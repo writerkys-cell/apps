@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>400 — 글쓰기 세션</title>
+<style>
+  :root {
+    --bg: #faf9f6;
+    --card: #ffffff;
+    --ink: #2b2a27;
+    --muted: #8d8a82;
+    --line: #e8e5de;
+    --accent: #4a6b5d;
+    --accent-soft: #e3ece7;
+    --danger: #b05c50;
+    --gold: #c2a24b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Noto Sans KR", -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 48px 20px 80px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+
+  header { margin-bottom: 36px; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+  h1 span { color: var(--accent); }
+  .subtitle { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  /* 새 프로젝트 버튼 & 팝업 */
+  .new-btn {
+    width: 100%;
+    border: 1px dashed var(--line);
+    background: none;
+    color: var(--muted);
+    border-radius: 14px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 4px;
+  }
+  .new-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(43, 42, 39, 0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 10;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  }
+  .modal h2 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+  .modal form { display: flex; flex-direction: column; gap: 10px; }
+  .modal input {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    background: var(--bg);
+    outline: none;
+  }
+  .modal input:focus { border-color: var(--accent); background: #fff; }
+  .modal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+  .modal .row button {
+    border-radius: 8px;
+    padding: 9px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .modal .cancel { background: none; border: 1px solid var(--line); color: var(--ink); }
+  .modal .cancel:hover { border-color: var(--muted); }
+  .modal .submit { background: var(--accent); border: none; color: #fff; font-weight: 600; }
+  .modal .submit:hover { filter: brightness(1.08); }
+
+  /* 섹션 */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin: 28px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title .count {
+    background: var(--line);
+    color: var(--muted);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+  }
+
+  /* 프로젝트 카드 */
+  .project {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .project-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .title-link {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    word-break: break-all;
+  }
+  .title-link[href]:hover { color: var(--accent); text-decoration: underline; }
+  .stage-badge {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 20px;
+    padding: 3px 12px;
+    white-space: nowrap;
+  }
+  .stage-badge.done { background: #f3ecd8; color: var(--gold); }
+
+  /* 진행 점 */
+  .dots { display: flex; gap: 6px; margin: 12px 0 14px; }
+  .dot {
+    width: 34px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--line);
+    position: relative;
+  }
+  .dot.filled { background: var(--accent); }
+  .dot.current { background: var(--accent); opacity: 0.45; }
+
+  .project-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .btn {
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:hover { border-color: var(--muted); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-danger { color: var(--danger); }
+  .btn-danger:hover { border-color: var(--danger); }
+  .btn-ghost { border: none; background: none; color: var(--muted); padding: 6px 8px; }
+  .btn-ghost:hover { color: var(--ink); }
+  .spacer { flex: 1; }
+  .meta { font-size: 12px; color: var(--muted); }
+
+  /* 편집 폼 */
+  .edit-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .edit-form input {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .edit-form .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+  .empty {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 28px 0;
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+  }
+
+  /* 백업 */
+  .backup {
+    margin-top: 44px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .backup .btn { font-size: 12px; color: var(--muted); }
+  #importFile { display: none; }
+
+  .completed-mark { color: var(--gold); font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>글쓰기 세션 <span>400</span></h1>
+    <div class="subtitle">400자씩, 2400자까지. 여섯 걸음이면 한 세션이 완성됩니다.</div>
+  </header>
+
+  <div class="section-title">진행 중 <span class="count" id="activeCount">0</span></div>
+  <div id="activeList"></div>
+  <button class="new-btn" id="newBtn">+ 새 프로젝트</button>
+
+  <div class="section-title">완료된 세션 <span class="count" id="doneCount">0</span></div>
+  <div id="doneList"></div>
+
+  <div class="backup">
+    <button class="btn" id="exportBtn">데이터 내보내기 (JSON)</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">데이터 가져오기</button>
+    <input type="file" id="importFile" accept=".json">
+  </div>
+</div>
+
+<div class="modal-overlay" id="newModal">
+  <div class="modal">
+    <h2>새 프로젝트</h2>
+    <form id="newForm">
+      <input type="text" id="newTitle" placeholder="프로젝트 제목" required>
+      <input type="text" id="newLink" placeholder="스크리브너 링크 (예: scrivcmp://... 또는 x-scrivener-item://...)">
+      <div class="row">
+        <button type="button" class="cancel" id="newCancel">취소</button>
+        <button type="submit" class="submit">400자부터 시작</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const STAGES = [400, 800, 1200, 1600, 2000, 2400];
+const KEY = 'writing400.projects.v1';
+let projects = [];
+let editingId = null;
+
+function load() {
+  try { projects = JSON.parse(localStorage.getItem(KEY)) || []; }
+  catch { projects = []; }
+}
+function save() {
+  localStorage.setItem(KEY, JSON.stringify(projects));
+}
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + '.' + String(d.getMonth()+1).padStart(2,'0') + '.' + String(d.getDate()).padStart(2,'0');
+}
+
+function titleHtml(p) {
+  if (p.link) {
+    return '<a class="title-link" href="' + esc(p.link) + '">' + esc(p.title) + '</a>';
+  }
+  return '<span class="title-link">' + esc(p.title) + '</span>';
+}
+
+function dotsHtml(stageIdx, done) {
+  let h = '<div class="dots">';
+  for (let i = 0; i < STAGES.length; i++) {
+    let cls = 'dot';
+    if (done || i < stageIdx) cls += ' filled';
+    else if (i === stageIdx) cls += ' current';
+    h += '<div class="' + cls + '" title="' + STAGES[i] + '자"></div>';
+  }
+  return h + '</div>';
+}
+
+function editFormHtml(p) {
+  return '<div class="edit-form">' +
+    '<input type="text" id="editTitle" value="' + esc(p.title) + '" placeholder="제목">' +
+    '<input type="text" id="editLink" value="' + esc(p.link || '') + '" placeholder="스크리브너 링크">' +
+    '<div class="row">' +
+    '<button class="btn" onclick="cancelEdit()">취소</button>' +
+    '<button class="btn btn-primary" onclick="saveEdit(\'' + p.id + '\')">저장</button>' +
+    '</div></div>';
+}
+
+function render() {
+  const active = projects.filter(p => !p.done);
+  const done = projects.filter(p => p.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+
+  document.getElementById('activeCount').textContent = active.length;
+  document.getElementById('doneCount').textContent = done.length;
+
+  const aEl = document.getElementById('activeList');
+  if (!active.length) {
+    aEl.innerHTML = '<div class="empty">진행 중인 프로젝트가 없습니다. 위에서 새로 시작해 보세요.</div>';
+  } else {
+    aEl.innerHTML = active.map(p => {
+      const stage = STAGES[p.stageIdx];
+      const isLast = p.stageIdx === STAGES.length - 1;
+      let h = '<div class="project">';
+      h += '<div class="project-top">' + titleHtml(p) +
+           '<span class="stage-badge">' + stage + '자</span></div>';
+      h += dotsHtml(p.stageIdx, false);
+      if (editingId === p.id) {
+        h += editFormHtml(p);
+      } else {
+        h += '<div class="project-actions">' +
+          '<button class="btn btn-primary" onclick="complete(\'' + p.id + '\')">' +
+          (isLast ? '2400자 완료 — 세션 마치기' : stage + '자 완료') + '</button>' +
+          '<span class="spacer"></span>' +
+          '<button class="btn-ghost btn" onclick="startEdit(\'' + p.id + '\')">편집</button>' +
+          '<button class="btn-ghost btn btn-danger" onclick="removeProject(\'' + p.id + '\')">삭제</button>' +
+          '</div>';
+      }
+      h += '</div>';
+      return h;
+    }).join('');
+  }
+
+  const dEl = document.getElementById('doneList');
+  if (!done.length) {
+    dEl.innerHTML = '<div class="empty">아직 완료된 세션이 없습니다.</div>';
+  } else {
+    dEl.innerHTML = done.map(p => {
+      let h = '<div class="project">';
+      h += '<div class="project-top"><span class="completed-mark">✦</span>' + titleHtml(p) +
+           '<span class="stage-badge done">2400자 완료</span></div>';
+      h += dotsHtml(STAGES.length, true);
+      if (editingId === p.id) {
+        h += editFormHtml(p);
+      } else {
+        h += '<div class="project-actions">' +
+          '<span class="meta">' + (p.doneAt ? fmtDate(p.doneAt) + ' 완료' : '') + '</span>' +
+          '<span class="spacer"></span>' +
+          '<button class="btn-ghost btn" onclick="reopen(\'' + p.id + '\')">다시 진행</button>' +
+          '<button class="btn-ghost btn" onclick="startEdit(\'' + p.id + '\')">편집</button>' +
+          '<button class="btn-ghost btn btn-danger" onclick="removeProject(\'' + p.id + '\')">삭제</button>' +
+          '</div>';
+      }
+      h += '</div>';
+      return h;
+    }).join('');
+  }
+}
+
+const newModal = document.getElementById('newModal');
+function openNewModal() {
+  newModal.classList.add('open');
+  document.getElementById('newTitle').focus();
+}
+function closeNewModal() {
+  newModal.classList.remove('open');
+  document.getElementById('newForm').reset();
+}
+document.getElementById('newBtn').addEventListener('click', openNewModal);
+document.getElementById('newCancel').addEventListener('click', closeNewModal);
+newModal.addEventListener('click', e => { if (e.target === newModal) closeNewModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && newModal.classList.contains('open')) closeNewModal();
+});
+
+document.getElementById('newForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const title = document.getElementById('newTitle').value.trim();
+  const link = document.getElementById('newLink').value.trim();
+  if (!title) return;
+  projects.unshift({ id: uid(), title, link, stageIdx: 0, done: false, createdAt: Date.now() });
+  save();
+  closeNewModal();
+  render();
+});
+
+function complete(id) {
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  if (p.stageIdx < STAGES.length - 1) {
+    p.stageIdx++;
+  } else {
+    p.done = true;
+    p.doneAt = Date.now();
+  }
+  save(); render();
+}
+
+function reopen(id) {
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  p.done = false;
+  p.stageIdx = STAGES.length - 1;
+  delete p.doneAt;
+  save(); render();
+}
+
+function removeProject(id) {
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  if (!confirm('"' + p.title + '" 프로젝트를 삭제할까요?')) return;
+  projects = projects.filter(x => x.id !== id);
+  if (editingId === id) editingId = null;
+  save(); render();
+}
+
+function startEdit(id) { editingId = id; render(); }
+function cancelEdit() { editingId = null; render(); }
+function saveEdit(id) {
+  const p = projects.find(x => x.id === id);
+  if (!p) return;
+  const t = document.getElementById('editTitle').value.trim();
+  const l = document.getElementById('editLink').value.trim();
+  if (t) p.title = t;
+  p.link = l;
+  editingId = null;
+  save(); render();
+}
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '글쓰기세션_백업_' + fmtDate(Date.now()).replaceAll('.', '') + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('importFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data)) throw new Error();
+      if (!confirm('기존 데이터를 가져온 데이터로 교체할까요?')) return;
+      projects = data.map(p => ({
+        id: p.id || uid(),
+        title: String(p.title || '제목 없음'),
+        link: String(p.link || ''),
+        stageIdx: Math.min(Math.max(parseInt(p.stageIdx) || 0, 0), STAGES.length - 1),
+        done: !!p.done,
+        createdAt: p.createdAt || Date.now(),
+        ...(p.doneAt ? { doneAt: p.doneAt } : {})
+      }));
+      save(); render();
+    } catch {
+      alert('올바른 백업 파일이 아닙니다.');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+load();
+render();
+</script>
+</body>
+</html>
