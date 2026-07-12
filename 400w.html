@@ -160,6 +160,7 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
   }
   .btn {
     border: 1px solid var(--line);
@@ -315,7 +316,7 @@ function render() {
 
   const aEl = document.getElementById('activeList');
   if (!active.length) {
-    aEl.innerHTML = '<div class="empty">진행 중인 프로젝트가 없습니다. 위에서 새로 시작해 보세요.</div>';
+    aEl.innerHTML = '<div class="empty">진행 중인 프로젝트가 없습니다. 아래에서 새로 시작해 보세요.</div>';
   } else {
     aEl.innerHTML = active.map(p => {
       const stage = STAGES[p.stageIdx];
@@ -330,6 +331,9 @@ function render() {
         h += '<div class="project-actions">' +
           '<button class="btn btn-primary" onclick="complete(\'' + p.id + '\')">' +
           (isLast ? '2400자 완료 — 세션 마치기' : stage + '자 완료') + '</button>' +
+          (p.stageIdx > 0
+            ? '<button class="btn" onclick="goBack(\'' + p.id + '\')" title="' + STAGES[p.stageIdx - 1] + '자 단계로 되돌리기">← 되돌리기</button>'
+            : '') +
           '<span class="spacer"></span>' +
           '<button class="btn-ghost btn" onclick="startEdit(\'' + p.id + '\')">편집</button>' +
           '<button class="btn-ghost btn btn-danger" onclick="removeProject(\'' + p.id + '\')">삭제</button>' +
@@ -355,7 +359,7 @@ function render() {
         h += '<div class="project-actions">' +
           '<span class="meta">' + (p.doneAt ? fmtDate(p.doneAt) + ' 완료' : '') + '</span>' +
           '<span class="spacer"></span>' +
-          '<button class="btn-ghost btn" onclick="reopen(\'' + p.id + '\')">다시 진행</button>' +
+          '<button class="btn-ghost btn" onclick="reopen(\'' + p.id + '\')">← 되돌리기</button>' +
           '<button class="btn-ghost btn" onclick="startEdit(\'' + p.id + '\')">편집</button>' +
           '<button class="btn-ghost btn btn-danger" onclick="removeProject(\'' + p.id + '\')">삭제</button>' +
           '</div>';
@@ -402,6 +406,13 @@ function complete(id) {
     p.done = true;
     p.doneAt = Date.now();
   }
+  save(); render();
+}
+
+function goBack(id) {
+  const p = projects.find(x => x.id === id);
+  if (!p || p.stageIdx <= 0) return;
+  p.stageIdx--;
   save(); render();
 }
 
