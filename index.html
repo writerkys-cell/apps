@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모닝페이지</title>
+<style>
+:root{
+  --paper:#F2F2ED;
+  --paper-deep:#EAEAE3;
+  --ink:#2A2B30;
+  --ink-soft:#55565C;
+  --muted:#8B8E94;
+  --line:#D9D9CF;
+  --dawn:#5C6E8E;
+  --dawn-faint:#DCE1E9;
+  --vermilion:#A93A2B;
+  --vermilion-faint:#F2E2DE;
+  --serif:"Noto Serif KR","Source Han Serif K",AppleMyungjo,"Nanum Myeongjo",Batang,serif;
+  --sans:"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--serif);
+  line-height:1.9;
+}
+button{font-family:var(--sans);cursor:pointer;background:none;border:none;color:inherit}
+button:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--dawn);outline-offset:2px}
+
+/* ---------- frame ---------- */
+.wrap{max-width:700px;margin:0 auto;padding:0 24px 120px}
+header.top{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:28px 0 10px;font-family:var(--sans);
+}
+.brand{font-size:13px;letter-spacing:.35em;color:var(--muted)}
+.top-actions{display:flex;gap:14px;font-size:12.5px;color:var(--ink-soft)}
+.top-actions button{padding:2px 0;border-bottom:1px solid transparent}
+.top-actions button:hover{border-bottom-color:var(--ink-soft)}
+.top-actions button.on{color:var(--dawn);border-bottom-color:var(--dawn)}
+
+/* ---------- horizon progress (signature) ---------- */
+.horizon{
+  position:relative;height:3px;background:var(--line);border-radius:2px;
+  margin:6px 0 34px;overflow:hidden;
+}
+.horizon .sun{
+  position:absolute;inset:0;width:0%;
+  background:linear-gradient(90deg,var(--dawn) 0%,#8496B3 70%,#C8A15A 100%);
+  transition:width .4s ease;
+}
+.horizon.done .sun{background:linear-gradient(90deg,#C8A15A,#D9B35E)}
+
+/* ---------- date heading ---------- */
+.datehead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+.datehead h1{font-size:21px;font-weight:600;letter-spacing:.02em}
+.datehead .sub{font-family:var(--sans);font-size:12px;color:var(--muted)}
+
+/* pages indicator: 세 쪽 */
+.pages{display:flex;gap:8px;align-items:center;margin:14px 0 22px;font-family:var(--sans)}
+.page{
+  width:22px;height:30px;border:1px solid var(--line);border-radius:2px;
+  background:linear-gradient(to top,var(--dawn-faint) var(--fill,0%),transparent var(--fill,0%));
+  position:relative;transition:background .3s;
+}
+.page.full{border-color:var(--dawn);background:linear-gradient(to top,var(--dawn) 100%,transparent 0)}
+.pages .count{font-size:12.5px;color:var(--ink-soft);margin-left:6px}
+.pages .count b{color:var(--ink);font-weight:600}
+
+/* ---------- writing area ---------- */
+textarea#editor{
+  width:100%;min-height:52vh;resize:vertical;
+  border:none;background:transparent;color:var(--ink);
+  font-family:var(--serif);font-size:17px;line-height:2.05;
+  padding:4px 0;
+}
+textarea#editor::placeholder{color:#B4B6B0}
+
+.statusline{
+  display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--sans);font-size:12px;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:10px;margin-top:8px;
+}
+
+/* completion banner */
+.doneNote{
+  display:none;margin:26px 0 8px;padding:18px 20px;
+  border-left:3px solid #C8A15A;background:var(--paper-deep);
+  font-size:15px;color:var(--ink-soft);
+}
+.doneNote.show{display:block}
+.doneNote b{color:var(--ink);font-weight:600}
+.doneNote button{
+  margin-top:10px;font-size:13px;color:var(--dawn);
+  border-bottom:1px solid var(--dawn);padding-bottom:1px;
+}
+
+/* ---------- archive view ---------- */
+#archiveView{display:none}
+.nav{
+  display:flex;align-items:center;justify-content:space-between;
+  margin:2px 0 26px;font-family:var(--sans);
+}
+.nav button.arrow{
+  font-size:20px;line-height:1;padding:8px 14px;color:var(--ink-soft);
+  border:1px solid var(--line);border-radius:3px;background:var(--paper-deep);
+}
+.nav button.arrow:hover:not(:disabled){color:var(--ink);border-color:var(--muted)}
+.nav button.arrow:disabled{opacity:.3;cursor:default}
+.nav .navmid{text-align:center}
+.nav .navmid .ago{font-size:12px;letter-spacing:.2em;color:var(--vermilion)}
+.nav .navmid h2{font-size:18px;font-weight:600;font-family:var(--serif)}
+select#dateJump{
+  font-family:var(--sans);font-size:12px;color:var(--ink-soft);
+  background:transparent;border:none;border-bottom:1px solid var(--line);
+  margin-top:4px;max-width:180px;
+}
+
+.entryBody{font-size:16.5px;line-height:2.1;white-space:pre-wrap;word-break:break-word}
+.entryBody .anchor{
+  background:var(--vermilion-faint);
+  border-bottom:1px solid var(--vermilion);
+  cursor:pointer;
+}
+.entryBody .note{
+  color:var(--vermilion);font-size:14px;
+  white-space:normal;
+}
+.entryBody .note .ndate{
+  font-family:var(--sans);font-size:11px;letter-spacing:.05em;
+  color:var(--vermilion);opacity:.75;
+}
+.entryBody .note .ndel{
+  font-family:var(--sans);font-size:11px;color:var(--muted);
+  margin-left:6px;border-bottom:1px dotted var(--muted);
+}
+.entryBody .note .ndel:hover{color:var(--vermilion)}
+
+.emptyDay{
+  padding:60px 0;text-align:center;color:var(--muted);
+  font-family:var(--sans);font-size:14px;line-height:2;
+}
+.emptyDay button{color:var(--dawn);border-bottom:1px solid var(--dawn);font-size:13px}
+
+.archMeta{
+  font-family:var(--sans);font-size:12px;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:10px;margin-top:34px;
+}
+
+/* selection popover */
+#annPop{
+  position:absolute;display:none;z-index:20;
+  background:var(--ink);color:var(--paper);
+  font-family:var(--sans);font-size:12.5px;
+  padding:6px 12px;border-radius:3px;
+}
+#annPop:after{
+  content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+  border:5px solid transparent;border-bottom:none;border-top-color:var(--ink);
+}
+
+/* annotation input dialog */
+#annBox{
+  display:none;position:fixed;inset:0;z-index:30;
+  background:rgba(42,43,48,.35);
+  align-items:center;justify-content:center;padding:20px;
+}
+#annBox.show{display:flex}
+#annBox .card{
+  background:var(--paper);width:100%;max-width:520px;
+  padding:26px 28px;border-top:3px solid var(--vermilion);
+  box-shadow:0 12px 40px rgba(0,0,0,.18);
+}
+#annBox .quoted{
+  font-size:14px;color:var(--ink-soft);border-left:2px solid var(--line);
+  padding-left:12px;margin-bottom:14px;max-height:90px;overflow:auto;
+}
+#annBox textarea{
+  width:100%;min-height:90px;resize:vertical;
+  font-family:var(--serif);font-size:15px;line-height:1.9;color:var(--vermilion);
+  background:transparent;border:1px solid var(--line);border-radius:3px;padding:10px 12px;
+}
+#annBox .row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-family:var(--sans)}
+#annBox .row .today{font-size:12px;color:var(--muted)}
+#annBox .row .btns button{font-size:13px;padding:7px 16px;border-radius:3px}
+#annBox .row .btns .save{background:var(--vermilion);color:#fff}
+#annBox .row .btns .cancel{color:var(--muted);margin-right:6px}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:var(--paper);font-family:var(--sans);font-size:13px;
+  padding:10px 20px;border-radius:3px;opacity:0;pointer-events:none;
+  transition:opacity .3s,transform .3s;z-index:40;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+@media (max-width:520px){
+  .wrap{padding:0 16px 100px}
+  textarea#editor{font-size:16px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">모닝페이지</div>
+    <nav class="top-actions">
+      <button id="btnWrite" class="on">오늘</button>
+      <button id="btnArchive">지난 페이지</button>
+      <button id="btnSound" title="750단어 도달 시 알림음">🔔</button>
+      <button id="btnExport">내보내기</button>
+      <button id="btnImport">가져오기</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </nav>
+  </header>
+  <div class="horizon" id="horizon"><div class="sun" id="sun"></div></div>
+
+  <!-- ===== 오늘 쓰기 ===== -->
+  <section id="writeView">
+    <div class="datehead">
+      <h1 id="todayLabel"></h1>
+      <span class="sub">아침의 세 쪽</span>
+    </div>
+    <div class="pages" id="pagesInd">
+      <div class="page" data-i="0"></div>
+      <div class="page" data-i="1"></div>
+      <div class="page" data-i="2"></div>
+      <span class="count"><b id="wc">0</b> / 750 단어</span>
+    </div>
+    <textarea id="editor" placeholder="생각하지 말고, 멈추지 말고, 그냥 쓰세요." spellcheck="false"></textarea>
+    <div class="doneNote" id="doneNote">
+      <b>오늘 세 쪽을 채웠습니다.</b> 750단어를 넘겼으니 손을 놓아도 좋습니다.<br>
+      <button id="goArchive">한 달 전 오늘의 페이지 보러 가기 →</button>
+    </div>
+    <div class="statusline">
+      <span id="saveStat">아직 저장된 내용 없음</span>
+      <span id="charStat"></span>
+    </div>
+  </section>
+
+  <!-- ===== 지난 페이지 ===== -->
+  <section id="archiveView">
+    <div class="nav">
+      <button class="arrow" id="navOlder" title="더 이전 달의 같은 날짜">←</button>
+      <div class="navmid">
+        <div class="ago" id="agoLabel"></div>
+        <h2 id="archDate"></h2>
+        <select id="dateJump" title="저장된 다른 날짜로 이동"></select>
+      </div>
+      <button class="arrow" id="navNewer" title="더 최근 달의 같은 날짜">→</button>
+    </div>
+    <div id="entryHost"></div>
+    <div class="archMeta" id="archMeta"></div>
+  </section>
+</div>
+
+<div id="annPop"><button id="annPopBtn">붉은 주석 달기</button></div>
+
+<div id="annBox" role="dialog" aria-modal="true">
+  <div class="card">
+    <div class="quoted" id="annQuoted"></div>
+    <textarea id="annText" placeholder="그때의 문장에게, 지금의 내가."></textarea>
+    <div class="row">
+      <span class="today" id="annToday"></span>
+      <span class="btns">
+        <button class="cancel" id="annCancel">취소</button>
+        <button class="save" id="annSave">주석 저장</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ================= storage ================= */
+const KEY = "morningpages_v1";
+let db = { entries: {} };
+try { const raw = localStorage.getItem(KEY); if (raw) db = JSON.parse(raw); } catch(e){}
+if (!db.entries) db.entries = {};
+function persist(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+
+/* ================= dates ================= */
+const pad = n => String(n).padStart(2,"0");
+function keyOf(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function parseKey(k){ const [y,m,dd]=k.split("-").map(Number); return new Date(y,m-1,dd); }
+const WD = ["일","월","화","수","목","금","토"];
+function fmt(d){ return d.getFullYear()+"년 "+(d.getMonth()+1)+"월 "+d.getDate()+"일 ("+WD[d.getDay()]+")"; }
+function fmtShort(d){ return d.getFullYear()+". "+(d.getMonth()+1)+". "+d.getDate()+"."; }
+function monthsBack(base, n){
+  const d = new Date(base.getFullYear(), base.getMonth()-n, 1);
+  const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+  d.setDate(Math.min(base.getDate(), last));
+  return d;
+}
+const today = new Date();
+const todayKey = keyOf(today);
+
+/* ================= word count ================= */
+function countWords(t){
+  const m = t.trim().match(/\S+/g);
+  return m ? m.length : 0;
+}
+const GOAL = 750;
+
+/* ================= elements ================= */
+const $ = id => document.getElementById(id);
+const editor=$("editor"), wc=$("wc"), sun=$("sun"), horizon=$("horizon"),
+      doneNote=$("doneNote"), saveStat=$("saveStat"), charStat=$("charStat"),
+      writeView=$("writeView"), archiveView=$("archiveView"),
+      btnWrite=$("btnWrite"), btnArchive=$("btnArchive");
+
+$("todayLabel").textContent = fmt(today);
+
+/* ================= sound (gentle two-note chime) ================= */
+let soundOn = db.soundOn !== false;
+function drawSoundBtn(){ $("btnSound").textContent = soundOn ? "🔔" : "🔕"; }
+drawSoundBtn();
+$("btnSound").onclick = () => { soundOn=!soundOn; db.soundOn=soundOn; persist(); drawSoundBtn();
+  toast(soundOn ? "750단어 도달 시 조용한 종소리가 울립니다" : "알림음을 껐습니다"); };
+function chime(){
+  if(!soundOn) return;
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [[523.25,0],[783.99,.28]].forEach(([f,t])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type="sine"; o.frequency.value=f;
+      g.gain.setValueAtTime(0,ctx.currentTime+t);
+      g.gain.linearRampToValueAtTime(.18,ctx.currentTime+t+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+t+1.4);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+1.5);
+    });
+  }catch(e){}
+}
+
+/* ================= toast ================= */
+let toastT;
+function toast(msg){
+  const el=$("toast"); el.textContent=msg; el.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("show"),2600);
+}
+
+/* ================= today: write & autosave ================= */
+let reached = false;
+(function initToday(){
+  const e = db.entries[todayKey];
+  if(e){ editor.value = e.text || ""; reached = countWords(editor.value) >= GOAL; }
+  refreshProgress(false);
+})();
+
+let saveT;
+editor.addEventListener("input", ()=>{
+  refreshProgress(true);
+  clearTimeout(saveT);
+  saveT = setTimeout(saveToday, 500);
+});
+
+function saveToday(){
+  const text = editor.value;
+  if(!db.entries[todayKey]) db.entries[todayKey] = { text:"", annotations:[] };
+  const e = db.entries[todayKey];
+  e.text = text;
+  e.words = countWords(text);
+  e.updatedAt = new Date().toISOString();
+  if(e.words >= GOAL && !e.completedAt) e.completedAt = new Date().toISOString();
+  persist();
+  const now = new Date();
+  saveStat.textContent = "저장됨 · "+pad(now.getHours())+":"+pad(now.getMinutes())+":"+pad(now.getSeconds());
+}
+
+function refreshProgress(live){
+  const n = countWords(editor.value);
+  wc.textContent = n;
+  charStat.textContent = editor.value.length ? editor.value.length.toLocaleString()+"자" : "";
+  const ratio = Math.min(n/GOAL, 1);
+  sun.style.width = (ratio*100)+"%";
+  horizon.classList.toggle("done", n>=GOAL);
+  /* 세 쪽: 각 250단어 */
+  document.querySelectorAll(".page").forEach((p,i)=>{
+    const seg = Math.max(0, Math.min(1, (n - i*250)/250));
+    p.style.setProperty("--fill", (seg*100)+"%");
+    p.classList.toggle("full", seg>=1);
+  });
+  document.title = n>=GOAL ? "모닝페이지 · 완료" : (n>0 ? "모닝페이지 · "+n+"/750" : "모닝페이지");
+  const done = n>=GOAL;
+  doneNote.classList.toggle("show", done);
+  if(done && !reached){ reached=true; if(live){ chime(); toast("750단어. 오늘의 세 쪽이 끝났습니다."); } }
+  if(!done) reached=false;
+}
+
+/* ================= view switching ================= */
+function show(view){
+  const w = view==="write";
+  writeView.style.display = w?"block":"none";
+  archiveView.style.display = w?"none":"block";
+  btnWrite.classList.toggle("on", w);
+  btnArchive.classList.toggle("on", !w);
+  if(!w) renderArchive();
+  else refreshProgress(false);
+}
+btnWrite.onclick = ()=>show("write");
+btnArchive.onclick = ()=>{ agoN = Math.max(agoN,1); show("archive"); };
+$("goArchive").onclick = ()=>{ agoN = 1; show("archive"); };
+
+/* ================= archive ================= */
+let agoN = 1;               // n개월 전
+let anchorDay = today.getDate(); // 기준 '일(日)' — 날짜 점프 시 그 날짜의 일을 따라감
+let curKey = null;          // 현재 보고 있는 날짜 key
+
+function agoText(n){ return n===12 ? "1년 전" : (n>12 ? Math.floor(n/12)+"년 "+(n%12? n%12+"개월 ":"")+"전" : n+"개월 전"); }
+
+function renderArchive(){
+  const lastOfThis = new Date(today.getFullYear(), today.getMonth()+1, 0).getDate();
+  const base = new Date(today.getFullYear(), today.getMonth(), Math.min(anchorDay, lastOfThis));
+  const d = monthsBack(base, agoN);
+  curKey = keyOf(d);
+  $("agoLabel").textContent = agoText(agoN);
+  $("archDate").textContent = fmt(d);
+  $("navNewer").disabled = agoN<=1;
+
+  buildJump();
+
+  const host = $("entryHost");
+  const e = db.entries[curKey];
+  if(!e || !e.text || !e.text.trim()){
+    const near = nearestKeyBefore(curKey);
+    host.innerHTML = "";
+    const div = document.createElement("div");
+    div.className = "emptyDay";
+    div.innerHTML = "이 날의 모닝페이지는 없습니다.<br><br>";
+    if(near){
+      const b = document.createElement("button");
+      b.textContent = "가장 가까운 기록으로 이동 · "+near;
+      b.onclick = ()=>{ jumpToKey(near); };
+      div.appendChild(b);
+    }
+    host.appendChild(div);
+    $("archMeta").textContent = "";
+    return;
+  }
+  renderEntry(host, curKey, e);
+  const w = e.words != null ? e.words : countWords(e.text);
+  const ann = (e.annotations||[]).length;
+  $("archMeta").textContent = w+"단어 · 주석 "+ann+"개 · 본문은 고칠 수 없고, 붉은 주석만 덧붙일 수 있습니다. 문장을 드래그해 보세요.";
+}
+
+function nearestKeyBefore(k){
+  const keys = Object.keys(db.entries).filter(x => x < k && db.entries[x].text && db.entries[x].text.trim() && x !== todayKey).sort();
+  return keys.length ? keys[keys.length-1] : null;
+}
+
+function buildJump(){
+  const sel = $("dateJump");
+  sel.innerHTML = "";
+  const opt0 = document.createElement("option");
+  opt0.value=""; opt0.textContent="저장된 날짜로 이동…";
+  sel.appendChild(opt0);
+  Object.keys(db.entries).filter(k=>k!==todayKey && db.entries[k].text && db.entries[k].text.trim())
+    .sort().reverse().forEach(k=>{
+      const o=document.createElement("option");
+      o.value=k; o.textContent=k+" ("+((db.entries[k].annotations||[]).length? "주석 "+(db.entries[k].annotations||[]).length : (db.entries[k].words||countWords(db.entries[k].text))+"단어")+")";
+      if(k===curKey) o.selected=true;
+      sel.appendChild(o);
+    });
+  sel.onchange = ()=>{ if(sel.value) jumpToKey(sel.value); };
+}
+
+function jumpToKey(k){
+  const d = parseKey(k);
+  const diff = (today.getFullYear()-d.getFullYear())*12 + (today.getMonth()-d.getMonth());
+  agoN = Math.max(diff,1);
+  anchorDay = d.getDate();
+  /* 같은 달의 다른 날일 수 있으므로 직접 지정 */
+  curKey = k;
+  renderDirect(k);
+}
+function renderDirect(k){
+  const d = parseKey(k);
+  $("agoLabel").textContent = agoText(Math.max(1,(today.getFullYear()-d.getFullYear())*12+(today.getMonth()-d.getMonth()))) ;
+  $("archDate").textContent = fmt(d);
+  $("navNewer").disabled = false;
+  buildJump();
+  const e = db.entries[k];
+  renderEntry($("entryHost"), k, e);
+  const w = e.words != null ? e.words : countWords(e.text);
+  $("archMeta").textContent = w+"단어 · 주석 "+(e.annotations||[]).length+"개 · 본문은 고칠 수 없고, 붉은 주석만 덧붙일 수 있습니다. 문장을 드래그해 보세요.";
+}
+
+$("navOlder").onclick = ()=>{ agoN++; renderArchive(); };
+$("navNewer").onclick = ()=>{ if(agoN>1){ agoN--; renderArchive(); } };
+document.addEventListener("keydown", e=>{
+  if(archiveView.style.display==="block" && !$("annBox").classList.contains("show")){
+    if(e.key==="ArrowLeft") $("navOlder").click();
+    if(e.key==="ArrowRight") $("navNewer").click();
+  }
+});
+
+/* ================= entry rendering with annotations ================= */
+function renderEntry(host, k, e){
+  host.innerHTML = "";
+  const body = document.createElement("div");
+  body.className = "entryBody";
+  body.dataset.key = k;
+
+  const text = e.text;
+  const anns = (e.annotations||[]).slice().sort((a,b)=>a.start-b.start);
+  let pos = 0;
+  anns.forEach(a=>{
+    if(a.start > pos) body.appendChild(document.createTextNode(text.slice(pos, a.start)));
+    const anchor = document.createElement("span");
+    anchor.className = "anchor";
+    anchor.appendChild(document.createTextNode(text.slice(a.start, a.end)));
+    body.appendChild(anchor);
+
+    const note = document.createElement("span");
+    note.className = "note";
+    note.contentEditable = "false";
+    const nd = document.createElement("span");
+    nd.className = "ndate";
+    nd.textContent = " 〔"+a.date+"〕 ";
+    note.appendChild(nd);
+    note.appendChild(document.createTextNode(a.note+" "));
+    const del = document.createElement("button");
+    del.className = "ndel";
+    del.textContent = "지움";
+    del.onclick = (ev)=>{
+      ev.stopPropagation();
+      if(confirm("이 주석을 지울까요?")){
+        e.annotations = e.annotations.filter(x=>x.id!==a.id);
+        persist(); renderDirect(k);
+      }
+    };
+    note.appendChild(del);
+    body.appendChild(note);
+    pos = a.end;
+  });
+  if(pos < text.length) body.appendChild(document.createTextNode(text.slice(pos)));
+  host.appendChild(body);
+
+  body.addEventListener("mouseup", ()=>maybeShowPop(body));
+  body.addEventListener("touchend", ()=>setTimeout(()=>maybeShowPop(body),10));
+}
+
+/* --- selection offset relative to original text (skip .note contents) --- */
+function offsetInBody(body, node, nodeOffset){
+  let acc = 0;
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      return n.parentElement && n.parentElement.closest(".note")
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let cur;
+  while((cur = walker.nextNode())){
+    if(cur === node) return acc + nodeOffset;
+    acc += cur.nodeValue.length;
+  }
+  return null;
+}
+
+let pendingSel = null;
+function maybeShowPop(body){
+  const pop = $("annPop");
+  const sel = window.getSelection();
+  pop.style.display = "none";
+  pendingSel = null;
+  if(!sel || sel.isCollapsed || sel.rangeCount===0) return;
+  const range = sel.getRangeAt(0);
+  if(!body.contains(range.startContainer) || !body.contains(range.endContainer)) return;
+  if(range.startContainer.nodeType!==3 || range.endContainer.nodeType!==3) return;
+  if(range.startContainer.parentElement.closest(".note") || range.endContainer.parentElement.closest(".note")) return;
+
+  const s = offsetInBody(body, range.startContainer, range.startOffset);
+  const eo = offsetInBody(body, range.endContainer, range.endOffset);
+  if(s==null || eo==null || eo<=s) return;
+
+  const k = body.dataset.key;
+  const entry = db.entries[k];
+  const overlap = (entry.annotations||[]).some(a => s < a.end && eo > a.start);
+  if(overlap){ toast("이미 주석이 달린 부분과 겹칩니다"); return; }
+
+  pendingSel = { key:k, start:s, end:eo, text: entry.text.slice(s,eo) };
+  const rect = range.getBoundingClientRect();
+  pop.style.display = "block";
+  pop.style.left = Math.max(12, rect.left + rect.width/2 - pop.offsetWidth/2 + window.scrollX) + "px";
+  pop.style.top = (rect.top + window.scrollY - pop.offsetHeight - 10) + "px";
+}
+document.addEventListener("mousedown", e=>{
+  if(!e.target.closest("#annPop")) $("annPop").style.display="none";
+});
+
+$("annPopBtn").onclick = ()=>{
+  if(!pendingSel) return;
+  $("annPop").style.display="none";
+  $("annQuoted").textContent = "“"+ (pendingSel.text.length>160 ? pendingSel.text.slice(0,160)+"…" : pendingSel.text) +"”";
+  $("annText").value = "";
+  $("annToday").textContent = "주석 날짜 · "+fmtShort(new Date());
+  $("annBox").classList.add("show");
+  setTimeout(()=>$("annText").focus(), 30);
+};
+$("annCancel").onclick = ()=>$("annBox").classList.remove("show");
+$("annBox").addEventListener("mousedown", e=>{ if(e.target===$("annBox")) $("annBox").classList.remove("show"); });
+$("annSave").onclick = ()=>{
+  if(!pendingSel) return;
+  const note = $("annText").value.trim();
+  if(!note){ $("annText").focus(); return; }
+  const e = db.entries[pendingSel.key];
+  if(!e.annotations) e.annotations = [];
+  e.annotations.push({
+    id: Date.now()+"-"+Math.random().toString(36).slice(2,7),
+    start: pendingSel.start, end: pendingSel.end,
+    note, date: fmtShort(new Date())
+  });
+  persist();
+  $("annBox").classList.remove("show");
+  renderDirect(pendingSel.key);
+  toast("붉은 주석을 남겼습니다");
+  pendingSel = null;
+};
+
+/* ================= export / import ================= */
+$("btnExport").onclick = ()=>{
+  const blob = new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "모닝페이지_백업_"+todayKey+".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("백업 파일을 내려받았습니다");
+};
+$("btnImport").onclick = ()=>$("importFile").click();
+$("importFile").addEventListener("change", ev=>{
+  const f = ev.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const data = JSON.parse(r.result);
+      if(!data.entries) throw 0;
+      const mode = confirm("확인 = 합치기(기존 기록 유지, 새 날짜만 추가)\n취소 = 전체 덮어쓰기");
+      if(mode){
+        Object.keys(data.entries).forEach(k=>{ if(!db.entries[k]) db.entries[k]=data.entries[k]; });
+      } else {
+        db = data;
+      }
+      persist();
+      toast("가져오기 완료");
+      if(db.entries[todayKey]) editor.value = db.entries[todayKey].text||"";
+      refreshProgress(false);
+      if(archiveView.style.display==="block") renderArchive();
+    }catch(e){ alert("올바른 백업 파일이 아닙니다."); }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+});
+</script>
+</body>
+</html>
