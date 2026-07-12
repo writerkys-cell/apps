@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>차근차근 — 일을 잘게 쪼개기</title>
+<style>
+:root{
+  --bg:#f6f5f2; --card:#ffffff; --text:#1d1d1f; --sub:#6e6e73;
+  --accent:#3a6b5c; --accent-soft:#e3ede9; --border:#e3e2de;
+  --danger:#b3402f; --done:#9a9a9f; --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#151517; --card:#212124; --text:#f0f0f2; --sub:#9a9aa0;
+    --accent:#7fb8a4; --accent-soft:#26332e; --border:#333338; --danger:#e0705e; --done:#6a6a70; }
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",sans-serif;
+  background:var(--bg); color:var(--text); line-height:1.55;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+.wrap{max-width:640px; margin:0 auto; padding:20px 16px 60px}
+h1{font-size:22px; margin:8px 0 2px}
+.tag{color:var(--sub); font-size:13px; margin-bottom:20px}
+.card{background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px}
+button{font-family:inherit; font-size:15px; border:none; border-radius:10px; padding:11px 16px; cursor:pointer; font-weight:600}
+.btn-primary{background:var(--accent); color:#fff; width:100%}
+.btn-ghost{background:transparent; color:var(--accent); border:1.5px solid var(--accent)}
+.btn-small{font-size:13px; padding:7px 12px; font-weight:500}
+.btn-danger{background:transparent; color:var(--danger); border:1.5px solid var(--danger)}
+textarea,input[type=text]{width:100%; font-family:inherit; font-size:15px; padding:12px; border-radius:10px;
+  border:1.5px solid var(--border); background:var(--card); color:var(--text); resize:vertical}
+textarea:focus,input:focus{outline:none; border-color:var(--accent)}
+label{font-size:13px; font-weight:600; color:var(--sub); display:block; margin:14px 0 6px}
+.row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.spacer{flex:1}
+.back{background:none; color:var(--accent); padding:6px 0; font-size:15px}
+/* project list */
+.proj{cursor:pointer}
+.proj h3{margin:0 0 6px; font-size:16px}
+.bar{height:6px; background:var(--accent-soft); border-radius:3px; overflow:hidden; margin-top:10px}
+.bar>div{height:100%; background:var(--accent); border-radius:3px; transition:width .3s}
+.meta{font-size:12.5px; color:var(--sub); margin-top:6px}
+.empty{text-align:center; color:var(--sub); padding:40px 10px; font-size:14.5px}
+/* steps flow */
+.stepnum{display:inline-flex; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff;
+  font-size:12.5px; font-weight:700; align-items:center; justify-content:center; margin-right:8px}
+.prompt-box{white-space:pre-wrap; font-size:13.5px; background:var(--accent-soft); border-radius:10px;
+  padding:14px; max-height:260px; overflow:auto; margin:10px 0; user-select:all; -webkit-user-select:all}
+.hint{font-size:13px; color:var(--sub); margin:8px 0}
+/* checklist */
+.phase{margin-bottom:4px}
+.phase-title{font-weight:700; font-size:15px; margin:16px 0 6px; display:flex; align-items:center; gap:8px}
+.phase-title .cnt{font-size:12px; color:var(--sub); font-weight:500}
+.task{display:flex; gap:10px; padding:10px 6px; border-bottom:1px solid var(--border); align-items:flex-start; cursor:pointer}
+.task:last-child{border-bottom:none}
+.task input{margin-top:3px; width:18px; height:18px; accent-color:var(--accent); flex:none}
+.task span{font-size:15px}
+.task.done span{color:var(--done); text-decoration:line-through}
+.task .del{margin-left:auto; color:var(--sub); background:none; padding:0 6px; font-size:16px; flex:none}
+.next-hint{background:var(--accent-soft); border-radius:10px; padding:12px 14px; font-size:14px; margin-bottom:10px}
+.next-hint b{color:var(--accent)}
+.next-task{display:flex; gap:10px; align-items:flex-start; margin-top:10px; padding:10px 12px;
+  background:var(--accent-soft); border-radius:10px}
+.next-task input{margin-top:3px; width:18px; height:18px; accent-color:var(--accent); flex:none}
+.next-task span{font-size:14px}
+.next-task b{color:var(--accent)}
+.modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:8; display:flex; align-items:center; justify-content:center; padding:20px}
+.modal{background:var(--card); border-radius:var(--radius); padding:18px; width:100%; max-width:480px; max-height:80vh; overflow:auto}
+.toast{position:fixed; bottom:30px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--bg);
+  padding:10px 18px; border-radius:20px; font-size:14px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9}
+.toast.show{opacity:1}
+.hidden{display:none}
+footer{margin-top:30px; text-align:center}
+footer button{color:var(--sub); background:none; font-size:12.5px; font-weight:500; padding:4px 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ 홈: 프로젝트 목록 ============ -->
+  <div id="view-home">
+    <h1>차근차근</h1>
+    <div class="tag">큰 일을 잘게 쪼개서, 하나씩.</div>
+    <button class="btn-primary" onclick="showNew()">＋ 새로운 할 일 쪼개기</button>
+    <div id="proj-list" style="margin-top:16px"></div>
+    <footer>
+      <button onclick="exportData()">데이터 내보내기</button> ·
+      <button onclick="document.getElementById('import-file').click()">가져오기</button>
+      <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+    </footer>
+  </div>
+
+  <!-- ============ 새 할 일 만들기 ============ -->
+  <div id="view-new" class="hidden">
+    <button class="back" onclick="showHome()">← 돌아가기</button>
+
+    <div class="card">
+      <div class="phase-title"><span class="stepnum">1</span>어떤 일을 해야 하나요?</div>
+      <textarea id="new-desc" rows="4" placeholder="예: 9월까지 단편소설 한 편을 완성해서 문예지 신인상에 응모하고 싶다."></textarea>
+      <label>참고 사항 (선택 — 마감일, 제약, 현재 상황 등)</label>
+      <textarea id="new-ctx" rows="2" placeholder="예: 평일엔 저녁 2시간만 쓸 수 있음. 초고는 절반쯤 써둔 상태."></textarea>
+      <div style="margin-top:14px"><button class="btn-primary" onclick="makePrompt()">프롬프트 만들기</button></div>
+    </div>
+
+    <div class="card hidden" id="prompt-card">
+      <div class="phase-title"><span class="stepnum">2</span>이 프롬프트를 AI에게 보내세요</div>
+      <div class="hint">복사해서 Claude나 ChatGPT에 붙여넣으면, AI가 방법을 검토하고 잘게 쪼갠 단계를 만들어 줍니다.</div>
+      <div class="prompt-box" id="prompt-text"></div>
+      <button class="btn-ghost" style="width:100%" onclick="copyPrompt()">프롬프트 복사</button>
+    </div>
+
+    <div class="card hidden" id="paste-card">
+      <div class="phase-title"><span class="stepnum">3</span>AI의 답변을 붙여넣으세요</div>
+      <div class="hint">답변 전체를 그대로 붙여넣으면 됩니다. 체크리스트 부분을 자동으로 찾아냅니다.</div>
+      <textarea id="ai-answer" rows="7" placeholder="AI 답변 전체 붙여넣기"></textarea>
+      <div style="margin-top:12px"><button class="btn-primary" onclick="parseAnswer()">단계로 변환하기</button></div>
+      <div id="parse-preview"></div>
+    </div>
+  </div>
+
+  <!-- ============ 프로젝트 상세 ============ -->
+  <div id="view-detail" class="hidden">
+    <button class="back" onclick="showHome()">← 목록</button>
+    <div class="card">
+      <div class="row" style="flex-wrap:nowrap">
+        <h3 id="d-title" style="margin:0 0 4px; font-size:17px; flex:1; cursor:pointer" onclick="openDescModal()" title="누르면 원래 문장 보기"></h3>
+        <button class="btn-small" style="background:none;color:var(--sub);padding:2px 6px;flex:none" onclick="renameProject()">✎</button>
+      </div>
+      <div class="meta" id="d-meta"></div>
+      <div class="bar"><div id="d-bar"></div></div>
+    </div>
+    <div class="next-hint" id="d-next"></div>
+    <div class="card" id="d-phases"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn-ghost btn-small" onclick="showPromptAgain()">프롬프트 다시 보기</button>
+      <span class="spacer"></span>
+      <button class="btn-danger btn-small" onclick="deleteProject()">삭제</button>
+    </div>
+  </div>
+
+</div>
+<!-- 원래 문장 팝업 -->
+<div class="modal-bg hidden" id="desc-modal" onclick="if(event.target===this)closeDescModal()">
+  <div class="modal">
+    <div class="phase-title" style="margin-top:0">원래 입력한 문장</div>
+    <textarea id="desc-edit" rows="5"></textarea>
+    <label>참고 사항</label>
+    <textarea id="ctx-edit" rows="2"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button class="btn-ghost btn-small" onclick="copyDesc()">복사</button>
+      <span class="spacer"></span>
+      <button class="btn-small" style="background:none;color:var(--sub)" onclick="closeDescModal()">닫기</button>
+      <button class="btn-primary btn-small" style="width:auto" onclick="saveDesc()">저장</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY='chagun_v1';
+let DB=load(), cur=null;
+
+function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{projects:[]}}catch(e){return{projects:[]}} }
+function save(){ localStorage.setItem(KEY, JSON.stringify(DB)); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+function esc(s){ return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function show(id){ ['view-home','view-new','view-detail'].forEach(v=>document.getElementById(v).classList.toggle('hidden', v!==id)); window.scrollTo(0,0); }
+
+/* ---------- 홈 ---------- */
+function showHome(){ cur=null; renderList(); show('view-home'); }
+function renderList(){
+  const el=document.getElementById('proj-list');
+  if(!DB.projects.length){ el.innerHTML='<div class="empty">아직 쪼갠 일이 없습니다.<br>큰 일 하나를 잘게 나눠 보세요.</div>'; return; }
+  el.innerHTML=DB.projects.map((p,i)=>{
+    const all=p.phases.flatMap(ph=>ph.tasks), done=all.filter(t=>t.done).length;
+    const pct=all.length?Math.round(done/all.length*100):0;
+    const next=all.find(t=>!t.done);
+    const nextHtml=next
+      ? `<div class="next-task" onclick="event.stopPropagation();toggleNext(${i})">
+           <input type="checkbox" onclick="event.stopPropagation();toggleNext(${i})">
+           <span><b>지금 할 일</b> · ${esc(next.text)}</span></div>`
+      : (all.length?`<div class="meta" style="margin-top:8px">🎉 모두 완료!</div>`:'');
+    return `<div class="card proj" onclick="openProj(${i})">
+      <h3>${esc(p.title)}</h3>
+      <div class="bar"><div style="width:${pct}%"></div></div>
+      <div class="meta">${done}/${all.length} 완료 · ${pct}%${pct===100?' 🎉':''}</div>
+      ${nextHtml}</div>`;
+  }).join('');
+}
+function toggleNext(i){
+  const all=DB.projects[i].phases.flatMap(ph=>ph.tasks);
+  const next=all.find(t=>!t.done);
+  if(next){ next.done=true; save(); }
+  renderList();
+}
+
+/* ---------- 새 할 일 ---------- */
+function showNew(){
+  document.getElementById('new-desc').value=''; document.getElementById('new-ctx').value='';
+  document.getElementById('ai-answer').value=''; document.getElementById('parse-preview').innerHTML='';
+  document.getElementById('prompt-card').classList.add('hidden');
+  document.getElementById('paste-card').classList.add('hidden');
+  show('view-new');
+}
+function buildPrompt(desc,ctx){
+  return `나는 아래의 일을 해내야 해. 이 일을 가장 잘 해낼 수 있는 방법을 먼저 검토한 다음, 부담 없이 하나씩 실행할 수 있을 만큼 잘게 쪼갠 단계별 할 일 목록을 만들어 줘.
+
+[해야 할 일]
+${desc}
+${ctx?`
+[참고 사항]
+${ctx}
+`:''}
+[작성 지침]
+1. 먼저 이 일의 목표와 완료 기준을 한두 문장으로 정리해 줘.
+2. 가장 효과적인 접근 방법이 무엇인지 검토하고, 왜 그 순서로 진행하는 게 좋은지 짧게 설명해 줘.
+3. 그런 다음 전체 과정을 큰 단계 몇 개로 나누고, 각 큰 단계 아래에 15~30분 안에 끝낼 수 있는 작은 할 일들로 쪼개 줘.
+4. 작은 할 일은 "무엇을 하면 끝났다고 볼 수 있는지"가 분명한 구체적 행동 문장으로 써 줘. (예: "자료 조사하기" ✗ → "경쟁 문예지 3곳의 최근 수상작 목록을 찾아 메모하기" ✓)
+5. 막히기 쉬운 단계가 있다면 그 단계의 할 일에 팁을 괄호로 덧붙여 줘.
+6. 답변 마지막에는 반드시 아래 형식을 그대로 지켜서 체크리스트를 출력해 줘. 내 앱이 이 부분을 읽어 체크리스트로 변환해.
+
+===체크리스트 시작===
+1. 큰 단계 제목
+- 작은 할 일
+- 작은 할 일
+2. 큰 단계 제목
+- 작은 할 일
+===체크리스트 끝===`;
+}
+function makePrompt(){
+  const desc=document.getElementById('new-desc').value.trim();
+  if(!desc){ toast('할 일을 먼저 적어 주세요'); return; }
+  const p=buildPrompt(desc, document.getElementById('new-ctx').value.trim());
+  document.getElementById('prompt-text').textContent=p;
+  document.getElementById('prompt-card').classList.remove('hidden');
+  document.getElementById('paste-card').classList.remove('hidden');
+  document.getElementById('prompt-card').scrollIntoView({behavior:'smooth'});
+}
+function copyText(txt,msg){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>toast(msg)).catch(()=>fallbackCopy(txt,msg));
+  } else fallbackCopy(txt,msg);
+}
+function fallbackCopy(txt,msg){
+  const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{ document.execCommand('copy'); toast(msg); }catch(e){ toast('길게 눌러 직접 복사해 주세요'); }
+  document.body.removeChild(ta);
+}
+function copyPrompt(){ copyText(document.getElementById('prompt-text').textContent,'복사했습니다. AI에게 붙여넣으세요.'); }
+
+/* ---------- 파싱 ---------- */
+function parseChecklist(text){
+  let body=text;
+  const m=text.match(/={2,}\s*체크리스트\s*시작\s*={2,}([\s\S]*?)(?:={2,}\s*체크리스트\s*끝\s*={2,}|$)/);
+  if(m) body=m[1];
+  const phases=[]; let curPhase=null;
+  body.split(/\r?\n/).forEach(line=>{
+    const l=line.replace(/\*\*/g,'').trim();
+    if(!l) return;
+    let mm;
+    if(mm=l.match(/^(\d+)[.)]\s*(.+)$/)){ curPhase={title:mm[2].trim(), tasks:[]}; phases.push(curPhase); }
+    else if(mm=l.match(/^[-*•·]\s*(?:\[[ xX]?\]\s*)?(.+)$/)){
+      if(!curPhase){ curPhase={title:'할 일', tasks:[]}; phases.push(curPhase); }
+      curPhase.tasks.push({text:mm[1].trim(), done:false});
+    }
+  });
+  phases.forEach(ph=>{ if(!ph.tasks.length) ph.tasks.push({text:ph.title, done:false}); });
+  return phases.filter(ph=>ph.tasks.length);
+}
+function parseAnswer(){
+  const txt=document.getElementById('ai-answer').value.trim();
+  if(!txt){ toast('AI 답변을 붙여넣어 주세요'); return; }
+  const phases=parseChecklist(txt);
+  const pv=document.getElementById('parse-preview');
+  if(!phases.length){ pv.innerHTML='<div class="hint" style="color:var(--danger)">체크리스트를 찾지 못했습니다. AI에게 "===체크리스트 시작===" 형식으로 다시 출력해 달라고 요청해 보세요.</div>'; return; }
+  const total=phases.reduce((s,p)=>s+p.tasks.length,0);
+  const desc=document.getElementById('new-desc').value.trim();
+  const suggested=desc.length>30?desc.slice(0,30)+'…':desc;
+  pv.innerHTML=`<div class="hint" style="margin-top:14px">✓ ${phases.length}개 단계, ${total}개 할 일을 찾았습니다.</div>`
+    + phases.map(ph=>`<div class="phase-title" style="font-size:14px">${esc(ph.title)}</div>`
+      + ph.tasks.map(t=>`<div style="font-size:13.5px;color:var(--sub);padding:2px 0 2px 12px">· ${esc(t.text)}</div>`).join('')).join('')
+    + `<label>프로젝트 제목 (목록에 표시됩니다 — 짧게 다듬어 보세요)</label>
+       <input type="text" id="proj-title" value="${esc(suggested)}">`
+    + `<div style="margin-top:14px"><button class="btn-primary" onclick="saveProject()">이대로 저장하기</button></div>`;
+  window._pending=phases;
+}
+function saveProject(){
+  const desc=document.getElementById('new-desc').value.trim();
+  const titleInput=document.getElementById('proj-title');
+  const title=(titleInput&&titleInput.value.trim())||(desc.length>30?desc.slice(0,30)+'…':desc);
+  DB.projects.unshift({
+    title, desc, ctx: document.getElementById('new-ctx').value.trim(),
+    created: Date.now(), phases: window._pending
+  });
+  save(); toast('저장했습니다'); openProj(0);
+}
+
+/* ---------- 상세 ---------- */
+function openProj(i){ cur=i; renderDetail(); show('view-detail'); }
+function renderDetail(){
+  const p=DB.projects[cur];
+  const all=p.phases.flatMap(ph=>ph.tasks), done=all.filter(t=>t.done).length;
+  const pct=all.length?Math.round(done/all.length*100):0;
+  document.getElementById('d-title').textContent=p.title;
+  document.getElementById('d-meta').textContent=`${done}/${all.length} 완료 · ${pct}%`;
+  document.getElementById('d-bar').style.width=pct+'%';
+  const next=all.find(t=>!t.done);
+  document.getElementById('d-next').innerHTML = next
+    ? `지금 할 일 딱 하나 → <b>${esc(next.text)}</b>`
+    : (all.length? '🎉 모든 단계를 끝냈습니다. 수고했어요!' : '할 일이 없습니다.');
+  document.getElementById('d-phases').innerHTML=p.phases.map((ph,pi)=>{
+    const d=ph.tasks.filter(t=>t.done).length;
+    return `<div class="phase"><div class="phase-title">${esc(ph.title)} <span class="cnt">${d}/${ph.tasks.length}</span></div>`
+      + ph.tasks.map((t,ti)=>`<div class="task ${t.done?'done':''}" onclick="toggle(${pi},${ti})">
+          <input type="checkbox" ${t.done?'checked':''} onclick="event.stopPropagation();toggle(${pi},${ti})">
+          <span>${esc(t.text)}</span>
+          <button class="del" onclick="event.stopPropagation();delTask(${pi},${ti})">×</button></div>`).join('')
+      + `</div>`;
+  }).join('');
+}
+function toggle(pi,ti){ const t=DB.projects[cur].phases[pi].tasks[ti]; t.done=!t.done; save(); renderDetail(); }
+function delTask(pi,ti){
+  const p=DB.projects[cur];
+  p.phases[pi].tasks.splice(ti,1);
+  if(!p.phases[pi].tasks.length) p.phases.splice(pi,1);
+  save(); renderDetail();
+}
+function openDescModal(){
+  const p=DB.projects[cur];
+  document.getElementById('desc-edit').value=p.desc||'';
+  document.getElementById('ctx-edit').value=p.ctx||'';
+  document.getElementById('desc-modal').classList.remove('hidden');
+}
+function closeDescModal(){ document.getElementById('desc-modal').classList.add('hidden'); }
+function copyDesc(){ copyText(document.getElementById('desc-edit').value,'복사했습니다'); }
+function saveDesc(){
+  const p=DB.projects[cur];
+  p.desc=document.getElementById('desc-edit').value.trim();
+  p.ctx=document.getElementById('ctx-edit').value.trim();
+  save(); closeDescModal(); toast('저장했습니다');
+}
+function renameProject(){
+  const p=DB.projects[cur];
+  const t=prompt('프로젝트 제목', p.title);
+  if(t&&t.trim()){ p.title=t.trim(); save(); renderDetail(); }
+}
+function deleteProject(){
+  if(!confirm('이 프로젝트를 삭제할까요?')) return;
+  DB.projects.splice(cur,1); save(); showHome();
+}
+function showPromptAgain(){
+  const p=DB.projects[cur];
+  copyText(buildPrompt(p.desc,p.ctx),'프롬프트를 복사했습니다');
+}
+
+/* ---------- 내보내기/가져오기 ---------- */
+function exportData(){
+  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='차근차근-백업-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importData(ev){
+  const f=ev.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const d=JSON.parse(r.result);
+      if(!d.projects) throw 0;
+      DB=d; save(); renderList(); toast('가져왔습니다');
+    }catch(e){ toast('올바른 백업 파일이 아닙니다'); } };
+  r.readAsText(f); ev.target.value='';
+}
+
+showHome();
+</script>
+</body>
+</html>

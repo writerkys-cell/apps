@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>매일 달리기 🏃</title>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Nanum+Pen+Script&display=swap" rel="stylesheet">
+<style>
+:root{
+  --run:#d94f2b; --walk:#2b7bd9; --ink:#3a352e; --paper:#faf6ee; --card:#fffdf8;
+  --line:#e8e0d1; --accent:#4a7c59; --muted:#8a8274;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Gowun Dodum','Apple SD Gothic Neo','Malgun Gothic',sans-serif;background:var(--paper);color:var(--ink);padding:16px;max-width:1100px;margin:0 auto}
+h1{font-family:'Nanum Pen Script',cursive;font-size:2.6rem;letter-spacing:1px}
+header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+.hbtns{display:flex;gap:8px;flex-wrap:wrap}
+button{font-family:inherit;font-size:.9rem;padding:8px 14px;border:1.5px solid var(--ink);border-radius:8px;background:var(--card);color:var(--ink);cursor:pointer;box-shadow:2px 2px 0 rgba(58,53,46,.25);transition:.1s}
+button:hover{transform:translate(-1px,-1px);box-shadow:3px 3px 0 rgba(58,53,46,.3)}
+button:active{transform:translate(1px,1px);box-shadow:none}
+button.primary{background:var(--run);color:#fff;border-color:var(--run)}
+button.ai{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.small{padding:3px 9px;font-size:.78rem;box-shadow:none}
+.layout{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+@media(max-width:860px){.layout{grid-template-columns:1fr}}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 2px 6px rgba(58,53,46,.06)}
+.card h2{font-size:1.05rem;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+/* calendar */
+.cal-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px}
+.cal-nav b{font-size:1.15rem;min-width:130px;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{text-align:center;font-size:.75rem;color:var(--muted);padding:4px 0}
+.cal-dow:first-child{color:var(--run)}
+.cell{position:relative;aspect-ratio:1/1.08;border-radius:8px;cursor:pointer;border:1px solid transparent}
+.cell:hover{background:#f3ecdd}
+.cell.other{opacity:.25}
+.cell.today{border:1.5px dashed var(--accent);background:#eef4ea}
+.cell .dnum{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-size:1.08rem;font-weight:700;z-index:2}
+.cell svg{position:absolute;inset:0;width:100%;height:100%;z-index:1;overflow:visible}
+.cell .km{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:.78rem;font-weight:700;color:var(--ink);z-index:2}
+.legend{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid;vertical-align:-1px;margin-right:4px}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.stat{background:#f7f1e3;border-radius:10px;padding:10px 12px}
+.stat .v{font-size:1.25rem;font-weight:700;margin-top:2px}
+.stat .l{font-size:.74rem;color:var(--muted)}
+.stat .s{font-size:.7rem;color:var(--muted);margin-top:2px}
+.stat.run .v{color:var(--run)} .stat.walk .v{color:var(--walk)} .stat.acc .v{color:var(--accent)}
+/* form */
+form label{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 3px}
+input,textarea,select{font-family:inherit;font-size:.95rem;width:100%;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:#fff}
+input:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.row{display:flex;gap:10px}.row>div{flex:1}
+.typebtns{display:flex;gap:8px;margin-top:4px}
+.typebtns button{flex:1}
+.typebtns button.on-run{background:var(--run);color:#fff;border-color:var(--run)}
+.typebtns button.on-walk{background:var(--walk);color:#fff;border-color:var(--walk)}
+.formbtns{display:flex;gap:8px;margin-top:14px}
+/* records */
+.rec{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px dashed var(--line);font-size:.86rem}
+.rec:last-child{border-bottom:none}
+.rec .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.rec .info{flex:1;min-width:0}
+.rec .t{font-weight:700}
+.rec .m{color:var(--muted);font-size:.76rem}
+.rec.flash{background:#fdf0c8;border-radius:8px}
+#recList{max-height:420px;overflow-y:auto}
+/* charts */
+.chart-wrap{margin-bottom:8px}
+.chart-wrap .ct{font-size:.78rem;color:var(--muted);margin-bottom:2px}
+svg.chart{width:100%;height:90px;display:block}
+/* modal */
+dialog{border:2px solid var(--ink);border-radius:14px;padding:20px;max-width:640px;width:92%;background:var(--card)}
+dialog::backdrop{background:rgba(58,53,46,.45)}
+dialog h2{margin-bottom:10px}
+dialog textarea{height:260px;font-size:.8rem;line-height:1.5;margin:10px 0}
+.modalbtns{display:flex;gap:8px;flex-wrap:wrap}
+.hint{font-size:.78rem;color:var(--muted);line-height:1.5}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:20px;font-size:.85rem;opacity:0;pointer-events:none;transition:.3s;z-index:99}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>매일 달리기 🏃</h1>
+  <div class="hbtns">
+    <button class="ai" onclick="openAI()">🤖 AI 분석 요청</button>
+    <button onclick="exportData()">💾 내보내기</button>
+    <button onclick="document.getElementById('importFile').click()">📂 가져오기</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
+  </div>
+</header>
+
+<div class="layout">
+<div><!-- left -->
+  <section class="card">
+    <div class="cal-nav">
+      <button class="small" onclick="moveMonth(-1)">◀</button>
+      <b id="calTitle"></b>
+      <button class="small" onclick="moveMonth(1)">▶</button>
+      <button class="small" onclick="goToday()">오늘</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="legend">
+      <span><i style="border-color:var(--run)"></i>달리기</span>
+      <span><i style="border-color:var(--walk)"></i>걷기</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>📊 통계</h2>
+    <div class="stats" id="statsGrid"></div>
+  </section>
+
+  <section class="card">
+    <h2>📈 추세</h2>
+    <div class="chart-wrap"><div class="ct">달리기 페이스 (분/km · 낮을수록 빠름)</div><svg class="chart" id="paceChart" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+    <div class="chart-wrap"><div class="ct">거리 (km)</div><svg class="chart" id="distChart" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+    <div class="chart-wrap"><div class="ct">몸무게 (kg)</div><svg class="chart" id="weightChart" viewBox="0 0 300 90" preserveAspectRatio="none"></svg></div>
+  </section>
+</div>
+
+<div><!-- right -->
+  <section class="card">
+    <h2 id="formTitle">✏️ 기록 입력</h2>
+    <form id="recForm" onsubmit="return saveRecord(event)">
+      <div class="row">
+        <div><label>날짜</label><input type="date" id="fDate" required></div>
+        <div><label>시각 (선택)</label><input type="time" id="fTime"></div>
+      </div>
+      <label>종류</label>
+      <div class="typebtns">
+        <button type="button" id="btnRun" onclick="setType('run')">🏃 달리기</button>
+        <button type="button" id="btnWalk" onclick="setType('walk')">🚶 걷기</button>
+      </div>
+      <label>제목</label>
+      <input type="text" id="fTitle" placeholder="예: 호수공원 달리기" required>
+      <div class="row">
+        <div><label>시간 (분)</label><input type="number" id="fMin" min="0" max="600" placeholder="33" required></div>
+        <div><label>시간 (초)</label><input type="number" id="fSec" min="0" max="59" placeholder="10" value="0"></div>
+        <div><label>거리 (km)</label><input type="number" id="fKm" min="0" step="0.01" placeholder="6.04" required></div>
+      </div>
+      <div class="row">
+        <div><label>몸무게 (kg, 선택)</label><input type="number" id="fWeight" min="0" step="0.1" placeholder="66.8"></div>
+      </div>
+      <label>메모 (선택)</label>
+      <input type="text" id="fMemo" placeholder="예: 타이머를 22분으로 늘림">
+      <div class="formbtns">
+        <button type="submit" class="primary" id="saveBtn">저장</button>
+        <button type="button" id="cancelBtn" style="display:none" onclick="cancelEdit()">취소</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>📒 기록 목록 <span id="recCount" style="font-size:.8rem;color:var(--muted)"></span></h2>
+    <div id="recList"></div>
+  </section>
+</div>
+</div>
+
+<dialog id="aiModal">
+  <h2>🤖 AI에게 분석 요청하기</h2>
+  <p class="hint">아래 프롬프트에 지금까지의 모든 기록과 통계가 담겨 있습니다. <b>복사하기</b>를 누른 뒤 Claude에 붙여넣으면 상세한 분석을 받을 수 있어요.</p>
+  <textarea id="aiPrompt" readonly></textarea>
+  <div class="modalbtns">
+    <button class="primary" onclick="copyPrompt()">📋 복사하기</button>
+    <button onclick="window.open('https://claude.ai/new','_blank')">Claude 열기 ↗</button>
+    <button onclick="document.getElementById('aiModal').close()">닫기</button>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+
+<script>
+/* ================= 데이터 ================= */
+const STORAGE_KEY='dailyRunData_v1';
+// dur = 초 단위
+const SEED=[
+ {date:'2026-04-03',time:'14:18',type:'walk',title:'빨리 걷기',dur:1804,km:3.00},
+ {date:'2026-04-05',time:'17:07',type:'walk',title:'빠르게 걷기',dur:1898,km:3.15},
+ {date:'2026-04-06',time:'17:58',type:'run',title:'달리기',dur:1872,km:5.07},
+ {date:'2026-04-07',time:'07:04',type:'run',title:'천천히 달리기',dur:1788,km:4.37},
+ {date:'2026-04-08',time:'07:27',type:'run',title:'달리기',dur:1956,km:5.18},
+ {date:'2026-04-09',time:'06:14',type:'run',title:'달리기',dur:2247,km:5.88},
+ {date:'2026-04-10',time:'07:16',type:'run',title:'빗속 달리기',dur:1715,km:4.27},
+ {date:'2026-04-11',time:'07:16',type:'walk',title:'제주시 해안 걷기',dur:2720,km:3.97},
+ {date:'2026-04-14',time:'07:24',type:'run',title:'달리기',dur:2195,km:6.53},
+ {date:'2026-04-15',time:'06:58',type:'walk',title:'먼지 심해 걷기',dur:2115,km:3.36},
+ {date:'2026-04-16',time:'07:01',type:'run',title:'달리기',dur:2016,km:6.26},
+ {date:'2026-04-17',time:'07:23',type:'walk',title:'걷기',dur:2169,km:3.56},
+ {date:'2026-04-18',time:'07:11',type:'run',title:'달리기',dur:2231,km:6.93},
+ {date:'2026-04-20',time:'07:15',type:'run',title:'달리기',dur:2097,km:6.36},
+ {date:'2026-04-23',time:'07:32',type:'run',title:'달리기',dur:1872,km:5.27},
+ {date:'2026-04-24',time:'07:24',type:'run',title:'달리기',dur:1790,km:4.95},
+ {date:'2026-04-25',time:'07:23',type:'run',title:'달리기',dur:2071,km:5.84,weight:68.4},
+ {date:'2026-04-27',time:'07:23',type:'run',title:'달리기',dur:2038,km:5.70},
+ {date:'2026-04-28',time:'07:29',type:'run',title:'달리기',dur:1956,km:5.64,weight:67.0},
+ {date:'2026-04-29',time:'18:29',type:'run',title:'달리기',dur:1900,km:5.46,weight:67.1},
+ {date:'2026-05-01',time:'07:09',type:'run',title:'달리기',dur:2077,km:6.11},
+ {date:'2026-05-04',time:'07:44',type:'run',title:'달리기',dur:2077,km:6.06,weight:67.8},
+ {date:'2026-05-05',time:'07:23',type:'run',title:'달리기',dur:2019,km:6.08},
+ {date:'2026-05-06',time:'07:43',type:'run',title:'달리기',dur:2107,km:5.78},
+ {date:'2026-05-11',time:'07:53',type:'run',title:'달리기',dur:2145,km:6.06,weight:67.3},
+ {date:'2026-05-12',time:'07:36',type:'run',title:'달리기',dur:2055,km:6.08,weight:66.9},
+ {date:'2026-05-13',time:'07:54',type:'run',title:'회복런',dur:1907,km:4.91,weight:66.8},
+ {date:'2026-05-16',time:'07:17',type:'run',title:'제주도 모슬포 해안 달리기',dur:1868,km:5.22},
+ {date:'2026-05-22',time:'07:47',type:'run',title:'달리기',dur:1990,km:6.04},
+ {date:'2026-05-23',time:'07:55',type:'run',title:'달리기',dur:2146,km:6.37,weight:66.9},
+ {date:'2026-05-25',time:'07:33',type:'run',title:'달리기',dur:2227,km:5.88,weight:67.5},
+ {date:'2026-05-26',time:'08:02',type:'run',title:'달리기',dur:2069,km:6.19,weight:67.2},
+ {date:'2026-05-30',time:'06:31',type:'walk',title:'도쿄 여행 중 우에노 공원 걷기',dur:2393,km:3.60},
+ {date:'2026-06-02',time:'07:47',type:'run',title:'달리기',dur:1993,km:5.99,weight:67.7},
+ {date:'2026-06-03',time:'07:55',type:'run',title:'달리기',dur:1918,km:5.91,weight:66.5},
+ {date:'2026-06-05',time:'08:09',type:'run',title:'달리기',dur:2165,km:6.53,weight:66.8,memo:'타이머를 22분으로 늘림'},
+ {date:'2026-06-09',time:'07:07',type:'run',title:'달리기',dur:2206,km:6.61,weight:67.0},
+ {date:'2026-06-10',time:'06:39',type:'run',title:'달리기',dur:2252,km:6.92,weight:66.6},
+ {date:'2026-06-11',time:'06:56',type:'run',title:'달리기',dur:2244,km:6.74,weight:66.7},
+ {date:'2026-06-12',time:'07:12',type:'run',title:'회복런',dur:2433,km:6.39,weight:66.1},
+ {date:'2026-06-13',time:'07:14',type:'walk',title:'해운대 걷기',dur:2317,km:3.38},
+ {date:'2026-06-16',time:'07:27',type:'run',title:'달리기',dur:2235,km:6.34,weight:67.5,memo:'주말에 먹고 놀았다'},
+ {date:'2026-06-17',time:'07:16',type:'run',title:'달리기',dur:2342,km:6.37,weight:66.7},
+ {date:'2026-06-18',time:'07:34',type:'run',title:'회복 달리기',dur:1837,km:4.66,weight:67.4},
+ {date:'2026-06-19',time:'07:29',type:'run',title:'달리기',dur:2454,km:6.67,weight:66.3},
+ {date:'2026-06-20',time:'07:27',type:'walk',title:'빗속 우비 입고 걷기',dur:2361,km:3.77},
+ {date:'2026-06-23',time:'07:23',type:'run',title:'달리기',dur:2068,km:6.83,weight:66.8},
+ {date:'2026-07-02',time:'07:12',type:'run',title:'달리기',dur:2433,km:6.70,weight:66.1},
+ {date:'2026-07-03',time:'07:42',type:'run',title:'회복 달리기',dur:2292,km:5.82,weight:65.8},
+ {date:'2026-07-08',time:'07:21',type:'walk',title:'빗속에 걷기',dur:2352,km:2.96,weight:66.0}
+].map((r,i)=>({id:'seed'+i,...r}));
+
+const METHOD_NOTE=`나의 달리기 방법: 알람을 20분(2026년 6월 5일부터는 22분)에 맞춘 뒤 집을 나섭니다. 호수공원까지 가는 길에 신호등이 있어 달리기를 시작할 때까지 걸리는 시간은 매일 다릅니다. 호수공원에 들어서면 달리기를 시작하고, 알람이 울리면 돌아서서 집으로 돌아옵니다. 알람 시간을 지속적으로 늘려나갈 계획입니다.`;
+
+let records=[];
+function load(){
+  try{
+    const raw=localStorage.getItem(STORAGE_KEY);
+    if(raw){records=JSON.parse(raw);return}
+  }catch(e){}
+  records=[...SEED]; save();
+}
+function save(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(records))}
+  catch(e){toast('저장 실패: 브라우저 저장소를 사용할 수 없습니다')}
+}
+
+/* ================= 유틸 ================= */
+const pad=n=>String(n).padStart(2,'0');
+function fmtDur(s){const m=Math.floor(s/60);return `${m}분 ${pad(Math.round(s%60))}초`}
+function fmtPace(secPerKm){if(!isFinite(secPerKm))return'-';const m=Math.floor(secPerKm/60);return `${m}'${pad(Math.round(secPerKm%60))}"`}
+function fmtDate(d){const[y,m,dd]=d.split('-');return `${m}/${dd}`}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('show'),2200)}
+function todayStr(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}
+function strHash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* 손으로 그린 듯한 동그라미 path — 날짜 숫자(중심 50,40)를 감싼다 */
+function handCirclePath(seedStr){
+  const rnd=mulberry32(strHash(seedStr));
+  const cx=50,cy=40,n=11;
+  const start=rnd()*Math.PI*2, extra=0.35+rnd()*0.4;
+  const pts=[];
+  for(let i=0;i<=n;i++){
+    const a=start+(i/n)*(Math.PI*2+extra);
+    const rx=30*(1+(rnd()-0.5)*0.13), ry=27*(1+(rnd()-0.5)*0.13);
+    pts.push([cx+Math.cos(a)*rx, cy+Math.sin(a)*ry]);
+  }
+  let d=`M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[Math.max(i-1,0)],p1=pts[i],p2=pts[i+1],p3=pts[Math.min(i+2,pts.length-1)];
+    const c1=[p1[0]+(p2[0]-p0[0])/6,p1[1]+(p2[1]-p0[1])/6];
+    const c2=[p2[0]-(p3[0]-p1[0])/6,p2[1]-(p3[1]-p1[1])/6];
+    d+=` C${c1[0].toFixed(1)} ${c1[1].toFixed(1)}, ${c2[0].toFixed(1)} ${c2[1].toFixed(1)}, ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+/* ================= 캘린더 ================= */
+let viewY,viewM; // M: 0-11
+function goToday(){const d=new Date();viewY=d.getFullYear();viewM=d.getMonth();renderCal()}
+function moveMonth(dir){viewM+=dir;if(viewM<0){viewM=11;viewY--}if(viewM>11){viewM=0;viewY++}renderCal()}
+function recsByDate(){
+  const m={};
+  for(const r of records){(m[r.date]=m[r.date]||[]).push(r)}
+  return m;
+}
+function renderCal(){
+  document.getElementById('calTitle').textContent=`${viewY}년 ${viewM+1}월`;
+  const grid=document.getElementById('calGrid');
+  grid.innerHTML='';
+  ['일','월','화','수','목','금','토'].forEach(d=>{
+    const e=document.createElement('div');e.className='cal-dow';e.textContent=d;grid.appendChild(e);
+  });
+  const first=new Date(viewY,viewM,1);
+  const startDow=first.getDay();
+  const daysIn=new Date(viewY,viewM+1,0).getDate();
+  const byDate=recsByDate();
+  const tStr=todayStr();
+  // 앞쪽 빈칸(이전 달)
+  const prevDays=new Date(viewY,viewM,0).getDate();
+  for(let i=0;i<startDow;i++){
+    const e=document.createElement('div');e.className='cell other';
+    e.innerHTML=`<span class="dnum">${prevDays-startDow+1+i}</span>`;grid.appendChild(e);
+  }
+  for(let d=1;d<=daysIn;d++){
+    const ds=`${viewY}-${pad(viewM+1)}-${pad(d)}`;
+    const cell=document.createElement('div');
+    cell.className='cell'+(ds===tStr?' today':'');
+    let inner=`<span class="dnum">${d}</span>`;
+    const recs=byDate[ds];
+    if(recs){
+      const hasRun=recs.some(r=>r.type==='run');
+      const color=hasRun?'var(--run)':'var(--walk)';
+      const totKm=recs.reduce((s,r)=>s+r.km,0);
+      inner+=`<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${handCirclePath(ds)}" fill="none" stroke="${color}" stroke-width="4.5" stroke-linecap="round" opacity="0.85"/></svg>`;
+      inner+=`<span class="km">${totKm.toFixed(1)}km</span>`;
+    }
+    cell.innerHTML=inner;
+    cell.onclick=()=>dayClick(ds,recs);
+    grid.appendChild(cell);
+  }
+}
+function dayClick(ds,recs){
+  if(recs&&recs.length){
+    const el=document.querySelector(`[data-rid="${recs[0].id}"]`);
+    if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}
+  }else{
+    document.getElementById('fDate').value=ds;
+    document.getElementById('fTitle').focus();
+    toast(ds+' 기록을 입력해보세요');
+  }
+}
+
+/* ================= 통계 ================= */
+function weekStart(dateStr){ // 월요일 기준
+  const d=new Date(dateStr+'T00:00:00');
+  const off=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-off);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function calcStats(){
+  if(!records.length)return null;
+  const sorted=[...records].sort((a,b)=>a.date.localeCompare(b.date));
+  const runs=sorted.filter(r=>r.type==='run');
+  const walks=sorted.filter(r=>r.type==='walk');
+  const first=sorted[0].date,last=sorted[sorted.length-1].date;
+  const weeksSpanned=Math.round((new Date(weekStart(last))-new Date(weekStart(first)))/(7*864e5))+1;
+  const activeDays=new Set(sorted.map(r=>r.date)).size;
+  const runDays=new Set(runs.map(r=>r.date)).size;
+  // 최근 4주
+  const cutoff=new Date();cutoff.setDate(cutoff.getDate()-28);
+  const cutStr=`${cutoff.getFullYear()}-${pad(cutoff.getMonth()+1)}-${pad(cutoff.getDate())}`;
+  const recent=sorted.filter(r=>r.date>=cutStr);
+  const recentDays=new Set(recent.map(r=>r.date)).size;
+  const sum=(arr,f)=>arr.reduce((s,r)=>s+f(r),0);
+  const runSec=sum(runs,r=>r.dur), runKm=sum(runs,r=>r.km);
+  const walkSec=sum(walks,r=>r.dur), walkKm=sum(walks,r=>r.km);
+  const weights=sorted.filter(r=>r.weight!=null);
+  const best=runs.length?runs.reduce((a,b)=>(a.dur/a.km<b.dur/b.km?a:b)):null;
+  const longest=runs.length?runs.reduce((a,b)=>(a.km>b.km?a:b)):null;
+  return {
+    total:sorted.length, totalKm:runKm+walkKm,
+    weeksSpanned, activeDays, runDays,
+    avgDaysPerWeek:activeDays/weeksSpanned,
+    avgRunDaysPerWeek:runDays/weeksSpanned,
+    recentDaysPerWeek:recentDays/4,
+    runCount:runs.length, walkCount:walks.length,
+    runAvgSec:runs.length?runSec/runs.length:0,
+    runAvgKm:runs.length?runKm/runs.length:0,
+    runPace:runKm?runSec/runKm:NaN,
+    walkPace:walkKm?walkSec/walkKm:NaN,
+    walkAvgSec:walks.length?walkSec/walks.length:0,
+    best, longest,
+    lastWeight:weights.length?weights[weights.length-1]:null,
+    firstWeight:weights.length?weights[0]:null,
+    runs, walks, sorted, weights
+  };
+}
+function renderStats(){
+  const s=calcStats();
+  const g=document.getElementById('statsGrid');
+  if(!s){g.innerHTML='<p class="hint">기록이 없습니다.</p>';return}
+  const wDiff=s.lastWeight&&s.firstWeight?(s.lastWeight.weight-s.firstWeight.weight):null;
+  g.innerHTML=`
+    <div class="stat acc"><div class="l">주 평균 활동일</div><div class="v">${s.avgDaysPerWeek.toFixed(1)}일</div><div class="s">최근 4주: ${s.recentDaysPerWeek.toFixed(1)}일/주</div></div>
+    <div class="stat run"><div class="l">주 평균 달린 일수</div><div class="v">${s.avgRunDaysPerWeek.toFixed(1)}일</div><div class="s">총 ${s.runDays}일 / ${s.weeksSpanned}주</div></div>
+    <div class="stat run"><div class="l">달리기 평균 시간</div><div class="v">${fmtDur(s.runAvgSec)}</div><div class="s">평균 ${s.runAvgKm.toFixed(2)}km</div></div>
+    <div class="stat run"><div class="l">달리기 평균 페이스</div><div class="v">${fmtPace(s.runPace)}/km</div><div class="s">${s.runCount}회 누적</div></div>
+    <div class="stat walk"><div class="l">걷기 평균 페이스</div><div class="v">${fmtPace(s.walkPace)}/km</div><div class="s">${s.walkCount}회 · 평균 ${fmtDur(s.walkAvgSec)}</div></div>
+    <div class="stat acc"><div class="l">총 누적 거리</div><div class="v">${s.totalKm.toFixed(1)}km</div><div class="s">총 ${s.total}회 활동</div></div>
+    ${s.best?`<div class="stat run"><div class="l">최고 페이스</div><div class="v">${fmtPace(s.best.dur/s.best.km)}/km</div><div class="s">${fmtDate(s.best.date)} · ${s.best.km}km</div></div>`:''}
+    ${s.longest?`<div class="stat run"><div class="l">최장 거리</div><div class="v">${s.longest.km}km</div><div class="s">${fmtDate(s.longest.date)}</div></div>`:''}
+    ${s.lastWeight?`<div class="stat acc"><div class="l">최근 몸무게</div><div class="v">${s.lastWeight.weight}kg</div><div class="s">${fmtDate(s.lastWeight.date)}${wDiff!=null?` · 처음보다 ${wDiff>0?'+':''}${wDiff.toFixed(1)}kg`:''}</div></div>`:''}
+  `;
+}
+
+/* ================= 차트 ================= */
+function drawLine(svgId,points,color,fmt){
+  const svg=document.getElementById(svgId);
+  svg.innerHTML='';
+  if(points.length<2){svg.innerHTML='<text x="150" y="48" text-anchor="middle" font-size="11" fill="#8a8274">데이터 부족</text>';return}
+  const ys=points.map(p=>p.y);
+  let min=Math.min(...ys),max=Math.max(...ys);
+  if(min===max){min-=1;max+=1}
+  const padY=(max-min)*0.15;min-=padY;max+=padY;
+  const X=i=>8+(i/(points.length-1))*284;
+  const Y=v=>82-((v-min)/(max-min))*70;
+  let d='';
+  points.forEach((p,i)=>{d+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(p.y).toFixed(1)+' '});
+  svg.innerHTML=`<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round"/>`+
+    points.map((p,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="2.2" fill="${color}"><title>${fmtDate(p.date)}: ${fmt(p.y)}</title></circle>`).join('')+
+    `<text x="4" y="12" font-size="9" fill="#8a8274">${fmt(Math.max(...ys))}</text><text x="4" y="86" font-size="9" fill="#8a8274">${fmt(Math.min(...ys))}</text>`;
+}
+function renderCharts(){
+  const s=calcStats();
+  if(!s)return;
+  drawLine('paceChart',s.runs.map(r=>({date:r.date,y:r.dur/r.km/60})),'#d94f2b',v=>v.toFixed(1));
+  drawLine('distChart',s.runs.map(r=>({date:r.date,y:r.km})),'#4a7c59',v=>v.toFixed(1));
+  drawLine('weightChart',s.weights.map(r=>({date:r.date,y:r.weight})),'#2b7bd9',v=>v.toFixed(1));
+}
+
+/* ================= 기록 목록 ================= */
+function renderList(){
+  const list=document.getElementById('recList');
+  const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||((b.time||'').localeCompare(a.time||'')));
+  document.getElementById('recCount').textContent=`(${records.length}건)`;
+  list.innerHTML=sorted.map(r=>{
+    const pace=r.km?fmtPace(r.dur/r.km):'-';
+    const color=r.type==='run'?'var(--run)':'var(--walk)';
+    return `<div class="rec" data-rid="${r.id}">
+      <span class="dot" style="background:${color}"></span>
+      <div class="info">
+        <div class="t">${r.date.replaceAll('-','.')} ${r.title}</div>
+        <div class="m">${fmtDur(r.dur)} · ${r.km}km · ${pace}/km${r.weight?` · ${r.weight}kg`:''}${r.memo?` · ${r.memo}`:''}</div>
+      </div>
+      <button class="small" onclick="editRecord('${r.id}')">수정</button>
+      <button class="small" onclick="deleteRecord('${r.id}')">삭제</button>
+    </div>`;
+  }).join('')||'<p class="hint">기록이 없습니다.</p>';
+}
+
+/* ================= 폼 ================= */
+let curType='run', editingId=null;
+function setType(t){
+  curType=t;
+  document.getElementById('btnRun').className=t==='run'?'on-run':'';
+  document.getElementById('btnWalk').className=t==='walk'?'on-walk':'';
+}
+function resetForm(){
+  document.getElementById('recForm').reset();
+  document.getElementById('fDate').value=todayStr();
+  setType('run');
+  editingId=null;
+  document.getElementById('formTitle').textContent='✏️ 기록 입력';
+  document.getElementById('saveBtn').textContent='저장';
+  document.getElementById('cancelBtn').style.display='none';
+}
+function cancelEdit(){resetForm()}
+function saveRecord(e){
+  e.preventDefault();
+  const min=parseInt(document.getElementById('fMin').value||0);
+  const sec=parseInt(document.getElementById('fSec').value||0);
+  const rec={
+    id:editingId||('r'+Date.now()),
+    date:document.getElementById('fDate').value,
+    time:document.getElementById('fTime').value||'',
+    type:curType,
+    title:document.getElementById('fTitle').value.trim(),
+    dur:min*60+sec,
+    km:parseFloat(document.getElementById('fKm').value),
+    weight:document.getElementById('fWeight').value?parseFloat(document.getElementById('fWeight').value):undefined,
+    memo:document.getElementById('fMemo').value.trim()||undefined
+  };
+  if(!rec.dur||!rec.km){toast('시간과 거리를 확인해주세요');return false}
+  if(editingId){
+    const i=records.findIndex(r=>r.id===editingId);
+    if(i>=0)records[i]=rec;
+    toast('기록을 수정했습니다 ✏️');
+  }else{
+    records.push(rec);
+    toast('기록을 저장했습니다 ✅');
+  }
+  save();resetForm();renderAll();
+  return false;
+}
+function editRecord(id){
+  const r=records.find(x=>x.id===id);
+  if(!r)return;
+  editingId=id;
+  document.getElementById('fDate').value=r.date;
+  document.getElementById('fTime').value=r.time||'';
+  document.getElementById('fTitle').value=r.title;
+  document.getElementById('fMin').value=Math.floor(r.dur/60);
+  document.getElementById('fSec').value=r.dur%60;
+  document.getElementById('fKm').value=r.km;
+  document.getElementById('fWeight').value=r.weight??'';
+  document.getElementById('fMemo').value=r.memo||'';
+  setType(r.type);
+  document.getElementById('formTitle').textContent='✏️ 기록 수정 중';
+  document.getElementById('saveBtn').textContent='수정 완료';
+  document.getElementById('cancelBtn').style.display='';
+  document.getElementById('recForm').scrollIntoView({behavior:'smooth'});
+}
+function deleteRecord(id){
+  const r=records.find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm(`${r.date} "${r.title}" 기록을 삭제할까요?`))return;
+  records=records.filter(x=>x.id!==id);
+  save();renderAll();toast('삭제했습니다');
+}
+
+/* ================= 내보내기/가져오기 ================= */
+function exportData(){
+  const blob=new Blob([JSON.stringify(records,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`달리기기록_${todayStr()}.json`;
+  a.click();
+  toast('JSON 파일로 내보냈습니다 💾');
+}
+function importData(input){
+  const f=input.files[0];
+  if(!f)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(!Array.isArray(data))throw 0;
+      if(confirm(`${data.length}건의 기록을 불러옵니다. 현재 기록을 대체할까요?\n(취소를 누르면 기존 기록에 추가됩니다)`)){
+        records=data;
+      }else{
+        const ids=new Set(records.map(r=>r.id));
+        data.forEach(r=>{if(!ids.has(r.id))records.push(r)});
+      }
+      save();renderAll();toast('불러오기 완료 📂');
+    }catch(e){toast('올바른 JSON 파일이 아닙니다')}
+  };
+  reader.readAsText(f);
+  input.value='';
+}
+
+/* ================= AI 분석 ================= */
+function buildPrompt(){
+  const s=calcStats();
+  const lines=s.sorted.map(r=>
+    `${r.date} ${r.time||''} [${r.type==='run'?'달리기':'걷기'}] ${r.title} | ${fmtDur(r.dur)} | ${r.km}km | 페이스 ${fmtPace(r.dur/r.km)}/km${r.weight?` | 몸무게 ${r.weight}kg`:''}${r.memo?` | 메모: ${r.memo}`:''}`
+  ).join('\n');
+  return `다음은 나의 매일 달리기 기록과 간혹 적은 몸무게 기록입니다. 걸은 날과 뛴 날을 나눠 페이스와 거리 등을 분석해주세요.
+
+${METHOD_NOTE}
+
+== 전체 기록 (${s.total}건) ==
+${lines}
+
+== 앱에서 계산한 요약 통계 ==
+- 기간: ${s.sorted[0].date} ~ ${s.sorted[s.sorted.length-1].date} (${s.weeksSpanned}주)
+- 주 평균 활동일: ${s.avgDaysPerWeek.toFixed(1)}일 (최근 4주: ${s.recentDaysPerWeek.toFixed(1)}일)
+- 주 평균 달린 일수: ${s.avgRunDaysPerWeek.toFixed(1)}일
+- 달리기: ${s.runCount}회, 평균 ${fmtDur(s.runAvgSec)}, 평균 ${s.runAvgKm.toFixed(2)}km, 평균 페이스 ${fmtPace(s.runPace)}/km
+- 걷기: ${s.walkCount}회, 평균 페이스 ${fmtPace(s.walkPace)}/km
+- 총 누적 거리: ${s.totalKm.toFixed(1)}km
+${s.lastWeight?`- 몸무게: 처음 ${s.firstWeight.weight}kg → 최근 ${s.lastWeight.weight}kg`:''}
+
+== 분석 요청 ==
+1. 걷기와 달리기를 구분한 페이스·거리·시간 추세 분석
+2. 주별/월별 변화 추이와 발전 정도 (알람 시간 20분→22분 변경 반영)
+3. 몸무게 변화와 달리기의 상관관계
+4. 최근 기록에서 눈에 띄는 점 (좋아진 점, 주의할 점)
+5. 앞으로의 목표 제안 (알람 시간 늘리기 계획을 고려한 다음 단계, 페이스/거리 목표)`;
+}
+function openAI(){
+  document.getElementById('aiPrompt').value=buildPrompt();
+  document.getElementById('aiModal').showModal();
+}
+function copyPrompt(){
+  const ta=document.getElementById('aiPrompt');
+  ta.select();
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value).then(()=>toast('복사했습니다! Claude에 붙여넣으세요 📋'),()=>fallbackCopy(ta));
+  }else fallbackCopy(ta);
+}
+function fallbackCopy(ta){
+  try{document.execCommand('copy');toast('복사했습니다! Claude에 붙여넣으세요 📋')}
+  catch(e){toast('복사 실패 — 직접 선택해서 복사해주세요')}
+}
+
+/* ================= 초기화 ================= */
+function renderAll(){renderCal();renderStats();renderCharts();renderList()}
+load();
+goToday();
+resetForm();
+renderStats();renderCharts();renderList();
+</script>
+</body>
+</html>

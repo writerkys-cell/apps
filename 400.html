@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초고 — 한 줄씩, 사백 자</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EFEAE3;
+  --paper-deep:#E7E0D5;
+  --ink:#201B15;
+  --ink-faded:#6F675B;
+  --rule:#D9D1C2;
+  --seal:#B23227;
+  --seal-soft:#B2322715;
+  --goal:400;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{height:100%}
+body{
+  font-family:'Gowun Batang', serif;
+  background:var(--paper);
+  color:var(--ink);
+  min-height:100%;
+  line-height:1.9;
+}
+/* ---------- header ---------- */
+header{
+  position:fixed; top:0; left:0; right:0; z-index:10;
+  background:linear-gradient(var(--paper) 82%, transparent);
+  padding:18px 24px 26px;
+}
+.head-inner{
+  max-width:680px; margin:0 auto;
+  display:flex; align-items:baseline; gap:18px;
+}
+.stats{
+  margin-left:auto; display:flex; gap:16px; align-items:baseline;
+  font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink-faded);
+}
+.stats b{color:var(--ink); font-weight:500; font-size:13px}
+.stats .done b{color:var(--seal)}
+.progress{
+  max-width:680px; margin:10px auto 0; height:2px; background:var(--rule);
+  position:relative; overflow:visible;
+}
+.progress .fill{
+  height:100%; width:0%; background:var(--ink);
+  transition:width .5s ease, background .5s ease;
+}
+.progress.done .fill{background:var(--seal)}
+/* ---------- manuscript ---------- */
+main{
+  max-width:680px; margin:0 auto;
+  padding:120px 24px 220px;
+}
+.empty-hint{
+  color:var(--ink-faded); font-size:15px; text-align:center;
+  padding:60px 0; line-height:2.4;
+}
+.line{
+  font-size:17px;
+  padding:2px 0;
+  animation:setink .9s ease;
+  word-break:keep-all; overflow-wrap:break-word;
+  white-space:pre-wrap;
+}
+.line.para{height:1.2em}
+@keyframes setink{
+  0%{opacity:0; filter:blur(2px); transform:translateY(4px)}
+  55%{opacity:1; filter:blur(.4px)}
+  100%{opacity:1; filter:none; transform:none}
+}
+.seal-mark{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:44px; height:44px; margin:28px 0 8px;
+  border:2px solid var(--seal); color:var(--seal);
+  font-size:19px; font-weight:700; border-radius:4px;
+  transform:rotate(-4deg);
+  background:var(--seal-soft);
+  animation:stamp .45s cubic-bezier(.2,1.6,.4,1);
+}
+@keyframes stamp{
+  0%{transform:scale(2.2) rotate(-14deg); opacity:0}
+  100%{transform:scale(1) rotate(-4deg); opacity:1}
+}
+/* ---------- input dock ---------- */
+.dock{
+  position:fixed; bottom:0; left:0; right:0; z-index:10;
+  background:linear-gradient(transparent, var(--paper) 22%);
+  padding:34px 24px 22px;
+}
+.dock-inner{max-width:680px; margin:0 auto}
+.input-row{
+  border-top:1px solid var(--ink);
+  padding-top:14px;
+  display:flex; align-items:flex-end; gap:12px;
+}
+textarea#lineInput{
+  flex:1; border:none; background:transparent; resize:none;
+  font-family:'Gowun Batang', serif; font-size:17px; line-height:1.8;
+  color:var(--ink); outline:none; height:auto; min-height:34px; max-height:180px;
+  word-break:keep-all;
+}
+textarea#lineInput::placeholder{color:var(--ink-faded); opacity:.6}
+.live-count{
+  font-family:'IBM Plex Mono', monospace; font-size:11px;
+  color:var(--ink-faded); white-space:nowrap; padding-bottom:6px;
+}
+.dock-note{
+  margin-top:10px; font-size:12px; color:var(--ink-faded);
+  display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.dock-actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+button{
+  font-family:'Gowun Batang', serif; font-size:13px;
+  padding:8px 16px; cursor:pointer;
+  border:1px solid var(--ink); background:transparent; color:var(--ink);
+  border-radius:2px; transition:all .15s;
+}
+button:hover:not(:disabled){background:var(--ink); color:var(--paper)}
+button:disabled{
+  border-color:var(--rule); color:var(--ink-faded); cursor:not-allowed; opacity:.7;
+}
+button.seal-btn{border-color:var(--seal); color:var(--seal)}
+button.seal-btn:hover:not(:disabled){background:var(--seal); color:var(--paper)}
+button.ghost{border-color:transparent; color:var(--ink-faded); padding:8px 8px}
+button.ghost:hover{background:transparent; color:var(--seal)}
+button:focus-visible{outline:2px solid var(--seal); outline-offset:2px}
+/* ---------- archive ---------- */
+.overlay{
+  position:fixed; inset:0; z-index:20; background:var(--paper);
+  overflow-y:auto; display:none; padding:40px 24px 80px;
+}
+.overlay.open{display:block}
+.overlay-inner{max-width:680px; margin:0 auto}
+.overlay h2{
+  font-size:15px; letter-spacing:.35em; font-weight:700; margin-bottom:32px;
+  display:flex; align-items:baseline; gap:16px;
+}
+.overlay h2 button{margin-left:auto}
+.session-item{
+  border-top:1px solid var(--rule); padding:18px 0; cursor:pointer;
+}
+.session-item:hover .s-preview{color:var(--seal)}
+.s-meta{
+  font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-faded);
+  display:flex; gap:14px; margin-bottom:6px; flex-wrap:wrap;
+}
+.s-preview{font-size:15px; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.reader{display:none}
+.reader.open{display:block}
+.reader .r-text{font-size:17px; white-space:pre-wrap; word-break:keep-all; margin:28px 0 40px}
+.r-actions{display:flex; gap:8px; flex-wrap:wrap}
+.toast{
+  position:fixed; bottom:200px; left:50%; transform:translateX(-50%) translateY(8px);
+  background:var(--ink); color:var(--paper); font-size:13px;
+  padding:8px 18px; border-radius:2px; opacity:0; pointer-events:none;
+  transition:all .25s; z-index:40;
+}
+.toast.show{opacity:1; transform:translateX(-50%)}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none!important; transition:none!important}
+}
+@media (max-width:560px){
+  .stats{gap:10px; font-size:11px}
+  main{padding-top:130px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-inner">
+    <div class="stats">
+      <div>자수 <b id="charCount">0</b></div>
+      <div>매수 <b id="pageCount">0.0</b></div>
+      <div>시간 <b id="timer">00:00</b></div>
+      <div class="done" id="remainWrap">남은 자수 <b id="remain">400</b></div>
+    </div>
+  </div>
+  <div class="progress" id="progress"><div class="fill" id="progressFill"></div></div>
+</header>
+
+<main id="manuscript">
+  <div class="empty-hint" id="emptyHint">
+    한 문장을 공들여 생각한 뒤, 입력하고 엔터를 누르세요.<br>
+    엔터 이후에는 고칠 수 없습니다. 다음 문장으로 나아갈 뿐입니다.<br>
+    사백 자가 되면 저장할 수 있습니다.
+  </div>
+</main>
+
+<div class="dock">
+  <div class="dock-inner">
+    <div class="input-row">
+      <textarea id="lineInput" rows="1" placeholder="한 줄을 쓰고 엔터 —" autofocus></textarea>
+      <div class="live-count" id="liveCount">+0</div>
+    </div>
+    <div class="dock-note">
+      <span>빈 줄에서 엔터를 치면 문단이 나뉩니다 · 확정된 문장은 수정할 수 없습니다</span>
+    </div>
+    <div class="dock-actions">
+      <button id="saveBtn" class="seal-btn" disabled>저장 (400자부터)</button>
+      <button id="copyBtn" disabled>텍스트 복사</button>
+      <button id="archiveBtn">보관함</button>
+    </div>
+  </div>
+</div>
+
+<!-- archive overlay -->
+<div class="overlay" id="archiveOverlay">
+  <div class="overlay-inner">
+    <div id="listView">
+      <h2>보 관 함 <button id="closeArchive">닫기</button></h2>
+      <div id="sessionList"></div>
+    </div>
+    <div class="reader" id="readerView">
+      <h2>다 시 읽 기 <button id="backToList">목록</button></h2>
+      <div class="s-meta" id="rMeta"></div>
+      <div class="r-text" id="rText"></div>
+      <div class="r-actions">
+        <button id="rCopy">텍스트 복사</button>
+        <button id="rDownload">.txt 내려받기</button>
+        <button id="rDelete" class="ghost">삭제</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const GOAL = 400;
+  const K_DRAFT = 'chogo_draft_v1';
+  const K_SESSIONS = 'chogo_sessions_v1';
+
+  // ----- state -----
+  // 열 때마다 항상 새 세션으로 시작한다 (임시 보관 복원 없음)
+  let draft = newDraft();
+  localStorage.removeItem(K_DRAFT); // 예전 버전이 남긴 임시 보관 정리
+  let sessions = load(K_SESSIONS) || [];
+  let saved = false;          // current session saved?
+  let timerInt = null;
+  let currentReadId = null;
+
+  function newDraft(){
+    return { lines: [], startedAt: null, elapsed: 0 };
+  }
+  function load(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } }
+  function store(k,v){ localStorage.setItem(k, JSON.stringify(v)); }
+
+  // ----- elements -----
+  const $ = id => document.getElementById(id);
+  const input = $('lineInput');
+  const manuscript = $('manuscript');
+  const emptyHint = $('emptyHint');
+
+  // ----- text helpers -----
+  function fullText(){ return draft.lines.join('\n'); }
+  function charLen(){ return fullText().replace(/\n/g,'').length; } // 공백 포함, 줄바꿈 제외
+
+  // ----- render -----
+  function renderLines(){
+    manuscript.querySelectorAll('.line,.seal-mark').forEach(e=>e.remove());
+    emptyHint.style.display = draft.lines.length ? 'none' : 'block';
+    draft.lines.forEach(t=>appendLineEl(t, false));
+    if(charLen()>=GOAL){
+      const seal=document.createElement('div');
+      seal.className='seal-mark'; seal.style.animation='none'; seal.textContent='完';
+      manuscript.appendChild(seal);
+    }
+    updateStats(false);
+  }
+  function appendLineEl(text, animate){
+    const div = document.createElement('div');
+    div.className = 'line' + (text==='' ? ' para' : '');
+    div.textContent = text;
+    if(!animate) div.style.animation = 'none';
+    manuscript.appendChild(div);
+  }
+  function updateStats(scroll){
+    const n = charLen();
+    $('charCount').textContent = n.toLocaleString();
+    $('pageCount').textContent = (n/200).toFixed(1);
+    const remain = Math.max(0, GOAL - n);
+    $('remain').textContent = remain.toLocaleString();
+    $('remainWrap').firstChild.textContent = remain===0 ? '완성 ' : '남은 자수 ';
+    const pct = Math.min(100, n/GOAL*100);
+    $('progressFill').style.width = pct + '%';
+    $('progress').classList.toggle('done', n>=GOAL);
+    const canSave = n>=GOAL && !saved;
+    $('saveBtn').disabled = !(canSave || saved);
+    $('saveBtn').textContent = saved ? '새 세션 시작' : (n>=GOAL ? '저장' : '저장 (400자부터)');
+    $('copyBtn').disabled = draft.lines.length===0;
+    if(scroll) window.scrollTo({top: document.body.scrollHeight, behavior:'smooth'});
+  }
+
+  // ----- timer -----
+  function fmt(s){ const m=Math.floor(s/60), ss=s%60;
+    return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
+  function startTimer(){
+    if(timerInt) return;
+    if(!draft.startedAt) draft.startedAt = Date.now();
+    timerInt = setInterval(()=>{
+      draft.elapsed++;
+      $('timer').textContent = fmt(draft.elapsed);
+    }, 1000);
+  }
+  $('timer').textContent = fmt(draft.elapsed||0);
+
+  // ----- commit (the point of no return) -----
+  function commit(){
+    if(saved){ toast('이미 저장된 세션입니다. 새 세션을 시작하세요.'); return; }
+    const t = input.value.replace(/\n/g,' ').trimEnd();
+    if(t==='' && draft.lines.length===0){ return; }              // 첫 줄 공백 무시
+    if(t==='' && draft.lines[draft.lines.length-1]===''){ return; } // 연속 빈 줄 방지
+    draft.lines.push(t);
+    appendLineEl(t, true);
+    emptyHint.style.display='none';
+    input.value=''; autosize();
+    $('liveCount').textContent = '+0';
+    updateStats(true);
+    if(charLen()>=GOAL && !manuscriptHasSeal()){
+      const seal = document.createElement('div');
+      seal.className='seal-mark'; seal.textContent='完';
+      manuscript.appendChild(seal);
+      toast('사백 자를 채웠습니다. 이제 저장할 수 있습니다.');
+    }
+  }
+  function manuscriptHasSeal(){ return !!manuscript.querySelector('.seal-mark'); }
+
+  input.addEventListener('keydown', e=>{
+    if(e.key==='Enter' && !e.isComposing && !e.shiftKey){
+      e.preventDefault(); commit();
+    }
+    // Backspace는 입력 중인 줄에서만 작동한다 (기본 동작). 확정된 줄은 DOM상 편집 불가.
+  });
+  input.addEventListener('input', ()=>{
+    startTimer(); autosize();
+    $('liveCount').textContent = '+' + input.value.length;
+  });
+  function autosize(){
+    input.style.height='auto';
+    input.style.height = Math.min(180, input.scrollHeight) + 'px';
+  }
+
+  // ----- save / copy / discard -----
+  $('saveBtn').addEventListener('click', ()=>{
+    if(saved){ resetSession(); return; }
+    if(charLen()<GOAL) return;
+    if(timerInt){ clearInterval(timerInt); timerInt=null; }
+    const s = {
+      id: Date.now(),
+      date: new Date().toISOString(),
+      chars: charLen(),
+      elapsed: draft.elapsed,
+      text: fullText()
+    };
+    sessions.unshift(s);
+    store(K_SESSIONS, sessions);
+    saved = true;
+    updateStats(false);
+    toast('저장되었습니다. 복사하여 스크리브너로 가져가세요.');
+  });
+
+  $('copyBtn').addEventListener('click', ()=>copyText(fullText()));
+
+  // WKWebView(스크리브너 등)는 confirm() 대화상자를 표시하지 않으므로
+  // 두 번 누르는 방식의 자체 확인을 사용한다.
+  function armButton(btn, armedLabel, action){
+    const disarm = ()=>{
+      btn.dataset.armed=''; btn.textContent=btn.dataset.label;
+      btn.classList.remove('seal-btn');
+      if(btn.dataset.wasGhost==='1') btn.classList.add('ghost');
+    };
+    if(btn.dataset.armed==='1'){
+      clearTimeout(btn._disarmT); disarm();
+      action();
+      return;
+    }
+    btn.dataset.label = btn.textContent;
+    btn.dataset.wasGhost = btn.classList.contains('ghost') ? '1' : '';
+    btn.dataset.armed='1';
+    btn.textContent = armedLabel;
+    btn.classList.remove('ghost');
+    btn.classList.add('seal-btn');
+    btn._disarmT = setTimeout(disarm, 4000);
+  }
+
+  function resetSession(){
+    if(timerInt){ clearInterval(timerInt); timerInt=null; }
+    draft = newDraft(); saved=false;
+    $('timer').textContent='00:00';
+    renderLines(); input.focus();
+  }
+
+  function copyText(t){
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(()=>toast('복사되었습니다.'),
+        ()=>fallbackCopy(t));
+    } else fallbackCopy(t);
+  }
+  function fallbackCopy(t){
+    const ta=document.createElement('textarea');
+    ta.value=t; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('복사되었습니다.'); }
+    catch(e){ toast('복사에 실패했습니다.'); }
+    ta.remove();
+  }
+
+  // ----- archive -----
+  const overlay=$('archiveOverlay'), listView=$('listView'), readerView=$('readerView');
+  $('archiveBtn').addEventListener('click', openArchive);
+  $('closeArchive').addEventListener('click', ()=>{ overlay.classList.remove('open'); input.focus(); });
+  $('backToList').addEventListener('click', ()=>{ readerView.classList.remove('open'); listView.style.display='block'; });
+
+  function openArchive(){
+    renderList();
+    readerView.classList.remove('open'); listView.style.display='block';
+    overlay.classList.add('open');
+  }
+  function renderList(){
+    const list=$('sessionList');
+    if(!sessions.length){
+      list.innerHTML='<div class="empty-hint">아직 저장된 세션이 없습니다.<br>오늘의 사백 자가 첫 기록이 됩니다.</div>';
+      return;
+    }
+    list.innerHTML='';
+    sessions.forEach(s=>{
+      const d=new Date(s.date);
+      const item=document.createElement('div');
+      item.className='session-item';
+      item.innerHTML =
+        '<div class="s-meta"><span>'+d.toLocaleDateString('ko-KR')+' '+
+        d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})+'</span>'+
+        '<span>'+s.chars.toLocaleString()+'자</span>'+
+        '<span>'+(s.chars/200).toFixed(1)+'매</span>'+
+        '<span>'+fmt(s.elapsed||0)+'</span></div>'+
+        '<div class="s-preview"></div>';
+      item.querySelector('.s-preview').textContent = s.text.split('\n').find(l=>l.trim()) || '(빈 문서)';
+      item.addEventListener('click', ()=>openReader(s.id));
+      list.appendChild(item);
+    });
+  }
+  function openReader(id){
+    const s=sessions.find(x=>x.id===id); if(!s) return;
+    currentReadId=id;
+    const d=new Date(s.date);
+    $('rMeta').innerHTML='<span>'+d.toLocaleString('ko-KR')+'</span><span>'+
+      s.chars.toLocaleString()+'자 · '+(s.chars/200).toFixed(1)+'매 · '+fmt(s.elapsed||0)+'</span>';
+    $('rText').textContent=s.text;
+    listView.style.display='none';
+    readerView.classList.add('open');
+  }
+  $('rCopy').addEventListener('click', ()=>{
+    const s=sessions.find(x=>x.id===currentReadId);
+    if(s) copyText(s.text);
+  });
+  $('rDownload').addEventListener('click', ()=>{
+    const s=sessions.find(x=>x.id===currentReadId); if(!s) return;
+    const d=new Date(s.date);
+    const name='초고_'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+
+      String(d.getDate()).padStart(2,'0')+'_'+String(d.getHours()).padStart(2,'0')+
+      String(d.getMinutes()).padStart(2,'0')+'.txt';
+    const blob=new Blob([s.text],{type:'text/plain;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download=name; a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  $('rDelete').addEventListener('click', ()=>{
+    armButton($('rDelete'), '한 번 더 누르면 삭제합니다', ()=>{
+      sessions=sessions.filter(x=>x.id!==currentReadId);
+      store(K_SESSIONS, sessions);
+      readerView.classList.remove('open'); listView.style.display='block';
+      renderList();
+      toast('삭제되었습니다.');
+    });
+  });
+
+  // ----- toast -----
+  let toastT=null;
+  function toast(msg){
+    const t=$('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastT);
+    toastT=setTimeout(()=>t.classList.remove('show'), 2400);
+  }
+
+  // ----- leave guard -----
+  window.addEventListener('beforeunload', e=>{
+    if(draft.lines.length && !saved && charLen()<GOAL){
+      e.preventDefault(); e.returnValue='';
+    }
+  });
+
+  // ----- boot -----
+  renderLines();
+  input.focus();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초고 가이드 — 소설</title>
+<style>
+  :root{
+    --bg:#f6f2ea; --paper:#fffdf8; --ink:#2b2620; --sub:#8a7f6f;
+    --accent:#9a6b3f; --accent-dark:#7a5230; --line:#e5dcc9;
+    --green:#5e7d4f; --red:#a5482f; --chip:#efe7d6;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Noto Serif KR","Nanum Myeongjo",serif;
+    line-height:1.7; min-height:100vh;
+  }
+  header{
+    background:var(--paper); border-bottom:1px solid var(--line);
+    padding:16px 24px; position:sticky; top:0; z-index:10;
+  }
+  .header-row{display:flex; align-items:center; gap:12px; flex-wrap:wrap; max-width:860px; margin:0 auto;}
+  h1{font-size:1.25rem; font-weight:700; letter-spacing:-.02em;}
+  h1 small{color:var(--sub); font-weight:400; font-size:.8rem; margin-left:6px;}
+  .spacer{flex:1;}
+  select,input[type=text],input[type=number],textarea{
+    font-family:inherit; font-size:.95rem; color:var(--ink);
+    background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+  }
+  select:focus,input:focus,textarea:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  button{
+    font-family:inherit; font-size:.9rem; cursor:pointer; border:none; border-radius:8px;
+    padding:8px 14px; background:var(--chip); color:var(--ink); transition:filter .15s;
+  }
+  button:hover{filter:brightness(.95);}
+  button.primary{background:var(--accent); color:#fff;}
+  button.primary:hover{background:var(--accent-dark); filter:none;}
+  button.ghost{background:transparent; border:1px solid var(--line);}
+  button.danger{background:transparent; color:var(--red); border:1px solid var(--line);}
+  button.small{font-size:.8rem; padding:4px 10px;}
+
+  /* progress */
+  .progress-wrap{max-width:860px; margin:10px auto 0;}
+  .progress-labels{display:flex; justify-content:space-between; font-size:.8rem; color:var(--sub);}
+  .progress-bar{height:8px; background:var(--chip); border-radius:99px; overflow:hidden; margin-top:4px;}
+  .progress-fill{height:100%; width:0%; background:var(--accent); border-radius:99px; transition:width .3s;}
+  .progress-fill.done{background:var(--green);}
+
+  main{max-width:860px; margin:0 auto; padding:20px 24px 80px;}
+  .tabs{display:flex; gap:6px; margin-bottom:20px;}
+  .tabs button{background:transparent; border:1px solid var(--line); border-radius:99px;}
+  .tabs button.active{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px;}
+  .chip{display:inline-block; font-size:.75rem; background:var(--chip); color:var(--accent-dark);
+        border-radius:99px; padding:2px 10px; margin-bottom:8px;}
+  .q-text{font-size:1.2rem; font-weight:700; line-height:1.6; margin-bottom:14px; white-space:pre-wrap;}
+  .q-actions{display:flex; gap:8px; flex-wrap:wrap;}
+  textarea{width:100%; min-height:140px; resize:vertical; line-height:1.8;}
+  .answer-meta{display:flex; justify-content:space-between; align-items:center; margin-top:8px; flex-wrap:wrap; gap:8px;}
+  .char-note{font-size:.8rem; color:var(--sub);}
+
+  .entry{border-top:1px solid var(--line); padding:14px 0;}
+  .entry:first-of-type{border-top:none;}
+  .entry .eq{font-weight:700; font-size:.95rem;}
+  .entry .eq .chip{margin:0 6px 0 0; vertical-align:1px;}
+  .entry .ea{margin-top:6px; white-space:pre-wrap; color:#4a4238; font-size:.95rem;}
+  .entry-actions{margin-top:8px; display:flex; gap:6px;}
+  .entry textarea{margin-top:6px;}
+  .empty{color:var(--sub); text-align:center; padding:24px 0; font-size:.9rem;}
+
+  .section-title{font-size:1rem; font-weight:700; margin-bottom:12px;}
+  .section-desc{font-size:.85rem; color:var(--sub); margin-bottom:12px;}
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .row.mt{margin-top:12px;}
+
+  /* question manager */
+  .q-item{display:flex; gap:10px; align-items:flex-start; border-top:1px solid var(--line); padding:10px 0;}
+  .q-item:first-of-type{border-top:none;}
+  .q-item .body{flex:1;}
+  .q-item .txt{font-size:.95rem;}
+  .q-item .answered{color:var(--green); font-size:.75rem; margin-left:6px;}
+  .q-edit-input{width:100%;}
+
+  .bottom-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;}
+
+  /* modal & toast */
+  .overlay{position:fixed; inset:0; background:rgba(43,38,32,.45); display:none;
+           align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .overlay.show{display:flex;}
+  .modal{background:var(--paper); border-radius:16px; padding:28px; max-width:420px; text-align:center;}
+  .modal h2{font-size:1.2rem; margin-bottom:10px;}
+  .modal p{font-size:.95rem; color:#4a4238; margin-bottom:18px;}
+  #toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
+    background:var(--ink); color:var(--paper); padding:10px 20px; border-radius:99px;
+    font-size:.85rem; transition:transform .25s; z-index:200;
+  }
+  #toast.show{transform:translateX(-50%) translateY(0);}
+  label.field{display:block; font-size:.85rem; color:var(--sub); margin:14px 0 4px;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <h1>초고 가이드<small>소설</small></h1>
+    <div class="spacer"></div>
+    <select id="sessionSelect" title="작업 불러오기"></select>
+    <button id="newSessionBtn" class="ghost small">＋ 새 작업</button>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-labels">
+      <span id="progressText">0 / 4000자</span>
+      <span id="entryCount">저장된 답변 0개</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button data-tab="write" class="active">✍️ 작성</button>
+    <button data-tab="questions">🗂 질문 관리</button>
+    <button data-tab="settings">⚙️ 설정 · 내보내기</button>
+  </div>
+
+  <!-- ============ 작성 탭 ============ -->
+  <section id="tab-write">
+    <div class="card">
+      <span class="chip" id="qCategory">—</span>
+      <div class="q-text" id="qText">아래 버튼을 눌러 질문을 뽑아보세요.</div>
+      <div class="q-actions">
+        <button class="primary" id="drawBtn">🎲 랜덤 질문 뽑기</button>
+        <button class="ghost" id="skipBtn">건너뛰기</button>
+      </div>
+      <div id="answerArea" class="hidden">
+        <label class="field">답변</label>
+        <textarea id="answerInput" placeholder="이 질문에 대해 자유롭게 써보세요. 완성된 문장이 아니어도 좋습니다."></textarea>
+        <div class="answer-meta">
+          <span class="char-note" id="answerCharNote">0자</span>
+          <button class="primary" id="saveAnswerBtn">답변 저장</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">저장된 질문과 답변</div>
+      <div id="entryList"><div class="empty">아직 저장된 답변이 없습니다.</div></div>
+      <div class="bottom-actions">
+        <button class="primary" id="copyPromptBtn">📋 AI 프롬프트 복사</button>
+        <button class="ghost" id="exportTxtBtn">TXT로 내보내기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 질문 관리 탭 ============ -->
+  <section id="tab-questions" class="hidden">
+    <div class="card">
+      <div class="section-title">질문 추가</div>
+      <div class="row">
+        <input type="text" id="newQText" placeholder="새 질문을 입력하세요" style="flex:1; min-width:200px;">
+        <input type="text" id="newQCat" list="catList" placeholder="카테고리" style="width:130px;">
+        <datalist id="catList"></datalist>
+        <button class="primary" id="addQBtn">추가</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">질문 목록 <span class="char-note" id="qCount"></span></div>
+      <div class="section-desc">✔ 표시는 현재 작업에서 이미 답한 질문입니다. 질문을 클릭 없이 바로 답하려면 ‘답하기’를 누르세요.</div>
+      <div class="row" style="margin-bottom:10px;">
+        <select id="catFilter"><option value="">전체 카테고리</option></select>
+        <button class="ghost small" id="restoreDefaultsBtn">기본 질문 복원</button>
+      </div>
+      <div id="questionList"></div>
+    </div>
+  </section>
+
+  <!-- ============ 설정 탭 ============ -->
+  <section id="tab-settings" class="hidden">
+    <div class="card">
+      <div class="section-title">현재 작업</div>
+      <label class="field">작업 이름</label>
+      <div class="row">
+        <input type="text" id="sessionTitleInput" style="flex:1; min-width:200px;">
+        <button id="renameSessionBtn">이름 저장</button>
+        <button class="danger" id="deleteSessionBtn">작업 삭제</button>
+      </div>
+      <label class="field">목표 글자 수 (질문+답변 합산)</label>
+      <div class="row">
+        <input type="number" id="targetInput" min="500" step="500" style="width:120px;">
+        <button id="saveTargetBtn">저장</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">AI 프롬프트 서문</div>
+      <div class="section-desc">‘AI 프롬프트 복사’를 누르면 이 서문 뒤에 저장된 질문·답변이 붙어 복사됩니다.</div>
+      <textarea id="promptIntroInput" style="min-height:180px;"></textarea>
+      <div class="row mt">
+        <button class="primary" id="savePromptBtn">서문 저장</button>
+        <button class="ghost" id="resetPromptBtn">기본값으로</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">백업 · 복원</div>
+      <div class="section-desc">모든 작업과 질문을 JSON 파일로 저장해두면 다른 컴퓨터나 브라우저에서도 이어서 쓸 수 있습니다.</div>
+      <div class="row">
+        <button class="primary" id="backupBtn">💾 전체 백업 (JSON)</button>
+        <button class="ghost" id="importBtn">📂 백업 불러오기</button>
+        <input type="file" id="importFile" accept=".json" class="hidden">
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="goalOverlay">
+  <div class="modal">
+    <h2>🎉 목표 분량 도달!</h2>
+    <p id="goalMsg">질문과 답변이 4,000자를 넘었습니다.<br>이제 ‘AI 프롬프트 복사’로 초고 가이드를 만들어보세요.</p>
+    <button class="primary" onclick="document.getElementById('goalOverlay').classList.remove('show')">계속 쓰기</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- 기본 질문 (소설) ---------- */
+const DEFAULT_QUESTIONS = [
+  ["장면","이 장면은 어디에서, 언제 벌어지는가? 공간의 분위기와 감각적 디테일(소리, 냄새, 빛)은 어떤가?"],
+  ["장면","이 장면에 등장하는 캐릭터들은 누구인가? 각자 왜 이 자리에 있는가?"],
+  ["장면","이 장면이 시작될 때와 끝날 때, 무엇이 달라져 있는가?"],
+  ["장면","이 장면을 한 문장으로 요약한다면?"],
+  ["장면","이 장면에서 독자가 느꼈으면 하는 감정은 무엇인가?"],
+  ["장면","이 장면에서 말해지지 않는 것(숨겨진 감정, 비밀, 긴장)은 무엇인가?"],
+  ["캐릭터","주인공이 이 이야기에서 간절히 원하는 것은 무엇인가? 왜 그것을 원하게 되었나?"],
+  ["캐릭터","주인공이 가장 두려워하는 것은 무엇인가? 그 두려움은 어디에서 왔나?"],
+  ["캐릭터","이 장면에서 캐릭터는 어떤 갈등을 느낄까? (내적 갈등과 외적 갈등을 나누어)"],
+  ["캐릭터","이 캐릭터가 절대 하지 않을 행동은 무엇인가? 이야기가 결국 그 행동을 하게 만든다면 어떤 상황일까?"],
+  ["캐릭터","캐릭터의 말버릇, 습관, 몸짓 중 성격을 드러내는 것은 무엇인가?"],
+  ["캐릭터","적대자(혹은 방해 요소)는 무엇을 원하는가? 그의 입장에서 그는 왜 옳은가?"],
+  ["캐릭터","캐릭터들 사이의 관계는 이 장면을 지나며 어떻게 변하는가?"],
+  ["갈등·플롯","지금 주인공 앞을 가로막는 가장 큰 장애물은 무엇인가?"],
+  ["갈등·플롯","주인공의 선택이 만들어낼 돌이킬 수 없는 결과는 무엇인가?"],
+  ["갈등·플롯","이야기의 가장 어두운 순간(모든 것이 무너지는 지점)은 어떤 모습인가?"],
+  ["갈등·플롯","독자가 다음 장을 넘기게 만들 질문(궁금증)은 무엇인가?"],
+  ["갈등·플롯","이 이야기에서 반드시 일어나야 하는 사건 세 가지는 무엇인가?"],
+  ["배경·세계","이 세계(배경)의 규칙 중 이야기에 직접 영향을 주는 것은 무엇인가?"],
+  ["배경·세계","계절, 날씨, 시간대는 장면의 정서에 어떤 영향을 주는가?"],
+  ["주제·문체","이 이야기를 통해 던지고 싶은 질문은 무엇인가?"],
+  ["주제·문체","결말에서 주인공은 처음과 어떻게 달라져 있는가?"],
+  ["주제·문체","이 이야기는 누구의 시점으로, 어떤 목소리로 서술되는가?"],
+  ["주제·문체","첫 문장은 어떤 이미지 혹은 사건으로 시작하고 싶은가?"],
+  ["주제·문체","마지막 장면에서 독자에게 남기고 싶은 단 하나의 이미지가 있다면?"]
+];
+
+const DEFAULT_PROMPT_INTRO =
+`당신은 소설 초고 작성을 돕는 전문 편집자입니다. 아래는 제가 쓰려는 소설에 대해 스스로 질문하고 답한 내용입니다.
+이 질문과 답변을 바탕으로, 집필에 바로 활용할 수 있는 '초고 작성 가이드'를 작성해주세요.
+
+가이드에 포함할 것:
+1. 이야기의 핵심 요약 (한 단락)
+2. 장면 구성과 전개 순서 제안
+3. 캐릭터와 갈등 구조 정리
+4. 답변들 사이의 모순이나 아직 비어 있는 부분, 그리고 그것을 채우기 위한 추가 질문
+5. 집필 시 유의할 점 (시점, 톤, 분위기)`;
+
+const STORE_KEY = "draftGuide.novel.v1";
+const DEFAULT_TARGET = 4000;
+
+/* ---------- 상태 ---------- */
+let state = null;
+let currentQ = null;      // {id, cat, text} 지금 뽑힌 질문
+let editingEntryId = null;
+let editingQId = null;
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const $ = id => document.getElementById(id);
+
+function defaultQuestions(){
+  return DEFAULT_QUESTIONS.map(([cat,text]) => ({id:uid(), cat, text}));
+}
+function newSession(title){
+  return {id:uid(), title:title||"이름 없는 작업", createdAt:Date.now(), entries:[], goalNotified:false};
+}
+function freshState(){
+  const s = newSession("첫 작업");
+  return {questions:defaultQuestions(), sessions:[s], currentSessionId:s.id,
+          target:DEFAULT_TARGET, promptIntro:DEFAULT_PROMPT_INTRO};
+}
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ state = JSON.parse(raw); if(!state.sessions||!state.sessions.length) throw 0; return; }
+  }catch(e){}
+  state = freshState();
+  save();
+}
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function session(){ return state.sessions.find(s=>s.id===state.currentSessionId) || state.sessions[0]; }
+
+/* ---------- 글자 수 ---------- */
+function totalChars(){
+  const saved = session().entries.reduce((n,e)=> n + e.q.length + e.a.length, 0);
+  const draft = $("answerArea").classList.contains("hidden") ? 0 : $("answerInput").value.length;
+  return saved + draft;
+}
+function updateProgress(){
+  const n = totalChars(), t = state.target || DEFAULT_TARGET;
+  const pct = Math.min(100, n/t*100);
+  $("progressFill").style.width = pct + "%";
+  $("progressFill").classList.toggle("done", n >= t);
+  $("progressText").textContent = n.toLocaleString() + " / " + t.toLocaleString() + "자";
+  $("entryCount").textContent = "저장된 답변 " + session().entries.length + "개";
+  if(n >= t && !session().goalNotified){
+    session().goalNotified = true; save();
+    $("goalMsg").innerHTML = "질문과 답변이 " + t.toLocaleString() + "자를 넘었습니다.<br>이제 ‘AI 프롬프트 복사’로 초고 가이드를 만들어보세요.";
+    $("goalOverlay").classList.add("show");
+  }
+}
+
+/* ---------- 토스트 ---------- */
+let toastTimer;
+function toast(msg){
+  const el = $("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove("show"), 2200);
+}
+
+/* ---------- 탭 ---------- */
+document.querySelectorAll(".tabs button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tabs button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    ["write","questions","settings"].forEach(t=>{
+      $("tab-"+t).classList.toggle("hidden", t !== btn.dataset.tab);
+    });
+    if(btn.dataset.tab==="questions") renderQuestions();
+    if(btn.dataset.tab==="settings") renderSettings();
+  });
+});
+
+/* ---------- 세션 ---------- */
+function renderSessions(){
+  const sel = $("sessionSelect");
+  sel.innerHTML = "";
+  state.sessions.forEach(s=>{
+    const o = document.createElement("option");
+    o.value = s.id; o.textContent = s.title;
+    if(s.id===state.currentSessionId) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+$("sessionSelect").addEventListener("change", e=>{
+  state.currentSessionId = e.target.value; save();
+  currentQ = null; resetQuestionCard(); renderAll();
+});
+$("newSessionBtn").addEventListener("click", ()=>{
+  const title = prompt("새 작업의 이름을 입력하세요", "새 작품 " + (state.sessions.length+1));
+  if(title===null) return;
+  const s = newSession(title.trim()||"이름 없는 작업");
+  state.sessions.push(s); state.currentSessionId = s.id; save();
+  currentQ = null; resetQuestionCard(); renderAll();
+  toast("새 작업을 시작했습니다");
+});
+
+/* ---------- 질문 뽑기 / 답변 ---------- */
+function resetQuestionCard(){
+  $("qCategory").textContent = "—";
+  $("qText").textContent = "아래 버튼을 눌러 질문을 뽑아보세요.";
+  $("answerArea").classList.add("hidden");
+  $("answerInput").value = "";
+}
+function answeredIds(){ return new Set(session().entries.map(e=>e.qid).filter(Boolean)); }
+
+function drawQuestion(){
+  if(!state.questions.length){ toast("질문이 없습니다. ‘질문 관리’에서 추가하세요."); return; }
+  const done = answeredIds();
+  let pool = state.questions.filter(q => !done.has(q.id) && (!currentQ || q.id!==currentQ.id));
+  let allUsed = false;
+  if(!pool.length){
+    pool = state.questions.filter(q => !currentQ || q.id!==currentQ.id);
+    if(!pool.length) pool = state.questions;
+    allUsed = true;
+  }
+  const q = pool[Math.floor(Math.random()*pool.length)];
+  showQuestion(q);
+  if(allUsed) toast("모든 질문에 답했습니다. 이미 답한 질문이 다시 나옵니다.");
+}
+function showQuestion(q){
+  currentQ = q;
+  $("qCategory").textContent = q.cat || "일반";
+  $("qText").textContent = q.text;
+  $("answerArea").classList.remove("hidden");
+  $("answerInput").value = "";
+  $("answerCharNote").textContent = "0자";
+  $("answerInput").focus();
+  updateProgress();
+}
+$("drawBtn").addEventListener("click", ()=>{
+  if(currentQ && $("answerInput").value.trim() &&
+     !confirm("작성 중인 답변이 있습니다. 저장하지 않고 새 질문을 뽑을까요?")) return;
+  drawQuestion();
+});
+$("skipBtn").addEventListener("click", drawQuestion);
+
+$("answerInput").addEventListener("input", ()=>{
+  $("answerCharNote").textContent = $("answerInput").value.length.toLocaleString() + "자";
+  updateProgress();
+});
+
+$("saveAnswerBtn").addEventListener("click", ()=>{
+  const a = $("answerInput").value.trim();
+  if(!currentQ){ toast("먼저 질문을 뽑아주세요"); return; }
+  if(!a){ toast("답변을 입력해주세요"); return; }
+  session().entries.push({id:uid(), qid:currentQ.id, cat:currentQ.cat, q:currentQ.text, a, ts:Date.now()});
+  save();
+  currentQ = null; resetQuestionCard();
+  renderEntries(); updateProgress();
+  toast("저장되었습니다 ✓");
+});
+
+/* ---------- 저장된 항목 ---------- */
+function renderEntries(){
+  const wrap = $("entryList");
+  const entries = session().entries;
+  if(!entries.length){ wrap.innerHTML = '<div class="empty">아직 저장된 답변이 없습니다.</div>'; return; }
+  wrap.innerHTML = "";
+  entries.slice().reverse().forEach(e=>{
+    const div = document.createElement("div");
+    div.className = "entry";
+    if(editingEntryId === e.id){
+      div.innerHTML =
+        '<div class="eq"><span class="chip">'+esc(e.cat||"일반")+'</span>'+esc(e.q)+'</div>' +
+        '<textarea data-edit>'+esc(e.a)+'</textarea>' +
+        '<div class="entry-actions"><button class="primary small" data-act="saveEdit">저장</button>' +
+        '<button class="ghost small" data-act="cancelEdit">취소</button></div>';
+    }else{
+      div.innerHTML =
+        '<div class="eq"><span class="chip">'+esc(e.cat||"일반")+'</span>'+esc(e.q)+'</div>' +
+        '<div class="ea">'+esc(e.a)+'</div>' +
+        '<div class="entry-actions"><span class="char-note">'+(e.q.length+e.a.length)+'자</span>' +
+        '<span class="spacer"></span>' +
+        '<button class="ghost small" data-act="edit">수정</button>' +
+        '<button class="danger small" data-act="del">삭제</button></div>';
+    }
+    div.addEventListener("click", ev=>{
+      const act = ev.target.dataset && ev.target.dataset.act;
+      if(!act) return;
+      if(act==="edit"){ editingEntryId = e.id; renderEntries(); }
+      if(act==="cancelEdit"){ editingEntryId = null; renderEntries(); }
+      if(act==="saveEdit"){
+        const ta = div.querySelector("[data-edit]");
+        e.a = ta.value.trim(); editingEntryId = null; save();
+        renderEntries(); updateProgress(); toast("수정되었습니다");
+      }
+      if(act==="del" && confirm("이 답변을 삭제할까요?")){
+        session().entries = session().entries.filter(x=>x.id!==e.id);
+        save(); renderEntries(); updateProgress();
+      }
+    });
+    wrap.appendChild(div);
+  });
+}
+
+/* ---------- 질문 관리 ---------- */
+function categories(){
+  return [...new Set(state.questions.map(q=>q.cat).filter(Boolean))];
+}
+function renderQuestions(){
+  const cats = categories();
+  $("catList").innerHTML = cats.map(c=>'<option value="'+esc(c)+'">').join("");
+  const filterSel = $("catFilter");
+  const prev = filterSel.value;
+  filterSel.innerHTML = '<option value="">전체 카테고리</option>' +
+    cats.map(c=>'<option value="'+esc(c)+'"'+(c===prev?" selected":"")+'>'+esc(c)+'</option>').join("");
+
+  const done = answeredIds();
+  const list = $("questionList");
+  const filter = filterSel.value;
+  const qs = state.questions.filter(q=>!filter || q.cat===filter);
+  $("qCount").textContent = "(" + qs.length + "개)";
+  list.innerHTML = "";
+  if(!qs.length){ list.innerHTML = '<div class="empty">질문이 없습니다.</div>'; return; }
+
+  qs.forEach(q=>{
+    const div = document.createElement("div");
+    div.className = "q-item";
+    if(editingQId === q.id){
+      div.innerHTML =
+        '<div class="body"><input class="q-edit-input" type="text" value="'+escAttr(q.text)+'" data-qtext>' +
+        '<div class="row mt"><input type="text" list="catList" value="'+escAttr(q.cat||"")+'" data-qcat style="width:130px;">' +
+        '<button class="primary small" data-act="saveQ">저장</button>' +
+        '<button class="ghost small" data-act="cancelQ">취소</button></div></div>';
+    }else{
+      div.innerHTML =
+        '<div class="body"><span class="chip">'+esc(q.cat||"일반")+'</span>' +
+        (done.has(q.id) ? '<span class="answered">✔ 답변함</span>' : '') +
+        '<div class="txt">'+esc(q.text)+'</div></div>' +
+        '<button class="ghost small" data-act="answerQ">답하기</button>' +
+        '<button class="ghost small" data-act="editQ">편집</button>' +
+        '<button class="danger small" data-act="delQ">삭제</button>';
+    }
+    div.addEventListener("click", ev=>{
+      const act = ev.target.dataset && ev.target.dataset.act;
+      if(!act) return;
+      if(act==="answerQ"){
+        showQuestion(q);
+        document.querySelector('.tabs button[data-tab="write"]').click();
+      }
+      if(act==="editQ"){ editingQId = q.id; renderQuestions(); }
+      if(act==="cancelQ"){ editingQId = null; renderQuestions(); }
+      if(act==="saveQ"){
+        const t = div.querySelector("[data-qtext]").value.trim();
+        const c = div.querySelector("[data-qcat]").value.trim();
+        if(!t){ toast("질문 내용을 입력하세요"); return; }
+        q.text = t; q.cat = c || "일반"; editingQId = null;
+        save(); renderQuestions(); toast("질문이 수정되었습니다");
+      }
+      if(act==="delQ" && confirm("이 질문을 삭제할까요? (이미 저장된 답변은 남습니다)")){
+        state.questions = state.questions.filter(x=>x.id!==q.id);
+        save(); renderQuestions();
+      }
+    });
+    list.appendChild(div);
+  });
+}
+$("catFilter").addEventListener("change", renderQuestions);
+$("addQBtn").addEventListener("click", ()=>{
+  const t = $("newQText").value.trim();
+  if(!t){ toast("질문 내용을 입력하세요"); return; }
+  const c = $("newQCat").value.trim() || "일반";
+  state.questions.push({id:uid(), cat:c, text:t});
+  save(); $("newQText").value = "";
+  renderQuestions(); toast("질문이 추가되었습니다");
+});
+$("newQText").addEventListener("keydown", e=>{ if(e.key==="Enter") $("addQBtn").click(); });
+$("restoreDefaultsBtn").addEventListener("click", ()=>{
+  if(!confirm("기본 질문 25개를 목록에 추가할까요? (기존 질문은 유지됩니다)")) return;
+  const existing = new Set(state.questions.map(q=>q.text));
+  let added = 0;
+  DEFAULT_QUESTIONS.forEach(([cat,text])=>{
+    if(!existing.has(text)){ state.questions.push({id:uid(), cat, text}); added++; }
+  });
+  save(); renderQuestions(); toast(added + "개의 기본 질문을 추가했습니다");
+});
+
+/* ---------- 프롬프트 / 내보내기 ---------- */
+function buildPrompt(){
+  const s = session();
+  let out = (state.promptIntro || DEFAULT_PROMPT_INTRO) + "\n\n---\n[작품: " + s.title + "]\n\n";
+  s.entries.forEach((e,i)=>{
+    out += "Q" + (i+1) + ". " + e.q + "\nA" + (i+1) + ". " + e.a + "\n\n";
+  });
+  return out.trim();
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta); return ok;
+  }
+}
+$("copyPromptBtn").addEventListener("click", async ()=>{
+  if(!session().entries.length){ toast("저장된 답변이 없습니다"); return; }
+  const ok = await copyText(buildPrompt());
+  toast(ok ? "프롬프트가 복사되었습니다. AI 채팅창에 붙여넣으세요 ✓" : "복사에 실패했습니다");
+});
+$("exportTxtBtn").addEventListener("click", ()=>{
+  if(!session().entries.length){ toast("저장된 답변이 없습니다"); return; }
+  downloadFile(session().title + "_초고가이드.txt", buildPrompt());
+});
+function downloadFile(name, content, type){
+  const blob = new Blob([content], {type: type||"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------- 설정 ---------- */
+function renderSettings(){
+  $("sessionTitleInput").value = session().title;
+  $("targetInput").value = state.target || DEFAULT_TARGET;
+  $("promptIntroInput").value = state.promptIntro || DEFAULT_PROMPT_INTRO;
+}
+$("renameSessionBtn").addEventListener("click", ()=>{
+  const t = $("sessionTitleInput").value.trim();
+  if(!t){ toast("이름을 입력하세요"); return; }
+  session().title = t; save(); renderSessions(); toast("이름이 변경되었습니다");
+});
+$("deleteSessionBtn").addEventListener("click", ()=>{
+  if(!confirm("‘" + session().title + "’ 작업과 모든 답변을 삭제할까요?")) return;
+  state.sessions = state.sessions.filter(s=>s.id!==state.currentSessionId);
+  if(!state.sessions.length) state.sessions.push(newSession("새 작업"));
+  state.currentSessionId = state.sessions[0].id;
+  save(); currentQ = null; resetQuestionCard(); renderAll(); renderSettings();
+  toast("작업이 삭제되었습니다");
+});
+$("saveTargetBtn").addEventListener("click", ()=>{
+  const v = parseInt($("targetInput").value, 10);
+  if(!v || v < 100){ toast("100자 이상으로 설정하세요"); return; }
+  state.target = v;
+  state.sessions.forEach(s=>{ if(s.goalNotified) s.goalNotified = false; });
+  save(); updateProgress(); toast("목표가 " + v.toLocaleString() + "자로 설정되었습니다");
+});
+$("savePromptBtn").addEventListener("click", ()=>{
+  state.promptIntro = $("promptIntroInput").value; save(); toast("서문이 저장되었습니다");
+});
+$("resetPromptBtn").addEventListener("click", ()=>{
+  $("promptIntroInput").value = DEFAULT_PROMPT_INTRO;
+  state.promptIntro = DEFAULT_PROMPT_INTRO; save(); toast("기본 서문으로 되돌렸습니다");
+});
+
+/* ---------- 백업 ---------- */
+$("backupBtn").addEventListener("click", ()=>{
+  const d = new Date().toISOString().slice(0,10);
+  downloadFile("초고가이드_백업_" + d + ".json", JSON.stringify(state, null, 2), "application/json");
+  toast("백업 파일이 다운로드됩니다");
+});
+$("importBtn").addEventListener("click", ()=> $("importFile").click());
+$("importFile").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const data = JSON.parse(r.result);
+      if(!data.sessions || !data.questions) throw new Error("형식 오류");
+      if(!confirm("현재 데이터를 백업 파일 내용으로 교체할까요?")) return;
+      state = data; save();
+      currentQ = null; resetQuestionCard(); renderAll(); renderSettings();
+      toast("백업을 불러왔습니다 ✓");
+    }catch(err){ toast("올바른 백업 파일이 아닙니다"); }
+    e.target.value = "";
+  };
+  r.readAsText(f);
+});
+
+/* ---------- 유틸 ---------- */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s){ return esc(s).replace(/"/g,"&quot;"); }
+
+function renderAll(){ renderSessions(); renderEntries(); renderQuestions(); updateProgress(); }
+
+/* ---------- 시작 ---------- */
+load();
+renderAll();
+</script>
+</body>
+</html>
