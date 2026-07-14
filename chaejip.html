@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="채집수첩">
+<title>채집수첩 — 관찰 기록</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;500;600&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F1EB;
+  --paper-deep:#EAE7DE;
+  --ink:#2B2924;
+  --ink-soft:#6E6A60;
+  --ink-faint:#A9A498;
+  --seal:#A63A2E;
+  --stitch:#C9C4B6;
+  --card:#FBFAF6;
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sat: env(safe-area-inset-top, 0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Gowun Batang','Noto Serif KR','Apple SD Gothic Neo',serif;
+  font-size:16px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;
+}
+
+/* ── 오침 제본 스티치 (왼쪽 가장자리) ── */
+.binding{
+  position:fixed; left:10px; top:0; bottom:0; width:2px; z-index:5;
+  background:
+    repeating-linear-gradient(to bottom,
+      transparent 0 calc(20% - 14px),
+      var(--stitch) calc(20% - 14px) calc(20% + 14px) );
+  opacity:.8; pointer-events:none;
+}
+
+/* ── 상단: 날짜 항해 ── */
+header{
+  position:sticky; top:0; z-index:20;
+  background:linear-gradient(to bottom, var(--paper) 82%, rgba(243,241,235,0));
+  padding:calc(var(--sat) + 14px) 20px 10px 28px;
+}
+.date-nav{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+.date-main{flex:1; text-align:center;}
+.date-title{
+  font-family:'Noto Serif KR',serif;
+  font-weight:600; font-size:1.15rem; letter-spacing:.02em;
+}
+.date-sub{font-size:.78rem; color:var(--ink-soft); letter-spacing:.14em; margin-top:1px;}
+.nav-btn{
+  border:none; background:none; color:var(--ink-soft);
+  font-size:1.3rem; padding:6px 12px; font-family:inherit; cursor:pointer;
+}
+.nav-btn:active{color:var(--seal);}
+.top-row{display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;}
+.small-link{
+  border:none; background:none; font-family:inherit; font-size:.8rem;
+  color:var(--ink-soft); letter-spacing:.1em; padding:4px 6px; cursor:pointer;
+}
+.small-link:active{color:var(--seal);}
+.today-mark{color:var(--seal);}
+
+/* ── 본문: 기록 목록 ── */
+main{
+  padding:6px 20px 220px 30px;
+  max-width:640px; margin:0 auto;
+}
+.empty{
+  text-align:center; color:var(--ink-faint); font-size:.92rem;
+  padding:70px 20px; letter-spacing:.05em;
+}
+.empty .e-mark{
+  display:block; font-size:1.9rem; color:var(--stitch); margin-bottom:14px;
+  font-family:'Noto Serif KR',serif;
+}
+.entry{
+  position:relative;
+  background:var(--card);
+  border:1px solid rgba(43,41,36,.07);
+  border-radius:3px;
+  padding:13px 15px 12px 15px;
+  margin-bottom:12px;
+  box-shadow:0 1px 2px rgba(43,41,36,.04);
+}
+.entry-head{display:flex; align-items:center; gap:9px; margin-bottom:6px;}
+.seal{
+  width:26px; height:26px; flex:0 0 26px;
+  border:1.4px solid var(--seal); border-radius:50%;
+  color:var(--seal);
+  font-family:'Noto Serif KR',serif; font-weight:600; font-size:.82rem;
+  display:flex; align-items:center; justify-content:center;
+  letter-spacing:0;
+  transform:rotate(-4deg);
+}
+.entry-time{font-size:.74rem; color:var(--ink-faint); letter-spacing:.12em;}
+.entry-type-name{font-size:.74rem; color:var(--ink-soft); letter-spacing:.14em;}
+.entry-text{white-space:pre-wrap; font-size:.98rem; word-break:keep-all;}
+.entry-actions{
+  display:none; gap:6px; margin-top:10px; padding-top:9px;
+  border-top:1px dotted var(--stitch);
+}
+.entry.open .entry-actions{display:flex;}
+.act-btn{
+  flex:1; border:1px solid rgba(43,41,36,.14); background:none;
+  font-family:inherit; font-size:.82rem; color:var(--ink-soft);
+  padding:7px 0; border-radius:3px; cursor:pointer; letter-spacing:.1em;
+}
+.act-btn.danger{color:var(--seal); border-color:rgba(166,58,46,.3);}
+.count-line{
+  text-align:center; font-size:.75rem; color:var(--ink-faint);
+  letter-spacing:.18em; margin:4px 0 16px;
+}
+
+/* ── 하단 입력부 ── */
+.composer{
+  position:fixed; left:0; right:0; bottom:0; z-index:30;
+  background:var(--paper-deep);
+  border-top:1px solid rgba(43,41,36,.1);
+  padding:10px 16px calc(10px + var(--sab)) 24px;
+}
+.type-row{display:flex; gap:8px; margin-bottom:8px;}
+.type-btn{
+  flex:1; border:1px solid rgba(43,41,36,.16); background:var(--card);
+  border-radius:3px; padding:7px 0; font-family:inherit; font-size:.86rem;
+  color:var(--ink-soft); letter-spacing:.06em; cursor:pointer;
+}
+.type-btn .t-seal{
+  font-family:'Noto Serif KR',serif; font-weight:600; margin-right:5px;
+  color:var(--ink-faint);
+}
+.type-btn.on{
+  border-color:var(--seal); color:var(--ink);
+  background:#FDF9F5;
+}
+.type-btn.on .t-seal{color:var(--seal);}
+.input-row{display:flex; gap:8px; align-items:flex-end;}
+textarea#noteInput{
+  flex:1; resize:none; border:1px solid rgba(43,41,36,.16);
+  border-radius:3px; background:var(--card); color:var(--ink);
+  font-family:inherit; font-size:16px; line-height:1.55;
+  padding:10px 12px; min-height:46px; max-height:132px;
+  outline:none;
+}
+textarea#noteInput:focus{border-color:var(--ink-soft);}
+.save-btn{
+  border:none; background:var(--ink); color:var(--paper);
+  font-family:inherit; font-size:.92rem; letter-spacing:.14em;
+  padding:12px 18px; border-radius:3px; cursor:pointer;
+  flex:0 0 auto;
+}
+.save-btn:active{background:var(--seal);}
+.prompt-btn{
+  width:100%; margin-top:8px;
+  border:1px solid var(--seal); background:none; color:var(--seal);
+  font-family:inherit; font-size:.9rem; letter-spacing:.18em;
+  padding:10px 0; border-radius:3px; cursor:pointer;
+}
+.prompt-btn:active{background:rgba(166,58,46,.06);}
+
+/* ── 시트(글감 청하기 / 기록 목록 / 보관) ── */
+.sheet-veil{
+  position:fixed; inset:0; background:rgba(43,41,36,.35);
+  z-index:40; display:none;
+}
+.sheet-veil.show{display:block;}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:50;
+  background:var(--paper); border-radius:14px 14px 0 0;
+  max-height:86vh; display:none; flex-direction:column;
+  padding:18px 20px calc(18px + var(--sab));
+  box-shadow:0 -6px 30px rgba(43,41,36,.18);
+}
+.sheet.show{display:flex;}
+.sheet h2{
+  font-family:'Noto Serif KR',serif; font-weight:600; font-size:1.02rem;
+  letter-spacing:.06em; margin-bottom:4px;
+}
+.sheet .s-sub{font-size:.8rem; color:var(--ink-soft); margin-bottom:12px;}
+.sheet-body{overflow-y:auto; -webkit-overflow-scrolling:touch; flex:1;}
+textarea#promptOut{
+  width:100%; border:1px solid rgba(43,41,36,.16); border-radius:3px;
+  background:var(--card); color:var(--ink); font-family:inherit;
+  font-size:16px; line-height:1.6; padding:12px; min-height:220px;
+  outline:none; resize:vertical;
+}
+textarea#promptOut:focus{border-color:var(--ink-soft);}
+textarea#tplInput{
+  width:100%; border:1px solid rgba(43,41,36,.16); border-radius:3px;
+  background:var(--card); color:var(--ink); font-family:inherit;
+  font-size:.88rem; line-height:1.6; padding:12px; min-height:180px;
+  outline:none; resize:vertical;
+}
+.sheet-actions{display:flex; gap:8px; margin-top:12px;}
+.sheet-btn{
+  flex:1; border:none; background:var(--ink); color:var(--paper);
+  font-family:inherit; font-size:.88rem; letter-spacing:.12em;
+  padding:12px 0; border-radius:3px; cursor:pointer;
+}
+.sheet-btn.ghost{
+  background:none; border:1px solid rgba(43,41,36,.2); color:var(--ink-soft);
+}
+.sheet-btn:active{opacity:.75;}
+.tpl-link{
+  display:block; margin-top:10px; text-align:center;
+  border:none; background:none; font-family:inherit; font-size:.8rem;
+  color:var(--ink-soft); text-decoration:underline; text-underline-offset:3px;
+  cursor:pointer; width:100%;
+}
+.arc-item{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 4px; border-bottom:1px dotted var(--stitch);
+  cursor:pointer;
+}
+.arc-date{font-size:.94rem;}
+.arc-count{font-size:.78rem; color:var(--ink-soft); letter-spacing:.08em;}
+.backup-row{display:flex; gap:8px; margin-top:14px;}
+.toast{
+  position:fixed; bottom:calc(180px + var(--sab)); left:50%;
+  transform:translateX(-50%) translateY(8px);
+  background:var(--ink); color:var(--paper); font-size:.84rem;
+  letter-spacing:.1em; padding:9px 18px; border-radius:20px;
+  opacity:0; transition:opacity .25s, transform .25s; z-index:60;
+  pointer-events:none; white-space:nowrap;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+@media (prefers-reduced-motion: reduce){
+  .toast{transition:none;}
+}
+</style>
+</head>
+<body>
+<div class="binding" aria-hidden="true"></div>
+
+<header>
+  <div class="top-row">
+    <button class="small-link" id="archiveBtn">기록 목록</button>
+    <button class="small-link" id="backupBtn">보관·복원</button>
+  </div>
+  <div class="date-nav">
+    <button class="nav-btn" id="prevDay" aria-label="이전 날">◀</button>
+    <div class="date-main">
+      <div class="date-title" id="dateTitle">—</div>
+      <div class="date-sub" id="dateSub">—</div>
+    </div>
+    <button class="nav-btn" id="nextDay" aria-label="다음 날">▶</button>
+  </div>
+</header>
+
+<main>
+  <div class="count-line" id="countLine"></div>
+  <div id="entryList"></div>
+</main>
+
+<div class="composer">
+  <div class="type-row" id="typeRow">
+    <button class="type-btn on" data-type="dialogue"><span class="t-seal">話</span>대화</button>
+    <button class="type-btn" data-type="event"><span class="t-seal">事</span>사건</button>
+    <button class="type-btn" data-type="description"><span class="t-seal">描</span>묘사</button>
+  </div>
+  <div class="input-row">
+    <textarea id="noteInput" rows="1" placeholder="지금 본 것, 들은 것을 적는다"></textarea>
+    <button class="save-btn" id="saveBtn">담기</button>
+  </div>
+  <button class="prompt-btn" id="promptBtn">글감 청하기 — 오늘의 기록으로</button>
+</div>
+
+<!-- 글감 프롬프트 시트 -->
+<div class="sheet-veil" id="veil"></div>
+<div class="sheet" id="promptSheet">
+  <h2>글감 청하기</h2>
+  <div class="s-sub" id="promptSub">기록을 엮어 AI에게 건넬 프롬프트입니다. 고쳐 써도 됩니다.</div>
+  <div class="sheet-body">
+    <textarea id="promptOut"></textarea>
+  </div>
+  <div class="sheet-actions">
+    <button class="sheet-btn" id="copyPrompt">복사</button>
+    <button class="sheet-btn ghost" id="sharePrompt">공유</button>
+  </div>
+  <button class="tpl-link" id="editTplBtn">청하는 말 고치기 (프롬프트 틀 편집)</button>
+</div>
+
+<!-- 템플릿 편집 시트 -->
+<div class="sheet" id="tplSheet">
+  <h2>청하는 말</h2>
+  <div class="s-sub">{날짜}와 {기록} 자리에 그날의 내용이 들어갑니다.</div>
+  <div class="sheet-body">
+    <textarea id="tplInput"></textarea>
+  </div>
+  <div class="sheet-actions">
+    <button class="sheet-btn" id="saveTpl">저장</button>
+    <button class="sheet-btn ghost" id="resetTpl">기본값</button>
+  </div>
+</div>
+
+<!-- 기록 고치기 시트 -->
+<div class="sheet" id="editSheet">
+  <h2>기록 고치기</h2>
+  <div class="s-sub">갈래를 바꾸거나 문장을 다듬습니다.</div>
+  <div class="sheet-body">
+    <div class="type-row" id="editTypeRow" style="margin-bottom:10px;">
+      <button class="type-btn" data-type="dialogue"><span class="t-seal">話</span>대화</button>
+      <button class="type-btn" data-type="event"><span class="t-seal">事</span>사건</button>
+      <button class="type-btn" data-type="description"><span class="t-seal">描</span>묘사</button>
+    </div>
+    <textarea id="editInput" style="width:100%;border:1px solid rgba(43,41,36,.16);border-radius:3px;background:var(--card);color:var(--ink);font-family:inherit;font-size:16px;line-height:1.6;padding:12px;min-height:140px;outline:none;resize:vertical;"></textarea>
+  </div>
+  <div class="sheet-actions">
+    <button class="sheet-btn" id="saveEdit">저장</button>
+    <button class="sheet-btn ghost" id="cancelEdit">취소</button>
+  </div>
+</div>
+
+<!-- 기록 목록 시트 -->
+<div class="sheet" id="archiveSheet">
+  <h2>기록 목록</h2>
+  <div class="s-sub">기록이 있는 날짜들. 눌러서 이동합니다.</div>
+  <div class="sheet-body" id="archiveList"></div>
+  <div class="sheet-actions">
+    <button class="sheet-btn ghost" id="closeArchive">닫기</button>
+  </div>
+</div>
+
+<!-- 보관/복원 시트 -->
+<div class="sheet" id="backupSheet">
+  <h2>보관·복원</h2>
+  <div class="s-sub">기록 전체를 파일로 내보내거나 되살립니다. 이따금 보관해 두면 안전합니다.</div>
+  <div class="sheet-body">
+    <div class="backup-row">
+      <button class="sheet-btn" id="exportBtn">내보내기 (JSON)</button>
+      <button class="sheet-btn ghost" id="importBtn">불러오기</button>
+    </div>
+    <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+  </div>
+  <div class="sheet-actions">
+    <button class="sheet-btn ghost" id="closeBackup">닫기</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── 저장소 (localStorage, 실패 시 메모리) ── */
+var mem = {};
+var store = {
+  get: function(k){ try{ return localStorage.getItem(k); }catch(e){ return mem[k] || null; } },
+  set: function(k,v){ try{ localStorage.setItem(k,v); }catch(e){ mem[k]=v; } }
+};
+var KEY_DATA = "chaejip.entries.v1";
+var KEY_TPL  = "chaejip.template.v1";
+
+var DEFAULT_TPL =
+"아래는 {날짜} 하루 동안 길에서, 일상에서 채집한 관찰 기록입니다.\n" +
+"대화(話), 사건(事), 묘사(描)로 분류되어 있고, 채집한 시각이 붙어 있습니다.\n\n" +
+"{기록}\n\n" +
+"이 기록들을 재료 삼아 다음을 제안해 주세요.\n\n" +
+"1. 단편소설의 글감 세 가지. 각각 핵심 갈등, 인물 스케치, 어울리는 시점(1인칭/3인칭)을 함께.\n" +
+"2. 서로 다른 기록 두세 개를 연결했을 때 이야기가 될 만한 조합 하나.\n" +
+"3. 첫 문장 후보 세 개. 관찰의 구체성이 살아 있게.\n\n" +
+"설명보다 장면으로, 요약보다 구체로 답해 주세요.";
+
+var TYPE_INFO = {
+  dialogue:    { seal:"話", name:"대화" },
+  event:       { seal:"事", name:"사건" },
+  description: { seal:"描", name:"묘사" }
+};
+var DOW = ["일","월","화","수","목","금","토"];
+
+function loadData(){
+  try{ return JSON.parse(store.get(KEY_DATA)) || {}; }catch(e){ return {}; }
+}
+function saveData(d){ store.set(KEY_DATA, JSON.stringify(d)); }
+
+var data = loadData();
+var curType = "dialogue";
+var openEntryId = null;
+
+/* ── 날짜 유틸 (로컬 기준) ── */
+function fmtKey(d){
+  var m = ("0"+(d.getMonth()+1)).slice(-2), day = ("0"+d.getDate()).slice(-2);
+  return d.getFullYear()+"-"+m+"-"+day;
+}
+function parseKey(k){
+  var p = k.split("-");
+  return new Date(+p[0], +p[1]-1, +p[2]);
+}
+function todayKey(){ return fmtKey(new Date()); }
+var curDate = todayKey();
+
+function fmtTitle(k){
+  var d = parseKey(k);
+  return d.getFullYear()+"년 "+(d.getMonth()+1)+"월 "+d.getDate()+"일";
+}
+function fmtSub(k){
+  var d = parseKey(k);
+  var s = DOW[d.getDay()] + "요일";
+  if(k === todayKey()) s += " · 오늘";
+  return s;
+}
+function nowTime(){
+  var d = new Date();
+  return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+}
+
+/* ── 렌더링 ── */
+var $ = function(id){ return document.getElementById(id); };
+
+function render(){
+  $("dateTitle").textContent = fmtTitle(curDate);
+  var sub = $("dateSub");
+  sub.innerHTML = "";
+  var d = parseKey(curDate);
+  var t = document.createTextNode(DOW[d.getDay()]+"요일");
+  sub.appendChild(t);
+  if(curDate === todayKey()){
+    var sp = document.createElement("span");
+    sp.className = "today-mark";
+    sp.textContent = " · 오늘";
+    sub.appendChild(sp);
+  }
+
+  var list = data[curDate] || [];
+  var wrap = $("entryList");
+  wrap.innerHTML = "";
+  $("countLine").textContent = list.length ? "채집 " + list.length + "건" : "";
+
+  if(!list.length){
+    var em = document.createElement("div");
+    em.className = "empty";
+    em.innerHTML = '<span class="e-mark">採</span>';
+    em.appendChild(document.createTextNode(
+      curDate === todayKey()
+        ? "아직 빈 페이지입니다. 들고 다니며 한 문장씩."
+        : "이 날의 기록이 없습니다."
+    ));
+    wrap.appendChild(em);
+    return;
+  }
+
+  list.forEach(function(e){
+    var card = document.createElement("div");
+    card.className = "entry" + (openEntryId === e.id ? " open" : "");
+    card.dataset.id = e.id;
+
+    var head = document.createElement("div");
+    head.className = "entry-head";
+    var seal = document.createElement("div");
+    seal.className = "seal";
+    seal.textContent = (TYPE_INFO[e.type]||TYPE_INFO.description).seal;
+    var tn = document.createElement("div");
+    tn.className = "entry-type-name";
+    tn.textContent = (TYPE_INFO[e.type]||TYPE_INFO.description).name;
+    var tm = document.createElement("div");
+    tm.className = "entry-time";
+    tm.textContent = e.time;
+    head.appendChild(seal); head.appendChild(tn); head.appendChild(tm);
+
+    var body = document.createElement("div");
+    body.className = "entry-text";
+    body.textContent = e.text;
+
+    var acts = document.createElement("div");
+    acts.className = "entry-actions";
+    var eb = document.createElement("button");
+    eb.className = "act-btn"; eb.textContent = "고치기";
+    eb.onclick = function(ev){ ev.stopPropagation(); editEntry(e.id); };
+    var db = document.createElement("button");
+    db.className = "act-btn danger"; db.textContent = "지우기";
+    db.onclick = function(ev){ ev.stopPropagation(); deleteEntry(e.id); };
+    acts.appendChild(eb); acts.appendChild(db);
+
+    card.appendChild(head); card.appendChild(body); card.appendChild(acts);
+    card.onclick = function(){
+      openEntryId = (openEntryId === e.id) ? null : e.id;
+      render();
+    };
+    wrap.appendChild(card);
+  });
+}
+
+/* ── 기록 추가/수정/삭제 ── */
+function addEntry(){
+  var ta = $("noteInput");
+  var text = ta.value.trim();
+  if(!text) return;
+  if(!data[curDate]) data[curDate] = [];
+  data[curDate].push({
+    id: Date.now() + "" + Math.floor(Math.random()*1000),
+    time: curDate === todayKey() ? nowTime() : "—",
+    type: curType,
+    text: text
+  });
+  saveData(data);
+  ta.value = ""; autoGrow(ta);
+  render();
+  window.scrollTo({top: document.body.scrollHeight});
+  toast("담았습니다");
+}
+var editingId = null;
+var editingType = null;
+function editEntry(id){
+  var list = data[curDate] || [];
+  var e = list.find(function(x){ return x.id === id; });
+  if(!e) return;
+  editingId = id;
+  editingType = e.type;
+  $("editInput").value = e.text;
+  syncEditTypeRow();
+  openSheet("editSheet");
+}
+function syncEditTypeRow(){
+  Array.prototype.forEach.call(document.querySelectorAll("#editTypeRow .type-btn"), function(b){
+    b.classList.toggle("on", b.dataset.type === editingType);
+  });
+}
+function deleteEntry(id){
+  if(!confirm("이 기록을 지울까요?")) return;
+  data[curDate] = (data[curDate]||[]).filter(function(x){ return x.id !== id; });
+  if(!data[curDate].length) delete data[curDate];
+  openEntryId = null;
+  saveData(data); render();
+}
+
+/* ── 입력창 자동 높이 ── */
+function autoGrow(ta){
+  ta.style.height = "auto";
+  ta.style.height = Math.min(ta.scrollHeight, 132) + "px";
+}
+
+/* ── 글감 프롬프트 ── */
+function getTpl(){ return store.get(KEY_TPL) || DEFAULT_TPL; }
+function buildPrompt(){
+  var list = data[curDate] || [];
+  var lines = list.map(function(e){
+    var info = TYPE_INFO[e.type] || TYPE_INFO.description;
+    return "[" + info.name + " · " + e.time + "] " + e.text;
+  }).join("\n\n");
+  return getTpl()
+    .split("{날짜}").join(fmtTitle(curDate))
+    .split("{기록}").join(lines);
+}
+
+/* ── 시트 열고 닫기 ── */
+var sheets = ["promptSheet","tplSheet","archiveSheet","backupSheet","editSheet"];
+function openSheet(id){
+  sheets.forEach(function(s){ $(s).classList.remove("show"); });
+  $("veil").classList.add("show");
+  $(id).classList.add("show");
+}
+function closeSheets(){
+  sheets.forEach(function(s){ $(s).classList.remove("show"); });
+  $("veil").classList.remove("show");
+}
+$("veil").onclick = closeSheets;
+
+/* ── 토스트 ── */
+var toastTimer = null;
+function toast(msg){
+  var t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 1600);
+}
+
+/* ── 복사 ── */
+function copyText(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(
+      function(){ toast("복사했습니다"); },
+      function(){ fallbackCopy(text); }
+    );
+  } else fallbackCopy(text);
+}
+function fallbackCopy(text){
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  try{ document.execCommand("copy"); toast("복사했습니다"); }
+  catch(e){ toast("길게 눌러 직접 복사해 주세요"); }
+  document.body.removeChild(ta);
+}
+
+/* ── 보관/복원 ── */
+function exportJSON(){
+  var payload = JSON.stringify({ exportedAt:new Date().toISOString(), template:getTpl(), entries:data }, null, 2);
+  var blob = new Blob([payload], {type:"application/json"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "chaejip-" + todayKey() + ".json";
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+  toast("내보냈습니다");
+}
+function importJSON(file){
+  var r = new FileReader();
+  r.onload = function(){
+    try{
+      var obj = JSON.parse(r.result);
+      var incoming = obj.entries || obj;
+      if(typeof incoming !== "object") throw new Error("형식 오류");
+      Object.keys(incoming).forEach(function(k){
+        if(!Array.isArray(incoming[k])) return;
+        if(!data[k]) data[k] = [];
+        incoming[k].forEach(function(e){
+          if(e && e.text && !data[k].some(function(x){ return x.id === e.id; })){
+            data[k].push(e);
+          }
+        });
+      });
+      if(obj.template) store.set(KEY_TPL, obj.template);
+      saveData(data); render(); closeSheets();
+      toast("되살렸습니다");
+    }catch(e){ toast("파일을 읽지 못했습니다"); }
+  };
+  r.readAsText(file);
+}
+
+/* ── 이벤트 연결 ── */
+$("saveBtn").onclick = addEntry;
+$("noteInput").addEventListener("input", function(){ autoGrow(this); });
+
+Array.prototype.forEach.call(document.querySelectorAll(".type-btn"), function(b){
+  b.onclick = function(){
+    curType = b.dataset.type;
+    Array.prototype.forEach.call(document.querySelectorAll(".type-btn"), function(x){
+      x.classList.toggle("on", x === b);
+    });
+  };
+});
+
+$("prevDay").onclick = function(){
+  var d = parseKey(curDate); d.setDate(d.getDate()-1);
+  curDate = fmtKey(d); openEntryId = null; render();
+};
+$("nextDay").onclick = function(){
+  var d = parseKey(curDate); d.setDate(d.getDate()+1);
+  curDate = fmtKey(d); openEntryId = null; render();
+};
+
+$("promptBtn").onclick = function(){
+  var list = data[curDate] || [];
+  if(!list.length){ toast("이 날의 기록이 아직 없습니다"); return; }
+  $("promptSub").textContent = fmtTitle(curDate) + " · 채집 " + list.length + "건. 아래를 자유롭게 고쳐 쓴 뒤 복사하세요.";
+  $("promptOut").value = buildPrompt();
+  openSheet("promptSheet");
+};
+$("copyPrompt").onclick = function(){ copyText($("promptOut").value); };
+$("sharePrompt").onclick = function(){
+  var text = $("promptOut").value;
+  if(navigator.share){
+    navigator.share({ text:text }).catch(function(){});
+  } else copyText(text);
+};
+
+$("editTplBtn").onclick = function(){
+  $("tplInput").value = getTpl();
+  openSheet("tplSheet");
+};
+$("saveTpl").onclick = function(){
+  var v = $("tplInput").value.trim();
+  if(v) store.set(KEY_TPL, v);
+  toast("저장했습니다");
+  closeSheets();
+};
+$("resetTpl").onclick = function(){
+  $("tplInput").value = DEFAULT_TPL;
+};
+
+Array.prototype.forEach.call(document.querySelectorAll("#editTypeRow .type-btn"), function(b){
+  b.onclick = function(){
+    editingType = b.dataset.type;
+    syncEditTypeRow();
+  };
+});
+$("saveEdit").onclick = function(){
+  var list = data[curDate] || [];
+  var e = list.find(function(x){ return x.id === editingId; });
+  if(e){
+    var nv = $("editInput").value.trim();
+    if(nv) e.text = nv;
+    e.type = editingType;
+    saveData(data);
+  }
+  editingId = null;
+  render(); closeSheets();
+  toast("고쳤습니다");
+};
+$("cancelEdit").onclick = function(){
+  editingId = null;
+  closeSheets();
+};
+
+$("archiveBtn").onclick = function(){
+  var wrap = $("archiveList");
+  wrap.innerHTML = "";
+  var keys = Object.keys(data).sort().reverse();
+  if(!keys.length){
+    var em = document.createElement("div");
+    em.className = "empty";
+    em.textContent = "아직 기록이 없습니다.";
+    wrap.appendChild(em);
+  }
+  keys.forEach(function(k){
+    var row = document.createElement("div");
+    row.className = "arc-item";
+    var l = document.createElement("div");
+    l.className = "arc-date";
+    l.textContent = fmtTitle(k) + " (" + DOW[parseKey(k).getDay()] + ")";
+    var r = document.createElement("div");
+    r.className = "arc-count";
+    r.textContent = data[k].length + "건";
+    row.appendChild(l); row.appendChild(r);
+    row.onclick = function(){
+      curDate = k; openEntryId = null; render(); closeSheets();
+      window.scrollTo({top:0});
+    };
+    wrap.appendChild(row);
+  });
+  openSheet("archiveSheet");
+};
+$("closeArchive").onclick = closeSheets;
+
+$("backupBtn").onclick = function(){ openSheet("backupSheet"); };
+$("closeBackup").onclick = closeSheets;
+$("exportBtn").onclick = exportJSON;
+$("importBtn").onclick = function(){ $("importFile").click(); };
+$("importFile").onchange = function(){
+  if(this.files && this.files[0]) importJSON(this.files[0]);
+  this.value = "";
+};
+
+render();
+})();
+</script>
+</body>
+</html>
