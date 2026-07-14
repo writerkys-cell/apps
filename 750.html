@@ -116,6 +116,7 @@ textarea::placeholder{color:#B5AF9E}
   font-size:1.5rem;font-weight:700;transform:rotate(-4deg);
   user-select:none;
 }
+.seal.incomplete{border-color:var(--ink-soft);color:var(--ink-soft);border-style:dashed}
 .stamp-in{animation:stamp .3s ease-out}
 @keyframes stamp{0%{transform:scale(1.6) rotate(-4deg);opacity:0}100%{transform:scale(1) rotate(-4deg);opacity:1}}
 @media (prefers-reduced-motion:reduce){.stamp-in{animation:none}}
@@ -187,6 +188,7 @@ textarea::placeholder{color:#B5AF9E}
   <nav>
     <select id="projectSelect" aria-label="프로젝트 선택"></select>
     <button class="btn" id="newProjectBtn">새 프로젝트</button>
+    <button class="btn" id="deleteProjectBtn">프로젝트 삭제</button>
     <button class="btn" id="writeBtn">오늘 쓰기</button>
     <button class="btn" id="archiveBtn">보관함</button>
     <button class="btn" id="exportBtn">초고 내보내기</button>
@@ -233,6 +235,25 @@ function countWords(t){
   const arr = t.trim().split(/\s+/).filter(Boolean);
   return t.trim() ? arr.length : 0;
 }
+function migrateStaleWip(){
+  const today = todayStr();
+  let changed = false;
+  state.projects.forEach(p=>{
+    const w = state.wip[p.id];
+    if(w && w.date < today){
+      if(w.text && w.text.trim()){
+        p.entries.push({
+          id:uid(), date:w.date, text:w.text,
+          words:countWords(w.text),
+          completedAt:null, incomplete:true, notes:[]
+        });
+      }
+      delete state.wip[p.id];
+      changed = true;
+    }
+  });
+  if(changed) save();
+}
 
 /* ── 상단 내비 ── */
 function renderNav(){
@@ -258,6 +279,24 @@ $('#newProjectBtn').addEventListener('click', ()=>{
   state.projects.push(p); state.activeId = p.id; save();
   view = 'write'; render();
 });
+$('#deleteProjectBtn').addEventListener('click', ()=>{
+  const p = proj();
+  const n = p.entries.length;
+  if(!confirm('"' + p.name + '" 프로젝트를 삭제할까요?\n저장된 초고 ' + n + '건이 함께 지워지며 되돌릴 수 없습니다.\n삭제 전에 초고 내보내기를 했는지 확인하세요.')) return;
+  const typed = prompt('삭제하려면 프로젝트 이름을 그대로 입력하세요:\n' + p.name);
+  if(typed === null) return;
+  if(typed.trim() !== p.name){ toast('이름이 일치하지 않아 삭제하지 않았습니다'); return; }
+  state.projects = state.projects.filter(x=>x.id !== p.id);
+  delete state.wip[p.id];
+  if(state.projects.length === 0){
+    const np = {id:uid(), name:'기본 프로젝트', createdAt:Date.now(), entries:[]};
+    state.projects.push(np);
+  }
+  state.activeId = state.projects[0].id;
+  save();
+  view = 'write'; render();
+  toast('프로젝트를 삭제했습니다');
+});
 $('#writeBtn').addEventListener('click', ()=>{ view='write'; render(); });
 $('#archiveBtn').addEventListener('click', ()=>{ view='archive'; render(); });
 $('#exportBtn').addEventListener('click', exportDraft);
@@ -267,6 +306,7 @@ let view = 'write';
 let readingId = null;
 
 function render(){
+  migrateStaleWip();
   renderNav();
   const m = $('#main');
   m.innerHTML = '';
@@ -387,6 +427,7 @@ function renderArchive(m){
     const b = document.createElement('button');
     b.innerHTML = '<span>' + fmtDate(en.date) + '</span>'
       + '<span class="meta">' + en.words + '단어'
+      + (en.incomplete ? ' · 미완' : '')
       + (en.notes.length ? ' · 주석 ' + en.notes.length : '') + '</span>';
     b.addEventListener('click', ()=>{ readingId = en.id; view='read'; render(); });
     li.appendChild(b); ul.appendChild(li);
@@ -407,7 +448,8 @@ function renderRead(m){
 
   const head = document.createElement('div');
   head.className = 'read-head';
-  head.innerHTML = '<span class="d">' + fmtDate(en.date) + ' · ' + en.words + '단어</span><span class="rule"></span>';
+  head.innerHTML = '<span class="d">' + fmtDate(en.date) + ' · ' + en.words + '단어'
+    + (en.incomplete ? ' · 미완' : '') + '</span><span class="rule"></span>';
   m.appendChild(head);
 
   const sheet = document.createElement('div');
@@ -416,7 +458,8 @@ function renderRead(m){
   dv.className = 'done-view';
   dv.textContent = en.text;
   const seal = document.createElement('div');
-  seal.className = 'seal'; seal.textContent = '了';
+  seal.className = 'seal' + (en.incomplete ? ' incomplete' : '');
+  seal.textContent = en.incomplete ? '未' : '了';
   dv.appendChild(seal);
   sheet.appendChild(dv);
   m.appendChild(sheet);
@@ -462,7 +505,8 @@ function exportDraft(){
   lines.push('초고 내보내기 · ' + fmtDate(todayStr()));
   lines.push('');
   [...p.entries].sort((a,b)=>a.date.localeCompare(b.date)).forEach(en=>{
-    lines.push('──── ' + fmtDate(en.date) + ' (' + en.words + '단어) ────');
+    lines.push('──── ' + fmtDate(en.date) + ' (' + en.words + '단어'
+      + (en.incomplete ? ' · 미완' : '') + ') ────');
     lines.push('');
     lines.push(en.text);
     lines.push('');
