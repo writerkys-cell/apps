@@ -162,6 +162,65 @@ textarea::placeholder{color:#B5AF9E}
 }
 .note-form input:focus{outline:2px solid var(--jjok);outline-offset:1px}
 
+/* ── 본문 내 붉은 주석 ── */
+.entry-body{white-space:pre-wrap;word-break:break-word}
+.entry-body .anchor{
+  background:#F2E1DC;border-bottom:1px solid var(--injoo);cursor:pointer;
+}
+.entry-body .ann{color:var(--injoo);font-size:.86em;white-space:normal}
+.entry-body .ann .nd{
+  font-family:'IBM Plex Sans KR',sans-serif;font-size:.72rem;opacity:.75;
+}
+.entry-body .ann .ndel{
+  background:none;border:none;padding:0;margin-left:6px;
+  font-size:.7rem;color:var(--ink-soft);border-bottom:1px dotted var(--ink-soft);
+}
+.entry-body .ann .ndel:hover{color:var(--injoo)}
+
+#annPop{
+  position:absolute;display:none;z-index:20;
+  background:var(--ink);color:var(--paper);
+  font-family:'IBM Plex Sans KR',sans-serif;font-size:.8rem;
+  padding:6px 12px;border-radius:2px;
+}
+#annPop button{background:none;border:none;color:var(--paper);font-size:.8rem}
+#annPop:after{
+  content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+  border:5px solid transparent;border-bottom:none;border-top-color:var(--ink);
+}
+#annBox{
+  display:none;position:fixed;inset:0;z-index:30;
+  background:rgba(38,36,31,.35);
+  align-items:center;justify-content:center;padding:20px;
+}
+#annBox.show{display:flex}
+#annBox .card{
+  background:var(--paper);width:100%;max-width:520px;
+  padding:24px 26px;border-top:3px solid var(--injoo);
+  box-shadow:0 12px 40px rgba(0,0,0,.18);
+}
+#annBox .quoted{
+  font-size:.88rem;color:var(--ink-soft);border-left:2px solid var(--line);
+  padding-left:12px;margin-bottom:12px;max-height:90px;overflow:auto;
+}
+#annBox textarea{
+  min-height:90px;height:110px;padding:10px 12px;
+  font-size:.95rem;line-height:1.9;color:var(--injoo);
+  border:1px solid var(--line);border-radius:2px;background:#FBF9F2;
+}
+#annBox .row{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-top:12px;font-family:'IBM Plex Sans KR',sans-serif;
+}
+#annBox .row .d{font-size:.75rem;color:var(--ink-soft)}
+#annBox .row button{font-size:.82rem;padding:7px 16px;border-radius:2px;border:none}
+#annBox .row .save{background:var(--injoo);color:#fff}
+#annBox .row .cancel{background:none;color:var(--ink-soft);margin-right:6px}
+.read-hint{
+  font-family:'IBM Plex Sans KR',sans-serif;font-size:.78rem;color:var(--ink-soft);
+  border-top:1px solid var(--line);padding-top:10px;margin-top:30px;
+}
+
 /* 토스트 */
 #toast{
   position:fixed;bottom:26px;left:50%;transform:translateX(-50%);
@@ -196,6 +255,23 @@ textarea::placeholder{color:#B5AF9E}
 </header>
 
 <main id="main"></main>
+
+<div id="annPop"><button id="annPopBtn">붉은 주석 달기</button></div>
+
+<div id="annBox" role="dialog" aria-modal="true">
+  <div class="card">
+    <div class="quoted" id="annQuoted"></div>
+    <textarea id="annText" placeholder="이 문장에게, 지금의 내가."></textarea>
+    <div class="row">
+      <span class="d" id="annToday"></span>
+      <span>
+        <button class="cancel" id="annCancel">취소</button>
+        <button class="save" id="annSave">주석 저장</button>
+      </span>
+    </div>
+  </div>
+</div>
+
 <div id="toast" role="status"></div>
 
 <script>
@@ -245,7 +321,7 @@ function migrateStaleWip(){
         p.entries.push({
           id:uid(), date:w.date, text:w.text,
           words:countWords(w.text),
-          completedAt:null, incomplete:true, notes:[]
+          completedAt:null, incomplete:true, notes:[], annotations:[]
         });
       }
       delete state.wip[p.id];
@@ -350,14 +426,17 @@ function renderWrite(m){
   if(done){
     const dv = document.createElement('div');
     dv.className = 'done-view';
-    dv.textContent = done.text;
+    const body = document.createElement('div');
+    body.className = 'entry-body';
+    renderEntryBody(body, done);
+    dv.appendChild(body);
     const seal = document.createElement('div');
     seal.className = 'seal'; seal.textContent = '了';
     dv.appendChild(seal);
     sheet.appendChild(dv);
     const msg = document.createElement('div');
     msg.className = 'done-msg';
-    msg.textContent = '오늘의 초고 끝. ' + done.words + '단어. 원고는 보관함에서 주석만 달 수 있습니다.';
+    msg.textContent = '오늘의 초고 끝. ' + done.words + '단어. 본문은 고칠 수 없고, 문장을 드래그해 붉은 주석만 달 수 있습니다.';
     sheet.appendChild(msg);
   } else {
     const wip = (state.wip[p.id] && state.wip[p.id].date===today) ? state.wip[p.id].text : '';
@@ -397,7 +476,7 @@ function renderWrite(m){
       const w = countWords(ta.value);
       if(w < GOAL) return;
       if(!confirm('오늘의 초고를 저장할까요? 저장 후에는 고칠 수 없고 주석만 달 수 있습니다.')) return;
-      p.entries.push({id:uid(), date:today, text:ta.value, words:w, completedAt:Date.now(), notes:[]});
+      p.entries.push({id:uid(), date:today, text:ta.value, words:w, completedAt:Date.now(), notes:[], annotations:[]});
       delete state.wip[p.id];
       save(); render();
     });
@@ -425,10 +504,11 @@ function renderArchive(m){
   [...p.entries].sort((a,b)=>b.date.localeCompare(a.date)).forEach(en=>{
     const li = document.createElement('li');
     const b = document.createElement('button');
+    const annCount = (en.annotations ? en.annotations.length : 0) + (en.notes ? en.notes.length : 0);
     b.innerHTML = '<span>' + fmtDate(en.date) + '</span>'
       + '<span class="meta">' + en.words + '단어'
       + (en.incomplete ? ' · 미완' : '')
-      + (en.notes.length ? ' · 주석 ' + en.notes.length : '') + '</span>';
+      + (annCount ? ' · 주석 ' + annCount : '') + '</span>';
     b.addEventListener('click', ()=>{ readingId = en.id; view='read'; render(); });
     li.appendChild(b); ul.appendChild(li);
   });
@@ -456,7 +536,10 @@ function renderRead(m){
   sheet.className = 'sheet';
   const dv = document.createElement('div');
   dv.className = 'done-view';
-  dv.textContent = en.text;
+  const body = document.createElement('div');
+  body.className = 'entry-body';
+  renderEntryBody(body, en);
+  dv.appendChild(body);
   const seal = document.createElement('div');
   seal.className = 'seal' + (en.incomplete ? ' incomplete' : '');
   seal.textContent = en.incomplete ? '未' : '了';
@@ -464,37 +547,148 @@ function renderRead(m){
   sheet.appendChild(dv);
   m.appendChild(sheet);
 
-  const nt = document.createElement('div');
-  nt.className = 'notes';
-  nt.innerHTML = '<h3>주석</h3>';
-  en.notes.forEach(n=>{
-    const d = document.createElement('div');
-    d.className = 'note';
+  /* 이전 방식으로 남긴 주석이 있으면 아래에 표시 */
+  if(en.notes && en.notes.length){
+    const nt = document.createElement('div');
+    nt.className = 'notes';
+    nt.innerHTML = '<h3>이전 주석</h3>';
+    en.notes.forEach(n=>{
+      const d = document.createElement('div');
+      d.className = 'note';
+      const nd = document.createElement('span');
+      nd.className = 'nd';
+      nd.textContent = new Date(n.createdAt).toLocaleDateString('ko-KR');
+      d.appendChild(nd);
+      d.appendChild(document.createTextNode(n.text));
+      nt.appendChild(d);
+    });
+    m.appendChild(nt);
+  }
+
+  const hint = document.createElement('div');
+  hint.className = 'read-hint';
+  hint.textContent = '본문은 고칠 수 없습니다. 문장을 드래그하면 그 자리에 붉은 주석을 달 수 있습니다.';
+  m.appendChild(hint);
+}
+
+/* ── 본문 내 붉은 주석 ── */
+let pendingSel = null;
+
+function renderEntryBody(container, en){
+  container.innerHTML = '';
+  const text = en.text;
+  const anns = (en.annotations || []).slice().sort((a,b)=>a.start-b.start);
+  let pos = 0;
+  anns.forEach(a=>{
+    if(a.start > pos) container.appendChild(document.createTextNode(text.slice(pos, a.start)));
+    const anchor = document.createElement('span');
+    anchor.className = 'anchor';
+    anchor.textContent = text.slice(a.start, a.end);
+    container.appendChild(anchor);
+
+    const note = document.createElement('span');
+    note.className = 'ann';
     const nd = document.createElement('span');
     nd.className = 'nd';
-    nd.textContent = new Date(n.createdAt).toLocaleDateString('ko-KR');
-    d.appendChild(nd);
-    d.appendChild(document.createTextNode(n.text));
-    nt.appendChild(d);
+    nd.textContent = ' 〔' + a.date + '〕 ';
+    note.appendChild(nd);
+    note.appendChild(document.createTextNode(a.note + ' '));
+    const del = document.createElement('button');
+    del.className = 'ndel';
+    del.textContent = '지움';
+    del.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      if(confirm('이 주석을 지울까요?')){
+        en.annotations = en.annotations.filter(x=>x.id!==a.id);
+        save(); render();
+      }
+    });
+    note.appendChild(del);
+    container.appendChild(note);
+    pos = a.end;
   });
-  const form = document.createElement('div');
-  form.className = 'note-form';
-  const inp = document.createElement('input');
-  inp.placeholder = '이 초고에 주석 달기';
-  const add = document.createElement('button');
-  add.className = 'btn'; add.textContent = '추가';
-  function addNote(){
-    const v = inp.value.trim();
-    if(!v) return;
-    en.notes.push({id:uid(), text:v, createdAt:Date.now()});
-    save(); render();
-  }
-  add.addEventListener('click', addNote);
-  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') addNote(); });
-  form.appendChild(inp); form.appendChild(add);
-  nt.appendChild(form);
-  m.appendChild(nt);
+  if(pos < text.length) container.appendChild(document.createTextNode(text.slice(pos)));
+
+  container.addEventListener('mouseup', ()=>maybeShowPop(container, en));
+  container.addEventListener('touchend', ()=>setTimeout(()=>maybeShowPop(container, en), 10));
 }
+
+/* 주석(.ann) 내용을 건너뛰고 원문 기준 오프셋 계산 */
+function offsetInBody(body, node, nodeOffset){
+  let acc = 0;
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      return n.parentElement && n.parentElement.closest('.ann')
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let cur;
+  while((cur = walker.nextNode())){
+    if(cur === node) return acc + nodeOffset;
+    acc += cur.nodeValue.length;
+  }
+  return null;
+}
+
+function maybeShowPop(body, en){
+  const pop = $('#annPop');
+  const sel = window.getSelection();
+  pop.style.display = 'none';
+  pendingSel = null;
+  if(!sel || sel.isCollapsed || sel.rangeCount===0) return;
+  const range = sel.getRangeAt(0);
+  if(!body.contains(range.startContainer) || !body.contains(range.endContainer)) return;
+  if(range.startContainer.nodeType!==3 || range.endContainer.nodeType!==3) return;
+  if(range.startContainer.parentElement.closest('.ann') || range.endContainer.parentElement.closest('.ann')) return;
+
+  const s = offsetInBody(body, range.startContainer, range.startOffset);
+  const eo = offsetInBody(body, range.endContainer, range.endOffset);
+  if(s==null || eo==null || eo<=s) return;
+
+  const overlap = (en.annotations || []).some(a => s < a.end && eo > a.start);
+  if(overlap){ toast('이미 주석이 달린 부분과 겹칩니다'); return; }
+
+  pendingSel = { entry:en, start:s, end:eo, text:en.text.slice(s, eo) };
+  const rect = range.getBoundingClientRect();
+  pop.style.display = 'block';
+  pop.style.left = Math.max(12, rect.left + rect.width/2 - pop.offsetWidth/2 + window.scrollX) + 'px';
+  pop.style.top = (rect.top + window.scrollY - pop.offsetHeight - 10) + 'px';
+}
+document.addEventListener('mousedown', e=>{
+  if(!e.target.closest('#annPop')) $('#annPop').style.display = 'none';
+});
+
+$('#annPopBtn').addEventListener('click', ()=>{
+  if(!pendingSel) return;
+  $('#annPop').style.display = 'none';
+  const q = pendingSel.text;
+  $('#annQuoted').textContent = '“' + (q.length>160 ? q.slice(0,160)+'…' : q) + '”';
+  $('#annText').value = '';
+  $('#annToday').textContent = '주석 날짜 · ' + new Date().toLocaleDateString('ko-KR');
+  $('#annBox').classList.add('show');
+  setTimeout(()=>$('#annText').focus(), 30);
+});
+$('#annCancel').addEventListener('click', ()=>$('#annBox').classList.remove('show'));
+$('#annBox').addEventListener('mousedown', e=>{
+  if(e.target === $('#annBox')) $('#annBox').classList.remove('show');
+});
+$('#annSave').addEventListener('click', ()=>{
+  if(!pendingSel) return;
+  const note = $('#annText').value.trim();
+  if(!note){ $('#annText').focus(); return; }
+  const en = pendingSel.entry;
+  if(!en.annotations) en.annotations = [];
+  en.annotations.push({
+    id: uid(),
+    start: pendingSel.start, end: pendingSel.end,
+    note, date: new Date().toLocaleDateString('ko-KR')
+  });
+  save();
+  $('#annBox').classList.remove('show');
+  pendingSel = null;
+  render();
+  toast('붉은 주석을 남겼습니다');
+});
 
 /* ── 내보내기 ── */
 function exportDraft(){
@@ -508,12 +702,21 @@ function exportDraft(){
     lines.push('──── ' + fmtDate(en.date) + ' (' + en.words + '단어'
       + (en.incomplete ? ' · 미완' : '') + ') ────');
     lines.push('');
-    lines.push(en.text);
+    /* 본문 주석을 달린 자리에 끼워 넣기 */
+    const anns = (en.annotations || []).slice().sort((a,b)=>a.start-b.start);
+    let out = '', pos = 0;
+    anns.forEach(a=>{
+      out += en.text.slice(pos, a.end);
+      out += ' [주석 ' + a.date + ': ' + a.note + ']';
+      pos = a.end;
+    });
+    out += en.text.slice(pos);
+    lines.push(out);
     lines.push('');
-    en.notes.forEach(n=>{
+    (en.notes || []).forEach(n=>{
       lines.push('[주석] ' + new Date(n.createdAt).toLocaleDateString('ko-KR') + ' — ' + n.text);
     });
-    if(en.notes.length) lines.push('');
+    if(en.notes && en.notes.length) lines.push('');
   });
   const text = lines.join('\n');
   copyText(text).then(ok=>{
