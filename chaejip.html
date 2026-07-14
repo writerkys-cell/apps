@@ -132,12 +132,13 @@ main{
 .type-row{display:flex; gap:8px; margin-bottom:8px;}
 .type-btn{
   flex:1; border:1px solid rgba(43,41,36,.16); background:var(--card);
-  border-radius:3px; padding:7px 0; font-family:inherit; font-size:.86rem;
-  color:var(--ink-soft); letter-spacing:.06em; cursor:pointer;
+  border-radius:3px; padding:7px 0; font-family:inherit; font-size:.76rem;
+  color:var(--ink-soft); letter-spacing:.01em; cursor:pointer;
+  white-space:nowrap;
 }
 .type-btn .t-seal{
-  font-family:'Noto Serif KR',serif; font-weight:600; margin-right:5px;
-  color:var(--ink-faint);
+  font-family:'Noto Serif KR',serif; font-weight:600; margin-right:3px;
+  color:var(--ink-faint); font-size:.8rem;
 }
 .type-btn.on{
   border-color:var(--seal); color:var(--ink);
@@ -264,9 +265,11 @@ textarea#tplInput{
 
 <div class="composer">
   <div class="type-row" id="typeRow">
-    <button class="type-btn on" data-type="dialogue"><span class="t-seal">話</span>대화</button>
-    <button class="type-btn" data-type="event"><span class="t-seal">事</span>사건</button>
-    <button class="type-btn" data-type="description"><span class="t-seal">描</span>묘사</button>
+    <button class="type-btn on" data-type="seen"><span class="t-seal">見</span>본 것</button>
+    <button class="type-btn" data-type="heard"><span class="t-seal">聞</span>들은 것</button>
+    <button class="type-btn" data-type="smelled"><span class="t-seal">嗅</span>맡은 것</button>
+    <button class="type-btn" data-type="tasted"><span class="t-seal">味</span>맛본 것</button>
+    <button class="type-btn" data-type="felt"><span class="t-seal">感</span>느낀 것</button>
   </div>
   <div class="input-row">
     <textarea id="noteInput" rows="1" placeholder="지금 본 것, 들은 것을 적는다"></textarea>
@@ -309,9 +312,11 @@ textarea#tplInput{
   <div class="s-sub">갈래를 바꾸거나 문장을 다듬습니다.</div>
   <div class="sheet-body">
     <div class="type-row" id="editTypeRow" style="margin-bottom:10px;">
-      <button class="type-btn" data-type="dialogue"><span class="t-seal">話</span>대화</button>
-      <button class="type-btn" data-type="event"><span class="t-seal">事</span>사건</button>
-      <button class="type-btn" data-type="description"><span class="t-seal">描</span>묘사</button>
+      <button class="type-btn" data-type="seen"><span class="t-seal">見</span>본 것</button>
+      <button class="type-btn" data-type="heard"><span class="t-seal">聞</span>들은 것</button>
+      <button class="type-btn" data-type="smelled"><span class="t-seal">嗅</span>맡은 것</button>
+      <button class="type-btn" data-type="tasted"><span class="t-seal">味</span>맛본 것</button>
+      <button class="type-btn" data-type="felt"><span class="t-seal">感</span>느낀 것</button>
     </div>
     <textarea id="editInput" style="width:100%;border:1px solid rgba(43,41,36,.16);border-radius:3px;background:var(--card);color:var(--ink);font-family:inherit;font-size:16px;line-height:1.6;padding:12px;min-height:140px;outline:none;resize:vertical;"></textarea>
   </div>
@@ -340,6 +345,9 @@ textarea#tplInput{
       <button class="sheet-btn" id="exportBtn">내보내기 (JSON)</button>
       <button class="sheet-btn ghost" id="importBtn">불러오기</button>
     </div>
+    <div class="backup-row">
+      <button class="sheet-btn" id="copyAllBtn">전체 기록 복사 (텍스트)</button>
+    </div>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none">
   </div>
   <div class="sheet-actions">
@@ -364,7 +372,7 @@ var KEY_TPL  = "chaejip.template.v1";
 
 var DEFAULT_TPL =
 "아래는 {날짜} 하루 동안 길에서, 일상에서 채집한 관찰 기록입니다.\n" +
-"대화(話), 사건(事), 묘사(描)로 분류되어 있고, 채집한 시각이 붙어 있습니다.\n\n" +
+"본 것(見), 들은 것(聞), 맡은 것(嗅), 맛본 것(味), 느낀 것(感)으로 분류되어 있고, 채집한 시각이 붙어 있습니다.\n\n" +
 "{기록}\n\n" +
 "이 기록들을 재료 삼아 다음을 제안해 주세요.\n\n" +
 "1. 단편소설의 글감 세 가지. 각각 핵심 갈등, 인물 스케치, 어울리는 시점(1인칭/3인칭)을 함께.\n" +
@@ -373,10 +381,14 @@ var DEFAULT_TPL =
 "설명보다 장면으로, 요약보다 구체로 답해 주세요.";
 
 var TYPE_INFO = {
-  dialogue:    { seal:"話", name:"대화" },
-  event:       { seal:"事", name:"사건" },
-  description: { seal:"描", name:"묘사" }
+  seen:    { seal:"見", name:"본 것" },
+  heard:   { seal:"聞", name:"들은 것" },
+  smelled: { seal:"嗅", name:"맡은 것" },
+  tasted:  { seal:"味", name:"맛본 것" },
+  felt:    { seal:"感", name:"느낀 것" }
 };
+/* 예전 갈래(대화/사건/묘사) → 오감 체계로 이행 */
+var LEGACY_MAP = { dialogue:"heard", event:"seen", description:"seen" };
 var DOW = ["일","월","화","수","목","금","토"];
 
 function loadData(){
@@ -385,7 +397,17 @@ function loadData(){
 function saveData(d){ store.set(KEY_DATA, JSON.stringify(d)); }
 
 var data = loadData();
-var curType = "dialogue";
+(function migrate(){
+  var changed = false;
+  Object.keys(data).forEach(function(k){
+    (data[k]||[]).forEach(function(e){
+      if(LEGACY_MAP[e.type]){ e.type = LEGACY_MAP[e.type]; changed = true; }
+      if(!TYPE_INFO[e.type]){ e.type = "seen"; changed = true; }
+    });
+  });
+  if(changed) saveData(data);
+})();
+var curType = "seen";
 var openEntryId = null;
 
 /* ── 날짜 유틸 (로컬 기준) ── */
@@ -459,10 +481,10 @@ function render(){
     head.className = "entry-head";
     var seal = document.createElement("div");
     seal.className = "seal";
-    seal.textContent = (TYPE_INFO[e.type]||TYPE_INFO.description).seal;
+    seal.textContent = (TYPE_INFO[e.type]||TYPE_INFO.seen).seal;
     var tn = document.createElement("div");
     tn.className = "entry-type-name";
-    tn.textContent = (TYPE_INFO[e.type]||TYPE_INFO.description).name;
+    tn.textContent = (TYPE_INFO[e.type]||TYPE_INFO.seen).name;
     var tm = document.createElement("div");
     tm.className = "entry-time";
     tm.textContent = e.time;
@@ -545,7 +567,7 @@ function getTpl(){ return store.get(KEY_TPL) || DEFAULT_TPL; }
 function buildPrompt(){
   var list = data[curDate] || [];
   var lines = list.map(function(e){
-    var info = TYPE_INFO[e.type] || TYPE_INFO.description;
+    var info = TYPE_INFO[e.type] || TYPE_INFO.seen;
     return "[" + info.name + " · " + e.time + "] " + e.text;
   }).join("\n\n");
   return getTpl()
@@ -630,6 +652,21 @@ function importJSON(file){
     }catch(e){ toast("파일을 읽지 못했습니다"); }
   };
   r.readAsText(file);
+}
+
+function buildAllText(){
+  var keys = Object.keys(data).sort();
+  if(!keys.length) return "";
+  var out = ["채집수첩 전체 기록", ""];
+  keys.forEach(function(k){
+    out.push(fmtTitle(k) + " (" + DOW[parseKey(k).getDay()] + ")");
+    (data[k]||[]).forEach(function(e){
+      var info = TYPE_INFO[e.type] || TYPE_INFO.seen;
+      out.push("[" + info.name + " · " + e.time + "] " + e.text);
+    });
+    out.push("");
+  });
+  return out.join("\n").trim();
 }
 
 /* ── 이벤트 연결 ── */
@@ -740,6 +777,11 @@ $("closeArchive").onclick = closeSheets;
 $("backupBtn").onclick = function(){ openSheet("backupSheet"); };
 $("closeBackup").onclick = closeSheets;
 $("exportBtn").onclick = exportJSON;
+$("copyAllBtn").onclick = function(){
+  var text = buildAllText();
+  if(!text){ toast("아직 기록이 없습니다"); return; }
+  copyText(text);
+};
 $("importBtn").onclick = function(){ $("importFile").click(); };
 $("importFile").onchange = function(){
   if(this.files && this.files[0]) importJSON(this.files[0]);
