@@ -2,105 +2,111 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>할일</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
     background: #f2f2f7;
-    min-height: 100vh;
-    padding: max(24px, env(safe-area-inset-top)) 20px 20px;
+    height: 100dvh;
+    padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* 오늘: 크고 네모난 카드 */
+  .today-card {
+    flex: 2.2;
+    border: none;
+    border-radius: 24px;
+    background: #007aff;
+    color: #fff;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 16px;
-  }
-  .row {
-    width: 100%;
-    max-width: 420px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  /* 체크박스 */
-  .checkbox {
-    width: 34px; height: 34px;
-    flex-shrink: 0;
-    border: 2.5px solid #c7c7cc;
-    border-radius: 10px;
-    background: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 22px; color: transparent;
     cursor: pointer;
     transition: all .15s;
+    position: relative;
   }
-  .checkbox.checked {
-    background: #34c759;
-    border-color: #34c759;
-    color: #fff;
+  .today-card:active { transform: scale(.98); }
+  .today-card .label {
+    font-size: 34px;
+    font-weight: 700;
   }
-  /* 큰 버튼 */
-  .btn {
-    flex: 1;
-    padding: 18px;
-    font-size: 20px;
-    font-weight: 600;
-    border: none;
-    border-radius: 16px;
-    background: #007aff;
-    color: #fff;
-    cursor: pointer;
-    transition: all .15s;
-  }
-  .btn:active { transform: scale(.97); }
-  .btn.running {
+  .today-card.running {
     background: #34c759;
     animation: pulse 1.5s ease-in-out infinite;
   }
-  .btn:disabled {
+  .today-card.disabled {
     background: #d1d1d6;
     color: #8e8e93;
     animation: none;
+    pointer-events: none;
   }
   @keyframes pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: .65; }
+    50% { opacity: .7; }
   }
-  /* 작은 버튼 */
-  .row.small { gap: 10px; margin-top: 4px; }
-  .btn-sm {
-    flex: 1;
-    padding: 12px;
-    font-size: 16px;
-    font-weight: 600;
-    border: none;
+
+  /* 체크박스: 카드 안 좌측 상단 */
+  .checkbox {
+    position: absolute;
+    top: 16px; left: 16px;
+    width: 40px; height: 40px;
+    border: 3px solid rgba(255,255,255,.8);
     border-radius: 12px;
-    background: #e5e5ea;
-    color: #007aff;
+    background: rgba(255,255,255,.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; color: transparent;
     cursor: pointer;
+    pointer-events: auto;
+    transition: all .15s;
   }
-  .btn-sm:active { transform: scale(.97); background: #d1d1d6; }
-  /* 오토포커스 줄: 체크박스 자리만큼 들여쓰기 없이 전체 폭 */
+  .today-card.disabled .checkbox {
+    border-color: #34c759;
+    background: #34c759;
+    color: #fff;
+  }
+
+  /* 직사각형 버튼들 */
+  .btn {
+    flex: 1;
+    border: none;
+    border-radius: 18px;
+    background: #fff;
+    color: #007aff;
+    font-size: 21px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all .15s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .btn:active { transform: scale(.98); background: #e5e5ea; }
+  .btn.running {
+    background: #34c759;
+    color: #fff;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
 </style>
 </head>
 <body>
 
-  <div class="row">
-    <div class="checkbox" id="todayCheck" onclick="toggleCheck()"></div>
-    <button class="btn" id="todayBtn" onclick="toggleToday()">오늘</button>
-  </div>
+  <button class="today-card" id="todayBtn" onclick="toggleToday()">
+    <div class="checkbox" id="todayCheck" onclick="toggleCheck(event)"></div>
+    <div class="label" id="todayLabel">오늘</div>
+  </button>
 
-  <div class="row">
-    <button class="btn" id="focusBtn" onclick="toggleFocus()">오토포커스</button>
-  </div>
-
-  <div class="row small">
-    <button class="btn-sm" onclick="runShortcut('내일')">내일 할일</button>
-    <button class="btn-sm" onclick="runShortcut('추가')">추가</button>
-  </div>
+  <button class="btn" id="focusBtn" onclick="toggleFocus()">오토포커스</button>
+  <button class="btn" onclick="runShortcut('추가')">추가</button>
+  <button class="btn" onclick="runShortcut('오늘할일')">오늘 할일</button>
+  <button class="btn" onclick="runShortcut('내일')">내일 할일</button>
 
 <script>
   function runShortcut(name) {
@@ -111,17 +117,18 @@
   var focusRunning = false;
 
   function toggleToday() {
-    var btn = document.getElementById('todayBtn');
+    var card = document.getElementById('todayBtn');
+    var label = document.getElementById('todayLabel');
     if (!todayRunning) {
       runShortcut('오늘');
       todayRunning = true;
-      btn.textContent = '실행중';
-      btn.classList.add('running');
+      label.textContent = '실행중';
+      card.classList.add('running');
     } else {
       runShortcut('오늘끝');
       todayRunning = false;
-      btn.textContent = '오늘';
-      btn.classList.remove('running');
+      label.textContent = '오늘';
+      card.classList.remove('running');
     }
   }
 
@@ -140,12 +147,14 @@
     }
   }
 
-  function toggleCheck() {
+  function toggleCheck(e) {
+    e.stopPropagation();
+    var card = document.getElementById('todayBtn');
     var check = document.getElementById('todayCheck');
-    var btn = document.getElementById('todayBtn');
-    var checked = check.classList.toggle('checked');
+    var checked = card.classList.toggle('disabled');
     check.textContent = checked ? '✓' : '';
-    btn.disabled = checked;
+    // 체크 해제도 가능하도록 체크박스만 클릭 허용
+    check.style.pointerEvents = 'auto';
   }
 </script>
 </body>
