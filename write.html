@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초고</title>
+<style>
+  :root {
+    --bg: #fafaf8;
+    --fg: #2b2b2b;
+    --muted: #9b9b95;
+    --line: #e6e6e0;
+    --accent: #2b2b2b;
+    --done: #4a7c59;
+    --panel: #ffffff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    font-size: 15px;
+    display: flex;
+  }
+  button {
+    font: inherit;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 14px;
+    color: var(--fg);
+    cursor: pointer;
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--fg); }
+  button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  button.primary:disabled { opacity: .3; cursor: default; }
+  button.ghost { border: none; color: var(--muted); padding: 4px 8px; }
+  button.ghost:hover { color: var(--fg); }
+  input[type=number], input[type=text] {
+    font: inherit;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    color: var(--fg);
+    padding: 2px 4px;
+    outline: none;
+  }
+  input[type=number] { width: 70px; text-align: right; }
+  input[type=number]::-webkit-inner-spin-button { display: none; }
+  input:focus { border-bottom-color: var(--fg); }
+
+  /* ── 사이드바 ── */
+  #sidebar {
+    width: 220px;
+    min-width: 220px;
+    border-right: 1px solid var(--line);
+    padding: 28px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+  }
+  #sidebar h1 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .2em;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-left: 8px;
+  }
+  .proj {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .proj:hover { background: #f0f0ec; }
+  .proj.active { color: var(--fg); background: #efefe9; }
+  .proj .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj .del { visibility: hidden; border: none; color: var(--muted); padding: 0 4px; font-size: 13px; }
+  .proj:hover .del { visibility: visible; }
+  .proj .del:hover { color: #b3423a; }
+  #addProj { margin-top: 10px; border-style: dashed; color: var(--muted); width: 100%; }
+
+  /* ── 메인 ── */
+  #main {
+    flex: 1;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 36px 40px 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    overflow-y: auto;
+  }
+  #empty {
+    margin: auto;
+    color: var(--muted);
+    text-align: center;
+    line-height: 2;
+  }
+
+  #topbar {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  #projName {
+    font-size: 22px;
+    font-weight: 700;
+    border-bottom: 1px solid transparent;
+    max-width: 340px;
+  }
+  #projName:focus { border-bottom-color: var(--line); }
+
+  /* 타이머 */
+  #timer { display: flex; align-items: center; gap: 8px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #timerDisplay { font-size: 15px; min-width: 48px; text-align: center; }
+  #timerDisplay.running { color: var(--fg); }
+  #timerDisplay.finished { color: var(--done); font-weight: 600; }
+  #timerMin { width: 44px; }
+
+  /* 설정 줄 */
+  #settings {
+    display: flex;
+    gap: 28px;
+    color: var(--muted);
+    font-size: 13.5px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  #settings label { display: flex; gap: 6px; align-items: baseline; }
+  #settings input { font-size: 13.5px; color: var(--fg); }
+
+  /* 최근 7일 로그 */
+  #logRow {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  #todayDate { font-size: 13.5px; color: var(--muted); }
+  #weekLog { display: flex; gap: 12px; }
+  .day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .day i {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #dcdcd4;
+  }
+  .day i.ok { background: var(--done); }
+  .day i.miss { background: #c05a52; }
+  .day.today span { color: var(--fg); font-weight: 600; }
+
+  /* 쓰기 영역 */
+  #editor {
+    width: 100%;
+    min-height: 320px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    padding: 24px;
+    font-family: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+    font-size: 17px;
+    line-height: 1.9;
+    resize: vertical;
+    outline: none;
+    color: var(--fg);
+  }
+  #editor:focus { border-color: #c9c9c0; }
+  #editor.done { border-color: var(--done); }
+
+  #counterRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  #counter { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 14px; }
+  #counter b { color: var(--fg); font-weight: 600; }
+  #counter.done b { color: var(--done); }
+  #doneMsg { color: var(--done); font-size: 14px; display: none; }
+  #btns { display: flex; gap: 8px; }
+
+  .bar {
+    height: 3px;
+    background: var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar i {
+    display: block;
+    height: 100%;
+    background: var(--fg);
+    width: 0%;
+    transition: width .3s;
+  }
+  .bar i.done { background: var(--done); }
+
+  /* 전체 원고 */
+  #totalSection { border-top: 1px solid var(--line); padding-top: 20px; }
+  #linkRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  #scrivLink {
+    flex: 1;
+    font-size: 13.5px;
+    color: var(--fg);
+  }
+  #openLink { white-space: nowrap; }
+  #totalHead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  #totalHead h2 { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .05em; }
+  #totalStats { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  #totalStats b { color: var(--fg); font-weight: 600; }
+  #fullText {
+    display: none;
+    margin-top: 14px;
+    max-height: 340px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-family: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+    font-size: 15px;
+    line-height: 1.85;
+    color: #555;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    background: var(--panel);
+  }
+
+  /* 토스트 */
+  #toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: var(--fg);
+    color: var(--bg);
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 13.5px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all .25s;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <h1>초고</h1>
+  <div id="projList"></div>
+  <button id="addProj">＋ 새 프로젝트</button>
+</aside>
+
+<main id="main">
+  <div id="empty">프로젝트를 만들어 시작하세요.</div>
+
+  <div id="work" style="display:none; flex-direction:column; gap:22px;">
+    <div id="topbar">
+      <input type="text" id="projName" title="프로젝트 이름 (클릭해서 수정)">
+      <div id="timer">
+        <input type="number" id="timerMin" value="25" min="1" title="분">
+        <span style="font-size:12px">분</span>
+        <span id="timerDisplay">–</span>
+        <button class="ghost" id="timerBtn">시작</button>
+        <button class="ghost" id="timerReset" title="초기화">↺</button>
+      </div>
+    </div>
+
+    <div id="settings">
+      <label>하루 분량 <input type="number" id="dailyInput" min="100" step="100"> 자 <span id="dailyMae"></span></label>
+      <label>목표 원고량 <input type="number" id="goalInput" min="0" step="1000"> 자 <span id="goalMae"></span></label>
+      <span id="todaySaved"></span>
+    </div>
+
+    <div id="logRow">
+      <span id="todayDate"></span>
+      <div id="weekLog"></div>
+    </div>
+
+    <textarea id="editor" placeholder="오늘의 초고를 쓰세요…" spellcheck="false"></textarea>
+
+    <div>
+      <div id="counterRow">
+        <span id="counter"><b>0</b> / 1,000자</span>
+        <span id="doneMsg">오늘 분량 완료 —</span>
+        <div id="btns">
+          <button id="copyDraft">복사</button>
+          <button id="saveDraft" class="primary">저장</button>
+        </div>
+      </div>
+      <div class="bar" style="margin-top:10px"><i id="dailyBar"></i></div>
+    </div>
+
+    <div id="totalSection">
+      <div id="linkRow">
+        <span>스크리브너</span>
+        <input type="text" id="scrivLink" placeholder="링크를 붙여넣으세요 (예: x-scrivener-item://… )" spellcheck="false">
+        <button class="ghost" id="openLink">열기 ↗</button>
+      </div>
+      <div id="totalHead">
+        <h2>전체 원고</h2>
+        <span id="totalStats"></span>
+        <div style="display:flex; gap:8px">
+          <button class="ghost" id="toggleFull">펼치기</button>
+          <button id="copyFull">복사</button>
+        </div>
+      </div>
+      <div class="bar"><i id="goalBar"></i></div>
+      <div id="fullText"></div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+const KEY = 'chogo-app-v1';
+const $ = id => document.getElementById(id);
+
+let state = load();
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || { currentId: null, projects: [] }; }
+  catch { return { currentId: null, projects: [] }; }
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function cur() { return state.projects.find(p => p.id === state.currentId) || null; }
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function today() { return dateKey(new Date()); }
+const fmt = n => n.toLocaleString('ko-KR');
+const mae = n => {
+  const m = n / 200;
+  return (m % 1 === 0 ? m : m.toFixed(1)) + '매';
+};
+
+/* ── 프로젝트 ── */
+function newProject() {
+  const name = prompt('프로젝트 이름');
+  if (!name || !name.trim()) return;
+  const p = { id: Date.now().toString(36), name: name.trim(), goal: 100000, daily: 1000, text: '', draft: '', history: {} };
+  state.projects.push(p);
+  state.currentId = p.id;
+  save(); render();
+}
+function deleteProject(id, e) {
+  e.stopPropagation();
+  const p = state.projects.find(p => p.id === id);
+  if (!confirm(`"${p.name}" 프로젝트를 삭제할까요?\n원고는 복구할 수 없습니다.`)) return;
+  state.projects = state.projects.filter(p => p.id !== id);
+  if (state.currentId === id) state.currentId = state.projects[0]?.id || null;
+  save(); render();
+}
+function selectProject(id) { state.currentId = id; save(); render(); }
+
+/* ── 렌더 ── */
+function render() {
+  const list = $('projList');
+  list.innerHTML = '';
+  state.projects.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'proj' + (p.id === state.currentId ? ' active' : '');
+    div.onclick = () => selectProject(p.id);
+    const nm = document.createElement('span');
+    nm.className = 'name'; nm.textContent = p.name;
+    const del = document.createElement('button');
+    del.className = 'del'; del.textContent = '✕'; del.title = '삭제';
+    del.onclick = e => deleteProject(p.id, e);
+    div.append(nm, del);
+    list.appendChild(div);
+  });
+
+  const p = cur();
+  $('empty').style.display = p ? 'none' : 'block';
+  $('work').style.display = p ? 'flex' : 'none';
+  if (!p) return;
+
+  $('projName').value = p.name;
+  $('dailyInput').value = p.daily;
+  $('goalInput').value = p.goal;
+  $('scrivLink').value = p.link || '';
+  $('editor').value = p.draft || '';
+  $('fullText').textContent = p.text || '(아직 원고가 없습니다)';
+  updateCounts();
+}
+
+function updateCounts() {
+  const p = cur(); if (!p) return;
+  const draftLen = $('editor').value.length;
+  const savedToday = p.history[today()] || 0;
+  const done = draftLen >= p.daily;
+
+  $('counter').innerHTML = `<b>${fmt(draftLen)}</b> / ${fmt(p.daily)}자`;
+  $('counter').classList.toggle('done', done);
+  $('doneMsg').style.display = done ? 'inline' : 'none';
+  $('editor').classList.toggle('done', done);
+
+  const db = $('dailyBar');
+  db.style.width = Math.min(100, draftLen / p.daily * 100) + '%';
+  db.classList.toggle('done', done);
+
+  $('todaySaved').textContent = savedToday ? `오늘 저장 ${fmt(savedToday)}자` : '';
+  $('dailyMae').textContent = `(${mae(p.daily)})`;
+  $('goalMae').textContent = p.goal > 0 ? `(${mae(p.goal)})` : '';
+
+  const total = p.text.length;
+  const pct = p.goal > 0 ? Math.min(100, total / p.goal * 100) : 0;
+  let daysLeft = '';
+  if (p.goal > 0) {
+    const remain = p.goal - total;
+    daysLeft = remain <= 0 ? ' · 목표 달성' : ` · 남은 일수 <b>${fmt(Math.ceil(remain / p.daily))}</b>일`;
+  }
+  $('totalStats').innerHTML = `<b>${mae(total)}</b> · 목표의 ${pct.toFixed(1)}%${daysLeft}`;
+  const gb = $('goalBar');
+  gb.style.width = pct + '%';
+  gb.classList.toggle('done', p.goal > 0 && total >= p.goal);
+
+  renderWeekLog(p);
+}
+
+/* ── 최근 7일 로그 ── */
+function renderWeekLog(p) {
+  const now = new Date();
+  $('todayDate').textContent = now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' });
+
+  const wl = $('weekLog');
+  wl.innerHTML = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const key = dateKey(d);
+    const chars = p.history[key] || 0;
+    const isToday = i === 0;
+
+    const div = document.createElement('div');
+    div.className = 'day' + (isToday ? ' today' : '');
+    const dot = document.createElement('i');
+    if (chars >= p.daily) dot.className = 'ok';
+    else if (chars > 0) dot.className = 'miss';
+    div.title = `${d.getMonth() + 1}/${d.getDate()} · ${fmt(chars)}자`;
+    const label = document.createElement('span');
+    label.textContent = isToday ? '오늘' : d.getDate();
+    div.append(dot, label);
+    wl.appendChild(div);
+  }
+}
+
+/* ── 쓰기 ── */
+let draftTimer;
+$('editor').addEventListener('input', () => {
+  updateCounts();
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => { const p = cur(); if (p) { p.draft = $('editor').value; save(); } }, 400);
+});
+
+$('saveDraft').onclick = () => {
+  const p = cur(); if (!p) return;
+  const t = $('editor').value;
+  if (!t.trim()) { toast('저장할 내용이 없습니다'); return; }
+  p.text = p.text ? p.text + '\n\n' + t : t;
+  p.history[today()] = (p.history[today()] || 0) + t.length;
+  p.draft = '';
+  $('editor').value = '';
+  save();
+  $('fullText').textContent = p.text;
+  updateCounts();
+  toast(`${fmt(t.length)}자를 전체 원고에 추가했습니다`);
+};
+
+/* ── 복사 ── */
+async function copyText(t, msg) {
+  if (!t) { toast('복사할 내용이 없습니다'); return; }
+  try { await navigator.clipboard.writeText(t); }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = t; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast(msg);
+}
+$('copyDraft').onclick = () => copyText($('editor').value, '오늘 원고를 복사했습니다');
+$('copyFull').onclick = () => copyText(cur()?.text || '', '전체 원고를 복사했습니다');
+
+/* ── 설정 ── */
+$('projName').addEventListener('change', () => { const p = cur(); if (p) { p.name = $('projName').value.trim() || p.name; save(); render(); } });
+$('dailyInput').addEventListener('change', () => { const p = cur(); if (p) { p.daily = Math.max(100, +$('dailyInput').value || 1000); save(); render(); } });
+$('goalInput').addEventListener('change', () => { const p = cur(); if (p) { p.goal = Math.max(0, +$('goalInput').value || 0); save(); render(); } });
+
+/* ── 스크리브너 링크 ── */
+$('scrivLink').addEventListener('change', () => { const p = cur(); if (p) { p.link = $('scrivLink').value.trim(); save(); } });
+$('openLink').onclick = () => {
+  const link = cur()?.link;
+  if (!link) { toast('링크를 먼저 입력하세요'); $('scrivLink').focus(); return; }
+  location.href = link;
+};
+
+/* ── 전체 원고 토글 ── */
+$('toggleFull').onclick = () => {
+  const ft = $('fullText');
+  const open = ft.style.display === 'block';
+  ft.style.display = open ? 'none' : 'block';
+  $('toggleFull').textContent = open ? '펼치기' : '접기';
+};
+
+/* ── 타이머 ── */
+let tRemain = 0, tInterval = null;
+function tShow() {
+  const m = Math.floor(tRemain / 60), s = tRemain % 60;
+  $('timerDisplay').textContent = `${m}:${String(s).padStart(2, '0')}`;
+}
+$('timerBtn').onclick = () => {
+  if (tInterval) { // 일시정지
+    clearInterval(tInterval); tInterval = null;
+    $('timerBtn').textContent = '계속';
+    return;
+  }
+  if (tRemain <= 0) tRemain = Math.max(1, +$('timerMin').value || 25) * 60;
+  $('timerDisplay').className = 'running';
+  $('timerBtn').textContent = '정지';
+  tShow();
+  tInterval = setInterval(() => {
+    tRemain--;
+    tShow();
+    if (tRemain <= 0) {
+      clearInterval(tInterval); tInterval = null;
+      $('timerDisplay').textContent = '끝';
+      $('timerDisplay').className = 'finished';
+      $('timerBtn').textContent = '시작';
+      toast('타이머 종료');
+      beep();
+    }
+  }, 1000);
+};
+$('timerReset').onclick = () => {
+  clearInterval(tInterval); tInterval = null; tRemain = 0;
+  $('timerDisplay').textContent = '–';
+  $('timerDisplay').className = '';
+  $('timerBtn').textContent = '시작';
+};
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 660; g.gain.value = 0.08;
+    o.start(); o.stop(ctx.currentTime + 0.35);
+  } catch {}
+}
+
+/* ── 토스트 ── */
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ── 단축키: Cmd/Ctrl+S 저장 ── */
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); $('saveDraft').click(); }
+});
+
+$('addProj').onclick = newProject;
+render();
+</script>
+</body>
+</html>
