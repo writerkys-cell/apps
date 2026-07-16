@@ -121,65 +121,6 @@
     font-size:13px;color:var(--muted);padding:6px 0;
   }
 
-  /* --- flow: 루틴 → 오늘 → 오토포커스 --- */
-  .flow-connector{
-    text-align:center;
-    color:var(--accent);
-    font-size:18px;
-    line-height:1;
-    padding:2px 0;
-    opacity:.6;
-  }
-  .flow-step{
-    background:var(--card);
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:14px 16px;
-    margin-bottom:2px;
-    display:flex;
-    align-items:center;
-    gap:10px;
-  }
-  .flow-step input[type=checkbox]{
-    width:22px;height:22px;flex:none;accent-color:var(--accent);
-  }
-  .flow-title{
-    flex:1;
-    font-size:16px;
-    font-weight:600;
-    color:var(--text);
-    text-decoration:none;
-    cursor:pointer;
-    background:none;border:none;text-align:left;padding:0;
-    font-family:inherit;
-  }
-  .flow-title:active{opacity:.55;}
-  .flow-step.done .flow-title{
-    text-decoration:line-through;
-    color:var(--done);
-  }
-  .flow-step .btn.flow-end{
-    flex:none;
-    padding:8px 16px;
-    font-size:13px;
-    border-radius:10px;
-  }
-
-  /* --- 내일 선택 / 추가 : 다른 톤의 버튼 --- */
-  footer.tomorrow{
-    display:flex;gap:10px;margin-top:22px;
-  }
-  footer.tomorrow .btn.ghost{
-    flex:1;
-    background:transparent;
-    border:1.5px dashed var(--muted);
-    color:var(--muted);
-    padding:12px;
-    font-size:13px;
-    font-weight:500;
-    border-radius:24px;
-  }
-
   /* modal / form overlay */
   .overlay{
     position:fixed;inset:0;background:rgba(0,0,0,.35);
@@ -208,36 +149,15 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>오늘의 흐름</h1>
+    <h1>소설가의 하루</h1>
     <div class="date" id="dateLabel"></div>
   </header>
   <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(event)">
 
   <section class="hero-card" id="section-routines">
-    <h2>루틴 <span class="sub" id="routineProgress"></span></h2>
     <div class="list" id="list-routines"></div>
     <button class="add-btn" onclick="openItemForm('routines')">+ 루틴 추가</button>
   </section>
-
-  <div class="flow-connector">↓</div>
-
-  <div class="flow-step" id="step-today">
-    <input type="checkbox" id="todayCheckbox" onchange="toggleTodayDone()">
-    <button class="flow-title" onclick="runShortcut('오늘')">오늘</button>
-    <button class="btn flow-end" onclick="runShortcut('오늘끝')">끝</button>
-  </div>
-
-  <div class="flow-connector">↓</div>
-
-  <div class="flow-step" id="step-autofocus">
-    <button class="flow-title" onclick="runShortcut('오토포커스')">오토포커스</button>
-    <button class="btn flow-end" onclick="runShortcut('오토포커스끝')">끝</button>
-  </div>
-
-  <footer class="tomorrow">
-    <button class="btn ghost" onclick="runShortcut('내일')">내일 선택</button>
-    <button class="btn ghost" onclick="runShortcut('추가')">추가</button>
-  </footer>
 
   <div class="sync-actions">
     <button class="btn" onclick="exportData()">내보내기</button>
@@ -285,8 +205,7 @@ function defaultState(){
   return {
     lastDate: todayStr(),
     nextId: 1,
-    routines: [],
-    todayDone: false
+    routines: []
   };
 }
 
@@ -317,7 +236,6 @@ function rolloverIfNewDay(){
   const t = todayStr();
   if(state.lastDate !== t){
     state.routines.forEach(r => { r.done = false; r.active = false; });
-    state.todayDone = false;
     state.lastDate = t;
     save();
   }
@@ -338,13 +256,15 @@ function renderRoutines(){
     container.innerHTML = '<div class="empty">아직 루틴이 없어요.</div>';
     return;
   }
-  container.innerHTML = items.map(item => `
+  container.innerHTML = items.map((item, idx) => `
     <div class="item ${item.done ? 'done' : ''} ${item.active ? 'active' : ''}">
       <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleDone(${item.id})">
       <div class="title">${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}</div>
       <div class="row-actions">
         <button class="btn" ${!item.startShortcut ? 'disabled' : ''} onclick="startRoutine(${item.id})">시작</button>
         <button class="btn" ${!item.endShortcut ? 'disabled' : ''} onclick="endRoutine(${item.id})">끝</button>
+        <button class="btn icon" ${idx === 0 ? 'disabled' : ''} onclick="moveRoutine(${item.id}, -1)">▲</button>
+        <button class="btn icon" ${idx === items.length - 1 ? 'disabled' : ''} onclick="moveRoutine(${item.id}, 1)">▼</button>
         <button class="btn icon" onclick="openItemForm('routines', ${item.id})">✎</button>
       </div>
     </div>
@@ -387,8 +307,13 @@ function toggleDone(id){
   }
 }
 
-function toggleTodayDone(){
-  state.todayDone = document.getElementById('todayCheckbox').checked;
+function moveRoutine(id, delta){
+  const idx = state.routines.findIndex(x => x.id === id);
+  if(idx === -1) return;
+  const newIdx = idx + delta;
+  if(newIdx < 0 || newIdx >= state.routines.length) return;
+  const arr = state.routines;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
   save();
   renderAll();
 }
@@ -402,10 +327,6 @@ function progressLabel(items){
 function renderAll(){
   document.getElementById('dateLabel').textContent = todayStr();
   renderRoutines();
-  document.getElementById('routineProgress').textContent = progressLabel(state.routines);
-
-  document.getElementById('todayCheckbox').checked = !!state.todayDone;
-  document.getElementById('step-today').classList.toggle('done', !!state.todayDone);
 }
 
 // --- item add/edit form (루틴 전용) ---
