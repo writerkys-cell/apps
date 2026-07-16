@@ -52,6 +52,17 @@
   input:focus { border-bottom-color: var(--fg); }
 
   /* ── 사이드바 ── */
+  #sideToggle {
+    position: fixed;
+    top: 24px;
+    left: 14px;
+    z-index: 10;
+    border: none;
+    color: var(--muted);
+    padding: 4px 8px;
+    font-size: 15px;
+  }
+  #sideToggle:hover { color: var(--fg); }
   #sidebar {
     width: 220px;
     min-width: 220px;
@@ -62,14 +73,22 @@
     gap: 4px;
     overflow-y: auto;
   }
+  #sidebar.collapsed { display: none; }
   #sidebar h1 {
     font-size: 13px;
     font-weight: 600;
     letter-spacing: .2em;
     color: var(--muted);
     margin-bottom: 16px;
-    padding-left: 8px;
+    padding-left: 34px;
   }
+  #sideFoot {
+    margin-top: auto;
+    padding-top: 20px;
+    display: flex;
+    gap: 4px;
+  }
+  #sideFoot button { font-size: 12.5px; flex: 1; }
   .proj {
     display: flex;
     align-items: center;
@@ -276,10 +295,17 @@
 </head>
 <body>
 
+<button id="sideToggle" class="ghost" title="프로젝트 목록 접기/펼치기">☰</button>
+
 <aside id="sidebar">
   <h1>초고</h1>
   <div id="projList"></div>
   <button id="addProj">＋ 새 프로젝트</button>
+  <div id="sideFoot">
+    <button class="ghost" id="exportBtn">내보내기</button>
+    <button class="ghost" id="importBtn">불러오기</button>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+  </div>
 </aside>
 
 <main id="main">
@@ -593,7 +619,48 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); $('saveDraft').click(); }
 });
 
+/* ── 사이드바 접기 ── */
+$('sideToggle').onclick = () => {
+  state.sideCollapsed = !state.sideCollapsed;
+  $('sidebar').classList.toggle('collapsed', state.sideCollapsed);
+  save();
+};
+
+/* ── 백업: 내보내기 / 불러오기 ── */
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `초고-백업-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('백업 파일을 내려받았습니다');
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data.projects)) throw new Error();
+      if (!confirm(`백업의 프로젝트 ${data.projects.length}개를 불러옵니다.\n현재 데이터를 덮어씁니다. 계속할까요?`)) return;
+      state = data;
+      if (!state.projects.find(p => p.id === state.currentId)) state.currentId = state.projects[0]?.id || null;
+      save(); render();
+      $('sidebar').classList.toggle('collapsed', !!state.sideCollapsed);
+      toast('불러오기 완료');
+    } catch {
+      toast('올바른 백업 파일이 아닙니다');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
 $('addProj').onclick = newProject;
+$('sidebar').classList.toggle('collapsed', !!state.sideCollapsed);
 render();
 </script>
 </body>
