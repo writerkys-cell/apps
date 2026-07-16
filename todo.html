@@ -2,160 +2,418 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>할일</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>소설가의 하루</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { height: 100%; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
-    background: #f2f2f7;
-    height: 100dvh;
-    padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+  :root{
+    --bg:#f7f6f3;
+    --border:#e6e3db;
+    --text:#2b2b28;
+    --muted:#a3a099;
+    --accent:#c9612f;
+    --done:#c3bfb4;
+    --danger:#b3432f;
+    --active:#3068a8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding:20px 18px 40px;
+  }
+  .wrap{max-width:480px;margin:0 auto;}
+  header{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:14px;
+  }
+  header h1{font-size:15px;font-weight:600;margin:0;color:var(--muted);}
+  header .date{font-size:12px;color:var(--muted);}
+
+  .list{margin-bottom:10px;}
+  .item{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .item:last-of-type{border-bottom:none;}
+  .item input[type=checkbox]{
+    width:18px;height:18px;flex:none;accent-color:var(--accent);
+  }
+  .item .title{
+    flex:1;min-width:0;
+    font-size:15px;
+    word-break:break-word;
+  }
+  .item.done .title{
+    text-decoration:line-through;
+    color:var(--done);
+  }
+  .item .title a{
+    color:inherit;
+    text-decoration:underline;
+    text-decoration-color:var(--border);
+    text-underline-offset:3px;
+  }
+  .item.done .title a{color:var(--done);}
+  .item.active .title,
+  .item.active .title a{
+    color:var(--active);
+    font-weight:600;
   }
 
-  /* 오늘: 크고 네모난 카드 */
-  .today-card {
-    flex: 2.2;
-    border: none;
-    border-radius: 24px;
-    background: #007aff;
-    color: #fff;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    cursor: pointer;
-    transition: all .15s;
-    position: relative;
+  .icon-btn{
+    flex:none;
+    width:28px;height:28px;
+    border:none;border-radius:8px;
+    background:none;
+    color:var(--muted);
+    font-size:13px;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
   }
-  .today-card:active { transform: scale(.98); }
-  .today-card .label {
-    font-size: 34px;
-    font-weight: 700;
+  .icon-btn:hover{background:var(--border);}
+  .icon-btn:disabled{opacity:.25;cursor:not-allowed;background:none;}
+  .icon-btn.start{color:var(--accent);}
+  .icon-btn.end{color:var(--muted);}
+
+  .add-btn{
+    width:100%;
+    background:none;
+    border:1px dashed var(--border);
+    color:var(--muted);
+    border-radius:8px;
+    padding:8px;
+    font-size:12px;
+    cursor:pointer;
+    margin-top:4px;
   }
-  .today-card.running {
-    background: #34c759;
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-  .today-card.disabled {
-    background: #d1d1d6;
-    color: #8e8e93;
-    animation: none;
-    pointer-events: none;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .7; }
+  .empty{
+    font-size:13px;color:var(--muted);padding:10px 0;
   }
 
-  /* 체크박스: 카드 안 좌측 상단 */
-  .checkbox {
-    position: absolute;
-    top: 16px; left: 16px;
-    width: 40px; height: 40px;
-    border: 3px solid rgba(255,255,255,.8);
-    border-radius: 12px;
-    background: rgba(255,255,255,.15);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 26px; color: transparent;
-    cursor: pointer;
-    pointer-events: auto;
-    transition: all .15s;
-  }
-  .today-card.disabled .checkbox {
-    border-color: #34c759;
-    background: #34c759;
-    color: #fff;
+  .sync-actions{display:flex;gap:6px;justify-content:center;margin-top:24px;}
+  .sync-actions button{
+    background:none;border:none;
+    color:var(--muted);padding:2px 6px;font-size:10px;cursor:pointer;
+    text-decoration:underline;text-decoration-color:var(--border);
   }
 
-  /* 직사각형 버튼들 */
-  .btn {
-    flex: 1;
-    border: none;
-    border-radius: 18px;
-    background: #fff;
-    color: #007aff;
-    font-size: 21px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all .15s;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  /* modal / form overlay */
+  .overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.35);
+    display:flex;align-items:flex-end;justify-content:center;
+    z-index:50;
   }
-  .btn:active { transform: scale(.98); background: #e5e5ea; }
-  .btn.running {
-    background: #34c759;
-    color: #fff;
-    animation: pulse 1.5s ease-in-out infinite;
+  .overlay.hidden{display:none;}
+  .sheet{
+    background:#fff;width:100%;max-width:480px;
+    border-radius:16px 16px 0 0;
+    padding:20px;max-height:80vh;overflow-y:auto;
   }
+  .sheet h3{margin:0 0 14px;font-size:16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;}
+  .field input{
+    width:100%;padding:9px 10px;border:1px solid var(--border);
+    border-radius:8px;font-size:14px;
+  }
+  .sheet-actions{
+    display:flex;gap:8px;margin-top:16px;
+  }
+  .sheet-actions button{
+    flex:1;padding:10px;text-align:center;font-size:14px;
+    border:none;border-radius:8px;cursor:pointer;
+  }
+  .btn-cancel{background:#f0efeb;color:var(--muted);}
+  .btn-delete{background:#f6dcd5;color:var(--danger);}
+  .btn-save{background:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
+<div class="wrap">
+  <header>
+    <h1>소설가의 하루</h1>
+    <div class="date" id="dateLabel"></div>
+  </header>
+  <input type="file" id="importFile" accept="application/json,.json" style="display:none" onchange="importData(event)">
 
-  <button class="today-card" id="todayBtn" onclick="toggleToday()">
-    <div class="checkbox" id="todayCheck" onclick="toggleCheck(event)"></div>
-    <div class="label" id="todayLabel">오늘</div>
-  </button>
+  <div class="list" id="list-routines"></div>
+  <button class="add-btn" onclick="openItemForm()">+ 추가</button>
 
-  <button class="btn" id="focusBtn" onclick="toggleFocus()">오토포커스</button>
-  <button class="btn" onclick="runShortcut('추가')">추가</button>
-  <button class="btn" onclick="runShortcut('오늘할일')">오늘 할일</button>
-  <button class="btn" onclick="runShortcut('내일')">내일 할일</button>
+  <div class="sync-actions">
+    <button onclick="exportData()">내보내기</button>
+    <button onclick="document.getElementById('importFile').click()">가져오기</button>
+  </div>
+</div>
+
+<!-- item add/edit sheet -->
+<div class="overlay hidden" id="itemOverlay">
+  <div class="sheet">
+    <h3 id="itemFormTitle">항목 추가</h3>
+    <div class="field">
+      <label>이름</label>
+      <input type="text" id="f-title" placeholder="예: 아침 루틴">
+    </div>
+    <div class="field">
+      <label>링크 (Scrivener 링크, 웹페이지 URL 등, 선택사항)</label>
+      <input type="text" id="f-link" placeholder="scrivener://... 또는 https://...">
+    </div>
+    <div class="field">
+      <label>시작 단축어 이름</label>
+      <input type="text" id="f-start" placeholder="Apple 단축어 이름">
+    </div>
+    <div class="field">
+      <label>끝 단축어 이름</label>
+      <input type="text" id="f-end" placeholder="Apple 단축어 이름">
+    </div>
+    <div class="field">
+      <label>순서 (숫자가 작을수록 위에 표시)</label>
+      <input type="number" id="f-order" placeholder="예: 1">
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-cancel" onclick="closeItemForm()">취소</button>
+      <button class="btn-delete" id="f-delete" style="display:none" onclick="deleteFromForm()">삭제</button>
+      <button class="btn-save" onclick="saveItemForm()">저장</button>
+    </div>
+  </div>
+</div>
 
 <script>
-  function runShortcut(name) {
-    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name);
+const KEY = 'routineAppData_v1';
+
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function defaultState(){
+  return {
+    lastDate: todayStr(),
+    nextId: 1,
+    routines: []
+  };
+}
+
+function load(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if(!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    const state = Object.assign(defaultState(), parsed);
+    state.routines.forEach((r, idx) => {
+      if(typeof r.order !== 'number') r.order = idx;
+    });
+    return state;
+  }catch(e){
+    return defaultState();
   }
+}
 
-  var todayRunning = false;
-  var focusRunning = false;
+function save(){
+  localStorage.setItem(KEY, JSON.stringify(state));
+}
 
-  function toggleToday() {
-    var card = document.getElementById('todayBtn');
-    var label = document.getElementById('todayLabel');
-    if (!todayRunning) {
-      runShortcut('오늘');
-      todayRunning = true;
-      label.textContent = '실행중';
-      card.classList.add('running');
-    } else {
-      runShortcut('오늘끝');
-      todayRunning = false;
-      label.textContent = '오늘';
-      card.classList.remove('running');
+function genId(){
+  const id = state.nextId || 1;
+  state.nextId = id + 1;
+  return id;
+}
+
+function nextOrder(){
+  if(!state.routines.length) return 0;
+  return Math.max(...state.routines.map(r => r.order || 0)) + 1;
+}
+
+let state = load();
+
+function rolloverIfNewDay(){
+  const t = todayStr();
+  if(state.lastDate !== t){
+    state.routines.forEach(r => { r.done = false; r.active = false; });
+    state.lastDate = t;
+    save();
+  }
+}
+
+function runShortcut(name){
+  if(!name){
+    alert('먼저 단축어 이름을 설정해주세요.');
+    return;
+  }
+  window.location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name);
+}
+
+function sortedRoutines(){
+  return [...state.routines].sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+function renderRoutines(){
+  const container = document.getElementById('list-routines');
+  const items = sortedRoutines();
+  if(!items.length){
+    container.innerHTML = '<div class="empty">아직 항목이 없어요.</div>';
+    return;
+  }
+  container.innerHTML = items.map(item => `
+    <div class="item ${item.done ? 'done' : ''} ${item.active ? 'active' : ''}">
+      <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleDone(${item.id})">
+      <div class="title">${item.link ? `<a href="${escapeHtml(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}</div>
+      <button class="icon-btn start" ${!item.startShortcut ? 'disabled' : ''} onclick="startRoutine(${item.id})" title="시작">▶</button>
+      <button class="icon-btn end" ${!item.endShortcut ? 'disabled' : ''} onclick="endRoutine(${item.id})" title="끝">■</button>
+      <button class="icon-btn" onclick="openItemForm(${item.id})" title="수정">✎</button>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s){
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function startRoutine(id){
+  const item = state.routines.find(x => x.id === id);
+  if(item){
+    item.active = true;
+    save();
+    renderAll();
+    runShortcut(item.startShortcut);
+  }
+}
+
+function endRoutine(id){
+  const item = state.routines.find(x => x.id === id);
+  if(item){
+    item.active = false;
+    save();
+    renderAll();
+    runShortcut(item.endShortcut);
+  }
+}
+
+function toggleDone(id){
+  const item = state.routines.find(x => x.id === id);
+  if(item){
+    item.done = !item.done;
+    save();
+    renderAll();
+  }
+}
+
+function renderAll(){
+  document.getElementById('dateLabel').textContent = todayStr();
+  renderRoutines();
+}
+
+// --- item add/edit form ---
+let formContext = { id: null };
+
+function openItemForm(id){
+  formContext = { id: id || null };
+  const titleEl = document.getElementById('itemFormTitle');
+  const del = document.getElementById('f-delete');
+  if(id){
+    const item = state.routines.find(x => x.id === id);
+    titleEl.textContent = '항목 수정';
+    document.getElementById('f-title').value = item.title;
+    document.getElementById('f-link').value = item.link || '';
+    document.getElementById('f-start').value = item.startShortcut || '';
+    document.getElementById('f-end').value = item.endShortcut || '';
+    document.getElementById('f-order').value = item.order || 0;
+    del.style.display = 'inline-block';
+  }else{
+    titleEl.textContent = '항목 추가';
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-link').value = '';
+    document.getElementById('f-start').value = '';
+    document.getElementById('f-end').value = '';
+    document.getElementById('f-order').value = nextOrder();
+    del.style.display = 'none';
+  }
+  document.getElementById('itemOverlay').classList.remove('hidden');
+}
+
+function closeItemForm(){
+  document.getElementById('itemOverlay').classList.add('hidden');
+}
+
+function saveItemForm(){
+  const title = document.getElementById('f-title').value.trim();
+  if(!title){ alert('이름을 입력해주세요.'); return; }
+  const link = document.getElementById('f-link').value.trim();
+  const startShortcut = document.getElementById('f-start').value.trim();
+  const endShortcut = document.getElementById('f-end').value.trim();
+  const orderVal = parseFloat(document.getElementById('f-order').value);
+  const order = isNaN(orderVal) ? nextOrder() : orderVal;
+  const { id } = formContext;
+  if(id){
+    const item = state.routines.find(x => x.id === id);
+    item.title = title;
+    item.link = link;
+    item.startShortcut = startShortcut;
+    item.endShortcut = endShortcut;
+    item.order = order;
+  }else{
+    state.routines.push({ id: genId(), title, link, startShortcut, endShortcut, order, done:false, active:false });
+  }
+  save();
+  renderAll();
+  closeItemForm();
+}
+
+function deleteFromForm(){
+  const { id } = formContext;
+  if(!id) return;
+  if(!confirm('삭제할까요?')) return;
+  state.routines = state.routines.filter(x => x.id !== id);
+  save();
+  renderAll();
+  closeItemForm();
+}
+
+// --- 기기 간 동기화: 내보내기 / 가져오기 ---
+function exportData(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'routine-data.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed || !Array.isArray(parsed.routines)){
+        alert('올바른 데이터 파일이 아니에요.');
+        return;
+      }
+      if(!confirm('현재 기기의 데이터를 가져온 파일로 덮어쓸까요?')) return;
+      state = Object.assign(defaultState(), parsed);
+      state.routines.forEach((r, idx) => {
+        if(typeof r.order !== 'number') r.order = idx;
+      });
+      save();
+      renderAll();
+      alert('불러왔어요.');
+    }catch(e){
+      alert('파일을 읽는 중 오류가 발생했어요.');
     }
-  }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
 
-  function toggleFocus() {
-    var btn = document.getElementById('focusBtn');
-    if (!focusRunning) {
-      runShortcut('오토포커스');
-      focusRunning = true;
-      btn.textContent = '실행중';
-      btn.classList.add('running');
-    } else {
-      runShortcut('오토포커스끝');
-      focusRunning = false;
-      btn.textContent = '오토포커스';
-      btn.classList.remove('running');
-    }
-  }
-
-  function toggleCheck(e) {
-    e.stopPropagation();
-    var card = document.getElementById('todayBtn');
-    var check = document.getElementById('todayCheck');
-    var checked = card.classList.toggle('disabled');
-    check.textContent = checked ? '✓' : '';
-    // 체크 해제도 가능하도록 체크박스만 클릭 허용
-    check.style.pointerEvents = 'auto';
-  }
+// init
+rolloverIfNewDay();
+renderAll();
 </script>
 </body>
 </html>
