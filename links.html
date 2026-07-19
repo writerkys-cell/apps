@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>링크</title>
+<style>
+  :root{
+    --bg:#fafafa; --fg:#222; --sub:#888; --line:#e2e2e2; --accent:#c0392b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
+  body{background:var(--bg); color:var(--fg); font-size:13px; max-width:300px; margin:0 auto; padding:10px 12px;}
+  header{display:flex; justify-content:space-between; align-items:baseline; padding-bottom:8px; border-bottom:1px solid var(--line);}
+  header h1{font-size:13px; font-weight:600;}
+  #count{font-size:12px; color:var(--sub);}
+
+  button{background:none; border:1px solid var(--line); border-radius:4px; padding:2px 8px; font-size:12px; cursor:pointer; color:var(--fg); line-height:1.6;}
+  button:hover{border-color:var(--fg);}
+  button.danger:hover{border-color:var(--accent); color:var(--accent);}
+
+  #list{list-style:none; padding:6px 0;}
+  #list li{display:flex; align-items:center; gap:6px; padding:6px 0; border-bottom:1px dashed var(--line);}
+  #list li .t{flex:1; word-break:break-all; cursor:pointer; text-decoration:underline; text-underline-offset:3px;}
+  #list li .t:hover{color:var(--accent);}
+  #list li button{padding:1px 6px; font-size:11px;}
+  #list li.editing{flex-wrap:wrap;}
+  .empty{color:var(--sub); font-size:12px; text-align:center; padding:14px 0;}
+  .editRow{display:flex; flex-direction:column; gap:4px; width:100%;}
+  .editRow input{width:100%; padding:3px 5px; font-size:12px; border:1px solid var(--line); border-radius:4px;}
+  .editBtns{display:flex; gap:6px; justify-content:flex-end;}
+
+  #addRow{display:flex; flex-direction:column; gap:4px; padding-top:8px; border-top:1px solid var(--line);}
+  #addRow input{width:100%; padding:4px 6px; font-size:12px; border:1px solid var(--line); border-radius:4px; background:#fff;}
+  #addRow .addBtns{display:flex; justify-content:flex-end;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>링크</h1>
+  <span id="count"></span>
+</header>
+
+<ul id="list"></ul>
+
+<div id="addRow">
+  <input id="newTitle" placeholder="제목">
+  <input id="newLink" placeholder="링크 (https:// shortcuts:// things:/// 등)" onkeydown="if(event.key==='Enter')addLink()">
+  <div class="addBtns"><button onclick="addLink()" title="추가">+</button></div>
+</div>
+
+<script>
+const LS='linkAppV1';
+let S=load();
+function load(){
+  try{const d=JSON.parse(localStorage.getItem(LS)); if(d&&Array.isArray(d.links))return d;}catch(e){}
+  return {links:[]};
+}
+function save(){localStorage.setItem(LS,JSON.stringify(S));}
+function item(id){return S.links.find(l=>l.id===id);}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+
+function render(){
+  document.getElementById('count').textContent=S.links.length+' 개';
+  const ul=document.getElementById('list'); ul.innerHTML='';
+  if(!S.links.length)ul.innerHTML='<li class="empty" style="border:none;display:block">+ 로 링크를 추가하세요</li>';
+  S.links.forEach(l=>{
+    const li=document.createElement('li');
+    if(l.editing){
+      li.className='editing';
+      li.innerHTML=`<div class="editRow">
+        <input value="${esc(l.title)}" id="e_t_${l.id}" placeholder="제목">
+        <input value="${esc(l.link)}" id="e_l_${l.id}" placeholder="링크">
+        <div class="editBtns">
+          <button class="danger" onclick="delLink('${l.id}')" title="삭제" style="margin-right:auto">− 삭제</button>
+          <button onclick="saveEdit('${l.id}')" title="저장">✓</button>
+          <button onclick="cancelEdit('${l.id}')" title="취소">✕</button>
+        </div></div>`;
+    }else{
+      li.innerHTML=`<span class="t" title="${esc(l.link)}" onclick="openLink('${l.id}')">${esc(l.title)}</span>
+        <button onclick="editLink('${l.id}')" title="수정">✎</button>`;
+    }
+    ul.appendChild(li);
+  });
+  save();
+}
+
+function addLink(){
+  const t=document.getElementById('newTitle'), k=document.getElementById('newLink');
+  const title=t.value.trim(), link=k.value.trim();
+  if(!title||!link)return;
+  S.links.push({id:Date.now()+''+Math.random().toString(36).slice(2,6),title,link});
+  t.value=''; k.value=''; t.focus(); render();
+}
+function openLink(id){
+  const l=item(id); if(!l||!l.link)return;
+  if(/^https?:/i.test(l.link))window.open(l.link,'_blank');
+  else window.location.href=l.link; // shortcuts:// x-scrivener-item:// things:/// 등
+}
+function editLink(id){item(id).editing=true;render();}
+function cancelEdit(id){delete item(id).editing;render();}
+function saveEdit(id){
+  const l=item(id);
+  const nt=document.getElementById('e_t_'+id).value.trim();
+  const nl=document.getElementById('e_l_'+id).value.trim();
+  if(nt)l.title=nt;
+  if(nl)l.link=nl;
+  delete l.editing; render();
+}
+function delLink(id){
+  const l=item(id);
+  if(!confirm('「'+l.title+'」 을(를) 삭제하시겠습니까?'))return;
+  S.links=S.links.filter(x=>x.id!==id);
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
