@@ -104,6 +104,8 @@
 
 <ul id="list"></ul>
 
+<datalist id="projOpts"></datalist>
+
 <div id="addRow">
   <input id="newTitle" placeholder="새 할 일" onkeydown="if(event.key==='Enter')addTask()">
   <button onclick="addTask()" title="추가">+</button>
@@ -192,7 +194,7 @@ function render(){
       li.className='editing';
       li.innerHTML=`<div class="editRow">
         <input value="${esc(t.title)}" id="e_t_${t.id}" placeholder="제목">
-        <input value="${esc(t.proj||'')}" id="e_p_${t.id}" placeholder="프로젝트">
+        <input value="${esc(t.proj||'')}" id="e_p_${t.id}" placeholder="프로젝트" list="projOpts">
         <input value="${esc(t.link||'')}" id="e_l_${t.id}" placeholder="링크 (https:// shortcuts:// things:/// 등)">
         <div class="editBtns"><button class="danger" onclick="deleteTask('${t.id}')" title="삭제" style="margin-right:auto">− 삭제</button>
         <button onclick="saveEdit('${t.id}')" title="저장">✓</button>
@@ -207,6 +209,11 @@ function render(){
     ul.appendChild(li);
   });
   renderArch();
+  // 프로젝트 자동완성 목록 (저장된 기록 + 할 일에 붙은 태그)
+  const dl=document.getElementById('projOpts');
+  const names=new Set(Object.keys(S.projects));
+  S.tasks.forEach(t=>{if(t.proj)names.add(t.proj);});
+  dl.innerHTML=[...names].sort().map(n=>'<option value="'+esc(n)+'">').join('');
   save();
 }
 function fmtMin(m){
@@ -337,17 +344,22 @@ function saveEdit(id){
   t.link=document.getElementById('e_l_'+id).value.trim();
   delete t.editing; render();
 }
+function runShortcut(name){ // 애플 단축어 실행
+  try{window.location.href='shortcuts://run-shortcut?name='+encodeURIComponent(name);}catch(e){}
+}
 function startTask(id){
   if(S.current)return;
   const t=task(id);
   if(!t.startedAt)t.startedAt=new Date().toISOString();
   S.current=id;
+  runShortcut('포모도로');
   if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();
   startTimer('work',S.cfg.work*60);
   render();
 }
 function finishPomodoro(){ // ✓ 끝
   const t=task(S.current); if(!t)return;
+  runShortcut('포모도로끝');
   const unit=round1(S.cfg.work/25); // 25분 기준 환산
   t.count=round1(t.count+unit); S.cycle++;
   const rec=day(todayStr());
@@ -367,6 +379,7 @@ function finishPomodoro(){ // ✓ 끝
 }
 function voidPomodoro(){ // ✕ 무효
   const t=task(S.current); if(!t)return;
+  runShortcut('포모도로끝');
   S.tasks=S.tasks.filter(x=>x.id!==t.id); S.tasks.unshift(t); // 맨 상단
   S.current=null; stopTimer(); render();
 }
