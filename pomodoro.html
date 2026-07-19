@@ -9,7 +9,7 @@
     --bg:#fafafa; --fg:#222; --sub:#888; --line:#e2e2e2; --accent:#c0392b;
   }
   *{box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
-  body{background:var(--bg); color:var(--fg); font-size:13px; max-width:300px; margin:0 auto; padding:10px 12px;}
+  body{background:var(--bg); color:var(--fg); font-size:13px; min-width:240px; margin:0 auto; padding:10px 12px;}
   header{display:flex; justify-content:space-between; align-items:baseline; padding-bottom:8px; border-bottom:1px solid var(--line);}
   #today{font-size:12px; color:var(--sub);}
   #dailyCount{font-size:12px; color:var(--accent); font-weight:600;}
@@ -60,6 +60,12 @@
   #statList .dh .dv{color:var(--sub); font-size:11px;}
   #statList .dh .dv b{color:var(--fg); font-weight:600;}
   #statList .dd{color:var(--sub); font-size:11px; margin-top:2px; word-break:break-all;}
+  .proj{color:var(--accent); font-size:11px; margin-right:4px;}
+  #projList .pr{display:flex; align-items:center; gap:6px; padding:3px 0; border-bottom:1px dashed var(--line);}
+  #projList .pr .pn{flex:1; word-break:break-all;}
+  #projList .pr .pv{color:var(--sub); font-size:11px;}
+  #projList .pr button{border:none; padding:0 2px; font-size:11px; color:var(--sub);}
+  #projList .pr button:hover{color:var(--accent);}
   .empty{color:var(--sub); font-size:11px;}
   #cfgPanel{padding:8px 0; font-size:12px; display:flex; flex-direction:column; gap:6px;}
   #cfgPanel[hidden]{display:none;}
@@ -84,6 +90,7 @@
     <div id="curTitle"></div>
     <div id="curMeta">
       <span id="timer">25:00</span>
+      <span id="curProj" class="proj"></span>
       <span id="curCount"></span>
       <span class="curBtns">
         <button id="btnDone" title="끝 (+1)">✓</button>
@@ -119,6 +126,10 @@
 </div>
 
 <div id="archPanel" hidden>
+  <div id="projSec" hidden>
+    <h4>프로젝트별 (25분 환산)</h4>
+    <div id="projList"></div>
+  </div>
   <h4>일별 기록 (최근 30일)</h4>
   <div id="avg"></div>
   <div id="statList"></div>
@@ -137,6 +148,7 @@ function load(){
   });
   delete d.archive;
   if(!d.cfg)d.cfg={work:25,brk:5,longEvery:4};
+  if(!d.projects)d.projects={};
   pruneHistory(d);
   return d;
 }
@@ -168,6 +180,7 @@ function render(){
     ct.textContent=cur.title;
     ct.className=cur.link?'linked':'';
     ct.title=cur.link||'';
+    document.getElementById('curProj').textContent=cur.proj?'#'+cur.proj:'';
     document.getElementById('curCount').textContent=fmtN(cur.count)+' 회';
   }
   renderTimer();
@@ -179,13 +192,14 @@ function render(){
       li.className='editing';
       li.innerHTML=`<div class="editRow">
         <input value="${esc(t.title)}" id="e_t_${t.id}" placeholder="제목">
+        <input value="${esc(t.proj||'')}" id="e_p_${t.id}" placeholder="프로젝트">
         <input value="${esc(t.link||'')}" id="e_l_${t.id}" placeholder="링크 (https:// shortcuts:// things:/// 등)">
         <div class="editBtns"><button class="danger" onclick="deleteTask('${t.id}')" title="삭제" style="margin-right:auto">− 삭제</button>
         <button onclick="saveEdit('${t.id}')" title="저장">✓</button>
         <button onclick="cancelEdit('${t.id}')" title="취소">✕</button></div></div>`;
     }else{
       li.innerHTML=`<input type="checkbox" ${t.checked?'checked':''} onchange="toggleCheck('${t.id}',this.checked)">
-        <span class="t">${esc(t.title)}<span class="cnt">${t.count>0?fmtN(t.count):''}</span></span>
+        <span class="t">${t.proj?'<span class="proj">#'+esc(t.proj)+'</span>':''}${esc(t.title)}<span class="cnt">${t.count>0?fmtN(t.count):''}</span></span>
         <button onclick="startTask('${t.id}')" title="시작" ${S.current?'disabled':''}>▶</button>
         <button onclick="editTask('${t.id}')" title="수정">✎</button>
         <button class="danger" onclick="completeTask('${t.id}')" title="완료">★</button>`;
@@ -202,6 +216,20 @@ function fmtMin(m){
 function renderArch(){
   const p=document.getElementById('archPanel');
   if(p.hidden)return;
+  // 프로젝트별
+  const names=Object.keys(S.projects).sort((a,b)=>S.projects[b]-S.projects[a]);
+  document.getElementById('projSec').hidden=!names.length;
+  const pl=document.getElementById('projList'); pl.innerHTML='';
+  names.forEach(n=>{
+    const div=document.createElement('div');
+    div.className='pr';
+    div.innerHTML='<span class="pn">#'+esc(n)+'</span><span class="pv">'+fmtN(S.projects[n])+'회</span>';
+    const b=document.createElement('button');
+    b.textContent='✕'; b.title='기록 삭제';
+    b.onclick=()=>{if(confirm('「'+n+'」 프로젝트 기록을 삭제하시겠습니까?')){delete S.projects[n];render();}};
+    div.appendChild(b);
+    pl.appendChild(div);
+  });
   const sl=document.getElementById('statList'); sl.innerHTML='';
   const days=Object.keys(S.history).filter(d=>{
     const r=S.history[d]; return r.n>0||r.done.length>0;
@@ -272,6 +300,7 @@ function importData(inp){
       });
       delete d.archive;
       if(!d.cfg)d.cfg={work:25,brk:5,longEvery:4};
+      if(!d.projects)d.projects={};
       pruneHistory(d);
       S=d; stopTimer(); render();
     }catch(e){alert('올바른 백업 파일이 아닙니다.');}
@@ -304,6 +333,7 @@ function saveEdit(id){
   const t=task(id);
   const nt=document.getElementById('e_t_'+id).value.trim();
   if(nt)t.title=nt;
+  t.proj=document.getElementById('e_p_'+id).value.trim();
   t.link=document.getElementById('e_l_'+id).value.trim();
   delete t.editing; render();
 }
@@ -322,6 +352,7 @@ function finishPomodoro(){ // ✓ 끝
   t.count=round1(t.count+unit); S.cycle++;
   const rec=day(todayStr());
   rec.n=round1(rec.n+unit); rec.min+=S.cfg.work;
+  if(t.proj)S.projects[t.proj]=round1((S.projects[t.proj]||0)+unit);
   pruneHistory(S);
   t.checked=false;
   S.tasks=S.tasks.filter(x=>x.id!==t.id); S.tasks.push(t); // 맨 하단
