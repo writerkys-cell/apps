@@ -94,6 +94,11 @@ input:focus{outline:none; border-color:var(--acc);}
 .editForm .del{color:var(--acc); font-size:16px; margin-right:auto; min-width:44px;}
 .editForm .sv{color:var(--acc); font-size:22px;}
 .editForm .cx{color:var(--sub); font-size:22px;}
+.projChips{display:flex; flex-wrap:wrap; gap:8px; margin:-2px 0 10px;}
+.projChips button{
+  min-height:44px; min-width:44px; font-size:16px; color:var(--acc);
+  border:1px solid var(--line); border-radius:22px; background:#fff; padding:8px 16px;
+}
 
 /* 새 할 일 */
 .newRow{display:flex; gap:8px; align-items:center; padding:14px 0;}
@@ -488,6 +493,7 @@ function editFormHtml(t){
   return '<div class="row" data-id="'+esc(t.id)+'"><div class="editForm">'+
     '<input type="text" id="efTitle" placeholder="제목" value="'+esc(t.title)+'">'+
     '<input type="text" id="efProj" placeholder="프로젝트" list="projList" value="'+esc(t.proj)+'">'+
+    projChipsHtml()+
     '<input type="text" id="efLink" placeholder="링크 (https:// 또는 URL 스킴)" value="'+esc(t.link)+'">'+
     '<div class="fr">'+
       '<button class="del" data-act="efDelete">− 삭제</button>'+
@@ -495,12 +501,22 @@ function editFormHtml(t){
       '<button class="cx" data-act="efCancel" aria-label="취소">✕</button>'+
     '</div></div></div>';
 }
-function renderDatalist(){
+function projectNames(){
   var names = {};
   Object.keys(S.projects).forEach(function(k){ names[k]=1; });
   S.tasks.forEach(function(t){ if(t.proj) names[t.proj]=1; });
+  return Object.keys(names).sort();
+}
+function projChipsHtml(){
+  var names = projectNames();
+  if(!names.length) return '';
+  return '<div class="projChips">'+names.map(function(n){
+    return '<button type="button" data-act="pickProj" data-proj="'+esc(n)+'">#'+esc(n)+'</button>';
+  }).join('')+'</div>';
+}
+function renderDatalist(){
   document.getElementById('projList').innerHTML =
-    Object.keys(names).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+    projectNames().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
 }
 function renderHist(){
   // 프로젝트별
@@ -666,6 +682,10 @@ document.addEventListener('click', function(ev){
     case 'efSave': saveEdit(id); break;
     case 'efCancel': editingId=null; render(); break;
     case 'efDelete': deleteTask(id); break;
+    case 'pickProj':
+      var pf = document.getElementById('efProj');
+      if(pf) pf.value = btn.getAttribute('data-proj');
+      break;
     case 'delProj':
       var pr = btn.closest('[data-proj]').getAttribute('data-proj');
       if(confirm('#'+pr+' 프로젝트 누적 기록을 삭제할까요?\n일별 기록에는 영향이 없습니다.')){
