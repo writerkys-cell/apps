@@ -164,7 +164,7 @@ function task(id){return S.tasks.find(t=>t.id===id);}
 /* ---------- 렌더 ---------- */
 function render(){
   document.getElementById('today').textContent=fmtDate();
-  document.getElementById('dailyCount').textContent='오늘 '+(S.history[todayStr()]||0)+' 회';
+  document.getElementById('dailyCount').textContent='오늘 '+fmtN(S.history[todayStr()]||0)+' 회';
 
   const cur=S.current?task(S.current):null;
   document.getElementById('curEmpty').style.display=cur?'none':'block';
@@ -174,7 +174,7 @@ function render(){
     ct.textContent=cur.title;
     ct.className=cur.link?'linked':'';
     ct.title=cur.link||'';
-    document.getElementById('curCount').textContent=cur.count+' 회';
+    document.getElementById('curCount').textContent=fmtN(cur.count)+' 회';
   }
   renderTimer();
 
@@ -191,7 +191,7 @@ function render(){
         <button onclick="cancelEdit('${t.id}')" title="취소">✕</button></div></div>`;
     }else{
       li.innerHTML=`<input type="checkbox" ${t.checked?'checked':''} onchange="toggleCheck('${t.id}',this.checked)">
-        <span class="t">${esc(t.title)}<span class="cnt">${t.count>0?t.count:''}</span></span>
+        <span class="t">${esc(t.title)}<span class="cnt">${t.count>0?fmtN(t.count):''}</span></span>
         <button onclick="startTask('${t.id}')" title="시작" ${S.current?'disabled':''}>▶</button>
         <button onclick="editTask('${t.id}')" title="수정">✎</button>
         <button class="danger" onclick="completeTask('${t.id}')" title="완료">★</button>`;
@@ -211,7 +211,7 @@ function renderArch(){
   days.forEach(d=>{
     const n=S.history[d];
     const row=document.createElement('div');
-    row.innerHTML='<span>'+fmtDate(d+'T12:00:00')+'</span><span><span class="bar">'+'▮'.repeat(Math.min(n,20))+'</span> '+n+'회</span>';
+    row.innerHTML='<span>'+fmtDate(d+'T12:00:00')+'</span><span><span class="bar">'+'▮'.repeat(Math.min(Math.round(n),20))+'</span> '+fmtN(n)+'회</span>';
     sl.appendChild(row);
   });
   // 완료 기록
@@ -220,7 +220,7 @@ function renderArch(){
   [...S.archive].reverse().forEach(a=>{
     const li=document.createElement('li');
     li.innerHTML='<span class="at">'+esc(a.title)+'</span>'
-      +'<span class="ad">'+fmtDate(a.startedAt)+'~'+fmtDate(a.endedAt)+' · '+a.count+'회</span>'
+      +'<span class="ad">'+fmtDate(a.startedAt)+'~'+fmtDate(a.endedAt)+' · '+fmtN(a.count)+'회</span>'
       +'<button title="보고서 복사" onclick="copyArch(\''+a.id+'\',this)">⧉</button>';
     al.appendChild(li);
   });
@@ -253,7 +253,7 @@ function toggleArch(){
 }
 function copyArch(id,btn){
   const a=S.archive.find(x=>x.id===id); if(!a)return;
-  navigator.clipboard.writeText('할 일: '+a.title+'\n시작 날짜: '+fmtDate(a.startedAt)+'\n끝난 날짜: '+fmtDate(a.endedAt)+'\n포모도로 횟수: '+a.count+' 회');
+  navigator.clipboard.writeText('할 일: '+a.title+'\n시작 날짜: '+fmtDate(a.startedAt)+'\n끝난 날짜: '+fmtDate(a.endedAt)+'\n포모도로 횟수: '+fmtN(a.count)+' 회');
   btn.textContent='✓'; setTimeout(()=>btn.textContent='⧉',1500);
 }
 
@@ -283,6 +283,8 @@ function importData(inp){
   r.readAsText(f);
 }
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+function round1(n){return Math.round(n*10)/10;}
+function fmtN(n){return String(round1(n));} // 1.0 → "1", 1.5 → "1.5"
 
 /* ---------- 할 일 ---------- */
 function addTask(){
@@ -319,8 +321,9 @@ function startTask(id){
 }
 function finishPomodoro(){ // ✓ 끝
   const t=task(S.current); if(!t)return;
-  t.count++; S.cycle++;
-  const d=todayStr(); S.history[d]=(S.history[d]||0)+1;
+  const unit=round1(S.cfg.work/25); // 25분 기준 환산
+  t.count=round1(t.count+unit); S.cycle++;
+  const d=todayStr(); S.history[d]=round1((S.history[d]||0)+unit);
   t.checked=false;
   S.tasks=S.tasks.filter(x=>x.id!==t.id); S.tasks.push(t); // 맨 하단
   S.current=null; stopTimer();
@@ -340,7 +343,7 @@ function voidPomodoro(){ // ✕ 무효
 function completeTask(id){
   const t=task(id);
   if(!confirm('「'+t.title+'」 완료하시겠습니까?'))return;
-  const rep='할 일: '+t.title+'\n시작 날짜: '+fmtDate(t.startedAt||t.createdAt)+'\n끝난 날짜: '+fmtDate()+'\n포모도로 횟수: '+t.count+' 회';
+  const rep='할 일: '+t.title+'\n시작 날짜: '+fmtDate(t.startedAt||t.createdAt)+'\n끝난 날짜: '+fmtDate()+'\n포모도로 횟수: '+fmtN(t.count)+' 회 (25분 기준)';
   S.archive.push({id:t.id,title:t.title,startedAt:t.startedAt||t.createdAt,endedAt:new Date().toISOString(),count:t.count});
   S.tasks=S.tasks.filter(x=>x.id!==id);
   if(S.current===id){S.current=null;stopTimer();}
