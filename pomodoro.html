@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>포모도로</title>
+<style>
+  :root{
+    --bg:#fafafa; --fg:#222; --sub:#888; --line:#e2e2e2; --accent:#c0392b;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
+  body{background:var(--bg); color:var(--fg); font-size:13px; max-width:300px; margin:0 auto; padding:10px 12px;}
+  header{display:flex; justify-content:space-between; align-items:baseline; padding-bottom:8px; border-bottom:1px solid var(--line);}
+  #today{font-size:12px; color:var(--sub);}
+  #dailyCount{font-size:12px; color:var(--accent); font-weight:600;}
+
+  /* 현재 작업 */
+  #currentBox{padding:12px 0; border-bottom:1px solid var(--line); min-height:64px;}
+  #curEmpty{color:var(--sub); font-size:12px; text-align:center; padding:14px 0;}
+  #curTitle{font-size:15px; font-weight:600; cursor:default; word-break:break-all;}
+  #curTitle.linked{cursor:pointer; text-decoration:underline; text-underline-offset:3px;}
+  #curMeta{display:flex; align-items:center; gap:10px; margin-top:8px;}
+  #curCount{color:var(--sub); font-size:12px;}
+  #timer{font-variant-numeric:tabular-nums; font-size:22px; font-weight:300; cursor:pointer; letter-spacing:1px;}
+  #timer.break{color:#2e7d32;}
+  #timer.paused{color:var(--sub);}
+  #timerMsg{font-size:11px; color:var(--accent); margin-top:4px; min-height:14px;}
+  .curBtns{margin-left:auto; display:flex; gap:6px;}
+
+  button{background:none; border:1px solid var(--line); border-radius:4px; padding:2px 8px; font-size:12px; cursor:pointer; color:var(--fg); line-height:1.6;}
+  button:hover{border-color:var(--fg);}
+  button:disabled{opacity:.3; cursor:default;}
+  button.danger:hover{border-color:var(--accent); color:var(--accent);}
+
+  /* 리스트 */
+  #list{list-style:none; padding:6px 0;}
+  #list li{display:flex; align-items:center; gap:6px; padding:5px 0; border-bottom:1px dashed var(--line);}
+  #list li .t{flex:1; word-break:break-all;}
+  #list li .t .cnt{color:var(--sub); font-size:11px; margin-left:4px;}
+  #list input[type=checkbox]{accent-color:var(--accent);}
+  #list li button{padding:1px 6px; font-size:11px;}
+  #list li.editing{flex-wrap:wrap;}
+  .editRow{display:flex; flex-direction:column; gap:4px; width:100%;}
+  .editRow input{width:100%; padding:3px 5px; font-size:12px; border:1px solid var(--line); border-radius:4px;}
+  .editBtns{display:flex; gap:6px; justify-content:flex-end;}
+
+  /* 추가 */
+  #addRow{display:flex; gap:6px; padding-top:8px;}
+  #addRow input{flex:1; padding:4px 6px; font-size:12px; border:1px solid var(--line); border-radius:4px; background:#fff;}
+
+  /* 하단 메뉴 · 기록 */
+  #footer{display:flex; gap:6px; justify-content:flex-end; padding-top:10px; margin-top:4px; border-top:1px solid var(--line);}
+  #footer button,#footer label{font-size:11px; color:var(--sub); border:none; padding:2px 4px; cursor:pointer; background:none;}
+  #footer button:hover,#footer label:hover{color:var(--fg);}
+  #archPanel{padding:8px 0; font-size:12px;}
+  #archPanel h4{font-size:11px; color:var(--sub); font-weight:600; margin:8px 0 4px;}
+  #statList div{display:flex; justify-content:space-between; padding:2px 0; color:var(--fg);}
+  #statList .bar{color:var(--accent); letter-spacing:-1px;}
+  #archList{list-style:none;}
+  #archList li{display:flex; align-items:baseline; gap:6px; padding:3px 0; border-bottom:1px dashed var(--line);}
+  #archList li .at{flex:1; word-break:break-all;}
+  #archList li .ad{color:var(--sub); font-size:11px; white-space:nowrap;}
+  #archList li button{border:none; padding:0 2px; font-size:11px; color:var(--sub);}
+  .empty{color:var(--sub); font-size:11px;}
+  #cfgPanel{padding:8px 0; font-size:12px; display:flex; flex-direction:column; gap:6px;}
+  #cfgPanel[hidden]{display:none;}
+  #cfgPanel .cfgRow{display:flex; justify-content:space-between; align-items:center;}
+  #cfgPanel input{width:52px; padding:2px 4px; font-size:12px; border:1px solid var(--line); border-radius:4px; text-align:right;}
+  #cfgPanel .cfgSave{align-self:flex-end;}
+
+  /* 팝업 */
+  #overlay{position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center;}
+  #overlay.show{display:flex;}
+  #modal{background:#fff; border-radius:8px; padding:16px; width:260px;}
+  #modal h3{font-size:13px; margin-bottom:8px;}
+  #reportText{width:100%; height:90px; font-size:12px; border:1px solid var(--line); border-radius:4px; padding:6px; resize:none;}
+  #modalBtns{display:flex; gap:6px; justify-content:flex-end; margin-top:8px;}
+  #longBreak{background:#fff8e1; border:1px solid #e8d9a0; border-radius:6px; padding:10px; margin-top:10px; font-size:12px; display:none; justify-content:space-between; align-items:center;}
+  #longBreak.show{display:flex;}
+</style>
+</head>
+<body>
+
+<header>
+  <span id="today"></span>
+  <span id="dailyCount"></span>
+</header>
+
+<div id="currentBox">
+  <div id="curEmpty">▶ 를 눌러 할 일을 시작하세요</div>
+  <div id="curActive" style="display:none">
+    <div id="curTitle"></div>
+    <div id="curMeta">
+      <span id="timer">25:00</span>
+      <span id="curCount"></span>
+      <span class="curBtns">
+        <button id="btnDone" title="끝 (+1)">✓</button>
+        <button id="btnVoid" class="danger" title="무효">✕</button>
+      </span>
+    </div>
+    <div id="timerMsg"></div>
+  </div>
+  <div id="longBreak"><span>포모도로 4회 완료 — 긴 휴식을 권합니다 (15~30분)</span><button id="btnLB">✓</button></div>
+</div>
+
+<ul id="list"></ul>
+
+<div id="addRow">
+  <input id="newTitle" placeholder="새 할 일" onkeydown="if(event.key==='Enter')addTask()">
+  <button onclick="addTask()" title="추가">+</button>
+</div>
+
+<div id="footer">
+  <button onclick="toggleCfg()" title="설정">⚙ 설정</button>
+  <button onclick="toggleArch()" title="기록 보기">≡ 기록</button>
+  <button onclick="exportData()" title="백업 파일 다운로드">↓ 백업</button>
+  <label for="importFile" title="백업 파일 불러오기">↑ 복원</label>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(this)">
+</div>
+
+<div id="cfgPanel" hidden>
+  <div class="cfgRow"><span>포모도로 시간</span><span><input type="number" id="cfgWork" min="1" max="120"> 분</span></div>
+  <div class="cfgRow"><span>휴식 시간</span><span><input type="number" id="cfgBrk" min="1" max="60"> 분</span></div>
+  <div class="cfgRow"><span>긴 휴식 권고 주기</span><span><input type="number" id="cfgLong" min="1" max="20"> 회</span></div>
+  <button class="cfgSave" onclick="saveCfg()" title="저장">✓ 저장</button>
+</div>
+
+<div id="archPanel" hidden>
+  <h4>일별 기록 (최근 14일)</h4>
+  <div id="statList"></div>
+  <h4>완료한 일</h4>
+  <ul id="archList"></ul>
+</div>
+
+<div id="overlay">
+  <div id="modal">
+    <h3>완료 보고서</h3>
+    <textarea id="reportText" readonly></textarea>
+    <div id="modalBtns">
+      <button onclick="copyReport(this)" title="복사">⧉ 복사</button>
+      <button onclick="closeModal()" title="닫기">✕</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const LS='pomoAppV1';
+let S=load();
+function load(){
+  let d=null;
+  try{d=JSON.parse(localStorage.getItem(LS));}catch(e){}
+  if(!d)d={tasks:[],current:null,cycle:0,timer:null};
+  if(!d.history){d.history={}; if(d.daily&&d.daily.count>0)d.history[d.daily.date]=d.daily.count;}
+  if(!d.archive)d.archive=[];
+  if(!d.cfg)d.cfg={work:25,brk:5,longEvery:4};
+  return d;
+}
+function save(){localStorage.setItem(LS,JSON.stringify(S));}
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function fmtDate(s){const d=s?new Date(s):new Date();const w='일월화수목금토';return d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate()+' ('+w[d.getDay()]+')';}
+function task(id){return S.tasks.find(t=>t.id===id);}
+
+/* ---------- 렌더 ---------- */
+function render(){
+  document.getElementById('today').textContent=fmtDate();
+  document.getElementById('dailyCount').textContent='오늘 '+(S.history[todayStr()]||0)+' 회';
+
+  const cur=S.current?task(S.current):null;
+  document.getElementById('curEmpty').style.display=cur?'none':'block';
+  document.getElementById('curActive').style.display=cur?'block':'none';
+  if(cur){
+    const ct=document.getElementById('curTitle');
+    ct.textContent=cur.title;
+    ct.className=cur.link?'linked':'';
+    ct.title=cur.link||'';
+    document.getElementById('curCount').textContent=cur.count+' 회';
+  }
+  renderTimer();
+
+  const ul=document.getElementById('list'); ul.innerHTML='';
+  S.tasks.forEach(t=>{
+    const li=document.createElement('li');
+    if(t.editing){
+      li.className='editing';
+      li.innerHTML=`<div class="editRow">
+        <input value="${esc(t.title)}" id="e_t_${t.id}" placeholder="제목">
+        <input value="${esc(t.link||'')}" id="e_l_${t.id}" placeholder="링크 (https:// shortcuts:// things:/// 등)">
+        <div class="editBtns"><button class="danger" onclick="deleteTask('${t.id}')" title="삭제" style="margin-right:auto">− 삭제</button>
+        <button onclick="saveEdit('${t.id}')" title="저장">✓</button>
+        <button onclick="cancelEdit('${t.id}')" title="취소">✕</button></div></div>`;
+    }else{
+      li.innerHTML=`<input type="checkbox" ${t.checked?'checked':''} onchange="toggleCheck('${t.id}',this.checked)">
+        <span class="t">${esc(t.title)}<span class="cnt">${t.count>0?t.count:''}</span></span>
+        <button onclick="startTask('${t.id}')" title="시작" ${S.current?'disabled':''}>▶</button>
+        <button onclick="editTask('${t.id}')" title="수정">✎</button>
+        <button class="danger" onclick="completeTask('${t.id}')" title="완료">★</button>`;
+    }
+    ul.appendChild(li);
+  });
+  renderArch();
+  save();
+}
+function renderArch(){
+  const p=document.getElementById('archPanel');
+  if(p.hidden)return;
+  // 일별 통계
+  const sl=document.getElementById('statList'); sl.innerHTML='';
+  const days=Object.keys(S.history).sort().reverse().slice(0,14);
+  if(!days.length)sl.innerHTML='<div class="empty">기록 없음</div>';
+  days.forEach(d=>{
+    const n=S.history[d];
+    const row=document.createElement('div');
+    row.innerHTML='<span>'+fmtDate(d+'T12:00:00')+'</span><span><span class="bar">'+'▮'.repeat(Math.min(n,20))+'</span> '+n+'회</span>';
+    sl.appendChild(row);
+  });
+  // 완료 기록
+  const al=document.getElementById('archList'); al.innerHTML='';
+  if(!S.archive.length)al.innerHTML='<li class="empty" style="border:none">기록 없음</li>';
+  [...S.archive].reverse().forEach(a=>{
+    const li=document.createElement('li');
+    li.innerHTML='<span class="at">'+esc(a.title)+'</span>'
+      +'<span class="ad">'+fmtDate(a.startedAt)+'~'+fmtDate(a.endedAt)+' · '+a.count+'회</span>'
+      +'<button title="보고서 복사" onclick="copyArch(\''+a.id+'\',this)">⧉</button>';
+    al.appendChild(li);
+  });
+}
+/* ---------- 설정 ---------- */
+function toggleCfg(){
+  const p=document.getElementById('cfgPanel');
+  p.hidden=!p.hidden;
+  if(!p.hidden){
+    document.getElementById('archPanel').hidden=true;
+    document.getElementById('cfgWork').value=S.cfg.work;
+    document.getElementById('cfgBrk').value=S.cfg.brk;
+    document.getElementById('cfgLong').value=S.cfg.longEvery;
+  }
+}
+function saveCfg(){
+  const w=parseInt(document.getElementById('cfgWork').value),
+        b=parseInt(document.getElementById('cfgBrk').value),
+        l=parseInt(document.getElementById('cfgLong').value);
+  if(!(w>0&&b>0&&l>0)){alert('1 이상의 숫자를 입력하세요.');return;}
+  S.cfg={work:Math.min(w,120),brk:Math.min(b,60),longEvery:Math.min(l,20)};
+  document.getElementById('cfgPanel').hidden=true;
+  render();
+}
+function toggleArch(){
+  const p=document.getElementById('archPanel');
+  p.hidden=!p.hidden;
+  if(!p.hidden)document.getElementById('cfgPanel').hidden=true;
+  renderArch();
+}
+function copyArch(id,btn){
+  const a=S.archive.find(x=>x.id===id); if(!a)return;
+  navigator.clipboard.writeText('할 일: '+a.title+'\n시작 날짜: '+fmtDate(a.startedAt)+'\n끝난 날짜: '+fmtDate(a.endedAt)+'\n포모도로 횟수: '+a.count+' 회');
+  btn.textContent='✓'; setTimeout(()=>btn.textContent='⧉',1500);
+}
+
+/* ---------- 백업 ---------- */
+function exportData(){
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='pomodoro-backup-'+todayStr()+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function importData(inp){
+  const f=inp.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!Array.isArray(d.tasks))throw 0;
+      if(!confirm('현재 데이터를 백업 파일로 교체하시겠습니까?'))return;
+      d.timer=null; d.current=null;
+      if(!d.history)d.history={}; if(!d.archive)d.archive=[];
+      if(!d.cfg)d.cfg={work:25,brk:5,longEvery:4};
+      S=d; stopTimer(); render();
+    }catch(e){alert('올바른 백업 파일이 아닙니다.');}
+    inp.value='';
+  };
+  r.readAsText(f);
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+
+/* ---------- 할 일 ---------- */
+function addTask(){
+  const inp=document.getElementById('newTitle');
+  const v=inp.value.trim(); if(!v)return;
+  S.tasks.push({id:Date.now()+''+Math.random().toString(36).slice(2,6),title:v,link:'',count:0,createdAt:new Date().toISOString(),startedAt:null,checked:false});
+  inp.value=''; render();
+}
+function toggleCheck(id,v){task(id).checked=v;save();}
+function editTask(id){task(id).editing=true;render();}
+function cancelEdit(id){delete task(id).editing;render();}
+function deleteTask(id){
+  const t=task(id);
+  if(!confirm('「'+t.title+'」 을(를) 삭제하시겠습니까?'))return;
+  S.tasks=S.tasks.filter(x=>x.id!==id);
+  if(S.current===id){S.current=null;stopTimer();}
+  render();
+}
+function saveEdit(id){
+  const t=task(id);
+  const nt=document.getElementById('e_t_'+id).value.trim();
+  if(nt)t.title=nt;
+  t.link=document.getElementById('e_l_'+id).value.trim();
+  delete t.editing; render();
+}
+function startTask(id){
+  if(S.current)return;
+  const t=task(id);
+  if(!t.startedAt)t.startedAt=new Date().toISOString();
+  S.current=id;
+  if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();
+  startTimer('work',S.cfg.work*60);
+  render();
+}
+function finishPomodoro(){ // ✓ 끝
+  const t=task(S.current); if(!t)return;
+  t.count++; S.cycle++;
+  const d=todayStr(); S.history[d]=(S.history[d]||0)+1;
+  t.checked=false;
+  S.tasks=S.tasks.filter(x=>x.id!==t.id); S.tasks.push(t); // 맨 하단
+  S.current=null; stopTimer();
+  if(S.cycle%S.cfg.longEvery===0){
+    document.querySelector('#longBreak span').textContent='포모도로 '+S.cfg.longEvery+'회 완료 — 긴 휴식을 권합니다 (15~30분)';
+    document.getElementById('longBreak').classList.add('show');
+  }else{
+    startTimer('break',S.cfg.brk*60);
+  }
+  render();
+}
+function voidPomodoro(){ // ✕ 무효
+  const t=task(S.current); if(!t)return;
+  S.tasks=S.tasks.filter(x=>x.id!==t.id); S.tasks.unshift(t); // 맨 상단
+  S.current=null; stopTimer(); render();
+}
+function completeTask(id){
+  const t=task(id);
+  if(!confirm('「'+t.title+'」 완료하시겠습니까?'))return;
+  const rep='할 일: '+t.title+'\n시작 날짜: '+fmtDate(t.startedAt||t.createdAt)+'\n끝난 날짜: '+fmtDate()+'\n포모도로 횟수: '+t.count+' 회';
+  S.archive.push({id:t.id,title:t.title,startedAt:t.startedAt||t.createdAt,endedAt:new Date().toISOString(),count:t.count});
+  S.tasks=S.tasks.filter(x=>x.id!==id);
+  if(S.current===id){S.current=null;stopTimer();}
+  render();
+  document.getElementById('reportText').value=rep;
+  document.getElementById('overlay').classList.add('show');
+}
+function copyReport(btn){
+  const ta=document.getElementById('reportText');
+  ta.select(); navigator.clipboard.writeText(ta.value).catch(()=>document.execCommand('copy'));
+  btn.textContent='✓ 복사됨'; setTimeout(()=>btn.textContent='⧉ 복사',1500);
+}
+function closeModal(){document.getElementById('overlay').classList.remove('show');}
+
+/* ---------- 타이머 ---------- */
+let tick=null;
+function startTimer(mode,sec){
+  S.timer={mode,endsAt:Date.now()+sec*1000,paused:false,remaining:null};
+  msg(''); runTick(); save();
+}
+function stopTimer(){S.timer=null; if(tick){clearInterval(tick);tick=null;} msg(''); save();}
+function runTick(){
+  if(tick)clearInterval(tick);
+  tick=setInterval(()=>{renderTimer();},400);
+}
+function togglePause(){
+  if(!S.timer)return;
+  if(S.timer.paused){S.timer.endsAt=Date.now()+S.timer.remaining; S.timer.paused=false;}
+  else{S.timer.remaining=Math.max(0,S.timer.endsAt-Date.now()); S.timer.paused=true;}
+  save(); renderTimer();
+}
+function renderTimer(){
+  const el=document.getElementById('timer');
+  if(!S.timer){el.textContent=String(S.cfg.work).padStart(2,'0')+':00'; el.className=''; if(!S.current)msg(''); return;}
+  const rem=S.timer.paused?S.timer.remaining:S.timer.endsAt-Date.now();
+  const r=Math.max(0,Math.ceil(rem/1000));
+  el.textContent=String(Math.floor(r/60)).padStart(2,'0')+':'+String(r%60).padStart(2,'0');
+  el.className=(S.timer.mode==='break'?'break ':'')+(S.timer.paused?'paused':'');
+  document.title=el.textContent+' 포모도로';
+  if(r<=0&&!S.timer.done){
+    S.timer.done=true; beep();
+    if(S.timer.mode==='work'){msg('포모도로 종료 — ✓ 끝 또는 ✕ 무효를 선택하세요'); notify('포모도로 25분 종료! ✓ 끝 또는 ✕ 무효를 선택하세요.');}
+    else{msg('휴식 종료'); notify('휴식 끝! 다음 할 일을 시작하세요.'); setTimeout(()=>{stopTimer();render();},1200);}
+    save();
+  }
+}
+function msg(s){const m=document.getElementById('timerMsg'); if(m)m.textContent=s;}
+function notify(txt){
+  try{if('Notification' in window&&Notification.permission==='granted')new Notification('포모도로',{body:txt});}catch(e){}
+}
+function beep(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    [0,.3,.6].forEach(t=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();
+      o.connect(g);g.connect(ctx.destination);
+      o.frequency.value=880;g.gain.setValueAtTime(.2,ctx.currentTime+t);
+      g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+t+.25);
+      o.start(ctx.currentTime+t);o.stop(ctx.currentTime+t+.25);
+    });
+  }catch(e){}
+}
+
+/* ---------- 이벤트 ---------- */
+document.getElementById('btnDone').onclick=finishPomodoro;
+document.getElementById('btnVoid').onclick=voidPomodoro;
+document.getElementById('btnLB').onclick=()=>{document.getElementById('longBreak').classList.remove('show');};
+document.getElementById('timer').onclick=togglePause;
+document.getElementById('curTitle').onclick=()=>{
+  const t=task(S.current);
+  if(t&&t.link){
+    if(/^https?:/i.test(t.link))window.open(t.link,'_blank');
+    else window.location.href=t.link; // shortcuts:// x-scrivener-item:// things:/// 등
+  }
+};
+
+/* 재접속 시 타이머 복원 */
+if(S.timer&&!S.timer.paused&&S.timer.endsAt<Date.now())S.timer.done=true;
+if(S.timer)runTick();
+render();
+let lastDay=todayStr();
+setInterval(()=>{const d=todayStr(); if(lastDay!==d){lastDay=d;render();}},60000);
+</script>
+</body>
+</html>
