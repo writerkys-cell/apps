@@ -353,7 +353,6 @@ function startTask(id){
   if(!t.startedAt)t.startedAt=new Date().toISOString();
   S.current=id;
   runShortcut('포모도로');
-  if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();
   startTimer('work',S.cfg.work*60);
   render();
 }
@@ -418,28 +417,13 @@ function renderTimer(){
   el.className=(S.timer.mode==='break'?'break ':'')+(S.timer.paused?'paused':'');
   document.title=el.textContent+' 포모도로';
   if(r<=0&&!S.timer.done){
-    S.timer.done=true; beep();
-    if(S.timer.mode==='work'){msg('포모도로 종료 — ✓ 끝 또는 ✕ 무효를 선택하세요'); notify('포모도로 25분 종료! ✓ 끝 또는 ✕ 무효를 선택하세요.');}
-    else{msg('휴식 종료'); notify('휴식 끝! 다음 할 일을 시작하세요.'); setTimeout(()=>{stopTimer();render();},1200);}
+    S.timer.done=true;
+    if(S.timer.mode==='work'){msg('포모도로 종료 — ✓ 끝 또는 ✕ 무효를 선택하세요');}
+    else{msg('휴식 종료'); setTimeout(()=>{stopTimer();render();},1200);}
     save();
   }
 }
 function msg(s){const m=document.getElementById('timerMsg'); if(m)m.textContent=s;}
-function notify(txt){
-  try{if('Notification' in window&&Notification.permission==='granted')new Notification('포모도로',{body:txt});}catch(e){}
-}
-function beep(){
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    [0,.3,.6].forEach(t=>{
-      const o=ctx.createOscillator(),g=ctx.createGain();
-      o.connect(g);g.connect(ctx.destination);
-      o.frequency.value=880;g.gain.setValueAtTime(.2,ctx.currentTime+t);
-      g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+t+.25);
-      o.start(ctx.currentTime+t);o.stop(ctx.currentTime+t+.25);
-    });
-  }catch(e){}
-}
 
 /* ---------- 이벤트 ---------- */
 document.getElementById('btnDone').onclick=finishPomodoro;
