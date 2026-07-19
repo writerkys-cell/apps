@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>링크 런처</title>
+<style>
+  :root {
+    --bg: #1e2126;
+    --bg-hover: #2a2e35;
+    --bg-modal: #262a31;
+    --border: #3a3f47;
+    --text: #e8eaed;
+    --text-dim: #7a8088;
+    --accent: #4a9eff;
+    --danger: #ff6b6b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+  }
+  .container { max-width: 680px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  header h1 { font-size: 20px; font-weight: 700; }
+  .btn {
+    background: var(--bg-hover); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+    transition: background .15s;
+  }
+  .btn:hover { background: #333842; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary:hover { background: #3a8eef; }
+
+  /* 링크 행 */
+  .row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    transition: background .12s;
+  }
+  .row:hover { background: var(--bg-hover); }
+
+  .disclosure {
+    width: 20px; height: 20px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: var(--text-dim); font-size: 11px;
+    border-radius: 4px; user-select: none;
+    transition: transform .15s;
+  }
+  .disclosure:hover { color: var(--text); }
+  .disclosure.open { transform: rotate(90deg); }
+  .disclosure.empty { visibility: hidden; cursor: default; }
+
+  .checkbox {
+    width: 17px; height: 17px; flex-shrink: 0;
+    border: 1.5px solid var(--text-dim); border-radius: 5px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all .15s;
+  }
+  .checkbox:hover { border-color: var(--accent); }
+  .checkbox.checked { background: var(--accent); border-color: var(--accent); }
+  .checkbox.checked::after {
+    content: ""; width: 4px; height: 8px;
+    border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg); margin-top: -2px;
+  }
+
+  .tag-icon { flex-shrink: 0; color: var(--text-dim); display: flex; }
+  .row[data-depth="0"] .tag-icon { color: var(--text); }
+
+  .link-title {
+    flex: 1; cursor: pointer; color: var(--text);
+    text-decoration: none; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+    padding: 2px 0;
+  }
+  .link-title:hover { color: var(--accent); text-decoration: underline; }
+  .link-title.no-url { cursor: default; }
+  .link-title.no-url:hover { color: var(--text); text-decoration: none; }
+  .row.done .link-title { color: var(--text-dim); text-decoration: line-through; }
+  .row.done .link-title:hover { color: var(--text-dim); }
+
+  .row-actions { display: none; gap: 2px; flex-shrink: 0; }
+  .row:hover .row-actions { display: flex; }
+  .icon-btn {
+    width: 26px; height: 26px; border: none; background: none;
+    color: var(--text-dim); cursor: pointer; border-radius: 5px;
+    font-size: 14px; display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:hover { background: #3a3f47; color: var(--text); }
+  .icon-btn.del:hover { color: var(--danger); }
+
+  .empty-state {
+    text-align: center; color: var(--text-dim);
+    padding: 60px 20px; line-height: 1.7;
+  }
+
+  /* 모달 */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--bg-modal); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px; width: 90%; max-width: 420px;
+  }
+  .modal h2 { font-size: 16px; margin-bottom: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .modal label { display: block; font-size: 12px; color: var(--text-dim); margin: 12px 0 5px; }
+  .modal input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 14px;
+  }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal .hint { font-size: 11px; color: var(--text-dim); margin-top: 5px; line-height: 1.5; }
+  .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  .toolbar-bottom { display: flex; gap: 8px; margin-top: 24px; justify-content: center; }
+  .toolbar-bottom .btn { font-size: 12px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🔗 링크 런처</h1>
+    <button class="btn btn-primary" onclick="openModal('add','')">+ 마스터 링크</button>
+  </header>
+
+  <div id="list"></div>
+
+  <div class="toolbar-bottom">
+    <button class="btn" onclick="exportData()">내보내기 (백업)</button>
+    <button class="btn" onclick="document.getElementById('importFile').click()">가져오기</button>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+  </div>
+</div>
+
+<!-- 추가/수정 모달 -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modalTitle">링크 추가</h2>
+    <label>제목</label>
+    <input type="text" id="inputTitle" placeholder="예: 소설 프로젝트" autocomplete="off">
+    <label>링크 (URL)</label>
+    <input type="text" id="inputUrl" placeholder="예: https://... 또는 things:///..." autocomplete="off">
+    <div class="hint">
+      웹사이트: https://example.com<br>
+      스크리브너: scrivener://... &nbsp;|&nbsp; 데본씽크: x-devonthink-item://...<br>
+      Things: things:///show?id=... &nbsp;|&nbsp; 단축어: shortcuts://run-shortcut?name=이름<br>
+      비워두면 클릭해도 열리지 않는 그룹 제목이 됩니다.
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveModal()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'linkLauncherData_v1';
+let data = [];
+let modalCtx = null; // {mode:'add'|'edit', path}
+
+const TAG_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83z"></path><circle cx="7" cy="7" r="1.2" fill="currentColor" stroke="none"></circle></svg>';
+
+// 모든 노드에 children/open 필드 보장 (기존 2단계 데이터도 자동 호환)
+function normalize(nodes) {
+  (nodes || []).forEach(n => {
+    if (!Array.isArray(n.children)) n.children = [];
+    if (typeof n.open !== 'boolean') n.open = true;
+    if (typeof n.done !== 'boolean') n.done = false;
+    normalize(n.children);
+  });
+  return nodes || [];
+}
+
+function load() {
+  try { data = normalize(JSON.parse(localStorage.getItem(STORAGE_KEY)) || []); }
+  catch(e) { data = []; }
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+// path: '' = 루트, '0' = data[0], '0-2' = data[0].children[2], ...
+function getNode(path) {
+  if (path === '') return null;
+  let node = null, arr = data;
+  for (const i of path.split('-').map(Number)) {
+    node = arr[i];
+    arr = node.children;
+  }
+  return node;
+}
+function getSiblings(path) {
+  const idx = path.split('-').map(Number);
+  const last = idx.pop();
+  let arr = data;
+  for (const i of idx) arr = arr[i].children;
+  return { arr, last };
+}
+function countAll(node) {
+  return node.children.reduce((sum, c) => sum + 1 + countAll(c), 0);
+}
+
+function openLink(url) {
+  if (!url) return;
+  if (/^https?:\/\//i.test(url)) window.open(url, '_blank');
+  else window.location.href = url; // 커스텀 스킴 (scrivener, devonthink, things, shortcuts 등)
+}
+
+function esc(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderNode(node, path, depth) {
+  const hasKids = node.children.length > 0;
+  let html = `
+  <div class="row ${node.done ? 'done' : ''}" data-depth="${depth}" style="margin-left:${depth * 30}px">
+    <div class="disclosure ${node.open ? 'open' : ''} ${hasKids ? '' : 'empty'}" onclick="toggleOpen('${path}')">▶</div>
+    <div class="checkbox ${node.done ? 'checked' : ''}" onclick="toggleDone('${path}')"></div>
+    <span class="tag-icon">${TAG_SVG}</span>
+    <span class="link-title ${node.url ? '' : 'no-url'}" onclick="openLink(${esc(JSON.stringify(node.url || ''))})" title="${esc(node.url)}">${esc(node.title)}</span>
+    <div class="row-actions">
+      <button class="icon-btn" title="하위 링크 추가" onclick="openModal('add','${path}')">+</button>
+      <button class="icon-btn" title="수정" onclick="openModal('edit','${path}')">✎</button>
+      <button class="icon-btn" title="상위로 나가기" onclick="outdent('${path}')">←</button>
+      <button class="icon-btn" title="위 링크의 하위로 들어가기" onclick="indent('${path}')">→</button>
+      <button class="icon-btn" title="위로" onclick="move('${path}',-1)">↑</button>
+      <button class="icon-btn" title="아래로" onclick="move('${path}',1)">↓</button>
+      <button class="icon-btn del" title="삭제" onclick="remove('${path}')">✕</button>
+    </div>
+  </div>`;
+  if (node.open && hasKids) {
+    node.children.forEach((c, i) => {
+      html += renderNode(c, path === '' ? String(i) : `${path}-${i}`, depth + 1);
+    });
+  }
+  return html;
+}
+
+function render() {
+  const list = document.getElementById('list');
+  if (data.length === 0) {
+    list.innerHTML = '<div class="empty-state">아직 링크가 없습니다.<br>오른쪽 위 <b>+ 마스터 링크</b> 버튼으로 시작하세요.</div>';
+    return;
+  }
+  list.innerHTML = data.map((n, i) => renderNode(n, String(i), 0)).join('');
+}
+
+function toggleOpen(path) {
+  const n = getNode(path);
+  n.open = !n.open;
+  save(); render();
+}
+
+function toggleDone(path) {
+  const n = getNode(path);
+  n.done = !n.done;
+  save(); render();
+}
+
+function move(path, dir) {
+  const { arr, last } = getSiblings(path);
+  const ni = last + dir;
+  if (ni < 0 || ni >= arr.length) return;
+  [arr[last], arr[ni]] = [arr[ni], arr[last]];
+  save(); render();
+}
+
+// → : 바로 위 형제 링크의 하위로 들어가기
+function indent(path) {
+  const { arr, last } = getSiblings(path);
+  if (last === 0) return; // 위에 형제가 없으면 불가
+  const node = arr.splice(last, 1)[0];
+  const prev = arr[last - 1];
+  prev.children.push(node);
+  prev.open = true;
+  save(); render();
+}
+
+// ← : 상위 링크의 바로 아래 형제로 나가기
+function outdent(path) {
+  const idx = path.split('-').map(Number);
+  if (idx.length < 2) return; // 이미 최상위면 불가
+  const last = idx.pop();
+  const parentPath = idx.join('-');
+  const parent = getNode(parentPath);
+  const node = parent.children.splice(last, 1)[0];
+  const { arr: grandArr, last: parentIdx } = getSiblings(parentPath);
+  grandArr.splice(parentIdx + 1, 0, node);
+  save(); render();
+}
+
+function remove(path) {
+  const { arr, last } = getSiblings(path);
+  const n = arr[last];
+  const total = countAll(n);
+  const msg = total
+    ? `"${n.title}"와 하위 링크 ${total}개를 삭제할까요?`
+    : `"${n.title}"을(를) 삭제할까요?`;
+  if (!confirm(msg)) return;
+  arr.splice(last, 1);
+  save(); render();
+}
+
+function openModal(mode, path) {
+  modalCtx = { mode, path };
+  const titleEl = document.getElementById('modalTitle');
+  const inputTitle = document.getElementById('inputTitle');
+  const inputUrl = document.getElementById('inputUrl');
+  if (mode === 'add') {
+    titleEl.textContent = path === '' ? '마스터 링크 추가' : `하위 링크 추가 — ${getNode(path).title}`;
+    inputTitle.value = ''; inputUrl.value = '';
+  } else {
+    titleEl.textContent = '링크 수정';
+    const n = getNode(path);
+    inputTitle.value = n.title; inputUrl.value = n.url;
+  }
+  document.getElementById('modalOverlay').classList.add('show');
+  inputTitle.focus();
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+  modalCtx = null;
+}
+
+function saveModal() {
+  const title = document.getElementById('inputTitle').value.trim();
+  const url = document.getElementById('inputUrl').value.trim();
+  if (!title) { alert('제목을 입력하세요.'); return; }
+  const { mode, path } = modalCtx;
+  if (mode === 'add') {
+    const newNode = { id: uid(), title, url, done: false, open: true, children: [] };
+    if (path === '') data.push(newNode);
+    else {
+      const parent = getNode(path);
+      parent.children.push(newNode);
+      parent.open = true;
+    }
+  } else {
+    const n = getNode(path);
+    n.title = title; n.url = url;
+  }
+  save(); render(); closeModal();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Enter' && document.getElementById('modalOverlay').classList.contains('show')) saveModal();
+});
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '링크런처_백업_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported)) throw new Error();
+      if (!confirm('현재 데이터를 가져온 데이터로 교체할까요?')) return;
+      data = normalize(imported);
+      save(); render();
+    } catch(e) { alert('올바른 백업 파일이 아닙니다.'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+load();
+render();
+</script>
+</body>
+</html>
