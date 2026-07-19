@@ -54,13 +54,12 @@
   #footer button:hover,#footer label:hover{color:var(--fg);}
   #archPanel{padding:8px 0; font-size:12px;}
   #archPanel h4{font-size:11px; color:var(--sub); font-weight:600; margin:8px 0 4px;}
-  #statList div{display:flex; justify-content:space-between; padding:2px 0; color:var(--fg);}
-  #statList .bar{color:var(--accent); letter-spacing:-1px;}
-  #archList{list-style:none;}
-  #archList li{display:flex; align-items:baseline; gap:6px; padding:3px 0; border-bottom:1px dashed var(--line);}
-  #archList li .at{flex:1; word-break:break-all;}
-  #archList li .ad{color:var(--sub); font-size:11px; white-space:nowrap;}
-  #archList li button{border:none; padding:0 2px; font-size:11px; color:var(--sub);}
+  #avg{font-size:11px; color:var(--accent); margin-bottom:6px;}
+  #statList .day{padding:4px 0; border-bottom:1px dashed var(--line);}
+  #statList .dh{display:flex; justify-content:space-between;}
+  #statList .dh .dv{color:var(--sub); font-size:11px;}
+  #statList .dh .dv b{color:var(--fg); font-weight:600;}
+  #statList .dd{color:var(--sub); font-size:11px; margin-top:2px; word-break:break-all;}
   .empty{color:var(--sub); font-size:11px;}
   #cfgPanel{padding:8px 0; font-size:12px; display:flex; flex-direction:column; gap:6px;}
   #cfgPanel[hidden]{display:none;}
@@ -68,13 +67,6 @@
   #cfgPanel input{width:52px; padding:2px 4px; font-size:12px; border:1px solid var(--line); border-radius:4px; text-align:right;}
   #cfgPanel .cfgSave{align-self:flex-end;}
 
-  /* 팝업 */
-  #overlay{position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center;}
-  #overlay.show{display:flex;}
-  #modal{background:#fff; border-radius:8px; padding:16px; width:260px;}
-  #modal h3{font-size:13px; margin-bottom:8px;}
-  #reportText{width:100%; height:90px; font-size:12px; border:1px solid var(--line); border-radius:4px; padding:6px; resize:none;}
-  #modalBtns{display:flex; gap:6px; justify-content:flex-end; margin-top:8px;}
   #longBreak{background:#fff8e1; border:1px solid #e8d9a0; border-radius:6px; padding:10px; margin-top:10px; font-size:12px; display:none; justify-content:space-between; align-items:center;}
   #longBreak.show{display:flex;}
 </style>
@@ -127,21 +119,9 @@
 </div>
 
 <div id="archPanel" hidden>
-  <h4>일별 기록 (최근 14일)</h4>
+  <h4>일별 기록 (최근 30일)</h4>
+  <div id="avg"></div>
   <div id="statList"></div>
-  <h4>완료한 일</h4>
-  <ul id="archList"></ul>
-</div>
-
-<div id="overlay">
-  <div id="modal">
-    <h3>완료 보고서</h3>
-    <textarea id="reportText" readonly></textarea>
-    <div id="modalBtns">
-      <button onclick="copyReport(this)" title="복사">⧉ 복사</button>
-      <button onclick="closeModal()" title="닫기">✕</button>
-    </div>
-  </div>
 </div>
 
 <script>
@@ -152,9 +132,22 @@ function load(){
   try{d=JSON.parse(localStorage.getItem(LS));}catch(e){}
   if(!d)d={tasks:[],current:null,cycle:0,timer:null};
   if(!d.history){d.history={}; if(d.daily&&d.daily.count>0)d.history[d.daily.date]=d.daily.count;}
-  if(!d.archive)d.archive=[];
+  Object.keys(d.history).forEach(k=>{ // 구버전(숫자) → {n,min,done} 이전
+    if(typeof d.history[k]==='number')d.history[k]={n:d.history[k],min:d.history[k]*25,done:[]};
+  });
+  delete d.archive;
   if(!d.cfg)d.cfg={work:25,brk:5,longEvery:4};
+  pruneHistory(d);
   return d;
+}
+function pruneHistory(d){ // 최근 30일만 보관
+  const lim=new Date(); lim.setDate(lim.getDate()-29);
+  const min=lim.getFullYear()+'-'+String(lim.getMonth()+1).padStart(2,'0')+'-'+String(lim.getDate()).padStart(2,'0');
+  Object.keys(d.history).forEach(k=>{if(k<min)delete d.history[k];});
+}
+function day(dt){ // 해당 날짜 기록 객체
+  if(!S.history[dt])S.history[dt]={n:0,min:0,done:[]};
+  return S.history[dt];
 }
 function save(){localStorage.setItem(LS,JSON.stringify(S));}
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -164,7 +157,8 @@ function task(id){return S.tasks.find(t=>t.id===id);}
 /* ---------- 렌더 ---------- */
 function render(){
   document.getElementById('today').textContent=fmtDate();
-  document.getElementById('dailyCount').textContent='오늘 '+fmtN(S.history[todayStr()]||0)+' 회';
+  const td=S.history[todayStr()];
+  document.getElementById('dailyCount').textContent='오늘 '+fmtN(td?td.n:0)+' 회';
 
   const cur=S.current?task(S.current):null;
   document.getElementById('curEmpty').style.display=cur?'none':'block';
@@ -201,28 +195,32 @@ function render(){
   renderArch();
   save();
 }
+function fmtMin(m){
+  if(m<60)return m+'분';
+  return Math.floor(m/60)+'시간'+(m%60?' '+m%60+'분':'');
+}
 function renderArch(){
   const p=document.getElementById('archPanel');
   if(p.hidden)return;
-  // 일별 통계
   const sl=document.getElementById('statList'); sl.innerHTML='';
-  const days=Object.keys(S.history).sort().reverse().slice(0,14);
-  if(!days.length)sl.innerHTML='<div class="empty">기록 없음</div>';
+  const days=Object.keys(S.history).filter(d=>{
+    const r=S.history[d]; return r.n>0||r.done.length>0;
+  }).sort().reverse();
+  // 일 평균 (기록 있는 날 기준)
+  const el=document.getElementById('avg');
+  if(days.length){
+    const sum=days.reduce((a,d)=>a+S.history[d].n,0);
+    el.textContent='일 평균 '+fmtN(sum/days.length)+' 회';
+  }else el.textContent='';
+  if(!days.length){sl.innerHTML='<div class="empty">기록 없음</div>';return;}
   days.forEach(d=>{
-    const n=S.history[d];
-    const row=document.createElement('div');
-    row.innerHTML='<span>'+fmtDate(d+'T12:00:00')+'</span><span><span class="bar">'+'▮'.repeat(Math.min(Math.round(n),20))+'</span> '+fmtN(n)+'회</span>';
-    sl.appendChild(row);
-  });
-  // 완료 기록
-  const al=document.getElementById('archList'); al.innerHTML='';
-  if(!S.archive.length)al.innerHTML='<li class="empty" style="border:none">기록 없음</li>';
-  [...S.archive].reverse().forEach(a=>{
-    const li=document.createElement('li');
-    li.innerHTML='<span class="at">'+esc(a.title)+'</span>'
-      +'<span class="ad">'+fmtDate(a.startedAt)+'~'+fmtDate(a.endedAt)+' · '+fmtN(a.count)+'회</span>'
-      +'<button title="보고서 복사" onclick="copyArch(\''+a.id+'\',this)">⧉</button>';
-    al.appendChild(li);
+    const r=S.history[d];
+    const div=document.createElement('div');
+    div.className='day';
+    div.innerHTML='<div class="dh"><span>'+fmtDate(d+'T12:00:00')+'</span>'
+      +'<span class="dv"><b>'+fmtN(r.n)+'회</b> · '+fmtMin(r.min)+'</span></div>'
+      +(r.done.length?'<div class="dd">완료: '+r.done.map(esc).join(', ')+'</div>':'');
+    sl.appendChild(div);
   });
 }
 /* ---------- 설정 ---------- */
@@ -251,12 +249,6 @@ function toggleArch(){
   if(!p.hidden)document.getElementById('cfgPanel').hidden=true;
   renderArch();
 }
-function copyArch(id,btn){
-  const a=S.archive.find(x=>x.id===id); if(!a)return;
-  navigator.clipboard.writeText('할 일: '+a.title+'\n시작 날짜: '+fmtDate(a.startedAt)+'\n끝난 날짜: '+fmtDate(a.endedAt)+'\n포모도로 횟수: '+fmtN(a.count)+' 회');
-  btn.textContent='✓'; setTimeout(()=>btn.textContent='⧉',1500);
-}
-
 /* ---------- 백업 ---------- */
 function exportData(){
   const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
@@ -274,8 +266,13 @@ function importData(inp){
       if(!Array.isArray(d.tasks))throw 0;
       if(!confirm('현재 데이터를 백업 파일로 교체하시겠습니까?'))return;
       d.timer=null; d.current=null;
-      if(!d.history)d.history={}; if(!d.archive)d.archive=[];
+      if(!d.history)d.history={};
+      Object.keys(d.history).forEach(k=>{
+        if(typeof d.history[k]==='number')d.history[k]={n:d.history[k],min:d.history[k]*25,done:[]};
+      });
+      delete d.archive;
       if(!d.cfg)d.cfg={work:25,brk:5,longEvery:4};
+      pruneHistory(d);
       S=d; stopTimer(); render();
     }catch(e){alert('올바른 백업 파일이 아닙니다.');}
     inp.value='';
@@ -323,7 +320,9 @@ function finishPomodoro(){ // ✓ 끝
   const t=task(S.current); if(!t)return;
   const unit=round1(S.cfg.work/25); // 25분 기준 환산
   t.count=round1(t.count+unit); S.cycle++;
-  const d=todayStr(); S.history[d]=round1((S.history[d]||0)+unit);
+  const rec=day(todayStr());
+  rec.n=round1(rec.n+unit); rec.min+=S.cfg.work;
+  pruneHistory(S);
   t.checked=false;
   S.tasks=S.tasks.filter(x=>x.id!==t.id); S.tasks.push(t); // 맨 하단
   S.current=null; stopTimer();
@@ -343,20 +342,11 @@ function voidPomodoro(){ // ✕ 무효
 function completeTask(id){
   const t=task(id);
   if(!confirm('「'+t.title+'」 완료하시겠습니까?'))return;
-  const rep='할 일: '+t.title+'\n시작 날짜: '+fmtDate(t.startedAt||t.createdAt)+'\n끝난 날짜: '+fmtDate()+'\n포모도로 횟수: '+fmtN(t.count)+' 회 (25분 기준)';
-  S.archive.push({id:t.id,title:t.title,startedAt:t.startedAt||t.createdAt,endedAt:new Date().toISOString(),count:t.count});
+  day(todayStr()).done.push(t.title); // 오늘 기록에 완료한 일 추가
   S.tasks=S.tasks.filter(x=>x.id!==id);
   if(S.current===id){S.current=null;stopTimer();}
   render();
-  document.getElementById('reportText').value=rep;
-  document.getElementById('overlay').classList.add('show');
 }
-function copyReport(btn){
-  const ta=document.getElementById('reportText');
-  ta.select(); navigator.clipboard.writeText(ta.value).catch(()=>document.execCommand('copy'));
-  btn.textContent='✓ 복사됨'; setTimeout(()=>btn.textContent='⧉ 복사',1500);
-}
-function closeModal(){document.getElementById('overlay').classList.remove('show');}
 
 /* ---------- 타이머 ---------- */
 let tick=null;
