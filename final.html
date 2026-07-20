@@ -94,6 +94,12 @@
     display:flex; flex-direction:column; gap:6px;
   }
   .sheet .stitle{font-size:14px; color:var(--sub); padding:2px 6px 8px; line-height:1.4; word-break:break-word;}
+  .sheet input{
+    font-size:16px; padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+    background:var(--bg); color:var(--ink); font-family:inherit; outline:none; width:100%;
+  }
+  .sheet input:focus{border-color:#bbb;}
+  .sheet .shint{font-size:12.5px; color:var(--sub); padding:0 6px 4px; line-height:1.4;}
   .sheet button{border:none; background:#f4f4f4; border-radius:12px; padding:14px; font-size:16px; font-family:inherit; color:var(--ink); cursor:pointer;}
   .sheet button:active{opacity:.7;}
   .sheet button.warn{color:var(--danger);}
@@ -252,10 +258,50 @@ function completeCurrent(){
 
 function forwardCurrent(){
   const t = currentTask(); if(!t) return;
+  openEditSheet(t.id, 'forward');
+}
+
+function confirmForward(id){
+  const t = S.tasks.find(x => x.id === id); if(!t || !isActive(t)) return;
+  const inp = document.getElementById('editInp');
+  const text = (inp && inp.value.trim()) || t.text;
   t.status = 'done'; t.fwd = true;
-  S.tasks.push({id: uid(), text: t.text, status: 'active', dotted: false});
+  S.tasks.push({id: uid(), text, status: 'active', dotted: false});
   toast('리스트 끝에 재기입했어요');
   afterAction();
+}
+
+function confirmEdit(id){
+  const t = S.tasks.find(x => x.id === id); if(!t) return;
+  const inp = document.getElementById('editInp');
+  const text = inp && inp.value.trim();
+  if(text) t.text = text;
+  closeSheet(); save(); render();
+}
+
+function openEditSheet(id, mode){
+  const t = S.tasks.find(x => x.id === id); if(!t) return;
+  const sheet = document.getElementById('sheet');
+  const fn = mode === 'forward' ? 'confirmForward' : 'confirmEdit';
+  const hint = mode === 'forward'
+    ? '읽은 페이지, 진행 상황 등을 반영해 다듬은 뒤 재기입하세요.'
+    : '할 일을 더 명확하게 다듬어 보세요.';
+  sheet.innerHTML =
+    '<div class="stitle">' + (mode === 'forward' ? '미완료 — 끝에 재기입' : '수정') + '</div>'
+    + '<div class="shint">' + hint + '</div>'
+    + '<input id="editInp" value="' + esc(t.text) + '" enterkeyhint="done"'
+    + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing&&event.keyCode!==229)' + fn + '(\'' + t.id + '\')">'
+    + '<button onclick="' + fn + '(\'' + t.id + '\')">' + (mode === 'forward' ? '재기입' : '저장') + '</button>'
+    + '<button class="plain" onclick="closeSheet()">취소</button>';
+  document.getElementById('sheetOvl').classList.add('show');
+  setTimeout(() => {
+    const i = document.getElementById('editInp');
+    if(i){
+      i.focus();
+      const n = i.value.length;
+      try{ i.setSelectionRange(n, n); }catch(e){}
+    }
+  }, 50);
 }
 
 /* ---------- task sheet ---------- */
@@ -271,6 +317,7 @@ function openSheet(id){
   } else {
     html += '<button onclick="urgentize(\'' + t.id + '\')">긴급으로 이동 (점 + 리스트 끝)</button>';
   }
+  html += '<button onclick="openEditSheet(\'' + t.id + '\',\'edit\')">수정</button>';
   html += '<button class="warn" onclick="deleteTask(\'' + t.id + '\')">삭제</button>';
   html += '<button class="plain" onclick="closeSheet()">취소</button>';
   sheet.innerHTML = html;
