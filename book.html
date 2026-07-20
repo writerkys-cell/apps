@@ -243,6 +243,15 @@
       <div class="btnrow" style="margin-top:8px;"><button class="btn primary" onclick="saveCaps()">저장</button></div>
     </div>
     <div class="panel">
+      <h3>독서 가이드 프롬프트</h3>
+      <p>책 정보 창에서 "프롬프트 복사"를 누르면 아래 템플릿의 <b>{제목}</b>과 <b>{저자}</b>가 그 책의 정보로 바뀌어 클립보드에 복사됩니다. 원하는 대로 고쳐 쓰세요.</p>
+      <textarea id="prompttpl" rows="10" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:13.5px;font-family:inherit;line-height:1.6;"></textarea>
+      <div class="btnrow" style="margin-top:8px;">
+        <button class="btn primary" onclick="savePrompt()">저장</button>
+        <button class="btn" onclick="resetPrompt()">기본값 복원</button>
+      </div>
+    </div>
+    <div class="panel">
       <h3>아이폰 입력 병합</h3>
       <p>아이폰 입력 앱에서 보낸 파일(AirDrop)이나 복사해 온 텍스트를 현재 데이터에 <b>추가</b>합니다. 이미 있는 제목은 건너뛰어요.</p>
       <div class="btnrow">
@@ -292,6 +301,8 @@
     <div class="slothint" id="slothint"></div>
     <label>메모</label>
     <input type="text" id="f-memo" placeholder="메모 (선택)">
+    <button class="btn" onclick="copyGuidePrompt()" style="width:100%;margin-top:18px;">📋 독서 가이드 프롬프트 복사</button>
+    <div class="slothint" style="margin-top:6px;">복사한 프롬프트를 AI에게 붙여넣으면 이 책의 독서 가이드를 받을 수 있어요. 프롬프트 내용은 관리 탭에서 편집.</div>
     <div class="actions">
       <button class="btn" onclick="closeModal('modal-book')">취소</button>
       <button class="btn danger" id="btn-dispose" onclick="disposeBook()" style="display:none;">처분</button>
@@ -326,6 +337,21 @@ function load() {
   return { books: [], disposed: [], caps: { keep: 365, toread: 80, slot: 13 } };
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
+
+const DEFAULT_PROMPT = `아래 책을 읽기 전에 독서 가이드를 만들어줘.
+
+제목: {제목}
+저자: {저자}
+
+다음 내용을 포함해줘:
+1. 이 책의 핵심 주제와 저자가 답하려는 질문
+2. 저자 소개와 이 책을 쓴 배경
+3. 책의 구조와 전체 흐름 (스포일러 없이)
+4. 읽으면서 주목하면 좋을 질문 3~5개
+5. 함께 읽으면 좋은 책 2~3권
+
+분량은 A4 한 장 이내로, 스포일러는 피해줘.`;
+if (!db.promptTemplate) db.promptTemplate = DEFAULT_PROMPT;
 
 const SHELVES = ['A','B','C','D','E'];
 const SLOTS_PER = 24;
@@ -484,6 +510,7 @@ function renderRank() {
 }
 
 function renderAdmin() {
+  document.getElementById('prompttpl').value = db.promptTemplate || DEFAULT_PROMPT;
   document.getElementById('capKeep').value = db.caps.keep;
   document.getElementById('capToread').value = db.caps.toread;
   document.getElementById('capSlot').value = db.caps.slot;
@@ -656,6 +683,34 @@ function openSlot(id) {
 }
 
 // ===== 관리 =====
+async function copyGuidePrompt() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { toast('제목을 먼저 입력하세요'); return; }
+  const author = document.getElementById('f-author').value.trim() || '(모름)';
+  const tpl = db.promptTemplate || DEFAULT_PROMPT;
+  const prompt = tpl.split('{제목}').join(title).split('{저자}').join(author);
+  try {
+    await navigator.clipboard.writeText(prompt);
+    toast('프롬프트를 복사했어요 — AI에게 붙여넣으세요');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = prompt; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+    toast('프롬프트를 복사했어요 — AI에게 붙여넣으세요');
+  }
+}
+function savePrompt() {
+  const v = document.getElementById('prompttpl').value.trim();
+  if (!v) { toast('템플릿이 비어 있어요'); return; }
+  if (!v.includes('{제목}')) { toast('{제목} 자리표시자가 필요해요'); return; }
+  db.promptTemplate = v;
+  save(); toast('프롬프트를 저장했어요');
+}
+function resetPrompt() {
+  if (!confirm('기본 프롬프트로 되돌릴까요?')) return;
+  db.promptTemplate = DEFAULT_PROMPT;
+  save(); renderAdmin(); toast('기본값으로 되돌렸어요');
+}
 function saveCaps() {
   db.caps.keep = Math.max(1, parseInt(document.getElementById('capKeep').value) || 365);
   db.caps.toread = Math.max(1, parseInt(document.getElementById('capToread').value) || 80);
