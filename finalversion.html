@@ -48,6 +48,8 @@
     font-size:20px; font-weight:700; line-height:1.35; color:var(--ink);
     word-break:break-word; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
   }
+  .now.link{cursor:pointer; text-decoration:underline; text-decoration-thickness:1.5px; text-underline-offset:3px;}
+  .lnk{flex:none; margin-left:6px; font-size:13px; color:var(--sub);}
   .nowlabel{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--sub); margin-bottom:6px;}
   .chainleft{font-size:12.5px; color:var(--sub); margin-top:8px;}
 
@@ -264,12 +266,18 @@ function forwardCurrent(){
   openEditSheet(t.id, 'forward');
 }
 
+function readUrlInput(){
+  const u = document.getElementById('editUrl');
+  return u ? u.value.trim() : '';
+}
+
 function confirmForward(id){
   const t = S.tasks.find(x => x.id === id); if(!t || !isActive(t)) return;
   const inp = document.getElementById('editInp');
   const text = (inp && inp.value.trim()) || t.text;
+  const url = readUrlInput();
   t.status = 'done'; t.fwd = true;
-  S.tasks.push({id: uid(), text, status: 'active', dotted: false});
+  S.tasks.push({id: uid(), text, status: 'active', dotted: false, url: url || undefined});
   toast('리스트 끝에 재기입했어요');
   afterAction();
 }
@@ -279,7 +287,16 @@ function confirmEdit(id){
   const inp = document.getElementById('editInp');
   const text = inp && inp.value.trim();
   if(text) t.text = text;
+  const url = readUrlInput();
+  if(url) t.url = url; else delete t.url;
   closeSheet(); save(); render();
+}
+
+function openLink(id){
+  const t = S.tasks.find(x => x.id === id);
+  if(!t || !t.url) return;
+  if(/^https?:\/\//i.test(t.url)) window.open(t.url, '_blank');
+  else location.href = t.url; // scrivener, things, devonthink, shortcuts 등 URL 스킴
 }
 
 function openEditSheet(id, mode){
@@ -289,11 +306,14 @@ function openEditSheet(id, mode){
   const hint = mode === 'forward'
     ? '읽은 페이지, 진행 상황 등을 반영해 다듬은 뒤 재기입하세요.'
     : '할 일을 더 명확하게 다듬어 보세요.';
+  const enter = ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing&&event.keyCode!==229)' + fn + '(\'' + t.id + '\')"';
   sheet.innerHTML =
     '<div class="stitle">' + (mode === 'forward' ? '미완료 — 끝에 재기입' : '수정') + '</div>'
     + '<div class="shint">' + hint + '</div>'
-    + '<input id="editInp" value="' + esc(t.text) + '" enterkeyhint="done"'
-    + ' onkeydown="if(event.key===\'Enter\'&&!event.isComposing&&event.keyCode!==229)' + fn + '(\'' + t.id + '\')">'
+    + '<input id="editInp" value="' + esc(t.text) + '" enterkeyhint="done"' + enter + '>'
+    + '<input id="editUrl" value="' + esc(t.url || '') + '" enterkeyhint="done"'
+    + ' placeholder="링크 (선택) — https://, x-scrivener-item://, things:///, x-devonthink-item://, shortcuts://"'
+    + ' autocapitalize="off" autocorrect="off" spellcheck="false"' + enter + '>'
     + '<button onclick="' + fn + '(\'' + t.id + '\')">' + (mode === 'forward' ? '재기입' : '저장') + '</button>'
     + '<button class="plain" onclick="closeSheet()">취소</button>';
   document.getElementById('sheetOvl').classList.add('show');
@@ -314,6 +334,7 @@ function openSheet(id){
   const cur = currentTask();
   const sheet = document.getElementById('sheet');
   let html = '<div class="stitle">' + esc(t.text) + '</div>';
+  if(t.url) html += '<button onclick="openLink(\'' + t.id + '\')">링크 열기 ↗</button>';
   if(S.phase === 'work' && cur && cur.id === t.id){
     html += '<button onclick="completeCurrent()">완료</button>';
     html += '<button onclick="forwardCurrent()">작업함 — 미완료 (끝에 재기입)</button>';
@@ -367,9 +388,11 @@ function render(){
       + '<div class="brow"><button class="bbtn" onclick="finishSelect()">선택 완료 → 실행</button>'
       + '<button class="bbtn ter" onclick="reselect()">취소</button></div>';
   } else if(S.phase === 'work' && cur){
+    const nowCls = cur.url ? 'now link' : 'now';
+    const nowOn = cur.url ? ' onclick="openLink(\'' + cur.id + '\')"' : '';
     banner.innerHTML =
-      '<div class="nowlabel">지금 할 일</div>'
-      + '<div class="now">' + esc(cur.text) + '</div>'
+      '<div class="nowlabel">지금 할 일' + (cur.url ? ' ↗' : '') + '</div>'
+      + '<div class="' + nowCls + '"' + nowOn + '>' + esc(cur.text) + '</div>'
       + '<div class="chainleft">체인에 ' + chainCount() + '개 남음</div>'
       + '<div class="brow">'
       + '<button class="bbtn" onclick="completeCurrent()">완료</button>'
@@ -406,7 +429,8 @@ function render(){
     }
     const dot = '<span class="dot">' + (t.dotted ? '•' : '') + '</span>';
     const fwd = t.fwd ? '<span class="fwd">→</span>' : '';
-    html += '<button class="' + cls + '"' + on + '>' + dot + '<span class="txt">' + esc(t.text) + '</span>' + fwd + '</button>';
+    const lnk = t.url ? '<span class="lnk">↗</span>' : '';
+    html += '<button class="' + cls + '"' + on + '>' + dot + '<span class="txt">' + esc(t.text) + '</span>' + lnk + fwd + '</button>';
   });
   list.innerHTML = html;
 }
