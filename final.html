@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Final Version</title>
+<style>
+  :root{
+    --bg:#fafafa; --card:#fff; --ink:#1a1a1a; --sub:#8a8a8a; --line:#ececec;
+    --hl:#fff3b0; --danger:#c0392b; --urgent:#d97706;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",sans-serif;
+    display:flex; flex-direction:column;
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    max-width:560px; margin:0 auto;
+  }
+  header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px 8px;}
+  header h1{font-size:17px; font-weight:700; letter-spacing:-.02em;}
+  .hbtns{display:flex; gap:4px;}
+  .hbtns button{background:none; border:none; color:var(--sub); font-size:13px; padding:6px 8px; border-radius:8px; cursor:pointer;}
+  .hbtns button:active{background:var(--line);}
+
+  /* phase banner / current card */
+  .banner{
+    margin:4px 14px 10px; padding:14px 16px; border-radius:14px;
+    background:var(--card); border:1px solid var(--line);
+    font-size:14px; color:var(--sub); line-height:1.5;
+  }
+  .banner .bq{font-size:15px; color:var(--ink); line-height:1.45; word-break:break-word;}
+  .banner .bq b{font-weight:700;}
+  .banner .brow{display:flex; gap:8px; margin-top:12px;}
+  .banner .bbtn{
+    flex:1; border:none; border-radius:11px; padding:12px; font-size:15px; font-weight:600;
+    font-family:inherit; cursor:pointer; background:var(--ink); color:#fff;
+  }
+  .banner .bbtn.sec{background:#f4f4f4; color:var(--ink);}
+  .banner .bbtn.ter{background:none; color:var(--sub); font-weight:400; flex:none; padding:12px 10px;}
+  .banner .bbtn:active{opacity:.7;}
+  .now{
+    font-size:20px; font-weight:700; line-height:1.35; color:var(--ink);
+    word-break:break-word; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .nowlabel{font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--sub); margin-bottom:6px;}
+  .chainleft{font-size:12.5px; color:var(--sub); margin-top:8px;}
+
+  /* list */
+  .list{
+    flex:1; overflow-y:auto; margin:0 14px; -webkit-overflow-scrolling:touch;
+    background:var(--card); border:1px solid var(--line); border-radius:16px; padding:6px 0;
+  }
+  .task{
+    display:flex; align-items:center; width:100%; min-height:48px; padding:10px 16px;
+    border:none; background:none; text-align:left; cursor:pointer; font-family:inherit;
+    border-bottom:1px solid var(--line); font-size:16px; line-height:1.35; color:var(--ink);
+  }
+  .task:last-child{border-bottom:none;}
+  .task:active{background:#f4f4f4;}
+  .task .dot{flex:none; width:22px; font-weight:800; color:var(--ink); font-size:18px;}
+  .task .txt{
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    overflow:hidden; word-break:break-word; flex:1;
+  }
+  .task .fwd{flex:none; margin-left:8px; font-size:13px; color:var(--sub);}
+  .task.done .txt{text-decoration:line-through; color:var(--sub); text-decoration-thickness:1.5px;}
+  .task.done .dot{color:var(--sub);}
+  .task.dim .txt{color:#c2c2c2;}
+  .task.cur{background:var(--hl);}
+  .task.cur:active{background:var(--hl);}
+  .task.selectable .txt{color:var(--ink);}
+  .empty{padding:40px 20px; text-align:center; color:var(--sub); font-size:14.5px; line-height:1.6;}
+
+  footer{padding:10px 14px 12px; display:flex; gap:8px;}
+  #inp{
+    flex:1; font-size:16px; padding:12px 14px; border:1px solid var(--line); border-radius:12px;
+    background:var(--card); color:var(--ink); font-family:inherit; outline:none; min-width:0;
+  }
+  #inp:focus{border-color:#bbb;}
+  .btn{border:none; border-radius:12px; font-size:15px; font-weight:600; padding:12px 16px; cursor:pointer; font-family:inherit; flex:none;}
+  .btn:active{opacity:.7;}
+  .btn.add{background:var(--ink); color:#fff;}
+  .btn.urg{background:none; color:var(--urgent); border:1px solid var(--line);}
+
+  /* sheet */
+  .ovl{position:fixed; inset:0; background:rgba(0,0,0,.25); display:none; align-items:flex-end; z-index:50; max-width:560px; margin:0 auto;}
+  .ovl.show{display:flex;}
+  .sheet{
+    background:var(--card); width:100%; border-radius:18px 18px 0 0;
+    padding:14px 14px calc(14px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .sheet .stitle{font-size:14px; color:var(--sub); padding:2px 6px 8px; line-height:1.4; word-break:break-word;}
+  .sheet button{border:none; background:#f4f4f4; border-radius:12px; padding:14px; font-size:16px; font-family:inherit; color:var(--ink); cursor:pointer;}
+  .sheet button:active{opacity:.7;}
+  .sheet button.warn{color:var(--danger);}
+  .sheet button.plain{background:none; color:var(--sub); font-size:15px;}
+
+  #toast{
+    position:fixed; left:50%; bottom:100px; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:14px; padding:10px 16px; border-radius:20px;
+    opacity:0; transition:opacity .25s; pointer-events:none; z-index:60; max-width:85%; text-align:center; line-height:1.4;
+  }
+  #toast.show{opacity:1;}
+
+  .help{align-items:center; justify-content:center; padding:20px;}
+  .helpbox{
+    background:var(--card); border-radius:16px; padding:22px; max-width:420px;
+    max-height:80vh; overflow-y:auto; font-size:14.5px; line-height:1.65; color:var(--ink);
+  }
+  .helpbox h2{font-size:16px; margin-bottom:10px;}
+  .helpbox p{margin-bottom:10px; color:#444;}
+  .helpbox .k{font-weight:600; color:var(--ink);}
+  .helpbox .clear{
+    width:100%; margin-top:6px; border:1px solid var(--line); background:none; border-radius:12px;
+    padding:12px; font-size:15px; font-family:inherit; color:var(--danger); cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Final Version</h1>
+  <div class="hbtns">
+    <button onclick="exportData()">내보내기</button>
+    <button onclick="document.getElementById('imp').click()">가져오기</button>
+    <button onclick="showHelp()">도움말</button>
+  </div>
+  <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(this)">
+</header>
+
+<div class="banner" id="banner"></div>
+
+<div class="list" id="list"></div>
+
+<footer>
+  <input id="inp" placeholder="할 일 추가…" enterkeyhint="done">
+  <button class="btn add" onclick="submitTask(false)">추가</button>
+  <button class="btn urg" onclick="submitTask(true)">긴급</button>
+</footer>
+
+<div class="ovl" id="sheetOvl" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<div class="ovl help" id="helpOvl" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="helpbox">
+    <h2>Final Version 규칙</h2>
+    <p>할 일은 전부 <span class="k">하나의 리스트 끝</span>에 추가합니다.</p>
+    <p><span class="k">체인 선택</span>: 리스트의 첫 번째 미처리 작업에 자동으로 점이 찍힙니다. “이것을 하기 전에 하고 싶은 일이 있나?”라고 물으며 아래로 훑고, 그런 작업을 탭해 점을 찍으세요. 점을 찍으면 그 작업이 새 기준이 됩니다. 리스트 끝까지 봤으면 선택 완료.</p>
+    <p><span class="k">실행</span>: 점 찍힌 작업들을 <span class="k">역순</span>으로 — 마지막에 찍은 것부터 — 합니다. 끝내지 못했으면 ‘미완료’를 눌러 리스트 끝에 재기입하세요. 체인을 다 처리하면 처음부터 다시 선택합니다.</p>
+    <p><span class="k">긴급</span>: 긴급 버튼으로 추가하면 점이 찍힌 채 끝에 들어가 가장 먼저 하게 됩니다. 이미 있는 작업이 긴급해졌으면 그 작업을 탭해 ‘긴급으로 이동’을 선택하세요.</p>
+    <p>오래 자리를 비웠다 돌아와 선택이 낡았으면 ‘재선택’으로 점을 지우고 새로 고르세요.</p>
+    <p style="color:var(--sub);font-size:13px;">데이터는 이 브라우저에 저장됩니다. Safari로 열어 ‘홈 화면에 추가’ 후 사용하고, 내보내기로 백업하세요.</p>
+    <button class="clear" onclick="clearDone()">완료된 항목 정리</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+const KEY = 'finalversion-v1';
+
+let S = load() || { tasks: [], phase: 'idle' }; // phase: idle | select | work
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function isActive(t){ return t.status === 'active'; }
+function activeTasks(){ return S.tasks.filter(isActive); }
+function lastDottedIdx(){
+  for(let i = S.tasks.length - 1; i >= 0; i--)
+    if(isActive(S.tasks[i]) && S.tasks[i].dotted) return i;
+  return -1;
+}
+function currentTask(){ const i = lastDottedIdx(); return i < 0 ? null : S.tasks[i]; }
+function chainCount(){ return S.tasks.filter(t => isActive(t) && t.dotted).length; }
+
+/* ---------- adding ---------- */
+function submitTask(urgent){
+  const inp = document.getElementById('inp');
+  const text = inp.value.trim();
+  if(!text){ inp.focus(); return; }
+  S.tasks.push({id: uid(), text, status: 'active', dotted: !!urgent});
+  if(urgent){
+    if(S.phase === 'idle') S.phase = 'work';
+    toast('점이 찍힌 채 추가 — 다음에 바로 하게 돼요');
+  }
+  inp.value = '';
+  save(); render();
+}
+
+/* ---------- selection ---------- */
+function startSelect(){
+  const first = S.tasks.find(isActive);
+  if(!first){ toast('리스트가 비어 있어요'); return; }
+  S.tasks.forEach(t => { if(isActive(t)) t.dotted = false; });
+  first.dotted = true;
+  S.phase = 'select';
+  // only one active task -> selection is trivially done
+  if(activeTasks().length === 1) S.phase = 'work';
+  save(); render();
+}
+
+function finishSelect(){
+  S.phase = 'work';
+  save(); render();
+}
+
+function reselect(){
+  S.tasks.forEach(t => { if(isActive(t)) t.dotted = false; });
+  S.phase = 'idle';
+  save(); render();
+  toast('선택을 초기화했어요');
+}
+
+function tapSelect(id){
+  const idx = S.tasks.findIndex(t => t.id === id);
+  const t = S.tasks[idx];
+  if(!t || !isActive(t) || t.dotted) return;
+  if(idx < lastDottedIdx()) { toast('마지막 점 아래의 작업만 고를 수 있어요'); return; }
+  t.dotted = true;
+  // reached the end? then nothing below can be selected
+  save(); render();
+}
+
+/* ---------- work ---------- */
+function afterAction(){
+  if(chainCount() === 0){
+    if(activeTasks().length === 0){
+      S.phase = 'idle';
+      toast('리스트를 전부 처리했어요');
+    } else {
+      S.phase = 'idle';
+      toast('체인 완료 — 처음부터 다시 선택하세요');
+    }
+  }
+  closeSheet(); save(); render();
+}
+
+function completeCurrent(){
+  const t = currentTask(); if(!t) return;
+  t.status = 'done';
+  afterAction();
+}
+
+function forwardCurrent(){
+  const t = currentTask(); if(!t) return;
+  t.status = 'done'; t.fwd = true;
+  S.tasks.push({id: uid(), text: t.text, status: 'active', dotted: false});
+  toast('리스트 끝에 재기입했어요');
+  afterAction();
+}
+
+/* ---------- task sheet ---------- */
+function openSheet(id){
+  const t = S.tasks.find(x => x.id === id);
+  if(!t || !isActive(t)) return;
+  const cur = currentTask();
+  const sheet = document.getElementById('sheet');
+  let html = '<div class="stitle">' + esc(t.text) + '</div>';
+  if(S.phase === 'work' && cur && cur.id === t.id){
+    html += '<button onclick="completeCurrent()">완료</button>';
+    html += '<button onclick="forwardCurrent()">작업함 — 미완료 (끝에 재기입)</button>';
+  } else {
+    html += '<button onclick="urgentize(\'' + t.id + '\')">긴급으로 이동 (점 + 리스트 끝)</button>';
+  }
+  html += '<button class="warn" onclick="deleteTask(\'' + t.id + '\')">삭제</button>';
+  html += '<button class="plain" onclick="closeSheet()">취소</button>';
+  sheet.innerHTML = html;
+  document.getElementById('sheetOvl').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheetOvl').classList.remove('show'); }
+
+function urgentize(id){
+  const i = S.tasks.findIndex(t => t.id === id);
+  if(i < 0) return;
+  const t = S.tasks.splice(i, 1)[0];
+  t.dotted = true;
+  S.tasks.push(t);
+  if(S.phase === 'idle') S.phase = 'work';
+  closeSheet(); save(); render();
+  toast('점이 찍힌 채 끝으로 이동 — 다음에 바로 하게 돼요');
+}
+
+function deleteTask(id){
+  const i = S.tasks.findIndex(t => t.id === id);
+  if(i >= 0) S.tasks.splice(i, 1);
+  if(S.phase !== 'idle' && chainCount() === 0) S.phase = 'idle';
+  closeSheet(); save(); render();
+}
+
+function clearDone(){
+  const n = S.tasks.length;
+  S.tasks = S.tasks.filter(isActive);
+  document.getElementById('helpOvl').classList.remove('show');
+  save(); render();
+  toast((n - S.tasks.length) + '개 항목을 정리했어요');
+}
+
+/* ---------- render ---------- */
+function render(){
+  const banner = document.getElementById('banner');
+  const cur = currentTask();
+
+  if(S.phase === 'select' && cur){
+    const eligible = S.tasks.some((t, i) => isActive(t) && !t.dotted && i > lastDottedIdx());
+    banner.innerHTML =
+      '<div class="bq">“<b>' + esc(cur.text) + '</b>” 하기 전에 하고 싶은 일이 있나요?<br>'
+      + (eligible ? '아래에서 탭해 점을 찍으세요.' : '더 고를 작업이 없어요.') + '</div>'
+      + '<div class="brow"><button class="bbtn" onclick="finishSelect()">선택 완료 → 실행</button>'
+      + '<button class="bbtn ter" onclick="reselect()">취소</button></div>';
+  } else if(S.phase === 'work' && cur){
+    banner.innerHTML =
+      '<div class="nowlabel">지금 할 일</div>'
+      + '<div class="now">' + esc(cur.text) + '</div>'
+      + '<div class="chainleft">체인에 ' + chainCount() + '개 남음</div>'
+      + '<div class="brow">'
+      + '<button class="bbtn" onclick="completeCurrent()">완료</button>'
+      + '<button class="bbtn sec" onclick="forwardCurrent()">미완료</button>'
+      + '<button class="bbtn ter" onclick="reselect()">재선택</button>'
+      + '</div>';
+  } else {
+    S.phase = 'idle';
+    const n = activeTasks().length;
+    banner.innerHTML =
+      '<div class="bq">' + (n ? '미처리 작업 ' + n + '개' : '할 일을 추가해 시작하세요.') + '</div>'
+      + (n ? '<div class="brow"><button class="bbtn" onclick="startSelect()">체인 선택 시작</button></div>' : '');
+  }
+
+  const list = document.getElementById('list');
+  if(S.tasks.length === 0){
+    list.innerHTML = '<div class="empty">아직 아무것도 없어요.<br>아래에서 할 일을 추가하세요.</div>';
+    return;
+  }
+  const ldi = lastDottedIdx();
+  let html = '';
+  S.tasks.forEach((t, i) => {
+    let cls = 'task';
+    let on = '';
+    if(t.status === 'done'){
+      cls += ' done';
+    } else if(S.phase === 'select'){
+      if(t.dotted){ /* dotted */ }
+      else if(i > ldi){ cls += ' selectable'; on = ' onclick="tapSelect(\'' + t.id + '\')"'; }
+      else { cls += ' dim'; on = ' onclick="openSheet(\'' + t.id + '\')"'; }
+    } else {
+      if(S.phase === 'work' && ldi === i) cls += ' cur';
+      on = ' onclick="openSheet(\'' + t.id + '\')"';
+    }
+    const dot = '<span class="dot">' + (t.dotted ? '•' : '') + '</span>';
+    const fwd = t.fwd ? '<span class="fwd">→</span>' : '';
+    html += '<button class="' + cls + '"' + on + '>' + dot + '<span class="txt">' + esc(t.text) + '</span>' + fwd + '</button>';
+  });
+  list.innerHTML = html;
+}
+
+/* ---------- toast / help / backup ---------- */
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+function showHelp(){ document.getElementById('helpOvl').classList.add('show'); }
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(S, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'finalversion-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importData(input){
+  const f = input.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const d = JSON.parse(r.result);
+      if(!d.tasks || !Array.isArray(d.tasks)) throw 0;
+      S = d;
+      save(); render();
+      toast('가져오기 완료');
+    }catch(e){ toast('올바른 백업 파일이 아니에요'); }
+  };
+  r.readAsText(f);
+  input.value = '';
+}
+
+document.getElementById('inp').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) submitTask(false);
+});
+
+render();
+</script>
+</body>
+</html>
