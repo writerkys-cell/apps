@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서가 관리</title>
+<style>
+  :root {
+    --ref: #3b82f6;      /* 참고 파랑 */
+    --keep: #10b981;     /* 소장 초록 */
+    --toread: #f59e0b;   /* 읽을 책 노랑 */
+    --bg: #f8f7f4;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --sub: #6b7280;
+    --line: #e5e7eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    background: var(--bg); color: var(--ink); padding-bottom: 80px;
+  }
+  header {
+    background: var(--card); border-bottom: 1px solid var(--line);
+    padding: 16px 20px; position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 20px; font-weight: 700; }
+  .stats { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; font-size: 13px; color: var(--sub); }
+  .stats b { color: var(--ink); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  nav {
+    display: flex; background: var(--card); border-bottom: 1px solid var(--line);
+    position: sticky; top: 73px; z-index: 9;
+  }
+  nav button {
+    flex: 1; padding: 12px 0; border: none; background: none; font-size: 14px;
+    color: var(--sub); cursor: pointer; border-bottom: 2px solid transparent; font-weight: 600;
+  }
+  nav button.on { color: var(--ink); border-bottom-color: var(--ink); }
+  main { padding: 16px; max-width: 860px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.on { display: block; }
+
+  /* 검색 */
+  .searchbar {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .searchbar input {
+    flex: 1; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 15px; background: var(--card);
+  }
+  .chips { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+  .chip {
+    padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--card); font-size: 13px; cursor: pointer; color: var(--sub);
+  }
+  .chip.on { color: #fff; border-color: transparent; }
+  .chip.on[data-f="all"] { background: var(--ink); }
+  .chip.on[data-f="ref"] { background: var(--ref); }
+  .chip.on[data-f="keep"] { background: var(--keep); }
+  .chip.on[data-f="toread"] { background: var(--toread); }
+  .rmode .chip.on { color: #fff; border-color: transparent; }
+  #rm-keep.on { background: var(--keep); }
+  #rm-toread.on { background: var(--toread); }
+  .fighter.toread:hover { border-color: var(--toread); background: #fffbeb; }
+  .ranknum.top.toread { color: var(--toread); }
+  .nextbadge {
+    font-size: 10.5px; font-weight: 800; color: #fff; background: var(--toread);
+    padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 2px;
+  }
+
+  .book {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+  }
+  .book .cat { width: 6px; height: 40px; border-radius: 3px; flex-shrink: 0; }
+  .book .info { flex: 1; min-width: 0; }
+  .book .title { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .book .meta { font-size: 12.5px; color: var(--sub); margin-top: 2px; }
+  .loc {
+    font-weight: 700; font-size: 14px; background: var(--ink); color: #fff;
+    padding: 6px 10px; border-radius: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums;
+  }
+  .loc.none { background: var(--line); color: var(--sub); }
+  .rankbadge { font-size: 11.5px; color: var(--keep); font-weight: 700; }
+  .empty { text-align: center; color: var(--sub); padding: 40px 0; font-size: 14px; }
+
+  /* 서가 그리드 */
+  .shelfrow { margin-bottom: 18px; }
+  .shelfrow h3 { font-size: 14px; margin-bottom: 6px; color: var(--sub); }
+  .slots { display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; }
+  .slot {
+    aspect-ratio: 1; border-radius: 8px; background: var(--card); border: 1px solid var(--line);
+    cursor: pointer; position: relative; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; overflow: hidden; padding: 2px;
+  }
+  .slot .sid { font-size: 10px; color: var(--sub); font-weight: 600; }
+  .slot .cnt { font-size: 13px; font-weight: 700; }
+  .slot .bar { position: absolute; bottom: 0; left: 0; right: 0; height: 4px; display: flex; }
+  .slot .bar i { height: 100%; }
+  .slot.full { background: #fef2f2; border-color: #fca5a5; }
+  .slot.tagged { border-width: 2px; }
+  .slot .tag { font-size: 9px; font-weight: 700; }
+
+  /* 순위 */
+  .battle {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px; margin-bottom: 18px;
+  }
+  .battle h3 { font-size: 15px; margin-bottom: 4px; }
+  .battle p.sub { font-size: 12.5px; color: var(--sub); margin-bottom: 14px; }
+  .vs { display: flex; gap: 10px; align-items: stretch; }
+  .fighter {
+    flex: 1; border: 1.5px solid var(--line); border-radius: 12px; padding: 16px 12px;
+    cursor: pointer; text-align: center; transition: all .12s; background: var(--bg);
+  }
+  .fighter:hover { border-color: var(--keep); background: #ecfdf5; }
+  .fighter .t { font-weight: 700; font-size: 15px; }
+  .fighter .a { font-size: 12.5px; color: var(--sub); margin-top: 4px; }
+  .vsmark { align-self: center; font-weight: 800; color: var(--sub); font-size: 13px; }
+  .skip { margin-top: 12px; text-align: center; }
+  .skip button { border: none; background: none; color: var(--sub); font-size: 13px; cursor: pointer; text-decoration: underline; }
+  .ranklist .book { cursor: default; }
+  .ranknum { font-weight: 800; font-size: 15px; width: 34px; text-align: center; color: var(--sub); flex-shrink: 0; }
+  .ranknum.top { color: var(--keep); }
+  .cutline {
+    text-align: center; font-size: 12.5px; color: #dc2626; font-weight: 700;
+    border-top: 2px dashed #fca5a5; margin: 14px 0 10px; padding-top: 8px;
+  }
+
+  /* 관리 */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+  .panel h3 { font-size: 15px; margin-bottom: 10px; }
+  .panel p { font-size: 13px; color: var(--sub); margin-bottom: 10px; line-height: 1.6; }
+  .btn {
+    padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); font-size: 14px; cursor: pointer; font-weight: 600;
+  }
+  .btn.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .btn.danger { color: #dc2626; border-color: #fca5a5; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .caps label { display: flex; align-items: center; justify-content: space-between; font-size: 14px; margin-bottom: 8px; }
+  .caps input { width: 80px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; text-align: center; }
+  .disposed-item { font-size: 13px; color: var(--sub); padding: 6px 0; border-bottom: 1px solid var(--line); }
+
+  /* FAB & 모달 */
+  .fab {
+    position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 50%;
+    background: var(--ink); color: #fff; font-size: 28px; border: none; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25); z-index: 20; line-height: 1;
+  }
+  .overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 30;
+    align-items: flex-end; justify-content: center;
+  }
+  .overlay.on { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 18px 18px 0 0; padding: 22px 20px 30px;
+    width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto;
+  }
+  .modal h3 { font-size: 17px; margin-bottom: 14px; }
+  .modal label { display: block; font-size: 13px; color: var(--sub); margin: 12px 0 5px; font-weight: 600; }
+  .modal input[type=text], .modal select, .modal textarea {
+    width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 15px;
+    font-family: inherit;
+  }
+  .catpick { display: flex; gap: 8px; }
+  .catpick button {
+    flex: 1; padding: 11px 0; border-radius: 10px; border: 1.5px solid var(--line);
+    background: var(--card); font-size: 14px; cursor: pointer; font-weight: 600; color: var(--sub);
+  }
+  .catpick button.on[data-c="ref"] { background: var(--ref); color: #fff; border-color: var(--ref); }
+  .catpick button.on[data-c="keep"] { background: var(--keep); color: #fff; border-color: var(--keep); }
+  .catpick button.on[data-c="toread"] { background: var(--toread); color: #fff; border-color: var(--toread); }
+  .modal .actions { display: flex; gap: 8px; margin-top: 20px; }
+  .modal .actions .btn { flex: 1; padding: 13px 0; }
+  .slothint { font-size: 12px; color: var(--sub); margin-top: 4px; }
+  .toast {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 13.5px; z-index: 50; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.on { opacity: 1; }
+  @media (max-width: 600px) { .slots { grid-template-columns: repeat(8, 1fr); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📚 서가 관리</h1>
+  <div class="stats" id="stats"></div>
+</header>
+
+<nav>
+  <button class="on" data-tab="search">검색</button>
+  <button data-tab="shelf">서가</button>
+  <button data-tab="rank">베스트</button>
+  <button data-tab="admin">관리</button>
+</nav>
+
+<main>
+  <!-- 검색 -->
+  <section class="tab on" id="tab-search">
+    <div class="searchbar">
+      <input type="text" id="q" placeholder="제목이나 저자로 검색…" autocomplete="off">
+    </div>
+    <div class="chips" id="chips">
+      <button class="chip on" data-f="all">전체</button>
+      <button class="chip" data-f="ref">참고</button>
+      <button class="chip" data-f="keep">소장</button>
+      <button class="chip" data-f="toread">읽을 책</button>
+      <button class="chip" data-f="noslot">칸 미지정</button>
+    </div>
+    <div id="booklist"></div>
+  </section>
+
+  <!-- 서가 -->
+  <section class="tab" id="tab-shelf">
+    <p style="font-size:13px;color:var(--sub);margin-bottom:14px;">
+      칸을 누르면 그 칸의 책을 볼 수 있어요. 숫자는 꽂힌 권수, 아래 색 띠는 분류 비율.
+    </p>
+    <div id="shelves"></div>
+  </section>
+
+  <!-- 베스트 -->
+  <section class="tab" id="tab-rank">
+    <div class="chips rmode" style="margin-bottom:14px;">
+      <button class="chip on" id="rm-keep" onclick="setRankMode('keep')">💚 베스트 (소장)</button>
+      <button class="chip" id="rm-toread" onclick="setRankMode('toread')">📙 다음에 읽을 책</button>
+    </div>
+    <div class="battle" id="battlebox"></div>
+    <div class="ranklist" id="ranklist"></div>
+  </section>
+
+  <!-- 관리 -->
+  <section class="tab" id="tab-admin">
+    <div class="panel caps">
+      <h3>보유 상한</h3>
+      <label>소장(베스트) 상한 <input type="number" id="capKeep"></label>
+      <label>읽을 책 상한 <input type="number" id="capToread"></label>
+      <label>칸당 권수 <input type="number" id="capSlot"></label>
+      <div class="btnrow" style="margin-top:8px;"><button class="btn primary" onclick="saveCaps()">저장</button></div>
+    </div>
+    <div class="panel">
+      <h3>아이폰 입력 병합</h3>
+      <p>아이폰 입력 앱에서 보낸 파일(AirDrop)이나 복사해 온 텍스트를 현재 데이터에 <b>추가</b>합니다. 이미 있는 제목은 건너뛰어요.</p>
+      <div class="btnrow">
+        <button class="btn primary" onclick="document.getElementById('mergefile').click()">파일로 병합</button>
+        <input type="file" id="mergefile" accept=".json,.txt" style="display:none" onchange="mergeFromFile(this)">
+      </div>
+      <label style="display:block;font-size:13px;color:var(--sub);margin:14px 0 6px;font-weight:600;">또는 붙여넣기로 병합</label>
+      <textarea id="mergetext" rows="3" placeholder="아이폰에서 복사한 데이터를 여기에 붙여넣으세요" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:13px;font-family:monospace;"></textarea>
+      <div class="btnrow" style="margin-top:8px;"><button class="btn" onclick="mergeFromText()">붙여넣은 데이터 병합</button></div>
+    </div>
+    <div class="panel">
+      <h3>백업</h3>
+      <p>데이터는 이 브라우저에 저장됩니다. 파일을 옮기거나 브라우저를 바꾸면 데이터가 사라질 수 있으니, 주기적으로 백업 파일을 내려받아 두세요.</p>
+      <div class="btnrow">
+        <button class="btn primary" onclick="exportJSON()">백업 내려받기</button>
+        <button class="btn" onclick="document.getElementById('importfile').click()">백업 불러오기</button>
+        <button class="btn" onclick="exportCSV()">CSV 내보내기</button>
+        <input type="file" id="importfile" accept=".json" style="display:none" onchange="importJSON(this)">
+      </div>
+    </div>
+    <div class="panel">
+      <h3>처분 기록 <span id="dispcnt" style="font-weight:400;color:var(--sub);font-size:13px;"></span></h3>
+      <p>처분한 책의 기록입니다. "이 책 내가 갖고 있었나?" 할 때 확인하세요.</p>
+      <div id="disposedlist"></div>
+    </div>
+  </section>
+</main>
+
+<button class="fab" onclick="openAdd()">+</button>
+
+<!-- 책 추가/편집 모달 -->
+<div class="overlay" id="modal-book">
+  <div class="modal">
+    <h3 id="modaltitle">책 추가</h3>
+    <label>제목 *</label>
+    <input type="text" id="f-title" placeholder="책 제목">
+    <label>저자</label>
+    <input type="text" id="f-author" placeholder="저자 (선택)">
+    <label>분류 *</label>
+    <div class="catpick" id="f-cat">
+      <button data-c="ref">📘 참고</button>
+      <button data-c="keep">💚 소장</button>
+      <button data-c="toread">📙 읽을 책</button>
+    </div>
+    <label>꽂을 칸</label>
+    <select id="f-slot"></select>
+    <div class="slothint" id="slothint"></div>
+    <label>메모</label>
+    <input type="text" id="f-memo" placeholder="메모 (선택)">
+    <div class="actions">
+      <button class="btn" onclick="closeModal('modal-book')">취소</button>
+      <button class="btn danger" id="btn-dispose" onclick="disposeBook()" style="display:none;">처분</button>
+      <button class="btn primary" onclick="saveBook()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 칸 상세 모달 -->
+<div class="overlay" id="modal-slot">
+  <div class="modal">
+    <h3 id="slottitle"></h3>
+    <div id="slotbooks"></div>
+    <div class="actions">
+      <button class="btn" onclick="closeModal('modal-slot')">닫기</button>
+      <button class="btn primary" id="btn-addhere">이 칸에 책 추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== 데이터 =====
+const KEY = 'shelfapp-v1';
+let db = load();
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && d.books) return d;
+  } catch(e) {}
+  return { books: [], disposed: [], caps: { keep: 365, toread: 80, slot: 13 } };
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
+
+const SHELVES = ['A','B','C','D','E'];
+const SLOTS_PER = 24;
+const CATNAME = { ref: '참고', keep: '소장', toread: '읽을 책' };
+const CATCOLOR = { ref: 'var(--ref)', keep: 'var(--keep)', toread: 'var(--toread)' };
+const allSlots = [];
+SHELVES.forEach(s => { for (let i = 1; i <= SLOTS_PER; i++) allSlots.push(s + '-' + i); });
+
+let editingId = null;
+let pickedCat = null;
+let filter = 'all';
+let battlePair = null;
+
+// ===== 유틸 =====
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('on'), 2200);
+}
+function slotBooks(slot) { return db.books.filter(b => b.slot === slot); }
+function catRank(cat) {
+  return db.books.filter(b => b.cat === cat).sort((a,b) => (b.elo||1500) - (a.elo||1500));
+}
+function keepRank() { return catRank('keep'); }
+let rankMode = 'keep';
+function setRankMode(m) {
+  rankMode = m; battlePair = null;
+  document.getElementById('rm-keep').classList.toggle('on', m === 'keep');
+  document.getElementById('rm-toread').classList.toggle('on', m === 'toread');
+  renderRank();
+}
+
+// ===== 렌더링 =====
+function renderStats() {
+  const c = { ref:0, keep:0, toread:0 };
+  db.books.forEach(b => c[b.cat]++);
+  document.getElementById('stats').innerHTML =
+    `<span><span class="dot" style="background:var(--ref)"></span>참고 <b>${c.ref}</b></span>` +
+    `<span><span class="dot" style="background:var(--keep)"></span>소장 <b>${c.keep}</b>/${db.caps.keep}</span>` +
+    `<span><span class="dot" style="background:var(--toread)"></span>읽을 책 <b>${c.toread}</b>/${db.caps.toread}</span>` +
+    `<span>전체 <b>${db.books.length}</b>권</span>`;
+}
+
+function renderList() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  let items = db.books.slice();
+  if (filter === 'noslot') items = items.filter(b => !b.slot);
+  else if (filter !== 'all') items = items.filter(b => b.cat === filter);
+  if (q) items = items.filter(b =>
+    b.title.toLowerCase().includes(q) || (b.author||'').toLowerCase().includes(q));
+  items.sort((a,b) => a.title.localeCompare(b.title, 'ko'));
+
+  const ranks = {};
+  keepRank().forEach((b,i) => ranks[b.id] = i+1);
+  const trRanks = {};
+  catRank('toread').forEach((b,i) => trRanks[b.id] = i+1);
+
+  const el = document.getElementById('booklist');
+  if (!items.length) {
+    el.innerHTML = `<div class="empty">${q ? '검색 결과가 없어요.' : '아직 등록된 책이 없어요. + 버튼으로 추가하세요.'}</div>`;
+    return;
+  }
+  el.innerHTML = items.map(b => {
+    let rank = '';
+    if (b.cat === 'keep' && ranks[b.id]) rank = `<span class="rankbadge">★ ${ranks[b.id]}위</span> `;
+    else if (b.cat === 'toread' && trRanks[b.id]) rank = `<span class="rankbadge" style="color:var(--toread)">▶ ${trRanks[b.id]}순위</span> `;
+    return `<div class="book" onclick="openEdit('${b.id}')">
+      <div class="cat" style="background:${CATCOLOR[b.cat]}"></div>
+      <div class="info">
+        <div class="title">${esc(b.title)}</div>
+        <div class="meta">${rank}${esc(b.author||'')}${b.author&&b.memo?' · ':''}${esc(b.memo||'')}</div>
+      </div>
+      <div class="loc ${b.slot?'':'none'}">${b.slot || '미지정'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderShelves() {
+  const el = document.getElementById('shelves');
+  el.innerHTML = SHELVES.map(sh => {
+    const cells = [];
+    for (let i = 1; i <= SLOTS_PER; i++) {
+      const id = sh + '-' + i;
+      const books = slotBooks(id);
+      const n = books.length;
+      const c = { ref:0, keep:0, toread:0 };
+      books.forEach(b => c[b.cat]++);
+      const bar = n ? `<div class="bar">` +
+        ['ref','keep','toread'].filter(k=>c[k]).map(k =>
+          `<i style="width:${c[k]/n*100}%;background:${CATCOLOR[k]}"></i>`).join('') +
+        `</div>` : '';
+      const full = n >= db.caps.slot ? ' full' : '';
+      cells.push(`<div class="slot${full}" onclick="openSlot('${id}')">
+        <span class="sid">${id}</span>
+        <span class="cnt">${n||''}</span>${bar}
+      </div>`);
+    }
+    const total = db.books.filter(b => b.slot && b.slot.startsWith(sh+'-')).length;
+    return `<div class="shelfrow"><h3>${sh} 서가 · ${total}권</h3><div class="slots">${cells.join('')}</div></div>`;
+  }).join('');
+}
+
+function renderRank() {
+  const isKeep = rankMode === 'keep';
+  const ranked = catRank(rankMode);
+  const box = document.getElementById('battlebox');
+  const catLabel = isKeep ? '소장' : '읽을 책';
+
+  if (ranked.length < 2) {
+    box.innerHTML = `<h3>${isKeep ? '베스트 만들기' : '읽을 순서 만들기'}</h3>
+      <p class="sub">${catLabel} 책이 2권 이상 등록되면, 두 권씩 비교해서 순위를 만들 수 있어요.</p>`;
+  } else {
+    if (!battlePair || !ranked.find(b=>b.id===battlePair[0].id) || !ranked.find(b=>b.id===battlePair[1].id)) {
+      battlePair = pickPair(ranked);
+    }
+    const [x, y] = battlePair;
+    const totalBattles = Math.floor(ranked.reduce((s,b) => s + (b.battles||0), 0) / 2);
+    const q = isKeep ? '어느 책이 더 좋았나요?' : '어느 책을 먼저 읽고 싶나요?';
+    const sub = isKeep
+      ? `고르기만 하면 순위가 쌓여요. 지금까지 ${totalBattles}번 비교했어요.`
+      : `고르기만 하면 읽을 순서가 정해져요. 1위가 다음에 읽을 책이에요. (${totalBattles}번 비교)`;
+    const fcls = isKeep ? 'fighter' : 'fighter toread';
+    box.innerHTML = `<h3>${q}</h3>
+      <p class="sub">${sub}</p>
+      <div class="vs">
+        <div class="${fcls}" onclick="battle('${x.id}','${y.id}')">
+          <div class="t">${esc(x.title)}</div><div class="a">${esc(x.author||'')}</div>
+        </div>
+        <div class="vsmark">VS</div>
+        <div class="${fcls}" onclick="battle('${y.id}','${x.id}')">
+          <div class="t">${esc(y.title)}</div><div class="a">${esc(y.author||'')}</div>
+        </div>
+      </div>
+      <div class="skip"><button onclick="skipBattle()">둘 다 비슷해요 / 건너뛰기</button></div>`;
+  }
+
+  const el = document.getElementById('ranklist');
+  if (!ranked.length) { el.innerHTML = `<div class="empty">${catLabel} 책이 없어요.</div>`; return; }
+  const cap = isKeep ? db.caps.keep : db.caps.toread;
+  const cutMsg = isKeep
+    ? `— 베스트 ${cap} 컷라인 · 아래 책은 처분 후보 —`
+    : `— 읽을 책 상한 ${cap} · 아래 책은 처분 후보 —`;
+  el.innerHTML = ranked.map((b,i) => {
+    const cut = i === cap ? `<div class="cutline">${cutMsg}</div>` : '';
+    const next = !isKeep && i === 0 ? `<span class="nextbadge">다음에 읽기</span>` : '';
+    return cut + `<div class="book" onclick="openEdit('${b.id}')" style="cursor:pointer;">
+      <div class="ranknum ${i<cap ? (isKeep?'top':'top toread') : ''}">${i+1}</div>
+      <div class="info">
+        <div class="title">${esc(b.title)}${next}</div>
+        <div class="meta">${esc(b.author||'')} · 비교 ${b.battles||0}회</div>
+      </div>
+      <div class="loc ${b.slot?'':'none'}">${b.slot||'미지정'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderAdmin() {
+  document.getElementById('capKeep').value = db.caps.keep;
+  document.getElementById('capToread').value = db.caps.toread;
+  document.getElementById('capSlot').value = db.caps.slot;
+  const el = document.getElementById('disposedlist');
+  document.getElementById('dispcnt').textContent = db.disposed.length ? `(${db.disposed.length}권)` : '';
+  el.innerHTML = db.disposed.length
+    ? db.disposed.slice().reverse().slice(0, 100).map(d =>
+        `<div class="disposed-item">${esc(d.title)}${d.author?' · '+esc(d.author):''} <span style="float:right">${d.date}</span></div>`).join('')
+    : '<div class="empty" style="padding:16px 0;">아직 없음</div>';
+}
+
+function renderAll() { renderStats(); renderList(); renderShelves(); renderRank(); renderAdmin(); }
+
+// ===== 랭킹 (Elo) =====
+function pickPair(ranked) {
+  // 비교 횟수가 적은 책을 우선으로, 레이팅이 비슷한 상대와 매칭
+  const sorted = ranked.slice().sort((a,b) => (a.battles||0) - (b.battles||0));
+  const x = sorted[Math.floor(Math.random() * Math.min(5, sorted.length))];
+  const near = ranked.filter(b => b.id !== x.id)
+    .sort((a,b) => Math.abs((a.elo||1500)-(x.elo||1500)) - Math.abs((b.elo||1500)-(x.elo||1500)));
+  const y = near[Math.floor(Math.random() * Math.min(8, near.length))];
+  return Math.random() < 0.5 ? [x,y] : [y,x];
+}
+function battle(winId, loseId) {
+  const w = db.books.find(b => b.id === winId);
+  const l = db.books.find(b => b.id === loseId);
+  if (!w || !l) return;
+  const ew = 1 / (1 + Math.pow(10, ((l.elo||1500)-(w.elo||1500))/400));
+  const K = 32;
+  w.elo = (w.elo||1500) + K * (1 - ew);
+  l.elo = (l.elo||1500) - K * (1 - ew);
+  w.battles = (w.battles||0) + 1;
+  l.battles = (l.battles||0) + 1;
+  battlePair = null;
+  save(); renderRank(); renderList();
+}
+function skipBattle() { battlePair = null; renderRank(); }
+
+// ===== 책 추가/편집 =====
+function fillSlotSelect(sel) {
+  const opts = ['<option value="">칸 미지정 (나중에)</option>'];
+  SHELVES.forEach(sh => {
+    for (let i = 1; i <= SLOTS_PER; i++) {
+      const id = sh + '-' + i;
+      const n = slotBooks(id).length;
+      const full = n >= db.caps.slot;
+      opts.push(`<option value="${id}" ${full?'disabled':''}>${id} (${n}/${db.caps.slot}권${full?' · 가득참':''})</option>`);
+    }
+  });
+  sel.innerHTML = opts.join('');
+}
+function openAdd(presetSlot) {
+  editingId = null; pickedCat = null;
+  document.getElementById('modaltitle').textContent = '책 추가';
+  document.getElementById('f-title').value = '';
+  document.getElementById('f-author').value = '';
+  document.getElementById('f-memo').value = '';
+  document.querySelectorAll('#f-cat button').forEach(b => b.classList.remove('on'));
+  const sel = document.getElementById('f-slot');
+  fillSlotSelect(sel);
+  if (presetSlot) sel.value = presetSlot;
+  document.getElementById('btn-dispose').style.display = 'none';
+  updateSlotHint();
+  document.getElementById('modal-book').classList.add('on');
+  setTimeout(() => document.getElementById('f-title').focus(), 100);
+}
+function openEdit(id) {
+  const b = db.books.find(x => x.id === id);
+  if (!b) return;
+  editingId = id; pickedCat = b.cat;
+  document.getElementById('modaltitle').textContent = '책 정보';
+  document.getElementById('f-title').value = b.title;
+  document.getElementById('f-author').value = b.author || '';
+  document.getElementById('f-memo').value = b.memo || '';
+  document.querySelectorAll('#f-cat button').forEach(btn =>
+    btn.classList.toggle('on', btn.dataset.c === b.cat));
+  const sel = document.getElementById('f-slot');
+  fillSlotSelect(sel);
+  // 자기 칸은 가득 차도 선택 가능해야 함
+  if (b.slot) {
+    const opt = sel.querySelector(`option[value="${b.slot}"]`);
+    if (opt) opt.disabled = false;
+    sel.value = b.slot;
+  }
+  document.getElementById('btn-dispose').style.display = '';
+  updateSlotHint();
+  document.getElementById('modal-book').classList.add('on');
+}
+function updateSlotHint() {
+  const v = document.getElementById('f-slot').value;
+  const hint = document.getElementById('slothint');
+  if (!v) { hint.textContent = '칸을 정하지 않으면 "칸 미지정"으로 남아요. 검색 필터로 나중에 찾을 수 있어요.'; return; }
+  const books = slotBooks(v).filter(b => b.id !== editingId);
+  const c = { ref:0, keep:0, toread:0 };
+  books.forEach(b => c[b.cat]++);
+  const parts = ['ref','keep','toread'].filter(k=>c[k]).map(k=>`${CATNAME[k]} ${c[k]}권`);
+  hint.textContent = books.length ? `이 칸에 지금: ${parts.join(', ')}` : '빈 칸이에요.';
+}
+document.getElementById('f-slot').addEventListener('change', updateSlotHint);
+document.getElementById('f-cat').addEventListener('click', e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  pickedCat = btn.dataset.c;
+  document.querySelectorAll('#f-cat button').forEach(b => b.classList.toggle('on', b === btn));
+});
+function saveBook() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { toast('제목을 입력하세요'); return; }
+  if (!pickedCat) { toast('분류를 선택하세요'); return; }
+  const slot = document.getElementById('f-slot').value || null;
+  if (slot) {
+    const n = slotBooks(slot).filter(b => b.id !== editingId).length;
+    if (n >= db.caps.slot) { toast(`${slot} 칸이 가득 찼어요`); return; }
+  }
+  const author = document.getElementById('f-author').value.trim();
+  const memo = document.getElementById('f-memo').value.trim();
+
+  if (editingId) {
+    const b = db.books.find(x => x.id === editingId);
+    Object.assign(b, { title, author, memo, cat: pickedCat, slot });
+  } else {
+    // 중복 경고
+    const dup = db.books.find(b => b.title.toLowerCase() === title.toLowerCase());
+    if (dup && !confirm(`"${title}" 은(는) 이미 ${dup.slot||'미지정'}에 있어요. 그래도 추가할까요?`)) return;
+    db.books.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      title, author, memo, cat: pickedCat, slot,
+      elo: 1500, battles: 0, added: new Date().toISOString().slice(0,10)
+    });
+  }
+  // 상한 경고
+  const cnt = db.books.filter(b => b.cat === pickedCat).length;
+  if (pickedCat === 'keep' && cnt > db.caps.keep) toast(`소장이 상한(${db.caps.keep})을 넘었어요 — 베스트 탭에서 컷라인 아래를 확인하세요`);
+  else if (pickedCat === 'toread' && cnt > db.caps.toread) toast(`읽을 책이 상한(${db.caps.toread})을 넘었어요`);
+  else toast(editingId ? '수정했어요' : '추가했어요');
+
+  save(); closeModal('modal-book'); renderAll();
+}
+function disposeBook() {
+  const b = db.books.find(x => x.id === editingId);
+  if (!b) return;
+  if (!confirm(`"${b.title}" 을(를) 처분할까요?\n처분 기록에는 남아요.`)) return;
+  db.disposed.push({ title: b.title, author: b.author, date: new Date().toISOString().slice(0,10) });
+  db.books = db.books.filter(x => x.id !== editingId);
+  save(); closeModal('modal-book'); renderAll(); toast('처분했어요');
+}
+
+// ===== 칸 상세 =====
+function openSlot(id) {
+  const books = slotBooks(id);
+  document.getElementById('slottitle').textContent = `${id} 칸 · ${books.length}/${db.caps.slot}권`;
+  const ranks = {};
+  keepRank().forEach((b,i) => ranks[b.id] = i+1);
+  const trRanks = {};
+  catRank('toread').forEach((b,i) => trRanks[b.id] = i+1);
+  document.getElementById('slotbooks').innerHTML = books.length
+    ? books.map(b => {
+        let r = '';
+        if (b.cat === 'keep' && ranks[b.id]) r = ` · ★ ${ranks[b.id]}위`;
+        else if (b.cat === 'toread' && trRanks[b.id]) r = ` · ▶ ${trRanks[b.id]}순위`;
+        return `<div class="book" onclick="closeModal('modal-slot');openEdit('${b.id}')">
+        <div class="cat" style="background:${CATCOLOR[b.cat]}"></div>
+        <div class="info">
+          <div class="title">${esc(b.title)}</div>
+          <div class="meta">${CATNAME[b.cat]}${r}${b.author?' · '+esc(b.author):''}</div>
+        </div>
+      </div>`; }).join('')
+    : '<div class="empty">빈 칸이에요.</div>';
+  document.getElementById('btn-addhere').onclick = () => { closeModal('modal-slot'); openAdd(id); };
+  document.getElementById('modal-slot').classList.add('on');
+}
+
+// ===== 관리 =====
+function saveCaps() {
+  db.caps.keep = Math.max(1, parseInt(document.getElementById('capKeep').value) || 365);
+  db.caps.toread = Math.max(1, parseInt(document.getElementById('capToread').value) || 80);
+  db.caps.slot = Math.max(1, parseInt(document.getElementById('capSlot').value) || 13);
+  save(); renderAll(); toast('저장했어요');
+}
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `서가백업_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+function importJSON(input) {
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d.books) throw 0;
+      if (!confirm(`백업에 ${d.books.length}권이 있어요. 현재 데이터를 덮어쓸까요?`)) return;
+      db = d; if (!db.caps) db.caps = { keep:365, toread:80, slot:13 };
+      if (!db.disposed) db.disposed = [];
+      save(); renderAll(); toast('불러왔어요');
+    } catch(e) { toast('올바른 백업 파일이 아니에요'); }
+  };
+  r.readAsText(f);
+  input.value = '';
+}
+function mergeFromFile(input) {
+  const f = input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => mergeData(r.result);
+  r.readAsText(f);
+  input.value = '';
+}
+function mergeFromText() {
+  const t = document.getElementById('mergetext').value.trim();
+  if (!t) { toast('붙여넣은 내용이 없어요'); return; }
+  mergeData(t);
+}
+function mergeData(raw) {
+  let d;
+  try { d = JSON.parse(raw); } catch(e) { toast('올바른 데이터 형식이 아니에요'); return; }
+  const list = d && Array.isArray(d.books) ? d.books : (Array.isArray(d) ? d : null);
+  if (!list) { toast('올바른 데이터 형식이 아니에요'); return; }
+
+  let added = 0, dup = 0;
+  const overSlots = new Set();
+  const today = new Date().toISOString().slice(0,10);
+  list.forEach(nb => {
+    const title = (nb.title || '').trim();
+    if (!title) return;
+    const exists = db.books.find(b => b.title.toLowerCase() === title.toLowerCase());
+    if (exists) { dup++; return; }
+    const slot = allSlots.includes(nb.slot) ? nb.slot : null;
+    if (slot && slotBooks(slot).length >= db.caps.slot) overSlots.add(slot);
+    db.books.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      title, author: (nb.author || '').trim(), memo: '',
+      cat: ['ref','keep','toread'].includes(nb.cat) ? nb.cat : 'toread',
+      slot, elo: 1500, battles: 0, added: today
+    });
+    added++;
+  });
+  save(); renderAll();
+  document.getElementById('mergetext').value = '';
+  let msg = `${added}권을 병합했어요.`;
+  if (dup) msg += `\n이미 있던 ${dup}권은 건너뛰었어요.`;
+  if (overSlots.size) msg += `\n주의: ${[...overSlots].join(', ')} 칸이 정원(${db.caps.slot}권)을 넘었어요. 서가 탭에서 확인하세요.`;
+  alert(msg);
+}
+function exportCSV() {
+  const ranks = {};
+  keepRank().forEach((b,i) => ranks[b.id] = i+1);
+  catRank('toread').forEach((b,i) => ranks[b.id] = i+1);
+  const rows = [['제목','저자','분류','칸','순위','메모','등록일']];
+  db.books.forEach(b => rows.push([b.title, b.author||'', CATNAME[b.cat], b.slot||'', ranks[b.id]||'', b.memo||'', b.added||'']));
+  const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `서가목록_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ===== 공통 =====
+function closeModal(id) { document.getElementById(id).classList.remove('on'); }
+document.querySelectorAll('.overlay').forEach(o =>
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('on'); }));
+document.querySelectorAll('nav button').forEach(btn =>
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+    btn.classList.add('on');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('on');
+    if (btn.dataset.tab === 'rank') { battlePair = null; renderRank(); }
+  }));
+document.getElementById('q').addEventListener('input', renderList);
+document.getElementById('chips').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  filter = c.dataset.f;
+  document.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+  renderList();
+});
+
+renderAll();
+</script>
+</body>
+</html>
