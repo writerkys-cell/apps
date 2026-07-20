@@ -25,7 +25,6 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 16px;
     margin: 0 12px 14px; overflow: hidden;
   }
-  .card.done { border-color: var(--keep); }
   .cardhead {
     display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line);
     align-items: center; background: #fafaf8;
@@ -75,8 +74,6 @@
     background: var(--bg); border: 1px solid var(--line); padding: 6px 10px; border-radius: 999px;
     flex-shrink: 0; font-variant-numeric: tabular-nums;
   }
-  .card.done .count { background: var(--keep); color: #fff; border-color: var(--keep); }
-  .fullmsg { text-align: center; font-size: 13px; color: var(--keep); font-weight: 700; padding: 0 0 12px; }
 
   .bottombar {
     position: fixed; bottom: 0; left: 0; right: 0; background: var(--card);
@@ -150,7 +147,6 @@
 
 <script>
 const KEY = 'shelfinput-v1';
-const CAPACITY = 13;
 const SHELVES = ['A','B','C','D','E'];
 const SLOTS_PER = 24;
 const CATNAME = { ref: '참고', keep: '소장', toread: '읽을 책' };
@@ -189,7 +185,6 @@ function slotOptions(current) {
 function render() {
   const el = document.getElementById('cards');
   el.innerHTML = state.cards.map((c, ci) => {
-    const full = c.books.length >= CAPACITY;
     const rows = c.books.map((b, bi) =>
       `<div class="bk">
         <span class="n">${bi+1}</span>
@@ -197,7 +192,7 @@ function render() {
         ${b.author ? `<span class="a">${esc(b.author)}</span>` : ''}
         <button class="del" onclick="delBook(${ci},${bi})">×</button>
       </div>`).join('');
-    return `<div class="card ${full?'done':''}">
+    return `<div class="card">
       <div class="cardhead">
         <select onchange="setSlot(${ci}, this.value)">${slotOptions(c.slot)}</select>
         <div class="seg">
@@ -205,16 +200,14 @@ function render() {
           <button data-c="keep" class="${c.cat==='keep'?'on':''}" onclick="setCat(${ci},'keep')">소장</button>
           <button data-c="toread" class="${c.cat==='toread'?'on':''}" onclick="setCat(${ci},'toread')">읽을 책</button>
         </div>
-        <span class="count">${c.books.length}/${CAPACITY}</span>
+        <span class="count">${c.books.length}권</span>
       </div>
       ${rows ? `<div class="books">${rows}</div>` : ''}
-      ${full
-        ? `<div class="fullmsg">✓ 칸이 다 찼어요 — 칸 ID를 다음 칸으로 바꾸면 이어서 입력할 수 있어요</div>`
-        : `<div class="inputrow">
-            <input class="ti" id="ti-${ci}" type="text" placeholder="제목" autocomplete="off" enterkeyhint="done">
-            <input class="au" id="au-${ci}" type="text" placeholder="저자(선택)" autocomplete="off" enterkeyhint="done">
-            <button onclick="addBook(${ci})">추가</button>
-          </div>`}
+      <div class="inputrow">
+        <input class="ti" id="ti-${ci}" type="text" placeholder="제목" autocomplete="off" enterkeyhint="done">
+        <input class="au" id="au-${ci}" type="text" placeholder="저자(선택)" autocomplete="off" enterkeyhint="done">
+        <button onclick="addBook(${ci})">추가</button>
+      </div>
     </div>`;
   }).join('');
 
