@@ -104,6 +104,25 @@
   .log li .x{flex:1;min-width:0}
   .log li .m{opacity:.6;flex-shrink:0;font-variant-numeric:tabular-nums}
 
+  .tag{
+    display:inline-block;font-size:10.5px;color:var(--dim);border:1px solid var(--line);
+    border-radius:20px;padding:1px 8px;vertical-align:middle;white-space:nowrap;
+  }
+  .group{margin-bottom:26px}
+  .group > .ghead{
+    display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid var(--line);
+  }
+  .group .gname{font-size:13.5px;font-weight:600;letter-spacing:.01em}
+  .group .gsum{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;flex-shrink:0}
+  .group .gstats{display:flex;margin:0 0 12px}
+  .group .gstats div{flex:1;text-align:center}
+  .group .gstats .v{font-size:17px;font-variant-numeric:tabular-nums;line-height:1.25}
+  .group .gstats .k{font-size:10.5px;color:var(--dim);margin-top:2px}
+  .group .gbtn{background:none;border:0;padding:0;color:var(--dim);font:inherit;
+    font-size:12.5px;cursor:pointer;margin-bottom:12px}
+  .group .gbtn:hover{color:var(--fg)}
+
   details.arc{border:1px solid var(--line);border-radius:8px;background:var(--card);
     margin-bottom:9px;padding:12px 14px}
   details.arc summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;
@@ -174,9 +193,11 @@
     <p class="hint">새 원고를 만들면 400자 쓰기가 시작됩니다. 완료할 때마다 다음 400자가 자동으로 이어집니다.</p>
     <form class="additem" id="formProject">
       <input type="text" id="pTitle" placeholder="새 원고" autocomplete="off">
-      <input type="text" id="pGoal" placeholder="목표 매수" inputmode="numeric" autocomplete="off" style="flex:0 0 88px">
+      <input type="text" id="pTag" placeholder="태그" list="tagList" autocomplete="off" style="flex:0 0 110px">
+      <input type="text" id="pGoal" placeholder="매수" inputmode="numeric" autocomplete="off" style="flex:0 0 70px">
       <button class="btn" type="submit">추가</button>
     </form>
+    <datalist id="tagList"></datalist>
     <ul class="plist" id="projectList"></ul>
     <p class="empty-msg" id="pEmpty" hidden>아직 원고가 없습니다.</p>
   </section>
@@ -214,6 +235,8 @@
   <form method="dialog" id="formEditProject">
     <label for="epTitle">제목</label>
     <input type="text" id="epTitle" autocomplete="off">
+    <label for="epTag">태그 — 이 원고가 속한 책·작품</label>
+    <input type="text" id="epTag" list="tagList" autocomplete="off" placeholder="예: 장편 《밤의 문》">
     <label for="epGoal">목표 매수 (200자 = 1매)</label>
     <input type="text" id="epGoal" inputmode="numeric" autocomplete="off" placeholder="예: 80">
     <div class="foot">
@@ -283,10 +306,25 @@
   function num(n){ return n.toLocaleString("ko-KR"); }
 
   /* ---------- 렌더 ---------- */
+  function renderTagList(){
+    var seen = {}, dl = $("tagList");
+    dl.innerHTML = "";
+    state.projects.concat(state.archive).forEach(function(x){
+      var t = (x.tag || "").trim();
+      if(t && !seen[t]){
+        seen[t] = 1;
+        var o = document.createElement("option");
+        o.value = t;
+        dl.appendChild(o);
+      }
+    });
+  }
+
   function render(){
     renderTasks();
     renderProjects();
     renderArchive();
+    renderTagList();
     $("cTasks").textContent = state.active.length || "";
     $("cProjects").textContent = state.projects.length || "";
     $("cArchive").textContent = state.archive.length || "";
@@ -393,6 +431,12 @@
       var t = document.createElement("div");
       t.className = "t";
       t.textContent = p.title;
+      if(p.tag){
+        t.appendChild(document.createTextNode(" "));
+        var tg = document.createElement("span");
+        tg.className = "tag"; tg.textContent = p.tag;
+        t.appendChild(tg);
+      }
       top.appendChild(t);
       if(goalChars){
         var pc = document.createElement("span");
@@ -455,7 +499,72 @@
     $("aEmpty").hidden = state.archive.length > 0;
     $("allAnalyze").hidden = state.archive.length === 0;
 
+    // 태그별로 묶기 (태그 없는 것은 개별)
+    var groups = [], byTag = {};
     state.archive.forEach(function(a){
+      var tg = (a.tag || "").trim();
+      if(!tg){ groups.push({ tag:null, items:[a] }); return; }
+      if(!byTag[tg]){ byTag[tg] = { tag:tg, items:[] }; groups.push(byTag[tg]); }
+      byTag[tg].items.push(a);
+    });
+
+    groups.forEach(function(g){
+      if(g.tag){
+        // 완료 시간순
+        g.items.sort(function(a,b){ return a.archivedAt - b.archivedAt; });
+        var chars = g.items.reduce(function(s,x){ return s + x.chars; }, 0);
+        var ms    = g.items.reduce(function(s,x){ return s + x.totalMs; }, 0);
+        var goal  = g.items.reduce(function(s,x){ return s + (x.goalPages||0); }, 0);
+        var runs  = g.items.reduce(function(s,x){ return s + x.tasks.length; }, 0);
+        var pages = chars / 200;
+        var hours = ms / 3600000;
+        var perHour = hours > 0 ? pages / hours : 0;
+        var span = Math.max(1, Math.round(
+          (g.items[g.items.length-1].archivedAt - g.items[0].startedAt) / 86400000));
+
+        var wrap = document.createElement("div");
+        wrap.className = "group";
+
+        var head = document.createElement("div");
+        head.className = "ghead";
+        var gn = document.createElement("span");
+        gn.className = "gname"; gn.textContent = g.tag;
+        var gs = document.createElement("span");
+        gs.className = "gsum";
+        gs.textContent = g.items.length + "편 · " + span + "일";
+        head.append(gn, gs);
+        wrap.appendChild(head);
+
+        var gst = document.createElement("div");
+        gst.className = "gstats";
+        gst.appendChild(gstat(pages.toFixed(1), goal ? "매 / 목표 " + goal : "원고지 매수"));
+        gst.appendChild(gstat(perHour ? perHour.toFixed(1) : "—", "시간당 매수"));
+        gst.appendChild(gstat(fmtShort(ms), "총 집필시간"));
+        gst.appendChild(gstat(runs + "회", "쓴 횟수"));
+        wrap.appendChild(gst);
+
+        var gb = document.createElement("button");
+        gb.className = "gbtn";
+        gb.textContent = "《" + g.tag + "》 전체 분석 프롬프트 복사";
+        gb.onclick = function(){ copyPrompt(buildPrompt(g.items, g.tag)); };
+        wrap.appendChild(gb);
+
+        g.items.forEach(function(a){ wrap.appendChild(archiveCard(a)); });
+        box.appendChild(wrap);
+      }else{
+        box.appendChild(archiveCard(g.items[0]));
+      }
+    });
+
+    function gstat(v, k){
+      var w = document.createElement("div");
+      var a = document.createElement("div"); a.className = "v"; a.textContent = v;
+      var b = document.createElement("div"); b.className = "k"; b.textContent = k;
+      w.append(a, b);
+      return w;
+    }
+
+    function archiveCard(a){
       var d = document.createElement("details");
       d.className = "arc";
 
@@ -504,8 +613,8 @@
       row.appendChild(b2);
       d.appendChild(row);
 
-      box.appendChild(d);
-    });
+      return d;
+    }
 
     function stat(v, k){
       var w = document.createElement("div");
@@ -630,7 +739,8 @@
     var v = $("pTitle").value.trim();
     if(!v) return;
     var g = parseFloat(($("pGoal").value || "").replace(/[^\d.]/g,"")) || 0;
-    var p = { id: uid(), title: v, goalPages: g, createdAt: Date.now() };
+    var p = { id: uid(), title: v, tag: $("pTag").value.trim(),
+              goalPages: g, createdAt: Date.now() };
     state.projects.push(p);
     state.active.push(makeTask(p, STEP));
     $("pTitle").value = "";
@@ -643,6 +753,7 @@
   function openProjectDialog(p){
     editingProject = p;
     $("epTitle").value = p.title;
+    $("epTag").value = p.tag || "";
     $("epGoal").value = p.goalPages || "";
     $("dlgProject").showModal();
   }
@@ -655,6 +766,7 @@
         if(t.projectId === editingProject.id) t.projectTitle = v;
       });
     }
+    editingProject.tag = $("epTag").value.trim();
     editingProject.goalPages = parseFloat(($("epGoal").value || "").replace(/[^\d.]/g,"")) || 0;
     setTimeout(render, 0);
   });
@@ -694,7 +806,7 @@
 
     state.archive.unshift({
       id: uid(), projectId: p.id, title: p.title,
-      goalPages: p.goalPages || 0,
+      tag: p.tag || "", goalPages: p.goalPages || 0,
       startedAt: p.createdAt, archivedAt: Date.now(),
       chars: chars, pages: pages, totalMs: totalMs, perHour: perHour,
       tasks: tasks
@@ -709,10 +821,23 @@
   }
 
   /* ---------- AI 프롬프트 ---------- */
-  function buildPrompt(entries){
+  function buildPrompt(entries, groupTag){
     var L = [];
     L.push("나는 초고를 400자 단위로 쌓아 올리는 방식으로 쓴다. 400자를 채우면 다음 800자, 그다음 1200자… 이런 식으로 목표를 400자씩 늘려가며 원고를 완성한다. 각 구간마다 실제로 글을 쓴 시간을 측정했다. 아래는 완성한 원고의 기록이다. (원고지 1매 = 200자)");
     L.push("");
+
+    if(groupTag){
+      var gc = entries.reduce(function(s,x){ return s + x.chars; }, 0);
+      var gm = entries.reduce(function(s,x){ return s + x.totalMs; }, 0);
+      var gp = gc / 200, gh = gm / 3600000;
+      L.push("이 원고들은 모두 《" + groupTag + "》라는 하나의 긴 작업(책·작품)에 속한다. 아래는 완료 시간순이다.");
+      L.push("");
+      L.push("### 《" + groupTag + "》 전체");
+      L.push("- 원고 " + entries.length + "편 / 총 " + num(gc) + "자 / 원고지 " + gp.toFixed(1) + "매");
+      L.push("- 총 집필시간 " + fmtShort(gm) + " / 평균 시간당 " + (gh > 0 ? (gp/gh).toFixed(2) : "0") + "매");
+      L.push("- 기간 " + stamp(entries[0].startedAt) + " ~ " + stamp(entries[entries.length-1].archivedAt));
+      L.push("");
+    }
 
     entries.forEach(function(a){
       var days = Math.max(1, Math.round((a.archivedAt - a.startedAt)/86400000));
@@ -756,6 +881,10 @@
     L.push("3. 시간대: 시간당 매수가 잘 나오는 시간대와 그렇지 않은 시간대. 앞으로 언제 쓰는 게 유리한가.");
     L.push("4. 세션 길이: 한 번 앉았을 때 얼마나 오래 쓰는 편인지, 그 길이가 적정한지.");
     L.push("5. 다음 원고에서 시간당 매수를 올리기 위해 바꿀 점 3가지를 구체적인 행동으로. 400자라는 단위 자체가 나에게 맞는지도 판단해줘.");
+
+    if(groupTag && entries.length > 1){
+      L.push("6. 《" + groupTag + "》 전체의 추이: 편이 거듭될수록 속도가 붙었나 떨어졌나. 작업 간격(한 편을 끝내고 다음 편을 시작하기까지)이 속도에 영향을 줬는지. 이 페이스라면 남은 작업을 언제쯤 끝낼 수 있을지.");
+    }
 
     return L.join("\n");
   }
