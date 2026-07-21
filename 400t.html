@@ -65,9 +65,10 @@
   .slot .row .done{color:var(--fg);font-weight:500}
   .empty-msg{color:var(--dim);font-size:13px;padding:24px 0;text-align:center}
 
-  .additem{display:flex;gap:8px;margin-bottom:16px}
+  .additem{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
   .additem input{flex:1;min-width:0}
-  input[type=text],input[type=url]{
+  .additem .full{flex:1 1 100%}
+  input[type=text],input[type=url],input[type=date]{
     background:var(--card);border:1px solid var(--line);border-radius:6px;
     padding:9px 11px;color:var(--fg);font:inherit;font-size:14px;width:100%;
   }
@@ -192,9 +193,10 @@
   <section id="viewProjects" hidden>
     <p class="hint">새 원고를 만들면 400자 쓰기가 시작됩니다. 완료할 때마다 다음 400자가 자동으로 이어집니다.</p>
     <form class="additem" id="formProject">
-      <input type="text" id="pTitle" placeholder="새 원고" autocomplete="off">
-      <input type="text" id="pTag" placeholder="태그" list="tagList" autocomplete="off" style="flex:0 0 110px">
-      <input type="text" id="pGoal" placeholder="매수" inputmode="numeric" autocomplete="off" style="flex:0 0 70px">
+      <input type="text" id="pTitle" class="full" placeholder="새 원고" autocomplete="off">
+      <input type="text" id="pTag" placeholder="태그" list="tagList" autocomplete="off">
+      <input type="text" id="pGoal" placeholder="매수" inputmode="numeric" autocomplete="off" style="flex:0 0 66px">
+      <input type="date" id="pDue" title="마감일" style="flex:0 0 auto">
       <button class="btn" type="submit">추가</button>
     </form>
     <datalist id="tagList"></datalist>
@@ -239,6 +241,8 @@
     <input type="text" id="epTag" list="tagList" autocomplete="off" placeholder="예: 장편 《밤의 문》">
     <label for="epGoal">목표 매수 (200자 = 1매)</label>
     <input type="text" id="epGoal" inputmode="numeric" autocomplete="off" placeholder="예: 80">
+    <label for="epDue">마감일</label>
+    <input type="date" id="epDue">
     <div class="foot">
       <button type="button" class="btn ghost" data-del>삭제</button>
       <button type="button" class="btn ghost" data-close>취소</button>
@@ -305,6 +309,26 @@
   }
   function num(n){ return n.toLocaleString("ko-KR"); }
 
+  /* 최근에 손댄 순 — 진행 중인 것이 항상 맨 위 */
+  function touchOf(t){
+    var last = (t.sessions||[])[(t.sessions||[]).length - 1];
+    return Math.max(t.touchedAt || 0, t.createdAt || 0,
+                    last ? (last.end || last.start) : 0);
+  }
+  function sortedActive(){
+    return state.active.slice().sort(function(a,b){
+      var ra = isRunning(a) ? 1 : 0, rb = isRunning(b) ? 1 : 0;
+      if(ra !== rb) return rb - ra;
+      return touchOf(b) - touchOf(a);
+    });
+  }
+  function dday(due){
+    if(!due) return null;
+    var d = new Date(due + "T00:00:00");
+    var t = new Date(); t.setHours(0,0,0,0);
+    return Math.round((d - t) / 86400000);
+  }
+
   /* ---------- 렌더 ---------- */
   function renderTagList(){
     var seen = {}, dl = $("tagList");
@@ -341,7 +365,7 @@
       ? "제목을 누르면 시작(링크가 있으면 함께 열림), 다시 누르면 정지. 완료하면 다음 " + STEP + "자가 이어집니다."
       : "";
 
-    state.active.forEach(function(t){
+    sortedActive().forEach(function(t){
       var run = isRunning(t);
       var el = document.createElement("div");
       el.className = "slot" + (run ? " running" : "");
@@ -426,7 +450,19 @@
     ul.innerHTML = "";
     $("pEmpty").hidden = state.projects.length > 0;
 
-    state.projects.forEach(function(p){
+    // 400자 쓰기 탭과 같은 순서
+    var order = {};
+    sortedActive().forEach(function(t, i){
+      if(!(t.projectId in order)) order[t.projectId] = i;
+    });
+    var ordered = state.projects.slice().sort(function(a,b){
+      var oa = (a.id in order) ? order[a.id] : 9999;
+      var ob = (b.id in order) ? order[b.id] : 9999;
+      if(oa !== ob) return oa - ob;
+      return (b.createdAt||0) - (a.createdAt||0);
+    });
+
+    ordered.forEach(function(p){
       var li = document.createElement("li");
       var s = projectStats(p.id);
       var goalChars = (p.goalPages || 0) * 200;
@@ -477,6 +513,13 @@
         if(perHour > 0) l2parts.push("예상 " + fmtShort((left/200) / perHour * 3600000));
       }else if(goalChars){
         l2parts.push("목표 달성");
+      }
+      var dd = dday(p.due);
+      if(dd !== null){
+        l2parts.push(dd > 0 ? "마감 D-" + dd : (dd === 0 ? "마감 오늘" : "마감 " + (-dd) + "일 지남"));
+        if(dd > 0 && goalChars && s.chars < goalChars){
+          l2parts.push("하루 " + (((goalChars - s.chars)/200) / dd).toFixed(1) + "매");
+        }
       }
       m.textContent = l1;
       m.appendChild(document.createElement("br"));
@@ -688,7 +731,7 @@
     return {
       id: uid(), projectId: p.id, projectTitle: p.title,
       target: target, text: num(target) + "자 쓰기",
-      link: "", createdAt: Date.now(), sessions: []
+      link: "", createdAt: Date.now(), touchedAt: Date.now(), sessions: []
     };
   }
 
@@ -706,6 +749,7 @@
     var v = $("tText").value.trim();
     if(v) editingTask.text = v;
     editingTask.link = $("tLink").value.trim();
+    editingTask.touchedAt = Date.now();
     setTimeout(render, 0);
   });
 
@@ -748,11 +792,12 @@
     if(!v) return;
     var g = parseFloat(($("pGoal").value || "").replace(/[^\d.]/g,"")) || 0;
     var p = { id: uid(), title: v, tag: $("pTag").value.trim(),
-              goalPages: g, createdAt: Date.now() };
+              goalPages: g, due: $("pDue").value || "", createdAt: Date.now() };
     state.projects.push(p);
     state.active.push(makeTask(p, STEP));
     $("pTitle").value = "";
     $("pGoal").value = "";
+    $("pDue").value = "";
     render();
     showTab("tasks");
   });
@@ -763,6 +808,7 @@
     $("epTitle").value = p.title;
     $("epTag").value = p.tag || "";
     $("epGoal").value = p.goalPages || "";
+    $("epDue").value = p.due || "";
     $("dlgProject").showModal();
   }
   $("formEditProject").addEventListener("submit", function(){
@@ -776,6 +822,7 @@
     }
     editingProject.tag = $("epTag").value.trim();
     editingProject.goalPages = parseFloat(($("epGoal").value || "").replace(/[^\d.]/g,"")) || 0;
+    editingProject.due = $("epDue").value || "";
     setTimeout(render, 0);
   });
   document.querySelector("[data-del]").onclick = function(){
@@ -814,7 +861,7 @@
 
     state.archive.unshift({
       id: uid(), projectId: p.id, title: p.title,
-      tag: p.tag || "", goalPages: p.goalPages || 0,
+      tag: p.tag || "", goalPages: p.goalPages || 0, due: p.due || "",
       startedAt: p.createdAt, archivedAt: Date.now(),
       chars: chars, pages: pages, totalMs: totalMs, perHour: perHour,
       tasks: tasks
