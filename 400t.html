@@ -309,18 +309,32 @@
   }
   function num(n){ return n.toLocaleString("ko-KR"); }
 
-  /* 최근에 손댄 순 — 진행 중인 것이 항상 맨 위 */
+  /* 마감일이 임박한 순 — 마감 없는 것은 뒤로 */
   function touchOf(t){
     var last = (t.sessions||[])[(t.sessions||[]).length - 1];
     return Math.max(t.touchedAt || 0, t.createdAt || 0,
                     last ? (last.end || last.start) : 0);
   }
+  function dueKey(due){
+    if(!due) return Infinity;
+    var d = new Date(due + "T00:00:00").getTime();
+    return isNaN(d) ? Infinity : d;
+  }
+  function projectOf(pid){
+    return state.projects.filter(function(x){ return x.id === pid; })[0];
+  }
+  function byDue(getDue, tieBreak){
+    return function(a, b){
+      var ka = dueKey(getDue(a)), kb = dueKey(getDue(b));
+      if(ka !== kb) return ka - kb;
+      return tieBreak(a, b);
+    };
+  }
   function sortedActive(){
-    return state.active.slice().sort(function(a,b){
-      var ra = isRunning(a) ? 1 : 0, rb = isRunning(b) ? 1 : 0;
-      if(ra !== rb) return rb - ra;
-      return touchOf(b) - touchOf(a);
-    });
+    return state.active.slice().sort(byDue(
+      function(t){ var p = projectOf(t.projectId); return p && p.due; },
+      function(a, b){ return touchOf(b) - touchOf(a); }
+    ));
   }
   function dday(due){
     if(!due) return null;
@@ -450,17 +464,11 @@
     ul.innerHTML = "";
     $("pEmpty").hidden = state.projects.length > 0;
 
-    // 400자 쓰기 탭과 같은 순서
-    var order = {};
-    sortedActive().forEach(function(t, i){
-      if(!(t.projectId in order)) order[t.projectId] = i;
-    });
-    var ordered = state.projects.slice().sort(function(a,b){
-      var oa = (a.id in order) ? order[a.id] : 9999;
-      var ob = (b.id in order) ? order[b.id] : 9999;
-      if(oa !== ob) return oa - ob;
-      return (b.createdAt||0) - (a.createdAt||0);
-    });
+    // 마감일이 임박한 순 (400자 쓰기 탭과 동일 기준)
+    var ordered = state.projects.slice().sort(byDue(
+      function(p){ return p.due; },
+      function(a, b){ return (b.createdAt||0) - (a.createdAt||0); }
+    ));
 
     ordered.forEach(function(p){
       var li = document.createElement("li");
