@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>400</title>
+<style>
+  :root{
+    --bg:#faf9f7; --fg:#1c1b19; --dim:#8b8781; --line:#e3e0db;
+    --card:#fff; --accent:#1c1b19; --run:#c96442; --runbg:#fdf3ef;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#141413; --fg:#eeece7; --dim:#8b8781; --line:#2c2b28;
+           --card:#1c1b19; --accent:#eeece7; --run:#d97757; --runbg:#241a16; }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:28px 20px 80px}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px}
+  h1{font-size:17px;margin:0;letter-spacing:.02em;font-weight:600}
+  .io{display:flex;gap:14px}
+  .io button{background:none;border:0;color:var(--dim);font-size:12px;cursor:pointer;padding:0;font-family:inherit}
+  .io button:hover{color:var(--fg)}
+
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:22px}
+  .tabs button{
+    background:none;border:0;border-bottom:2px solid transparent;
+    color:var(--dim);padding:8px 13px 9px;font-size:14px;cursor:pointer;margin-bottom:-1px;
+    font-family:inherit;
+  }
+  .tabs button.on{color:var(--fg);border-bottom-color:var(--fg)}
+  .tabs .count{font-size:11px;color:var(--dim);margin-left:5px}
+
+  .hint{color:var(--dim);font-size:12.5px;margin:0 0 18px;line-height:1.6}
+
+  .slot{
+    background:var(--card);border:1px solid var(--line);border-radius:8px;
+    padding:14px 15px;margin-bottom:9px;transition:background .15s,border-color .15s;
+  }
+  .slot.running{background:var(--runbg);border-color:var(--run)}
+  .slot .proj{font-size:11.5px;color:var(--dim);margin-bottom:3px;letter-spacing:.02em;
+    display:flex;justify-content:space-between;gap:10px}
+  .slot .elapsed{font-variant-numeric:tabular-nums;flex-shrink:0}
+  .slot.running .elapsed{color:var(--run)}
+  .slot .task{
+    font-size:15.5px;line-height:1.45;word-break:break-word;cursor:pointer;
+    display:inline-block;border-bottom:1px solid transparent;
+  }
+  .slot .task:hover{border-bottom-color:var(--line)}
+  .slot.running .task{color:var(--run);font-weight:600}
+  .slot.running .task::before{content:"● ";font-size:9px;vertical-align:middle}
+  .slot .bar{height:2px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
+  .slot .bar i{display:block;height:100%;background:var(--dim);border-radius:2px}
+  .slot.running .bar i{background:var(--run)}
+  .slot .row{display:flex;gap:13px;margin-top:11px;flex-wrap:wrap}
+  .slot .row button, .slot .row a{
+    background:none;border:0;padding:0;font:inherit;font-size:12.5px;
+    color:var(--dim);cursor:pointer;text-decoration:none;
+  }
+  .slot .row button:hover,.slot .row a:hover{color:var(--fg)}
+  .slot .row .done{color:var(--fg);font-weight:500}
+  .empty-msg{color:var(--dim);font-size:13px;padding:24px 0;text-align:center}
+
+  .additem{display:flex;gap:8px;margin-bottom:16px}
+  .additem input{flex:1;min-width:0}
+  input[type=text],input[type=url]{
+    background:var(--card);border:1px solid var(--line);border-radius:6px;
+    padding:9px 11px;color:var(--fg);font:inherit;font-size:14px;width:100%;
+  }
+  input:focus{outline:none;border-color:var(--dim)}
+  .btn{
+    background:var(--accent);color:var(--bg);border:0;border-radius:6px;
+    padding:9px 15px;font:inherit;font-size:13.5px;cursor:pointer;white-space:nowrap;
+  }
+  .btn.ghost{background:none;color:var(--dim);border:1px solid var(--line)}
+
+  .plist{list-style:none;margin:0;padding:0}
+  .plist li{
+    display:flex;align-items:center;gap:10px;
+    padding:11px 2px;border-bottom:1px solid var(--line);
+  }
+  .plist{border-bottom:0}
+  .plist li{display:block;padding:14px 0}
+  .plist .top{display:flex;align-items:baseline;gap:10px}
+  .plist .t{flex:1;min-width:0;word-break:break-word;font-size:15px}
+  .plist .pct{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;flex-shrink:0}
+  .plist .gbar{height:3px;background:var(--line);border-radius:3px;margin:9px 0 8px;overflow:hidden}
+  .plist .gbar i{display:block;height:100%;background:var(--fg);border-radius:3px;transition:width .3s}
+  .plist .meta{font-size:11.5px;color:var(--dim);line-height:1.7}
+  .plist .acts{display:flex;gap:11px;flex-shrink:0;margin-top:7px}
+  .plist .acts button{background:none;border:0;padding:0;color:var(--dim);
+    font:inherit;font-size:12.5px;cursor:pointer}
+  .plist .acts button:hover{color:var(--fg)}
+
+  .log{margin-top:30px;border-top:1px solid var(--line);padding-top:14px}
+  .log h2{font-size:12px;color:var(--dim);font-weight:500;margin:0 0 9px}
+  .log ul{list-style:none;margin:0;padding:0}
+  .log li{font-size:12.5px;color:var(--dim);padding:3px 0;display:flex;gap:9px}
+  .log li .d{opacity:.6;flex-shrink:0}
+  .log li .x{flex:1;min-width:0}
+  .log li .m{opacity:.6;flex-shrink:0;font-variant-numeric:tabular-nums}
+
+  details.arc{border:1px solid var(--line);border-radius:8px;background:var(--card);
+    margin-bottom:9px;padding:12px 14px}
+  details.arc summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;
+    gap:10px;align-items:baseline}
+  details.arc summary::-webkit-details-marker{display:none}
+  details.arc .name{font-size:15px;font-weight:500}
+  details.arc .sm{font-size:11.5px;color:var(--dim);flex-shrink:0;font-variant-numeric:tabular-nums}
+  .stats{display:flex;gap:0;margin-top:13px;border-top:1px solid var(--line);padding-top:13px}
+  .stats div{flex:1;text-align:center}
+  .stats .v{font-size:19px;font-variant-numeric:tabular-nums;line-height:1.25}
+  .stats .k{font-size:11px;color:var(--dim);margin-top:2px}
+  details.arc ul{list-style:none;margin:13px 0 0;padding:12px 0 0;border-top:1px solid var(--line)}
+  details.arc li{font-size:13px;padding:4px 0;display:flex;gap:10px;color:var(--dim)}
+  details.arc li .x{flex:1;min-width:0;color:var(--fg)}
+  details.arc li .m{flex-shrink:0;font-variant-numeric:tabular-nums}
+  details.arc .arow{display:flex;gap:12px;margin-top:13px}
+  details.arc .arow button{background:none;border:0;padding:0;color:var(--dim);
+    font:inherit;font-size:12.5px;cursor:pointer}
+  details.arc .arow button:hover{color:var(--fg)}
+
+  dialog{
+    border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--fg);
+    padding:20px;width:min(420px,calc(100vw - 40px));
+  }
+  dialog::backdrop{background:rgba(0,0,0,.35)}
+  dialog h3{margin:0 0 4px;font-size:15px;font-weight:600}
+  dialog .sub{color:var(--dim);font-size:12.5px;margin:0 0 14px}
+  dialog label{display:block;font-size:12px;color:var(--dim);margin:12px 0 5px}
+  dialog .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  .toast{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:26px;
+    background:var(--accent);color:var(--bg);padding:9px 16px;border-radius:20px;
+    font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:99;
+  }
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>400</h1>
+    <div class="io">
+      <button id="btnExport">내보내기</button>
+      <button id="btnImport">불러오기</button>
+      <input type="file" id="fileIn" accept="application/json" hidden>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button id="tabTasks" class="on">400자 쓰기 <span class="count" id="cTasks"></span></button>
+    <button id="tabProjects">프로젝트 <span class="count" id="cProjects"></span></button>
+    <button id="tabArchive">아카이브 <span class="count" id="cArchive"></span></button>
+  </div>
+
+  <!-- 400자 쓰기 -->
+  <section id="viewTasks">
+    <p class="hint" id="stateHint"></p>
+    <div id="slots"></div>
+    <p class="empty-msg" id="tEmpty" hidden>프로젝트 탭에서 새 원고를 만드세요.</p>
+    <div class="log" id="logBox" hidden>
+      <h2>최근 완료</h2>
+      <ul id="logList"></ul>
+    </div>
+  </section>
+
+  <!-- 프로젝트 -->
+  <section id="viewProjects" hidden>
+    <p class="hint">새 원고를 만들면 400자 쓰기가 시작됩니다. 완료할 때마다 다음 400자가 자동으로 이어집니다.</p>
+    <form class="additem" id="formProject">
+      <input type="text" id="pTitle" placeholder="새 원고" autocomplete="off">
+      <input type="text" id="pGoal" placeholder="목표 매수" inputmode="numeric" autocomplete="off" style="flex:0 0 88px">
+      <button class="btn" type="submit">추가</button>
+    </form>
+    <ul class="plist" id="projectList"></ul>
+    <p class="empty-msg" id="pEmpty" hidden>아직 원고가 없습니다.</p>
+  </section>
+
+  <!-- 아카이브 -->
+  <section id="viewArchive" hidden>
+    <p class="hint">완료한 원고의 분량과 속도입니다. 원고지 1매 = 200자.</p>
+    <div id="archiveList"></div>
+    <p class="empty-msg" id="aEmpty" hidden>아직 완료한 원고가 없습니다.</p>
+    <div id="allAnalyze" hidden style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">
+      <button class="btn ghost" id="btnAnalyzeAll">전체 분석 프롬프트 복사</button>
+    </div>
+  </section>
+</div>
+
+<!-- 할 일 수정 -->
+<dialog id="dlgTask">
+  <h3 id="dlgTaskTitle">수정</h3>
+  <p class="sub" id="dlgTaskSub"></p>
+  <form method="dialog" id="formTask">
+    <label for="tText">할 일</label>
+    <input type="text" id="tText" autocomplete="off">
+    <label for="tLink">링크 (선택)</label>
+    <input type="url" id="tLink" autocomplete="off" placeholder="https://">
+    <div class="foot">
+      <button type="button" class="btn ghost" data-close>취소</button>
+      <button class="btn" value="ok">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 프로젝트 수정 -->
+<dialog id="dlgProject">
+  <h3>원고 수정</h3>
+  <form method="dialog" id="formEditProject">
+    <label for="epTitle">제목</label>
+    <input type="text" id="epTitle" autocomplete="off">
+    <label for="epGoal">목표 매수 (200자 = 1매)</label>
+    <input type="text" id="epGoal" inputmode="numeric" autocomplete="off" placeholder="예: 80">
+    <div class="foot">
+      <button type="button" class="btn ghost" data-del>삭제</button>
+      <button type="button" class="btn ghost" data-close>취소</button>
+      <button class="btn" value="ok">저장</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var KEY = "400-app-v1";
+  var STEP = 400;
+  var mem = null;
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return mem || { projects:[], active:[], history:[], archive:[] };
+  }
+  function save(){
+    mem = state;
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  var state = load();
+  ["projects","active","history","archive"].forEach(function(k){
+    if(!Array.isArray(state[k])) state[k] = [];
+  });
+
+  var $ = function(id){ return document.getElementById(id); };
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  /* ---------- 시간 ---------- */
+  function taskMs(t){
+    var ms = 0;
+    (t.sessions||[]).forEach(function(s){ ms += (s.end || Date.now()) - s.start; });
+    return ms;
+  }
+  function isRunning(t){
+    var s = (t.sessions||[])[(t.sessions||[]).length - 1];
+    return !!(s && !s.end);
+  }
+  function fmt(ms){
+    var sec = Math.floor(ms/1000);
+    var h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+    if(h) return h + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+    return m + ":" + String(s).padStart(2,"0");
+  }
+  function fmtShort(ms){
+    var min = Math.round(ms/60000);
+    if(min < 60) return min + "분";
+    return Math.floor(min/60) + "시간 " + (min%60) + "분";
+  }
+  function stamp(ts){
+    var d = new Date(ts);
+    return (d.getMonth()+1) + "/" + d.getDate() + " " +
+           String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+  }
+  function num(n){ return n.toLocaleString("ko-KR"); }
+
+  /* ---------- 렌더 ---------- */
+  function render(){
+    renderTasks();
+    renderProjects();
+    renderArchive();
+    $("cTasks").textContent = state.active.length || "";
+    $("cProjects").textContent = state.projects.length || "";
+    $("cArchive").textContent = state.archive.length || "";
+    save();
+  }
+
+  function renderTasks(){
+    var box = $("slots");
+    box.innerHTML = "";
+    $("tEmpty").hidden = state.active.length > 0;
+
+    var written = state.history.reduce(function(a,h){ return a + STEP; }, 0);
+    $("stateHint").textContent = state.active.length
+      ? "제목을 누르면 시작(링크가 있으면 함께 열림), 다시 누르면 정지. 완료하면 다음 " + STEP + "자가 이어집니다."
+      : "";
+
+    state.active.forEach(function(t){
+      var run = isRunning(t);
+      var el = document.createElement("div");
+      el.className = "slot" + (run ? " running" : "");
+      el.dataset.id = t.id;
+
+      var head = document.createElement("div");
+      head.className = "proj";
+      var pn = document.createElement("span");
+      pn.textContent = t.projectTitle;
+      head.appendChild(pn);
+      var ela = document.createElement("span");
+      ela.className = "elapsed";
+      ela.textContent = fmt(taskMs(t));
+      head.appendChild(ela);
+      el.appendChild(head);
+
+      var task = document.createElement("div");
+      task.className = "task";
+      task.textContent = t.text;
+      task.title = run ? "누르면 정지" : (t.link ? "누르면 시작하고 링크 열기" : "누르면 시작");
+      task.onclick = function(){ toggleRun(t.id); };
+      el.appendChild(task);
+
+      var prev = t.target - STEP;
+      if(prev > 0){
+        var bar = document.createElement("div");
+        bar.className = "bar";
+        var i = document.createElement("i");
+        i.style.width = Math.min(100, (prev / t.target) * 100) + "%";
+        bar.appendChild(i);
+        el.appendChild(bar);
+      }
+
+      var row = document.createElement("div");
+      row.className = "row";
+
+      var bDone = document.createElement("button");
+      bDone.className = "done";
+      bDone.textContent = "완료";
+      bDone.onclick = function(){ completeTask(t.id); };
+      row.appendChild(bDone);
+
+      var bEdit = document.createElement("button");
+      bEdit.textContent = "수정";
+      bEdit.onclick = function(){ editTask(t); };
+      row.appendChild(bEdit);
+
+      el.appendChild(row);
+      box.appendChild(el);
+    });
+
+    var logBox = $("logBox"), logList = $("logList");
+    if(state.history.length){
+      logBox.hidden = false;
+      logList.innerHTML = "";
+      state.history.slice(0, 10).forEach(function(h){
+        var li = document.createElement("li");
+        var d = document.createElement("span"); d.className = "d";
+        d.textContent = stamp(h.completedAt).split(" ")[0];
+        var x = document.createElement("span"); x.className = "x";
+        x.textContent = h.projectTitle + " · " + h.text;
+        var m = document.createElement("span"); m.className = "m";
+        m.textContent = fmtShort(h.ms);
+        li.append(d, x, m);
+        logList.appendChild(li);
+      });
+    }else{
+      logBox.hidden = true;
+    }
+  }
+
+  function renderProjects(){
+    var ul = $("projectList");
+    ul.innerHTML = "";
+    $("pEmpty").hidden = state.projects.length > 0;
+
+    state.projects.forEach(function(p){
+      var li = document.createElement("li");
+      var s = projectStats(p.id);
+      var goalChars = (p.goalPages || 0) * 200;
+      var pages = s.chars / 200;
+      var hours = s.ms / 3600000;
+      var perHour = hours > 0 ? pages / hours : 0;
+
+      var top = document.createElement("div");
+      top.className = "top";
+      var t = document.createElement("div");
+      t.className = "t";
+      t.textContent = p.title;
+      top.appendChild(t);
+      if(goalChars){
+        var pc = document.createElement("span");
+        pc.className = "pct";
+        pc.textContent = Math.min(999, Math.round(s.chars / goalChars * 100)) + "%";
+        top.appendChild(pc);
+      }
+      li.appendChild(top);
+
+      if(goalChars){
+        var bar = document.createElement("div");
+        bar.className = "gbar";
+        var i = document.createElement("i");
+        i.style.width = Math.min(100, s.chars / goalChars * 100) + "%";
+        bar.appendChild(i);
+        li.appendChild(bar);
+      }
+
+      var m = document.createElement("div");
+      m.className = "meta";
+      var l1 = pages.toFixed(1) + "매 / " + (goalChars ? p.goalPages + "매" : "목표 없음") +
+               "  ·  " + num(s.chars) + "자" +
+               (goalChars ? " / " + num(goalChars) + "자" : "");
+      var l2parts = [];
+      l2parts.push(s.ms ? fmtShort(s.ms) : "0분");
+      l2parts.push(perHour > 0 ? "시간당 " + perHour.toFixed(1) + "매" : "시간당 —");
+      if(goalChars && s.chars < goalChars){
+        var left = (goalChars - s.chars);
+        l2parts.push("남은 " + (left/200).toFixed(1) + "매 (" + Math.ceil(left/400) + "번)");
+        if(perHour > 0) l2parts.push("예상 " + fmtShort((left/200) / perHour * 3600000));
+      }else if(goalChars){
+        l2parts.push("목표 달성");
+      }
+      m.textContent = l1;
+      m.appendChild(document.createElement("br"));
+      m.appendChild(document.createTextNode(l2parts.join("  ·  ")));
+      li.appendChild(m);
+
+      var acts = document.createElement("div");
+      acts.className = "acts";
+
+      var bEdit = document.createElement("button");
+      bEdit.textContent = "수정";
+      bEdit.onclick = function(){ openProjectDialog(p); };
+      acts.appendChild(bEdit);
+
+      var bDone = document.createElement("button");
+      bDone.textContent = "완료";
+      bDone.onclick = function(){ archiveProject(p); };
+      acts.appendChild(bDone);
+
+      li.appendChild(acts);
+      ul.appendChild(li);
+    });
+  }
+
+  function renderArchive(){
+    var box = $("archiveList");
+    box.innerHTML = "";
+    $("aEmpty").hidden = state.archive.length > 0;
+    $("allAnalyze").hidden = state.archive.length === 0;
+
+    state.archive.forEach(function(a){
+      var d = document.createElement("details");
+      d.className = "arc";
+
+      var s = document.createElement("summary");
+      var n = document.createElement("span");
+      n.className = "name"; n.textContent = a.title;
+      var sm = document.createElement("span");
+      sm.className = "sm";
+      sm.textContent = num(a.chars) + "자 · " + fmtShort(a.totalMs);
+      s.append(n, sm);
+      d.appendChild(s);
+
+      var st = document.createElement("div");
+      st.className = "stats";
+      st.appendChild(stat(a.pages.toFixed(1), a.goalPages ? "매 / 목표 " + a.goalPages + "매" : "원고지 매수"));
+      st.appendChild(stat(a.perHour ? a.perHour.toFixed(1) : "—", "시간당 매수"));
+      st.appendChild(stat(a.tasks.length + "회", "쓴 횟수"));
+      d.appendChild(st);
+
+      var ul = document.createElement("ul");
+      a.tasks.forEach(function(t){
+        var li = document.createElement("li");
+        var dd = document.createElement("span");
+        dd.textContent = stamp(t.completedAt).split(" ")[0];
+        var x = document.createElement("span"); x.className = "x"; x.textContent = t.text;
+        var m = document.createElement("span"); m.className = "m";
+        m.textContent = fmtShort(t.ms) + (t.sessionCount > 1 ? " ·" + t.sessionCount + "회" : "");
+        li.append(dd, x, m);
+        ul.appendChild(li);
+      });
+      if(a.tasks.length) d.appendChild(ul);
+
+      var row = document.createElement("div");
+      row.className = "arow";
+      var b1 = document.createElement("button");
+      b1.textContent = "AI 분석 프롬프트 복사";
+      b1.onclick = function(){ copyPrompt(buildPrompt([a])); };
+      row.appendChild(b1);
+      var b2 = document.createElement("button");
+      b2.textContent = "삭제";
+      b2.onclick = function(){
+        if(!confirm("이 기록을 삭제할까요?")) return;
+        state.archive = state.archive.filter(function(x){ return x.id !== a.id; });
+        render();
+      };
+      row.appendChild(b2);
+      d.appendChild(row);
+
+      box.appendChild(d);
+    });
+
+    function stat(v, k){
+      var w = document.createElement("div");
+      var a = document.createElement("div"); a.className = "v"; a.textContent = v;
+      var b = document.createElement("div"); b.className = "k"; b.textContent = k;
+      w.append(a, b);
+      return w;
+    }
+  }
+
+  function projectStats(pid){
+    var items = state.history.filter(function(h){ return h.projectId === pid; });
+    var ms = items.reduce(function(a,b){ return a + b.ms; }, 0);
+    // 진행 중인 것의 시간도 합산
+    state.active.forEach(function(t){
+      if(t.projectId === pid) ms += taskMs(t);
+    });
+    return { count: items.length, chars: items.length * STEP, ms: ms, items: items };
+  }
+
+  /* ---------- 시작/정지 ---------- */
+  function toggleRun(id){
+    var t = state.active.filter(function(x){ return x.id === id; })[0];
+    if(!t) return;
+    if(!t.sessions) t.sessions = [];
+    if(isRunning(t)){
+      stopRun(t);
+      toast("정지 · " + fmt(taskMs(t)));
+    }else{
+      state.active.forEach(function(o){ if(isRunning(o)) stopRun(o); });
+      t.sessions.push({ start: Date.now(), end: null });
+      if(t.link){
+        window.open(t.link, "_blank", "noopener,noreferrer");
+        toast("시작 · 링크를 열었습니다");
+      }else{
+        toast("시작");
+      }
+    }
+    render();
+  }
+  function stopRun(t){
+    var s = t.sessions[t.sessions.length - 1];
+    if(s && !s.end) s.end = Date.now();
+  }
+
+  setInterval(function(){
+    var any = false;
+    state.active.forEach(function(t){
+      if(isRunning(t)){
+        any = true;
+        var el = document.querySelector('.slot[data-id="'+t.id+'"] .elapsed');
+        if(el) el.textContent = fmt(taskMs(t));
+      }
+    });
+    if(any){
+      if(!$("viewProjects").hidden) renderProjects();
+      save();
+    }
+  }, 1000);
+
+  /* ---------- 할 일 ---------- */
+  function makeTask(p, target){
+    return {
+      id: uid(), projectId: p.id, projectTitle: p.title,
+      target: target, text: num(target) + "자 쓰기",
+      link: "", createdAt: Date.now(), sessions: []
+    };
+  }
+
+  var editingTask = null;
+  function editTask(t){
+    editingTask = t;
+    $("dlgTaskTitle").textContent = "수정";
+    $("dlgTaskSub").textContent = t.projectTitle;
+    $("tText").value = t.text;
+    $("tLink").value = t.link || "";
+    $("dlgTask").showModal();
+  }
+  $("formTask").addEventListener("submit", function(){
+    if(!editingTask) return;
+    var v = $("tText").value.trim();
+    if(v) editingTask.text = v;
+    editingTask.link = $("tLink").value.trim();
+    setTimeout(render, 0);
+  });
+
+  document.querySelectorAll("[data-close]").forEach(function(b){
+    b.onclick = function(){ b.closest("dialog").close(); };
+  });
+
+  function completeTask(id){
+    var t = state.active.filter(function(x){ return x.id === id; })[0];
+    if(!t) return;
+    if(isRunning(t)) stopRun(t);
+
+    state.history.unshift({
+      id: t.id, projectId: t.projectId, projectTitle: t.projectTitle,
+      text: t.text, target: t.target, ms: taskMs(t),
+      sessionCount: (t.sessions||[]).length,
+      sessions: (t.sessions||[]).map(function(s){ return {start:s.start, end:s.end}; }),
+      createdAt: t.createdAt, completedAt: Date.now()
+    });
+
+    var idx = state.active.findIndex(function(x){ return x.id === id; });
+    var p = state.projects.filter(function(x){ return x.id === t.projectId; })[0];
+
+    if(p){
+      var next = makeTask(p, t.target + STEP);
+      next.link = t.link || "";
+      state.active[idx] = next;   // 같은 자리에서 이어짐
+      toast(num(t.target) + "자 완료 — 다음 " + num(next.target) + "자");
+    }else{
+      state.active.splice(idx, 1);
+      toast("완료");
+    }
+    render();
+  }
+
+  /* ---------- 프로젝트 ---------- */
+  $("formProject").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    var v = $("pTitle").value.trim();
+    if(!v) return;
+    var g = parseFloat(($("pGoal").value || "").replace(/[^\d.]/g,"")) || 0;
+    var p = { id: uid(), title: v, goalPages: g, createdAt: Date.now() };
+    state.projects.push(p);
+    state.active.push(makeTask(p, STEP));
+    $("pTitle").value = "";
+    $("pGoal").value = "";
+    render();
+    showTab("tasks");
+  });
+
+  var editingProject = null;
+  function openProjectDialog(p){
+    editingProject = p;
+    $("epTitle").value = p.title;
+    $("epGoal").value = p.goalPages || "";
+    $("dlgProject").showModal();
+  }
+  $("formEditProject").addEventListener("submit", function(){
+    if(!editingProject) return;
+    var v = $("epTitle").value.trim();
+    if(v){
+      editingProject.title = v;
+      state.active.forEach(function(t){
+        if(t.projectId === editingProject.id) t.projectTitle = v;
+      });
+    }
+    editingProject.goalPages = parseFloat(($("epGoal").value || "").replace(/[^\d.]/g,"")) || 0;
+    setTimeout(render, 0);
+  });
+  document.querySelector("[data-del]").onclick = function(){
+    if(!editingProject) return;
+    if(!confirm("삭제할까요? 아카이브 기록은 남습니다.")) return;
+    var pid = editingProject.id;
+    state.projects = state.projects.filter(function(x){ return x.id !== pid; });
+    state.active   = state.active.filter(function(x){ return x.projectId !== pid; });
+    $("dlgProject").close();
+    render();
+  };
+
+  function archiveProject(p){
+    var s = projectStats(p.id);
+    var tasks = s.items.slice().sort(function(a,b){ return a.completedAt - b.completedAt; });
+
+    // 진행 중이던 미완 분량의 시간도 포함
+    var pending = state.active.filter(function(t){ return t.projectId === p.id; });
+    pending.forEach(function(t){
+      if(isRunning(t)) stopRun(t);
+      if(taskMs(t) > 0){
+        tasks.push({
+          text: t.text + " (미완)", target: t.target, ms: taskMs(t),
+          sessionCount: (t.sessions||[]).length, sessions: (t.sessions||[]),
+          createdAt: t.createdAt, completedAt: Date.now(), unfinished: true
+        });
+      }
+    });
+    state.active = state.active.filter(function(t){ return t.projectId !== p.id; });
+
+    var chars = s.count * STEP;
+    var totalMs = tasks.reduce(function(a,b){ return a + b.ms; }, 0);
+    var pages = chars / 200;
+    var hours = totalMs / 3600000;
+    var perHour = hours > 0 ? pages / hours : 0;
+
+    state.archive.unshift({
+      id: uid(), projectId: p.id, title: p.title,
+      goalPages: p.goalPages || 0,
+      startedAt: p.createdAt, archivedAt: Date.now(),
+      chars: chars, pages: pages, totalMs: totalMs, perHour: perHour,
+      tasks: tasks
+    });
+
+    state.projects = state.projects.filter(function(x){ return x.id !== p.id; });
+    state.history  = state.history.filter(function(h){ return h.projectId !== p.id; });
+
+    render();
+    showTab("archive");
+    toast(num(chars) + "자 · " + pages.toFixed(1) + "매");
+  }
+
+  /* ---------- AI 프롬프트 ---------- */
+  function buildPrompt(entries){
+    var L = [];
+    L.push("나는 초고를 400자 단위로 쌓아 올리는 방식으로 쓴다. 400자를 채우면 다음 800자, 그다음 1200자… 이런 식으로 목표를 400자씩 늘려가며 원고를 완성한다. 각 구간마다 실제로 글을 쓴 시간을 측정했다. 아래는 완성한 원고의 기록이다. (원고지 1매 = 200자)");
+    L.push("");
+
+    entries.forEach(function(a){
+      var days = Math.max(1, Math.round((a.archivedAt - a.startedAt)/86400000));
+      L.push("## 원고: " + a.title);
+      L.push("- 기간: " + stamp(a.startedAt) + " ~ " + stamp(a.archivedAt) + " (약 " + days + "일)");
+      L.push("- 최종 분량: " + num(a.chars) + "자 / 원고지 " + a.pages.toFixed(1) + "매" +
+             (a.goalPages ? " (목표 " + a.goalPages + "매, 달성률 " + Math.round(a.pages/a.goalPages*100) + "%)" : ""));
+      L.push("- 총 집필시간: " + fmtShort(a.totalMs) + " / 시간당 " + a.perHour.toFixed(2) + "매");
+      L.push("");
+      L.push("| 구간 | 집필시간 | 착수 횟수 | 첫 시작 | 완료 |");
+      L.push("|---|---|---|---|---|");
+      a.tasks.forEach(function(t){
+        var first = (t.sessions && t.sessions[0]) ? stamp(t.sessions[0].start) : "-";
+        L.push("| " + t.text.replace(/\|/g,"/") + " | " + fmtShort(t.ms) + " | " +
+               (t.sessionCount||1) + "회 | " + first + " | " + stamp(t.completedAt) + " |");
+      });
+      L.push("");
+
+      var byHour = {};
+      a.tasks.forEach(function(t){
+        (t.sessions||[]).forEach(function(s){
+          var h = new Date(s.start).getHours();
+          byHour[h] = (byHour[h] || 0) + ((s.end||s.start) - s.start);
+        });
+      });
+      var hours = Object.keys(byHour).sort(function(x,y){ return byHour[y]-byHour[x]; }).slice(0,5);
+      if(hours.length){
+        L.push("주로 쓴 시간대: " + hours.map(function(h){
+          return h + "시(" + fmtShort(byHour[h]) + ")";
+        }).join(", "));
+        L.push("");
+      }
+    });
+
+    L.push("---");
+    L.push("");
+    L.push("이 기록을 근거로 분석해줘. 일반적인 글쓰기 조언 말고, 위 숫자에서 실제로 읽히는 것만.");
+    L.push("");
+    L.push("1. 속도 곡선: 구간이 뒤로 갈수록 400자를 쓰는 데 걸린 시간이 늘었나 줄었나. 유독 오래 걸린 구간이 어디이고 그 지점에서 원고에 무슨 일이 있었을지 가설.");
+    L.push("2. 착수 저항: 한 구간을 여러 번 나눠 붙든 경우(착수 횟수가 많은 구간)와 한 번에 끝낸 경우의 차이. 나는 어느 쪽일 때 더 빨랐나.");
+    L.push("3. 시간대: 시간당 매수가 잘 나오는 시간대와 그렇지 않은 시간대. 앞으로 언제 쓰는 게 유리한가.");
+    L.push("4. 세션 길이: 한 번 앉았을 때 얼마나 오래 쓰는 편인지, 그 길이가 적정한지.");
+    L.push("5. 다음 원고에서 시간당 매수를 올리기 위해 바꿀 점 3가지를 구체적인 행동으로. 400자라는 단위 자체가 나에게 맞는지도 판단해줘.");
+
+    return L.join("\n");
+  }
+
+  function copyPrompt(text){
+    function ok(){ toast("복사했습니다 — AI 창에 붙여넣으세요"); }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(ok, fallback);
+    }else fallback();
+    function fallback(){
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand("copy"); ok(); }catch(e){ toast("복사 실패"); }
+      document.body.removeChild(ta);
+    }
+  }
+  $("btnAnalyzeAll").onclick = function(){ copyPrompt(buildPrompt(state.archive)); };
+
+  /* ---------- 탭 ---------- */
+  function showTab(which){
+    $("viewTasks").hidden    = which !== "tasks";
+    $("viewProjects").hidden = which !== "projects";
+    $("viewArchive").hidden  = which !== "archive";
+    $("tabTasks").classList.toggle("on", which === "tasks");
+    $("tabProjects").classList.toggle("on", which === "projects");
+    $("tabArchive").classList.toggle("on", which === "archive");
+  }
+  $("tabTasks").onclick = function(){ showTab("tasks"); };
+  $("tabProjects").onclick = function(){ showTab("projects"); };
+  $("tabArchive").onclick = function(){ showTab("archive"); };
+
+  /* ---------- 내보내기 / 불러오기 ---------- */
+  $("btnExport").onclick = function(){
+    var blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    var d = new Date();
+    a.download = "400-" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") +
+                 String(d.getDate()).padStart(2,"0") + ".json";
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+  };
+  $("btnImport").onclick = function(){ $("fileIn").click(); };
+  $("fileIn").onchange = function(){
+    var f = this.files[0];
+    if(!f) return;
+    var r = new FileReader();
+    r.onload = function(){
+      try{
+        var d = JSON.parse(r.result);
+        if(!d || !Array.isArray(d.projects)) throw 0;
+        state = { projects:d.projects||[], active:d.active||[],
+                  history:d.history||[], archive:d.archive||[] };
+        render();
+        toast("불러왔습니다");
+      }catch(e){ toast("파일을 읽을 수 없습니다"); }
+    };
+    r.readAsText(f);
+    this.value = "";
+  };
+
+  var toastTimer;
+  function toast(msg){
+    var el = $("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 1800);
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
