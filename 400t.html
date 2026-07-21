@@ -378,7 +378,7 @@
 
     var written = state.history.reduce(function(a,h){ return a + STEP; }, 0);
     $("stateHint").textContent = state.active.length
-      ? "제목을 누르면 시작(링크가 있으면 함께 열림), 다시 누르면 정지. 완료하면 다음 " + STEP + "자가 이어집니다."
+      ? "제목을 누르면 시작 — 링크가 열리고 단축어 ‘400’이 함께 실행됩니다. 다시 누르면 정지."
       : "";
 
     sortedActive().forEach(function(t){
@@ -418,7 +418,8 @@
       var task = document.createElement("div");
       task.className = "task";
       task.textContent = t.text;
-      task.title = run ? "누르면 정지" : (t.link ? "누르면 시작하고 링크 열기" : "누르면 시작");
+      task.title = run ? "누르면 정지"
+                       : "누르면 시작 · " + (t.link ? "링크 열기 · " : "") + "단축어 ‘400’ 실행";
       task.onclick = function(){ toggleRun(t.id); };
       el.appendChild(task);
 
@@ -705,6 +706,24 @@
     return { count: items.length, chars: items.length * STEP, ms: ms, items: items };
   }
 
+  /* ---------- 단축어 '400' ---------- */
+  var SHORTCUT = "400";
+  var DEFAULT_INPUT = "글쓰기";
+
+  function runShortcut(t){
+    var p = projectOf(t.projectId);
+    var tag = ((p && p.tag) || t.tag || "").trim() || DEFAULT_INPUT;
+    var url = "shortcuts://run-shortcut?name=" + encodeURIComponent(SHORTCUT) +
+              "&input=text&text=" + encodeURIComponent(tag);
+
+    // 링크 새 탭을 방해하지 않도록 숨은 프레임으로 호출
+    var f = document.createElement("iframe");
+    f.style.display = "none";
+    f.src = url;
+    document.body.appendChild(f);
+    setTimeout(function(){ f.remove(); }, 2000);
+  }
+
   /* ---------- 시작/정지 ---------- */
   function toggleRun(id){
     var t = state.active.filter(function(x){ return x.id === id; })[0];
@@ -716,12 +735,11 @@
     }else{
       state.active.forEach(function(o){ if(isRunning(o)) stopRun(o); });
       t.sessions.push({ start: Date.now(), end: null });
-      if(t.link){
-        window.open(t.link, "_blank", "noopener,noreferrer");
-        toast("시작 · 링크를 열었습니다");
-      }else{
-        toast("시작");
-      }
+
+      if(t.link) window.open(t.link, "_blank", "noopener,noreferrer");
+      runShortcut(t);
+
+      toast("시작" + (t.link ? " · 링크" : "") + " · 단축어 400");
     }
     render();
   }
