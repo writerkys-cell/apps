@@ -308,8 +308,7 @@
     </div>
     <div id="giftfields">
       <div class="gf-title">🎁 증정본 정보</div>
-      <label>증정자 (누가 주었나)</label>
-      <input type="text" id="f-giver" placeholder="예: 홍길동 / OO출판사">
+      <div class="slothint" style="margin:0 0 4px;">증정자는 위 <b>저자</b>로 자동 기록됩니다.</div>
       <label>받은 날짜</label>
       <input type="date" id="f-received">
       <label>보관 기한</label>
@@ -318,6 +317,7 @@
         <input type="checkbox" id="f-permanent" style="width:auto;"> 영구 보관 (기한 없이 계속 보관)
       </label>
     </div>
+    <div id="giftnote" class="slothint" style="display:none;background:#faf8ff;border:1px solid #e9e2fb;border-radius:10px;padding:10px 12px;margin-top:12px;color:var(--gift);"></div>
     <label>꽂을 칸</label>
     <select id="f-slot"></select>
     <div class="slothint" id="slothint"></div>
@@ -423,8 +423,8 @@ function renderStats() {
 function today() { return new Date().toISOString().slice(0,10); }
 function giftMeta(b) {
   const parts = [];
-  parts.push(`🎁 ${b.giver ? esc(b.giver) : '증정자 미상'}`);
-  if (b.author) parts.push(esc(b.author));
+  const giver = b.giver || b.author;
+  parts.push(`🎁 ${giver ? esc(giver) : '증정자(저자) 미상'}`);
   if (b.permanent) parts.push('영구보관');
   else if (b.keepUntil) {
     const overdue = b.keepUntil < today();
@@ -473,7 +473,8 @@ function renderList() {
     if (b.cat === 'gift') {
       meta = giftMeta(b);
     } else {
-      meta = `${rank}${esc(b.author||'')}${b.author&&b.memo?' · ':''}${esc(b.memo||'')}`;
+      const giftBadge = b.giver ? `<span class="gift-tag">🎁 ${esc(b.giver)} 증정</span> ` : '';
+      meta = `${rank}${giftBadge}${esc(b.author||'')}${b.author&&b.memo?' · ':''}${esc(b.memo||'')}`;
     }
     return `<div class="book" onclick="openEdit('${b.id}')">
       <div class="cat" style="background:${CATCOLOR[b.cat]}"></div>
@@ -616,7 +617,16 @@ function fillSlotSelect(sel) {
   sel.innerHTML = opts.join('');
 }
 function toggleGiftFields() {
-  document.getElementById('giftfields').classList.toggle('on', pickedCat === 'gift');
+  const isGift = pickedCat === 'gift';
+  document.getElementById('giftfields').classList.toggle('on', isGift);
+  const note = document.getElementById('giftnote');
+  const b = editingId ? db.books.find(x => x.id === editingId) : null;
+  if (!isGift && b && b.giver) {
+    note.style.display = '';
+    note.innerHTML = `🎁 <b>${esc(b.giver)}</b>께 받은 증정본입니다.${b.received ? ` (${b.received} 받음)` : ''} 분류를 바꿔도 이 기록은 남습니다.`;
+  } else {
+    note.style.display = 'none';
+  }
 }
 function openAdd(presetSlot) {
   editingId = null; pickedCat = null;
@@ -624,7 +634,6 @@ function openAdd(presetSlot) {
   document.getElementById('f-title').value = '';
   document.getElementById('f-author').value = '';
   document.getElementById('f-memo').value = '';
-  document.getElementById('f-giver').value = '';
   document.getElementById('f-received').value = new Date().toISOString().slice(0,10);
   document.getElementById('f-keepuntil').value = '';
   document.getElementById('f-permanent').checked = false;
@@ -646,7 +655,6 @@ function openEdit(id) {
   document.getElementById('f-title').value = b.title;
   document.getElementById('f-author').value = b.author || '';
   document.getElementById('f-memo').value = b.memo || '';
-  document.getElementById('f-giver').value = b.giver || '';
   document.getElementById('f-received').value = b.received || '';
   document.getElementById('f-keepuntil').value = b.keepUntil || '';
   document.getElementById('f-permanent').checked = !!b.permanent;
@@ -684,12 +692,23 @@ function saveBook() {
   const slot = document.getElementById('f-slot').value || null;
   const author = document.getElementById('f-author').value.trim();
   const memo = document.getElementById('f-memo').value.trim();
-  const giftData = pickedCat === 'gift' ? {
-    giver: document.getElementById('f-giver').value.trim(),
-    received: document.getElementById('f-received').value || '',
-    keepUntil: document.getElementById('f-keepuntil').value || '',
-    permanent: document.getElementById('f-permanent').checked
-  } : { giver: '', received: '', keepUntil: '', permanent: false };
+  let giftData;
+  if (pickedCat === 'gift') {
+    // 증정본으로 (재)지정: 저자를 증정자로 기록. 기존 증정자가 있으면 유지.
+    const ex = editingId ? db.books.find(x => x.id === editingId) : null;
+    giftData = {
+      giver: (ex && ex.giver) ? ex.giver : author,
+      received: document.getElementById('f-received').value || (ex && ex.received) || '',
+      keepUntil: document.getElementById('f-keepuntil').value || '',
+      permanent: document.getElementById('f-permanent').checked
+    };
+  } else if (editingId) {
+    // 다른 서가로 옮겨도 증정 기록(증정자·받은날짜)은 유지
+    const ex = db.books.find(x => x.id === editingId);
+    giftData = { giver: ex.giver || '', received: ex.received || '', keepUntil: ex.keepUntil || '', permanent: !!ex.permanent };
+  } else {
+    giftData = { giver: '', received: '', keepUntil: '', permanent: false };
+  }
 
   if (editingId) {
     const b = db.books.find(x => x.id === editingId);
@@ -738,7 +757,8 @@ function openSlot(id) {
           let r = '';
           if (b.cat === 'keep' && ranks[b.id]) r = ` · ★ ${ranks[b.id]}위`;
           else if (b.cat === 'toread' && trRanks[b.id]) r = ` · ▶ ${trRanks[b.id]}순위`;
-          meta = `${CATNAME[b.cat]}${r}${b.author?' · '+esc(b.author):''}`;
+          const g = b.giver ? ` · 🎁 ${esc(b.giver)} 증정` : '';
+          meta = `${CATNAME[b.cat]}${r}${b.author?' · '+esc(b.author):''}${g}`;
         }
         return `<div class="book" onclick="closeModal('modal-slot');openEdit('${b.id}')">
         <div class="cat" style="background:${CATCOLOR[b.cat]}"></div>
@@ -836,11 +856,12 @@ function mergeData(raw) {
     if (exists) { dup++; return; }
     const slot = allSlots.includes(nb.slot) ? nb.slot : null;
     const cat = CATKEYS.includes(nb.cat) ? nb.cat : 'toread';
+    const author = (nb.author || '').trim();
     db.books.push({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-      title, author: (nb.author || '').trim(), memo: '',
+      title, author, memo: '',
       cat, slot, elo: 1500, battles: 0, added: t,
-      giver: (nb.giver || '').trim(), received: nb.received || '',
+      giver: cat === 'gift' ? (nb.giver || author) : '', received: nb.received || '',
       keepUntil: nb.keepUntil || '', permanent: !!nb.permanent
     });
     added++;
