@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>김연수 책상</title>
+<style>
+  :root{
+    --bg:#f7f5f0; --card:#ffffff; --ink:#26241f; --sub:#8a857a;
+    --accent:#2f4858; --accent-soft:#e3ebef; --line:#e6e2d8;
+    --done:#7a9e7e; --gold:#b98a2f; --danger:#b0563f;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    line-height:1.6; padding:20px 16px 60px;
+    max-width:640px; margin:0 auto;
+    -webkit-text-size-adjust:100%;
+  }
+  h1{font-size:20px; font-weight:700; letter-spacing:-0.3px;}
+  header{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px;}
+  header .date{font-size:13px; color:var(--sub);}
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
+  .tab{
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+    padding:7px 14px; border-radius:20px; font-size:14px; cursor:pointer;
+  }
+  .tab.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .tab.add{color:var(--sub); border-style:dashed;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:20px; margin-bottom:16px;
+  }
+  .card h2{font-size:15px; font-weight:700; margin-bottom:12px; color:var(--accent);}
+  .muted{color:var(--sub); font-size:13px;}
+  /* current task */
+  .now-label{font-size:12px; color:var(--sub); letter-spacing:1px; margin-bottom:6px;}
+  .now-title{font-size:22px; font-weight:800; letter-spacing:-0.5px; margin-bottom:2px; overflow:hidden; text-overflow:ellipsis;}
+  .now-sub{font-size:14px; color:var(--sub); margin-bottom:14px;}
+  .threshold-box{
+    background:var(--accent-soft); border-radius:10px; padding:12px 14px;
+    font-size:14px; margin-bottom:14px;
+  }
+  .threshold-box.final{background:#f6ecd7;}
+  .threshold-box b{color:var(--accent);}
+  .note-box{
+    border-left:3px solid var(--gold); padding:8px 12px; margin-bottom:14px;
+    font-size:14px; background:#fbf8f1; border-radius:0 8px 8px 0;
+    white-space:pre-wrap; overflow-wrap:break-word;
+  }
+  .note-box .tag{font-size:11px; color:var(--gold); font-weight:700; display:block; margin-bottom:2px; letter-spacing:1px;}
+  .note-box.edit{white-space:normal;}
+  .note-box textarea{
+    width:100%; border:none; background:transparent; font-family:inherit;
+    font-size:14px; color:var(--ink); resize:vertical;
+    line-height:1.6; outline:none; padding:0; display:block;
+  }
+  .btn-row{display:flex; gap:10px; flex-wrap:wrap;}
+  button, .linkbtn{
+    -webkit-appearance:none; appearance:none;
+    font-family:inherit; font-size:15px; border-radius:10px; cursor:pointer;
+    padding:12px 18px; border:1px solid var(--line); background:var(--card); color:var(--ink);
+    text-decoration:none; display:inline-block; text-align:center;
+  }
+  .primary{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700; flex:1;}
+  .linkbtn{background:#fff; color:var(--accent); border-color:var(--accent);}
+  .gold-btn{background:#fff; color:var(--gold); border-color:var(--gold);}
+  .ghost{font-size:13px; color:var(--sub); border:none; background:none; padding:8px 4px;}
+  .danger{color:var(--danger);}
+  /* type toggle */
+  .type-toggle{display:flex; gap:8px; margin-bottom:14px;}
+  .type-toggle button{flex:1; padding:10px;}
+  .type-toggle button.on{background:var(--accent); color:#fff; border-color:var(--accent); font-weight:700;}
+  /* progress */
+  .stats{display:flex; gap:18px; flex-wrap:wrap; margin-bottom:14px;}
+  .stat .v{font-size:19px; font-weight:800;}
+  .stat .k{font-size:12px; color:var(--sub);}
+  .circle-wrap{display:flex; justify-content:center; margin:6px 0 10px;}
+  .circle-wrap svg{width:230px; height:230px;}
+  .circle-wrap .pct{font-size:34px; font-weight:800; fill:var(--ink); text-anchor:middle; font-family:inherit;}
+  .circle-wrap .pg{font-size:14px; fill:var(--sub); text-anchor:middle; font-family:inherit;}
+  .circle-wrap .tick-label{font-size:13px; font-weight:700; fill:var(--gold); text-anchor:middle; dominant-baseline:middle; font-family:inherit;}
+  .bar-caption{font-size:12px; color:var(--sub); text-align:center;}
+  /* 절반 구분선 */
+  .half-divider{
+    display:flex; align-items:center; gap:10px;
+    margin:4px 0; padding:6px 0;
+  }
+  .half-divider::before, .half-divider::after{
+    content:""; flex:1; border-top:2px solid var(--gold); opacity:.5;
+  }
+  .half-divider .label{
+    font-size:12px; font-weight:700; color:var(--gold);
+    letter-spacing:1px; white-space:nowrap;
+  }
+  /* units */
+  .unit{
+    border-top:1px solid var(--line); padding:12px 0;
+  }
+  .unit:first-of-type{border-top:none;}
+  .unit-head{display:flex; align-items:center; gap:10px; cursor:pointer;}
+  .unit-head .num{font-weight:700; font-size:14px; flex-shrink:0;}
+  .unit-head .range{font-size:12px; color:var(--sub); flex:1; min-width:0; overflow:hidden;}
+  .unit-title-preview{font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .unit-head .st{font-size:12px; flex-shrink:0;}
+  .st.done{color:var(--done); font-weight:700;}
+  .st.current{color:var(--accent); font-weight:700;}
+  .st.todo{color:var(--sub);}
+  .unit-body{display:none; padding-top:10px;}
+  .unit.open .unit-body{display:block;}
+  .unit-body label{font-size:12px; color:var(--sub); display:block; margin-bottom:3px;}
+  .unit-body input, .unit-body textarea, .form input, .setting-input{
+    width:100%; font-family:inherit; font-size:14px; padding:9px 11px;
+    border:1px solid var(--line); border-radius:8px; background:#fdfcfa;
+    margin-bottom:10px; color:var(--ink);
+  }
+  .unit-body textarea{resize:vertical; min-height:60px;}
+  .unit-note-preview{font-size:12px; color:var(--gold); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  /* form */
+  .form label, .setting-label{font-size:13px; color:var(--sub); display:block; margin-bottom:4px;}
+  .preview{font-size:13px; color:var(--accent); margin-bottom:12px; background:var(--accent-soft); padding:10px 12px; border-radius:8px;}
+  .hidden{display:none;}
+  .done-card{text-align:center; padding:36px 20px;}
+  .done-card .big{font-size:26px; font-weight:800; margin-bottom:8px;}
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px;
+    font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:9;
+    max-width:90%; text-align:center;
+  }
+  .toast.show{opacity:1;}
+  .footer-tools{display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>김연수 책상</h1>
+  <span class="date" id="todayLabel"></span>
+</header>
+
+<div class="tabs" id="tabs"></div>
+
+<div id="main"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= 상수 ================= */
+const UNIT_CHARS = 2667;      // 글쓰기: 한 부분의 완성 기준 자수
+const BLOCKS_PER_UNIT = 6;    // 글쓰기: 온전한 부분 = 400자 쓰기 6번
+const BLOCK_CHARS = 400;
+const SESSION_PAGES = 30;     // 독서: 한 번에 읽는 양
+const STORE_KEY = "kysdesk_v1";
+
+/* ================= 상태 ================= */
+let state = load();
+
+function load(){
+  let s = { items: [], activeId: null, lastBackup: "" };
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ s = JSON.parse(raw); }
+  }catch(e){}
+  // 이전 개별 앱 데이터가 있으면 한 번만 흡수
+  try{
+    if(!s.items.length){
+      const w = localStorage.getItem("writing400_v1");
+      if(w){
+        const wd = JSON.parse(w);
+        (wd.projects || []).forEach(p => { p.kind = "w"; s.items.push(p); });
+      }
+      const r = localStorage.getItem("reading50_v1");
+      if(r){
+        const rd = JSON.parse(r);
+        (rd.books || []).forEach(b => { b.kind = "r"; s.items.push(b); });
+      }
+      if(s.items.length && !s.activeId) s.activeId = s.items[0].id;
+    }
+  }catch(e){}
+  return s;
+}
+function save(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function fmt(n){ return n.toLocaleString("ko-KR"); }
+function item(){ return state.items.find(x => x.id === state.activeId) || null; }
+function todayCount(x){
+  const t = todayStr();
+  return (x.log || []).filter(e => e.d === t).length;
+}
+
+/* ================= 글쓰기 계산 ================= */
+/* 전체 자수를 2667자 부분들로 나누고, 나머지는 마지막 부분으로.
+   단, 25매 미만은 전체를 하나의 부분으로. */
+function makeWritingUnits(pages){
+  const total = pages * 200;
+  if(pages < 25){
+    return [{ chars: total, blocks: Math.max(1, Math.ceil(total / BLOCK_CHARS)), link:"", note:"", title:"" }];
+  }
+  const full = Math.floor(total / UNIT_CHARS);
+  const rem = total - full * UNIT_CHARS;
+  const arr = [];
+  for(let i = 0; i < full; i++){
+    arr.push({ chars: UNIT_CHARS, blocks: BLOCKS_PER_UNIT, link:"", note:"", title:"" });
+  }
+  if(rem > 0 || arr.length === 0){
+    const c = rem > 0 ? rem : total;
+    const b = Math.max(1, Math.min(BLOCKS_PER_UNIT, Math.ceil(c / BLOCK_CHARS)));
+    arr.push({ chars: c, blocks: b, link:"", note:"", title:"" });
+  }
+  return arr;
+}
+function deriveW(p){
+  const units = p.units;
+  const unitCount = units.length;
+  let totalBlocks = 0, totalChars = 0;
+  units.forEach(u => { totalBlocks += u.blocks; totalChars += u.chars; });
+  const done = Math.min(p.done, totalBlocks);
+  const finished = done >= totalBlocks;
+  let unitIdx = unitCount - 1, posInUnit = units[unitCount - 1].blocks, acc = 0;
+  if(!finished){
+    for(let i = 0; i < unitCount; i++){
+      if(done < acc + units[i].blocks){ unitIdx = i; posInUnit = done - acc + 1; break; }
+      acc += units[i].blocks;
+    }
+  }
+  let doneUnits = 0, revisedChars = 0, blockAcc = 0;
+  for(const u of units){
+    blockAcc += u.blocks;
+    if(done >= blockAcc){ doneUnits++; revisedChars += u.chars; } else break;
+  }
+  const draftChars = done * BLOCK_CHARS;
+  return { unitCount, totalBlocks, totalChars, done, finished, unitIdx, posInUnit,
+           draftChars, doneUnits, revisedChars, revisedPages: revisedChars / 200 };
+}
+function cumCharsW(units, idx){
+  let c = 0;
+  for(let i = 0; i <= idx; i++) c += units[i].chars;
+  return c;
+}
+function fractionW(p, d){
+  let chars = 0, acc = 0;
+  for(const u of p.units){
+    if(d.done >= acc + u.blocks){ chars += u.chars; acc += u.blocks; }
+    else{ chars += u.chars * Math.max(0, d.done - acc) / u.blocks; break; }
+  }
+  return { f: Math.min(1, d.totalChars ? chars / d.totalChars : 0), chars };
+}
+
+/* ================= 독서 계산 ================= */
+/* 전체 페이지를 50쪽 부분들로 나누고, 나머지는 마지막 부분으로. */
+function makeReadingUnits(total){
+  const full = Math.floor(total / SESSION_PAGES);
+  const rem = total - full * SESSION_PAGES;
+  const arr = [];
+  for(let i = 0; i < full; i++){
+    arr.push({ pages: SESSION_PAGES, title:"", note:"" });
+  }
+  if(rem > 0 || arr.length === 0){
+    arr.push({ pages: rem > 0 ? rem : total, title:"", note:"" });
+  }
+  return arr;
+}
+function deriveR(b){
+  const units = b.units;
+  const unitCount = units.length;
+  const totalPages = units.reduce((a,u) => a + u.pages, 0);
+  const done = Math.min(b.done, unitCount);
+  const finished = done >= unitCount;
+  const unitIdx = finished ? unitCount - 1 : done;
+  let readPages = 0;
+  for(let i = 0; i < done; i++) readPages += units[i].pages;
+  return { unitCount, totalPages, done, finished, unitIdx, readPages };
+}
+function cumPagesR(units, idx){
+  let c = 0;
+  for(let i = 0; i <= idx; i++) c += units[i].pages;
+  return c;
+}
+
+/* ================= 렌더 ================= */
+const $tabs = document.getElementById("tabs");
+const $main = document.getElementById("main");
+document.getElementById("todayLabel").textContent = todayStr();
+
+let showNewForm = false;
+let newKind = "w";     // 새로 시작 폼의 종류
+let openUnits = {};
+
+function render(){
+  renderTabs();
+  const x = item();
+  if(showNewForm || !x){ renderForm(); }
+  else if(x.kind === "r"){ renderBook(x); }
+  else{ renderProject(x); }
+}
+
+function renderTabs(){
+  $tabs.innerHTML = "";
+  state.items.forEach(x => {
+    const b = document.createElement("button");
+    b.className = "tab" + (x.id === state.activeId && !showNewForm ? " active" : "");
+    b.textContent = x.kind === "r" ? "《" + (x.title || "") + "》" : (x.name || "");
+    b.onclick = () => { state.activeId = x.id; showNewForm = false; openUnits = {}; save(); render(); };
+    $tabs.appendChild(b);
+  });
+  const add = document.createElement("button");
+  add.className = "tab add";
+  add.textContent = "+ 새로 시작";
+  add.onclick = () => { showNewForm = true; render(); };
+  $tabs.appendChild(add);
+}
+
+/* ---------- 새로 시작 ---------- */
+function renderForm(){
+  const isW = newKind === "w";
+  $main.innerHTML = `
+    <div class="card form">
+      <h2>새로 시작</h2>
+      <div class="type-toggle">
+        <button id="tW" class="${isW ? "on" : ""}">새 원고</button>
+        <button id="tR" class="${isW ? "" : "on"}">새 책</button>
+      </div>
+      ${ isW ? `
+      <label>제목</label>
+      <input id="fName" type="text" placeholder="원고 제목">
+      <label>목표 매수 (200자 원고지)</label>
+      <input id="fPages" type="number" inputmode="numeric" placeholder="예: 16, 80, 400, 1600">
+      <div class="preview" id="fPreview">매수를 입력하면 부분과 400자 횟수를 계산합니다.</div>
+      ` : `
+      <label>제목</label>
+      <input id="fName" type="text" placeholder="책 제목">
+      <label>저자</label>
+      <input id="fAuthor" type="text" placeholder="지은이">
+      <label>전체 페이지</label>
+      <input id="fPages" type="number" inputmode="numeric" placeholder="예: 320">
+      <div class="preview" id="fPreview">페이지를 입력하면 부분과 읽기 횟수를 계산합니다.</div>
+      `}
+      <div class="btn-row">
+        <button class="primary" id="fCreate">시작하기</button>
+        ${state.items.length ? '<button class="ghost" id="fCancel">취소</button>' : ""}
+      </div>
+    </div>`;
+  document.getElementById("tW").onclick = () => { newKind = "w"; render(); };
+  document.getElementById("tR").onclick = () => { newKind = "r"; render(); };
+  const $pages = document.getElementById("fPages");
+  $pages.oninput = () => {
+    const pg = parseInt($pages.value, 10);
+    const el = document.getElementById("fPreview");
+    if(!pg || pg <= 0){
+      el.textContent = isW ? "매수를 입력하면 부분과 400자 횟수를 계산합니다." : "페이지를 입력하면 부분과 읽기 횟수를 계산합니다.";
+      return;
+    }
+    if(isW){
+      const units = makeWritingUnits(pg);
+      const full = units.filter(u => u.chars === UNIT_CHARS).length;
+      const last = units[units.length - 1];
+      const totalBlocks = units.reduce((a,u) => a + u.blocks, 0);
+      let comp = "";
+      if(full > 0) comp = `${fmt(UNIT_CHARS)}자 × ${full}`;
+      if(last.chars !== UNIT_CHARS) comp += (comp ? " + " : "") + `${fmt(last.chars)}자(400자 ${last.blocks}회)`;
+      el.innerHTML = `${fmt(pg)}매 = ${fmt(pg*200)}자 → <b>${units.length}개 부분</b> (${comp})<br>400자 쓰기 <b>총 ${fmt(totalBlocks)}회</b>`;
+    } else {
+      const units = makeReadingUnits(pg);
+      const full = units.filter(u => u.pages === SESSION_PAGES).length;
+      const last = units[units.length - 1];
+      let comp = "";
+      if(full > 0) comp = `${SESSION_PAGES}쪽 × ${full}`;
+      if(last.pages !== SESSION_PAGES) comp += (comp ? " + " : "") + `마지막 부분 ${last.pages}쪽`;
+      el.innerHTML = `${fmt(pg)}쪽 → <b>${units.length}개 부분</b> (${comp})<br>완독까지 읽기 <b>${units.length}회</b>`;
+    }
+  };
+  document.getElementById("fCreate").onclick = () => {
+    const name = document.getElementById("fName").value.trim();
+    const pg = parseInt($pages.value, 10);
+    if(!name){ toast("제목을 입력해 주세요."); return; }
+    if(!pg || pg <= 0){ toast(isW ? "목표 매수를 입력해 주세요." : "전체 페이지를 입력해 주세요."); return; }
+    let x;
+    if(isW){
+      const units = makeWritingUnits(pg);
+      x = { kind:"w", id: uid(), name, totalPages: pg, done: 0, log: [], dtLink: "",
+            units, createdAt: todayStr() };
+      toast(`${units.length}개 부분, 400자 쓰기 ${units.reduce((a,u)=>a+u.blocks,0)}회가 준비되었습니다.`);
+    } else {
+      const author = document.getElementById("fAuthor").value.trim();
+      const units = makeReadingUnits(pg);
+      x = { kind:"r", id: uid(), title: name, author, totalPages: pg, done: 0, log: [],
+            refNote: "", jotLink: "", dtLink: "", units, createdAt: todayStr() };
+      toast(`${units.length}개 부분, 읽기 ${units.length}회가 준비되었습니다.`);
+    }
+    state.items.push(x);
+    state.activeId = x.id;
+    showNewForm = false; openUnits = {};
+    save(); render();
+  };
+  const c = document.getElementById("fCancel");
+  if(c) c.onclick = () => { showNewForm = false; render(); };
+}
+
+/* ================= 진행 원 (공용) ================= */
+/* 아래(0,-1)에서 시작해 왼쪽(-1,0)=1/4 → 위(0,1)=1/2 → 오른쪽(1,0)=3/4 → 아래로 복귀=완성 */
+function circleSVG(f, centerLabel){
+  const R = 90;
+  const pt = (t, r) => {
+    const th = t * 2 * Math.PI;
+    return [ +(-r * Math.sin(th)).toFixed(2), +(r * Math.cos(th)).toFixed(2) ];
+  };
+  let svg = `<svg viewBox="-120 -120 240 240" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<circle r="${R}" fill="none" stroke="#ece8de" stroke-width="12"/>`;
+  if(f > 0.0001){
+    const [x0, y0] = pt(0, R);
+    if(f >= 0.9999){
+      svg += `<circle r="${R}" fill="rgba(122,158,126,.18)"/>`;
+      svg += `<circle r="${R}" fill="none" stroke="var(--done)" stroke-width="12"/>`;
+    } else {
+      const [x1, y1] = pt(f, R);
+      const la = f > 0.5 ? 1 : 0;
+      svg += `<path d="M0,0 L${x0},${y0} A${R},${R} 0 ${la} 1 ${x1},${y1} Z" fill="rgba(122,158,126,.18)"/>`;
+      svg += `<path d="M${x0},${y0} A${R},${R} 0 ${la} 1 ${x1},${y1}" fill="none" stroke="var(--done)" stroke-width="12" stroke-linecap="round"/>`;
+    }
+  }
+  [[1/3, "1/3"], [2/3, "2/3"]].forEach(([t, lb]) => {
+    const [a, b] = pt(t, R - 10), [c, e] = pt(t, R + 10);
+    svg += `<line x1="${a}" y1="${b}" x2="${c}" y2="${e}" stroke="var(--gold)" stroke-width="3"/>`;
+    const [lx, ly] = pt(t, R + 23);
+    svg += `<text x="${lx}" y="${ly}" class="tick-label">${lb}</text>`;
+  });
+  const [sx, sy] = pt(0, R);
+  svg += `<circle cx="${sx}" cy="${sy}" r="4" fill="#c9c4b6"/>`;
+  if(f > 0.0001 && f < 0.9999){
+    const [cx, cy] = pt(f, R);
+    svg += `<circle cx="${cx}" cy="${cy}" r="8" fill="var(--accent)"/>`;
+  }
+  svg += `<text y="-2" class="pct">${Math.round(f * 100)}%</text>`;
+  svg += `<text y="24" class="pg">${centerLabel}</text>`;
+  svg += `</svg>`;
+  return svg;
+}
+
+/* ================= 원고 화면 ================= */
+function renderProject(p){
+  const d = deriveW(p);
+  let html = "";
+
+  if(d.finished){
+    html += `
+    <div class="card done-card">
+      <div class="big">완성</div>
+      <p class="muted">${esc(p.name)} · ${fmt(d.totalBlocks)}번의 400자를 모두 지나왔습니다.<br>
+      완성 기준 ${fmt(d.totalChars)}자 (${fmt(p.totalPages)}매)</p>
+    </div>`;
+  } else {
+    const unit = p.units[d.unitIdx];
+    const remainAfterThis = unit.blocks - d.posInUnit;
+    const isThresholdBlock = d.posInUnit === unit.blocks;
+    const thisCum = cumCharsW(p.units, d.unitIdx);
+    const unitTitle = unit.title ? esc(unit.title) : `부분 ${d.unitIdx + 1}`;
+
+    html += `
+    <div class="card">
+      <div class="now-label">지금 할 일 — ${d.done + 1}번째 / 전체 ${fmt(d.totalBlocks)}회</div>
+      <div class="now-title">${unitTitle}</div>
+      <div class="now-sub">부분 ${d.unitIdx + 1} / ${d.unitCount} · 이 부분의 ${d.posInUnit}번째 400자 (${d.posInUnit}/${unit.blocks})</div>
+      ${ isThresholdBlock
+        ? `<div class="threshold-box final">이 400자를 마치면 <b>부분 ${d.unitIdx+1}이 완성</b>됩니다 — ${fmt(unit.chars)}자 문턱(누적 ${fmt(thisCum)}자, ${fmt(Math.round(thisCum/200))}매)을 넘습니다. 무엇이든 하나를 넘어가게 하세요.</div>`
+        : `<div class="threshold-box">다음 문턱까지 <b>400자 × ${remainAfterThis + 1}회</b> — 부분 ${d.unitIdx+1}(${fmt(unit.chars)}자) 완성 시 누적 ${fmt(thisCum)}자 (${fmt(Math.round(thisCum/200))}매)</div>`
+      }
+      ${ unit.note
+        ? `<div class="note-box"><span class="tag">이 부분에서 벌어질 일</span>${esc(unit.note)}</div>`
+        : `<div class="note-box"><span class="tag">이 부분에서 벌어질 일</span><span class="muted">아직 메모가 없습니다. 아래 부분 목록에서 적어둘 수 있어요.</span></div>`
+      }
+      <div class="btn-row">
+        <button class="linkbtn" id="btnScriv">스크리브너에서 쓰기</button>
+        <button class="gold-btn" id="btnRefs">자료들</button>
+        <button class="primary" id="btnDone">${fmt(d.posInUnit * BLOCK_CHARS)}자 완료</button>
+      </div>
+      ${ p.done > 0 ? `<button class="ghost" id="btnUndo">마지막 완료 되돌리기</button>` : "" }
+    </div>`;
+  }
+
+  const fr = fractionW(p, d);
+  html += `
+  <div class="card">
+    <h2>진행 상황</h2>
+    <div class="stats">
+      <div class="stat"><div class="v">${fmt(d.done)}<span class="muted">/${fmt(d.totalBlocks)}</span></div><div class="k">400자 쓰기</div></div>
+      <div class="stat"><div class="v">${d.doneUnits}<span class="muted">/${d.unitCount}</span></div><div class="k">완성한 부분</div></div>
+      <div class="stat"><div class="v">${fmt(d.draftChars)}</div><div class="k">초고 누적 자수</div></div>
+      <div class="stat"><div class="v">${todayCount(p)}</div><div class="k">오늘 쓴 400자</div></div>
+    </div>
+    <div class="circle-wrap">${circleSVG(fr.f, fmt(Math.round(fr.chars / 200)) + "매")}</div>
+    <div class="bar-caption">아래에서 시작 · 왼쪽 ¼ → 위 ½ → 오른쪽 ¾ · 완성 기준 누적 ${fmt(d.revisedChars)}자 (${fmt(Math.round(d.revisedPages))}매 / 목표 ${fmt(p.totalPages)}매)</div>
+  </div>`;
+
+  const halfCount = Math.ceil(d.unitCount / 2);
+  html += `<div class="card"><h2>부분 목록 — 문턱마다 벌어질 일</h2>`;
+  p.units.forEach((u, i) => {
+    const status = i < d.doneUnits ? "done" : (i === d.unitIdx && !d.finished ? "current" : "todo");
+    const stLabel = status === "done" ? "완성" : (status === "current" ? "쓰는 중" : "예정");
+    const cum = cumCharsW(p.units, i);
+    const sizeLabel = `${fmt(u.chars)}자·${u.blocks}회`;
+    html += `
+    <div class="unit ${openUnits[i] ? "open" : ""}" data-i="${i}">
+      <div class="unit-head" data-toggle="${i}">
+        <span class="num">부분 ${i+1}</span>
+        <span class="range">${u.title ? `<div class="unit-title-preview">${esc(u.title)}</div>` : ""}${sizeLabel} · 누적 ${fmt(cum)}자(${fmt(Math.round(cum/200))}매)${u.note ? `<div class="unit-note-preview">${esc(u.note)}</div>` : ""}</span>
+        <span class="st ${status}">${stLabel}</span>
+      </div>
+      <div class="unit-body">
+        <label>소제목</label>
+        <input type="text" data-title="${i}" value="${escAttr(u.title || "")}" placeholder="이 부분의 소제목">
+        <label>스크리브너 링크 (문서에서 ‘링크 복사’ 후 붙여넣기)</label>
+        <input type="url" data-link="${i}" value="${escAttr(u.link)}" placeholder="x-scrivener-item:///... 또는 scrivener://">
+        <label>이 부분에서 벌어질 일 — 놀라움, 새 인물, 예상치 못한 사건…</label>
+        <textarea data-note="${i}" placeholder="이 문턱을 넘을 때 이야기를 흔들 무언가">${esc(u.note)}</textarea>
+      </div>
+    </div>`;
+    if(d.unitCount >= 8 && i + 1 === halfCount && i + 1 < d.unitCount){
+      const halfCum = cumCharsW(p.units, i);
+      html += `<div class="half-divider"><span class="label">절반 — 전반 ${halfCount} · 후반 ${d.unitCount - halfCount} · 누적 ${fmt(halfCum)}자(${fmt(Math.round(halfCum/200))}매)</span></div>`;
+    }
+  });
+  html += `</div>`;
+
+  html += `
+  <div class="card">
+    <h2>설정 · 데이터</h2>
+    <label class="setting-label">데본씽크 링크 — 이 원고의 자료 DB (부분이 바뀌어도 그대로 유지)</label>
+    <input class="setting-input" id="dtLink" type="url" value="${escAttr(p.dtLink || "")}" placeholder="x-devonthink-item://... 또는 x-devonthink://">
+    <p class="muted" style="margin-bottom:10px">마지막 자동 백업: ${state.lastBackup || "아직 없음"} · 하루에 한 번 열 때 자동으로 내보냅니다.</p>
+    <div class="footer-tools">
+      <button id="btnExport">지금 내보내기</button>
+      <button id="btnImport">불러오기</button>
+      <input type="file" id="importFile" accept=".json" class="hidden">
+      <button class="ghost" id="btnEdit">목표 매수 수정</button>
+      <button class="ghost danger" id="btnDelete">삭제</button>
+    </div>
+  </div>`;
+
+  $main.innerHTML = html;
+  bindCommon(p);
+  bindProject(p, d);
+}
+
+function bindProject(p, d){
+  const bs = document.getElementById("btnScriv");
+  if(bs) bs.onclick = () => {
+    const link = p.units[d.unitIdx] ? p.units[d.unitIdx].link : "";
+    if(link){ window.location.href = link; }
+    else{ toast("부분 목록에서 이 부분의 스크리브너 링크를 먼저 입력해 주세요."); }
+  };
+  const bd = document.getElementById("btnDone");
+  if(bd) bd.onclick = () => {
+    const unit = p.units[d.unitIdx];
+    const wasLast = d.posInUnit === unit.blocks;
+    p.done++;
+    p.log = p.log || [];
+    p.log.push({ d: todayStr() });
+    save(); render();
+    if(p.done >= d.totalBlocks){ toast("모든 400자를 마쳤습니다. 완성!"); }
+    else if(wasLast){ toast(`부분 ${d.unitIdx+1} 완성 — ${fmt(unit.chars)}자 문턱을 넘었습니다.`); }
+    else{ toast(`${p.done}번째 400자 완료.`); }
+  };
+  $main.querySelectorAll("[data-link]").forEach(el => {
+    el.onchange = () => { p.units[+el.getAttribute("data-link")].link = el.value.trim(); save(); render(); };
+  });
+  document.getElementById("btnEdit").onclick = () => {
+    const v = prompt("목표 매수 (200자 원고지)", p.totalPages);
+    const pg = parseInt(v, 10);
+    if(!pg || pg <= 0) return;
+    const fresh = makeWritingUnits(pg);
+    if(fresh.length < p.units.length){
+      if(!confirm(`부분이 ${p.units.length}개에서 ${fresh.length}개로 줄어듭니다. 뒤쪽 부분의 메모·링크는 삭제됩니다.`)) return;
+    }
+    fresh.forEach((u, i) => {
+      if(p.units[i]){
+        u.link = p.units[i].link || "";
+        u.note = p.units[i].note || "";
+        u.title = p.units[i].title || "";
+      }
+    });
+    p.totalPages = pg;
+    p.units = fresh;
+    p.done = Math.min(p.done, fresh.reduce((a,u)=>a+u.blocks,0));
+    save(); render();
+  };
+}
+
+/* ================= 책 화면 ================= */
+function renderBook(b){
+  const d = deriveR(b);
+  let html = "";
+
+  if(d.finished){
+    html += `
+    <div class="card done-card">
+      <div class="big">완독</div>
+      <p class="muted">${esc(b.title)}${b.author ? " · " + esc(b.author) : ""}<br>
+      ${fmt(d.totalPages)}쪽을 모두 읽었습니다.</p>
+    </div>`;
+  } else {
+    const unit = b.units[d.unitIdx];
+    const startPage = d.readPages + 1;
+    const endPage = d.readPages + unit.pages;
+    const remainAfterThis = d.unitCount - d.unitIdx - 1;
+    const isLast = d.unitIdx === d.unitCount - 1;
+    const unitTitle = unit.title ? esc(unit.title) : `부분 ${d.unitIdx + 1}`;
+
+    html += `
+    <div class="card">
+      <div class="now-label">지금 읽을 페이지 — ${d.done + 1}번째 / 전체 ${d.unitCount}회</div>
+      <div class="now-title">${unitTitle}</div>
+      <div class="now-sub">${esc(b.title)}${b.author ? " · " + esc(b.author) : ""} — ${fmt(startPage)}–${fmt(endPage)}쪽 (부분 ${d.unitIdx + 1}/${d.unitCount})</div>
+      ${ isLast
+        ? `<div class="threshold-box final">이번 ${unit.pages}쪽을 읽으면 <b>완독</b>입니다.</div>`
+        : `<div class="threshold-box">완독까지 <b>${SESSION_PAGES}쪽 × ${remainAfterThis + 1}회</b> — 이번 부분을 읽으면 누적 ${fmt(endPage)}쪽 / ${fmt(d.totalPages)}쪽</div>`
+      }
+      <div class="note-box edit"><span class="tag">늘 참조할 것 — 헷갈리는 인물, 관계, 용어…</span><textarea id="refNote" rows="2" placeholder="이 책을 읽는 동안 항상 옆에 둘 메모">${esc(b.refNote)}</textarea></div>
+      <div class="btn-row">
+        <button class="linkbtn" id="btnJot">적어둘 것</button>
+        <button class="gold-btn" id="btnRefs">자료들</button>
+        <button class="primary" id="btnDone">${fmt(endPage)}쪽 완료</button>
+      </div>
+      ${ b.done > 0 ? `<button class="ghost" id="btnUndo">마지막 완료 되돌리기</button>` : "" }
+    </div>`;
+  }
+
+  const f = Math.min(1, d.totalPages ? d.readPages / d.totalPages : 0);
+  html += `
+  <div class="card">
+    <h2>진행 상황</h2>
+    <div class="stats">
+      <div class="stat"><div class="v">${d.done}<span class="muted">/${d.unitCount}</span></div><div class="k">읽기 횟수</div></div>
+      <div class="stat"><div class="v">${fmt(d.readPages)}</div><div class="k">읽은 쪽수</div></div>
+      <div class="stat"><div class="v">${todayCount(b)}</div><div class="k">오늘 읽은 횟수</div></div>
+    </div>
+    <div class="circle-wrap">${circleSVG(f, fmt(d.readPages) + "쪽")}</div>
+    <div class="bar-caption">아래에서 시작 · 왼쪽 ¼ → 위 ½ → 오른쪽 ¾ · 누적 ${fmt(d.readPages)}쪽 / 전체 ${fmt(d.totalPages)}쪽</div>
+  </div>`;
+
+  const halfCount = Math.ceil(d.unitCount / 2);
+  html += `<div class="card"><h2>부분 목록</h2>`;
+  let acc = 0;
+  b.units.forEach((u, i) => {
+    const status = i < d.done ? "done" : (i === d.unitIdx && !d.finished ? "current" : "todo");
+    const stLabel = status === "done" ? "완료" : (status === "current" ? "읽는 중" : "예정");
+    const s = acc + 1, e = acc + u.pages;
+    acc = e;
+    html += `
+    <div class="unit ${openUnits[i] ? "open" : ""}" data-i="${i}">
+      <div class="unit-head" data-toggle="${i}">
+        <span class="num">부분 ${i+1}</span>
+        <span class="range">${u.title ? `<div class="unit-title-preview">${esc(u.title)}</div>` : ""}${fmt(s)}–${fmt(e)}쪽 (${u.pages}쪽)${u.note ? `<div class="unit-note-preview">${esc(u.note)}</div>` : ""}</span>
+        <span class="st ${status}">${stLabel}</span>
+      </div>
+      <div class="unit-body">
+        <label>소제목 (장 제목 등)</label>
+        <input type="text" data-title="${i}" value="${escAttr(u.title || "")}" placeholder="이 부분의 소제목">
+        <label>이 부분 메모</label>
+        <textarea data-note="${i}" placeholder="이 부분에서 기억해둘 것">${esc(u.note)}</textarea>
+      </div>
+    </div>`;
+    if(d.unitCount >= 8 && i + 1 === halfCount && i + 1 < d.unitCount){
+      const halfCum = cumPagesR(b.units, i);
+      html += `<div class="half-divider"><span class="label">절반 — 전반 ${halfCount} · 후반 ${d.unitCount - halfCount} · 누적 ${fmt(halfCum)}쪽</span></div>`;
+    }
+  });
+  html += `</div>`;
+
+  html += `
+  <div class="card">
+    <h2>설정 · 데이터</h2>
+    <label class="setting-label">적어둘 것 링크 — 메모를 남기는 곳 (노트 앱 등 외부 링크)</label>
+    <input class="setting-input" id="jotLink" type="url" value="${escAttr(b.jotLink || "")}" placeholder="메모 앱·문서의 링크">
+    <label class="setting-label">데본씽크 링크 — 이 책의 자료 DB</label>
+    <input class="setting-input" id="dtLink" type="url" value="${escAttr(b.dtLink || "")}" placeholder="x-devonthink-item://... 또는 x-devonthink://">
+    <p class="muted" style="margin-bottom:10px">마지막 자동 백업: ${state.lastBackup || "아직 없음"} · 하루에 한 번 열 때 자동으로 내보냅니다.</p>
+    <div class="footer-tools">
+      <button id="btnExport">지금 내보내기</button>
+      <button id="btnImport">불러오기</button>
+      <input type="file" id="importFile" accept=".json" class="hidden">
+      <button class="ghost" id="btnEdit">전체 페이지 수정</button>
+      <button class="ghost danger" id="btnDelete">삭제</button>
+    </div>
+  </div>`;
+
+  $main.innerHTML = html;
+  bindCommon(b);
+  bindBook(b, d);
+}
+
+function bindBook(b, d){
+  const ref = document.getElementById("refNote");
+  if(ref) ref.onchange = () => { b.refNote = ref.value; save(); toast("참조 메모를 저장했습니다."); };
+  const bj = document.getElementById("btnJot");
+  if(bj) bj.onclick = () => {
+    if(b.jotLink){ window.location.href = b.jotLink; }
+    else{ toast("아래 설정에서 적어둘 것 링크를 먼저 입력해 주세요."); }
+  };
+  const bd = document.getElementById("btnDone");
+  if(bd) bd.onclick = () => {
+    b.done++;
+    b.log = b.log || [];
+    b.log.push({ d: todayStr() });
+    save(); render();
+    if(b.done >= d.unitCount){ toast("완독했습니다!"); }
+    else{ toast(`부분 ${d.unitIdx + 1} 완료 — 누적 ${fmt(deriveR(b).readPages)}쪽.`); }
+  };
+  document.getElementById("jotLink").onchange = (e) => {
+    b.jotLink = e.target.value.trim(); save();
+    toast("적어둘 것 링크를 저장했습니다.");
+  };
+  document.getElementById("btnEdit").onclick = () => {
+    const v = prompt("전체 페이지", b.totalPages);
+    const pg = parseInt(v, 10);
+    if(!pg || pg <= 0) return;
+    const fresh = makeReadingUnits(pg);
+    if(fresh.length < b.units.length){
+      if(!confirm(`부분이 ${b.units.length}개에서 ${fresh.length}개로 줄어듭니다. 뒤쪽 부분의 메모는 삭제됩니다.`)) return;
+    }
+    fresh.forEach((u, i) => {
+      if(b.units[i]){
+        u.title = b.units[i].title || "";
+        u.note = b.units[i].note || "";
+      }
+    });
+    b.totalPages = pg;
+    b.units = fresh;
+    b.done = Math.min(b.done, fresh.length);
+    save(); render();
+  };
+}
+
+/* ================= 공용 바인딩 ================= */
+function bindCommon(x){
+  const bu = document.getElementById("btnUndo");
+  if(bu) bu.onclick = () => {
+    if(x.done > 0){
+      x.done--;
+      if(x.log && x.log.length) x.log.pop();
+      save(); render();
+      toast("되돌렸습니다.");
+    }
+  };
+  const br = document.getElementById("btnRefs");
+  if(br) br.onclick = () => {
+    if(x.dtLink){ window.location.href = x.dtLink; }
+    else{ toast("아래 설정에서 데본씽크 링크를 먼저 입력해 주세요."); }
+  };
+  $main.querySelectorAll("[data-toggle]").forEach(el => {
+    el.onclick = () => {
+      const i = el.getAttribute("data-toggle");
+      openUnits[i] = !openUnits[i];
+      render();
+    };
+  });
+  $main.querySelectorAll("[data-title]").forEach(el => {
+    el.onchange = () => { x.units[+el.getAttribute("data-title")].title = el.value.trim(); save(); render(); };
+  });
+  $main.querySelectorAll("[data-note]").forEach(el => {
+    el.onchange = () => { x.units[+el.getAttribute("data-note")].note = el.value.trim(); save(); render(); };
+  });
+  const dt = document.getElementById("dtLink");
+  if(dt) dt.onchange = (e) => {
+    x.dtLink = e.target.value.trim(); save();
+    toast("데본씽크 링크를 저장했습니다.");
+  };
+  document.getElementById("btnExport").onclick = () => { exportJSON(); toast("내보냈습니다."); };
+  const fileInput = document.getElementById("importFile");
+  document.getElementById("btnImport").onclick = () => fileInput.click();
+  fileInput.onchange = () => {
+    const f = fileInput.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      try{
+        const data = JSON.parse(r.result);
+        if(data.items){
+          state = data;
+        } else if(data.projects){          // 예전 글쓰기 앱 백업
+          data.projects.forEach(p => { p.kind = "w"; state.items.push(p); });
+        } else if(data.books){             // 예전 독서 앱 백업
+          data.books.forEach(b => { b.kind = "r"; state.items.push(b); });
+        } else {
+          throw new Error("bad");
+        }
+        if(!state.items.find(y => y.id === state.activeId)){
+          state.activeId = state.items.length ? state.items[0].id : null;
+        }
+        save(); render();
+        toast("불러왔습니다.");
+      }catch(e){ toast("파일을 읽을 수 없습니다."); }
+    };
+    r.readAsText(f);
+  };
+  document.getElementById("btnDelete").onclick = () => {
+    const label = x.kind === "r" ? x.title : x.name;
+    if(!confirm(`"${label}"을(를) 삭제할까요? 되돌릴 수 없습니다.`)) return;
+    state.items = state.items.filter(y => y.id !== x.id);
+    state.activeId = state.items.length ? state.items[0].id : null;
+    save(); render();
+  };
+}
+
+/* ================= 내보내기 ================= */
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `김연수책상_백업_${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  state.lastBackup = todayStr();
+  save();
+}
+function autoBackup(){
+  if(state.items.length && state.lastBackup !== todayStr()){
+    setTimeout(() => { exportJSON(); toast("오늘의 자동 백업을 내보냈습니다."); }, 1200);
+  }
+}
+
+/* ================= 유틸 ================= */
+function esc(s){ return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s){ return esc(s).replace(/"/g,"&quot;"); }
+let toastTimer = null;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+/* ================= 시작 ================= */
+if(state.items.length && !state.items.find(x => x.id === state.activeId)){
+  state.activeId = state.items[0].id;
+}
+render();
+autoBackup();
+</script>
+</body>
+</html>
