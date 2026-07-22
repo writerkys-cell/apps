@@ -165,6 +165,7 @@
     <p><span class="k">실행</span>: 점 찍힌 작업들을 <span class="k">역순</span>으로 — 마지막에 찍은 것부터 — 합니다. 끝내지 못했으면 ‘미완료’를 눌러 리스트 끝에 재기입하세요. 체인을 다 처리하면 처음부터 다시 선택합니다.</p>
     <p><span class="k">긴급</span>: 긴급 버튼으로 추가하면 점이 찍힌 채 끝에 들어가 가장 먼저 하게 됩니다. 이미 있는 작업이 긴급해졌으면 그 작업을 탭해 ‘긴급으로 이동’을 선택하세요.</p>
     <p>오래 자리를 비웠다 돌아와 선택이 낡았으면 ‘재선택’으로 점을 지우고 새로 고르세요.</p>
+    <p>완료된 할 일이 <span class="k">2개 이상 연달아</span> 붙으면 자동으로 리스트에서 정리됩니다. 활성 작업 사이에 홀로 남은 완료 표시는 그대로 두어 흐름을 볼 수 있어요.</p>
     <p style="color:var(--sub);font-size:13px;">데이터는 이 브라우저에 저장됩니다. Safari로 열어 ‘홈 화면에 추가’ 후 사용하고, 내보내기로 백업하세요.</p>
     <p style="color:var(--sub);font-size:13px;"><span class="k" style="color:var(--sub)">기기 간 병합</span>: 한 기기에서 내보낸 파일을 다른 기기에서 ‘가져오기’ 하면 병합·덮어쓰기를 고를 수 있어요. 병합은 양쪽 작업을 합치고 같은 작업은 더 최근에 고친 쪽을 남깁니다. 삭제한 작업은 30일간 기록으로 남아 되살아나지 않으며, ‘완료된 항목 정리’로 비웁니다. 병합이 어긋나지 않으려면 <span class="k" style="color:var(--sub)">한 번에 한 기기에서만</span> 쓰고, 마칠 때 내보내 다른 기기에서 병합하세요.</p>
     <button class="clear" onclick="clearDone()">완료된 항목 정리</button>
@@ -261,7 +262,25 @@ function tapSelect(id){
 }
 
 /* ---------- work ---------- */
+// 완료된 할 일이 2개 이상 연달아 붙으면 묶어서 정리(묘비 처리) — 리스트가 길어지는 것을 억제
+function collapseDone(){
+  const vis = S.tasks.filter(t => t.status !== 'deleted');
+  let changed = false, i = 0;
+  while(i < vis.length){
+    if(vis[i].status === 'done'){
+      let j = i;
+      while(j < vis.length && vis[j].status === 'done') j++;
+      if(j - i >= 2){
+        for(let k = i; k < j; k++){ vis[k].status = 'deleted'; touch(vis[k]); changed = true; }
+      }
+      i = j;
+    } else i++;
+  }
+  return changed;
+}
+
 function afterAction(){
+  collapseDone();
   if(chainCount() === 0){
     if(activeTasks().length === 0){
       S.phase = 'idle';
@@ -522,6 +541,7 @@ function importData(input){
 function doMerge(){
   if(!pendingImport) return;
   mergeInto(pendingImport);
+  collapseDone();
   pendingImport = null;
   closeSheet(); save(); render();
   toast('병합했어요');
@@ -529,6 +549,7 @@ function doMerge(){
 function doOverwrite(){
   if(!pendingImport) return;
   S = migrate(pendingImport);
+  collapseDone();
   pendingImport = null;
   closeSheet(); save(); render();
   toast('덮어썼어요');
@@ -538,6 +559,7 @@ document.getElementById('inp').addEventListener('keydown', e => {
   if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) submitTask(false);
 });
 
+if(collapseDone()) save();
 render();
 </script>
 </body>
