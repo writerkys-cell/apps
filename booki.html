@@ -46,11 +46,6 @@
   .seg button.on[data-c="gift"] { background: var(--gift); border-color: var(--gift); color: #fff; }
   .seg { flex-wrap: wrap; }
   .seg button { flex: 1 1 22%; font-size: 12.5px; padding: 9px 0; }
-  .giverrow { padding: 0 12px 10px; }
-  .giverrow input {
-    width: 100%; padding: 12px; border: 1px solid var(--gift); border-radius: 11px;
-    font-size: 15px; font-family: inherit; background: #faf8ff;
-  }
   .bk .g { color: var(--gift); font-size: 12px; flex-shrink: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 
   .books { padding: 4px 14px; }
@@ -130,7 +125,7 @@
 
 <header>
   <h1>📱 서가 입력</h1>
-  <p>칸 ID와 분류를 정하고, 책등을 보며 쭉 입력하세요. 증정본은 증정자도 함께 적을 수 있어요.</p>
+  <p>칸 ID와 분류를 정하고, 책등을 보며 쭉 입력하세요. 증정본은 저자가 증정자로 기록돼요.</p>
 </header>
 
 <div id="cards"></div>
@@ -199,8 +194,7 @@ function render() {
       `<div class="bk">
         <span class="n">${bi+1}</span>
         <span class="t">${esc(b.title)}</span>
-        ${b.giver ? `<span class="g">🎁 ${esc(b.giver)}</span>` : ''}
-        ${b.author ? `<span class="a">${esc(b.author)}</span>` : ''}
+        ${b.author ? `<span class="${isGift?'g':'a'}">${isGift?'🎁 ':''}${esc(b.author)}</span>` : ''}
         <button class="del" onclick="delBook(${ci},${bi})">×</button>
       </div>`).join('');
     return `<div class="card">
@@ -215,10 +209,9 @@ function render() {
         <span class="count">${c.books.length}권</span>
       </div>
       ${rows ? `<div class="books">${rows}</div>` : ''}
-      ${isGift ? `<div class="giverrow"><input id="gv-${ci}" type="text" placeholder="🎁 증정자 (이 칸 공통 · 누가 주었나)" value="${esc(c.giver||'')}" autocomplete="off" oninput="setGiver(${ci}, this.value)"></div>` : ''}
       <div class="inputrow">
         <input class="ti" id="ti-${ci}" type="text" placeholder="제목" autocomplete="off" enterkeyhint="done">
-        <input class="au" id="au-${ci}" type="text" placeholder="저자(선택)" autocomplete="off" enterkeyhint="done">
+        <input class="au" id="au-${ci}" type="text" placeholder="${isGift?'저자 = 증정자':'저자(선택)'}" autocomplete="off" enterkeyhint="done">
         <button onclick="addBook(${ci})">추가</button>
       </div>
     </div>`;
@@ -243,7 +236,6 @@ function setSlot(ci, v) {
   state.cards[ci].slot = v; save(); render();
 }
 function setCat(ci, c) { state.cards[ci].cat = c; save(); render(); }
-function setGiver(ci, v) { state.cards[ci].giver = v; save(); } // 재렌더 안 함(포커스 유지)
 function addBook(ci) {
   const ti = document.getElementById('ti-' + ci);
   const au = document.getElementById('au-' + ci);
@@ -251,10 +243,7 @@ function addBook(ci) {
   if (!title) { ti.focus(); return; }
   const dup = state.cards.some(c => c.books.some(b => b.title === title));
   if (dup && !confirm(`"${title}" 은(는) 이미 입력했어요. 그래도 추가할까요?`)) { ti.value=''; ti.focus(); return; }
-  const card = state.cards[ci];
-  const book = { title, author: au.value.trim() };
-  if (card.cat === 'gift' && card.giver) book.giver = card.giver.trim();
-  card.books.push(book);
+  state.cards[ci].books.push({ title, author: au.value.trim(), received: new Date().toISOString().slice(0,10) });
   save(); render();
   const nt = document.getElementById('ti-' + ci);
   if (nt) nt.focus();
@@ -276,8 +265,8 @@ function buildExport() {
   state.cards.forEach(c => c.books.forEach(b => {
     const rec = { title: b.title, author: b.author, cat: c.cat, slot: c.slot };
     if (c.cat === 'gift') {
-      rec.giver = b.giver || c.giver || '';
-      rec.received = new Date().toISOString().slice(0,10);
+      rec.giver = b.author || '';
+      rec.received = b.received || new Date().toISOString().slice(0,10);
     }
     books.push(rec);
   }));
