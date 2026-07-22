@@ -1012,16 +1012,36 @@
   $("tabArchive").onclick = function(){ showTab("archive"); };
 
   /* ---------- 내보내기 / 불러오기 ---------- */
-  $("btnExport").onclick = function(){
+  function downloadJSON(prefix){
     var blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     var d = new Date();
-    a.download = "400-" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") +
+    a.download = prefix + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") +
                  String(d.getDate()).padStart(2,"0") + ".json";
     a.click();
     setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-  };
+  }
+  $("btnExport").onclick = function(){ downloadJSON("400-"); };
+
+  /* ---------- 하루 한 번 자동 백업 ---------- */
+  var BACKUP_KEY = "400-last-backup";
+  function autoBackup(){
+    // 데이터가 없으면 백업하지 않음
+    if(!state.projects.length && !state.archive.length && !state.history.length) return;
+    var last = parseInt(localStorage.getItem(BACKUP_KEY) || "0", 10);
+    if(Date.now() - last < 24 * 3600 * 1000) return;
+    try{
+      downloadJSON("400-backup-");
+      localStorage.setItem(BACKUP_KEY, String(Date.now()));
+      toast("하루치 자동 백업을 내려받았습니다");
+    }catch(e){}
+  }
+  // 첫 실행에는 기준 시각만 심어 즉시 다운로드가 뜨지 않게 함
+  if(!localStorage.getItem(BACKUP_KEY)){
+    localStorage.setItem(BACKUP_KEY, String(Date.now()));
+  }
+  setTimeout(autoBackup, 4000);
   $("btnImport").onclick = function(){ $("fileIn").click(); };
   $("fileIn").onchange = function(){
     var f = this.files[0];
