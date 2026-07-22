@@ -9,6 +9,7 @@
     --ref: #3b82f6;      /* 참고 파랑 */
     --keep: #10b981;     /* 소장 초록 */
     --toread: #f59e0b;   /* 읽을 책 노랑 */
+    --gift: #8b5cf6;     /* 증정본 보라 */
     --bg: #f8f7f4;
     --card: #ffffff;
     --ink: #1f2937;
@@ -59,6 +60,7 @@
   .chip.on[data-f="ref"] { background: var(--ref); }
   .chip.on[data-f="keep"] { background: var(--keep); }
   .chip.on[data-f="toread"] { background: var(--toread); }
+  .chip.on[data-f="gift"] { background: var(--gift); }
   .rmode .chip.on { color: #fff; border-color: transparent; }
   #rm-keep.on { background: var(--keep); }
   #rm-toread.on { background: var(--toread); }
@@ -172,6 +174,14 @@
   .catpick button.on[data-c="ref"] { background: var(--ref); color: #fff; border-color: var(--ref); }
   .catpick button.on[data-c="keep"] { background: var(--keep); color: #fff; border-color: var(--keep); }
   .catpick button.on[data-c="toread"] { background: var(--toread); color: #fff; border-color: var(--toread); }
+  .catpick button.on[data-c="gift"] { background: var(--gift); color: #fff; border-color: var(--gift); }
+  .catpick { flex-wrap: wrap; }
+  .catpick button { flex: 1 1 40%; }
+  #giftfields { display: none; background: #faf8ff; border: 1px solid #e9e2fb; border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+  #giftfields.on { display: block; }
+  #giftfields .gf-title { font-size: 13px; font-weight: 700; color: var(--gift); margin-bottom: 4px; }
+  .gift-tag { font-size: 11px; font-weight: 700; color: var(--gift); }
+  .keepwarn { color: #dc2626; font-weight: 700; }
   .modal .actions { display: flex; gap: 8px; margin-top: 20px; }
   .modal .actions .btn { flex: 1; padding: 13px 0; }
   .slothint { font-size: 12px; color: var(--sub); margin-top: 4px; }
@@ -209,6 +219,7 @@
       <button class="chip" data-f="ref">참고</button>
       <button class="chip" data-f="keep">소장</button>
       <button class="chip" data-f="toread">읽을 책</button>
+      <button class="chip" data-f="gift">증정본</button>
       <button class="chip" data-f="noslot">칸 미지정</button>
     </div>
     <div id="booklist"></div>
@@ -293,6 +304,19 @@
       <button data-c="ref">📘 참고</button>
       <button data-c="keep">💚 소장</button>
       <button data-c="toread">📙 읽을 책</button>
+      <button data-c="gift">🎁 증정본</button>
+    </div>
+    <div id="giftfields">
+      <div class="gf-title">🎁 증정본 정보</div>
+      <label>증정자 (누가 주었나)</label>
+      <input type="text" id="f-giver" placeholder="예: 홍길동 / OO출판사">
+      <label>받은 날짜</label>
+      <input type="date" id="f-received">
+      <label>보관 기한</label>
+      <input type="date" id="f-keepuntil">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+        <input type="checkbox" id="f-permanent" style="width:auto;"> 영구 보관 (기한 없이 계속 보관)
+      </label>
     </div>
     <label>꽂을 칸</label>
     <select id="f-slot"></select>
@@ -353,8 +377,9 @@ if (!db.promptTemplate) db.promptTemplate = DEFAULT_PROMPT;
 
 const SHELVES = ['A','B','C','D','E'];
 const SLOTS_PER = 24;
-const CATNAME = { ref: '참고', keep: '소장', toread: '읽을 책' };
-const CATCOLOR = { ref: 'var(--ref)', keep: 'var(--keep)', toread: 'var(--toread)' };
+const CATNAME = { ref: '참고', keep: '소장', toread: '읽을 책', gift: '증정본' };
+const CATCOLOR = { ref: 'var(--ref)', keep: 'var(--keep)', toread: 'var(--toread)', gift: 'var(--gift)' };
+const CATKEYS = ['ref','keep','toread','gift'];
 const allSlots = [];
 SHELVES.forEach(s => { for (let i = 1; i <= SLOTS_PER; i++) allSlots.push(s + '-' + i); });
 
@@ -385,13 +410,31 @@ function setRankMode(m) {
 
 // ===== 렌더링 =====
 function renderStats() {
-  const c = { ref:0, keep:0, toread:0 };
+  const c = { ref:0, keep:0, toread:0, gift:0 };
   db.books.forEach(b => c[b.cat]++);
+  const over = giftOverdue().length;
   document.getElementById('stats').innerHTML =
     `<span><span class="dot" style="background:var(--ref)"></span>참고 <b>${c.ref}</b></span>` +
     `<span><span class="dot" style="background:var(--keep)"></span>소장 <b>${c.keep}</b>/${db.caps.keep}</span>` +
     `<span><span class="dot" style="background:var(--toread)"></span>읽을 책 <b>${c.toread}</b>/${db.caps.toread}</span>` +
+    `<span><span class="dot" style="background:var(--gift)"></span>증정본 <b>${c.gift}</b>${over?` <span class="keepwarn">· 기한경과 ${over}</span>`:''}</span>` +
     `<span>전체 <b>${db.books.length}</b>권</span>`;
+}
+function today() { return new Date().toISOString().slice(0,10); }
+function giftMeta(b) {
+  const parts = [];
+  parts.push(`🎁 ${b.giver ? esc(b.giver) : '증정자 미상'}`);
+  if (b.author) parts.push(esc(b.author));
+  if (b.permanent) parts.push('영구보관');
+  else if (b.keepUntil) {
+    const overdue = b.keepUntil < today();
+    parts.push(`<span class="${overdue?'keepwarn':''}">보관 ~${b.keepUntil}${overdue?' (경과)':''}</span>`);
+  }
+  return parts.join(' · ');
+}
+function giftOverdue() {
+  const t = today();
+  return db.books.filter(b => b.cat === 'gift' && !b.permanent && b.keepUntil && b.keepUntil < t);
 }
 
 function renderList() {
@@ -400,8 +443,17 @@ function renderList() {
   if (filter === 'noslot') items = items.filter(b => !b.slot);
   else if (filter !== 'all') items = items.filter(b => b.cat === filter);
   if (q) items = items.filter(b =>
-    b.title.toLowerCase().includes(q) || (b.author||'').toLowerCase().includes(q));
-  items.sort((a,b) => a.title.localeCompare(b.title, 'ko'));
+    b.title.toLowerCase().includes(q) || (b.author||'').toLowerCase().includes(q) || (b.giver||'').toLowerCase().includes(q));
+  if (filter === 'gift') {
+    // 보관 기한 임박 순 (영구보관은 뒤로)
+    items.sort((a,b) => {
+      const ka = a.permanent ? '9999' : (a.keepUntil || '8888');
+      const kb = b.permanent ? '9999' : (b.keepUntil || '8888');
+      return ka.localeCompare(kb) || a.title.localeCompare(b.title, 'ko');
+    });
+  } else {
+    items.sort((a,b) => a.title.localeCompare(b.title, 'ko'));
+  }
 
   const ranks = {};
   keepRank().forEach((b,i) => ranks[b.id] = i+1);
@@ -417,11 +469,17 @@ function renderList() {
     let rank = '';
     if (b.cat === 'keep' && ranks[b.id]) rank = `<span class="rankbadge">★ ${ranks[b.id]}위</span> `;
     else if (b.cat === 'toread' && trRanks[b.id]) rank = `<span class="rankbadge" style="color:var(--toread)">▶ ${trRanks[b.id]}순위</span> `;
+    let meta;
+    if (b.cat === 'gift') {
+      meta = giftMeta(b);
+    } else {
+      meta = `${rank}${esc(b.author||'')}${b.author&&b.memo?' · ':''}${esc(b.memo||'')}`;
+    }
     return `<div class="book" onclick="openEdit('${b.id}')">
       <div class="cat" style="background:${CATCOLOR[b.cat]}"></div>
       <div class="info">
         <div class="title">${esc(b.title)}</div>
-        <div class="meta">${rank}${esc(b.author||'')}${b.author&&b.memo?' · ':''}${esc(b.memo||'')}</div>
+        <div class="meta">${meta}</div>
       </div>
       <div class="loc ${b.slot?'':'none'}">${b.slot || '미지정'}</div>
     </div>`;
@@ -436,10 +494,10 @@ function renderShelves() {
       const id = sh + '-' + i;
       const books = slotBooks(id);
       const n = books.length;
-      const c = { ref:0, keep:0, toread:0 };
+      const c = { ref:0, keep:0, toread:0, gift:0 };
       books.forEach(b => c[b.cat]++);
       const bar = n ? `<div class="bar">` +
-        ['ref','keep','toread'].filter(k=>c[k]).map(k =>
+        CATKEYS.filter(k=>c[k]).map(k =>
           `<i style="width:${c[k]/n*100}%;background:${CATCOLOR[k]}"></i>`).join('') +
         `</div>` : '';
       cells.push(`<div class="slot" onclick="openSlot('${id}')">
@@ -557,13 +615,21 @@ function fillSlotSelect(sel) {
   });
   sel.innerHTML = opts.join('');
 }
+function toggleGiftFields() {
+  document.getElementById('giftfields').classList.toggle('on', pickedCat === 'gift');
+}
 function openAdd(presetSlot) {
   editingId = null; pickedCat = null;
   document.getElementById('modaltitle').textContent = '책 추가';
   document.getElementById('f-title').value = '';
   document.getElementById('f-author').value = '';
   document.getElementById('f-memo').value = '';
+  document.getElementById('f-giver').value = '';
+  document.getElementById('f-received').value = new Date().toISOString().slice(0,10);
+  document.getElementById('f-keepuntil').value = '';
+  document.getElementById('f-permanent').checked = false;
   document.querySelectorAll('#f-cat button').forEach(b => b.classList.remove('on'));
+  toggleGiftFields();
   const sel = document.getElementById('f-slot');
   fillSlotSelect(sel);
   if (presetSlot) sel.value = presetSlot;
@@ -580,8 +646,13 @@ function openEdit(id) {
   document.getElementById('f-title').value = b.title;
   document.getElementById('f-author').value = b.author || '';
   document.getElementById('f-memo').value = b.memo || '';
+  document.getElementById('f-giver').value = b.giver || '';
+  document.getElementById('f-received').value = b.received || '';
+  document.getElementById('f-keepuntil').value = b.keepUntil || '';
+  document.getElementById('f-permanent').checked = !!b.permanent;
   document.querySelectorAll('#f-cat button').forEach(btn =>
     btn.classList.toggle('on', btn.dataset.c === b.cat));
+  toggleGiftFields();
   const sel = document.getElementById('f-slot');
   fillSlotSelect(sel);
   if (b.slot) sel.value = b.slot;
@@ -594,9 +665,9 @@ function updateSlotHint() {
   const hint = document.getElementById('slothint');
   if (!v) { hint.textContent = '칸을 정하지 않으면 "칸 미지정"으로 남아요. 검색 필터로 나중에 찾을 수 있어요.'; return; }
   const books = slotBooks(v).filter(b => b.id !== editingId);
-  const c = { ref:0, keep:0, toread:0 };
+  const c = { ref:0, keep:0, toread:0, gift:0 };
   books.forEach(b => c[b.cat]++);
-  const parts = ['ref','keep','toread'].filter(k=>c[k]).map(k=>`${CATNAME[k]} ${c[k]}권`);
+  const parts = CATKEYS.filter(k=>c[k]).map(k=>`${CATNAME[k]} ${c[k]}권`);
   hint.textContent = books.length ? `이 칸에 지금: ${parts.join(', ')}` : '빈 칸이에요.';
 }
 document.getElementById('f-slot').addEventListener('change', updateSlotHint);
@@ -604,6 +675,7 @@ document.getElementById('f-cat').addEventListener('click', e => {
   const btn = e.target.closest('button'); if (!btn) return;
   pickedCat = btn.dataset.c;
   document.querySelectorAll('#f-cat button').forEach(b => b.classList.toggle('on', b === btn));
+  toggleGiftFields();
 });
 function saveBook() {
   const title = document.getElementById('f-title').value.trim();
@@ -612,19 +684,25 @@ function saveBook() {
   const slot = document.getElementById('f-slot').value || null;
   const author = document.getElementById('f-author').value.trim();
   const memo = document.getElementById('f-memo').value.trim();
+  const giftData = pickedCat === 'gift' ? {
+    giver: document.getElementById('f-giver').value.trim(),
+    received: document.getElementById('f-received').value || '',
+    keepUntil: document.getElementById('f-keepuntil').value || '',
+    permanent: document.getElementById('f-permanent').checked
+  } : { giver: '', received: '', keepUntil: '', permanent: false };
 
   if (editingId) {
     const b = db.books.find(x => x.id === editingId);
-    Object.assign(b, { title, author, memo, cat: pickedCat, slot });
+    Object.assign(b, { title, author, memo, cat: pickedCat, slot }, giftData);
   } else {
     // 중복 경고
     const dup = db.books.find(b => b.title.toLowerCase() === title.toLowerCase());
     if (dup && !confirm(`"${title}" 은(는) 이미 ${dup.slot||'미지정'}에 있어요. 그래도 추가할까요?`)) return;
-    db.books.push({
+    db.books.push(Object.assign({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       title, author, memo, cat: pickedCat, slot,
       elo: 1500, battles: 0, added: new Date().toISOString().slice(0,10)
-    });
+    }, giftData));
   }
   // 상한 경고
   const cnt = db.books.filter(b => b.cat === pickedCat).length;
@@ -653,14 +731,20 @@ function openSlot(id) {
   catRank('toread').forEach((b,i) => trRanks[b.id] = i+1);
   document.getElementById('slotbooks').innerHTML = books.length
     ? books.map(b => {
-        let r = '';
-        if (b.cat === 'keep' && ranks[b.id]) r = ` · ★ ${ranks[b.id]}위`;
-        else if (b.cat === 'toread' && trRanks[b.id]) r = ` · ▶ ${trRanks[b.id]}순위`;
+        let meta;
+        if (b.cat === 'gift') {
+          meta = CATNAME[b.cat] + ' · ' + giftMeta(b);
+        } else {
+          let r = '';
+          if (b.cat === 'keep' && ranks[b.id]) r = ` · ★ ${ranks[b.id]}위`;
+          else if (b.cat === 'toread' && trRanks[b.id]) r = ` · ▶ ${trRanks[b.id]}순위`;
+          meta = `${CATNAME[b.cat]}${r}${b.author?' · '+esc(b.author):''}`;
+        }
         return `<div class="book" onclick="closeModal('modal-slot');openEdit('${b.id}')">
         <div class="cat" style="background:${CATCOLOR[b.cat]}"></div>
         <div class="info">
           <div class="title">${esc(b.title)}</div>
-          <div class="meta">${CATNAME[b.cat]}${r}${b.author?' · '+esc(b.author):''}</div>
+          <div class="meta">${meta}</div>
         </div>
       </div>`; }).join('')
     : '<div class="empty">빈 칸이에요.</div>';
@@ -744,18 +828,20 @@ function mergeData(raw) {
   if (!list) { toast('올바른 데이터 형식이 아니에요'); return; }
 
   let added = 0, dup = 0;
-  const today = new Date().toISOString().slice(0,10);
+  const t = new Date().toISOString().slice(0,10);
   list.forEach(nb => {
     const title = (nb.title || '').trim();
     if (!title) return;
     const exists = db.books.find(b => b.title.toLowerCase() === title.toLowerCase());
     if (exists) { dup++; return; }
     const slot = allSlots.includes(nb.slot) ? nb.slot : null;
+    const cat = CATKEYS.includes(nb.cat) ? nb.cat : 'toread';
     db.books.push({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
       title, author: (nb.author || '').trim(), memo: '',
-      cat: ['ref','keep','toread'].includes(nb.cat) ? nb.cat : 'toread',
-      slot, elo: 1500, battles: 0, added: today
+      cat, slot, elo: 1500, battles: 0, added: t,
+      giver: (nb.giver || '').trim(), received: nb.received || '',
+      keepUntil: nb.keepUntil || '', permanent: !!nb.permanent
     });
     added++;
   });
@@ -769,8 +855,9 @@ function exportCSV() {
   const ranks = {};
   keepRank().forEach((b,i) => ranks[b.id] = i+1);
   catRank('toread').forEach((b,i) => ranks[b.id] = i+1);
-  const rows = [['제목','저자','분류','칸','순위','메모','등록일']];
-  db.books.forEach(b => rows.push([b.title, b.author||'', CATNAME[b.cat], b.slot||'', ranks[b.id]||'', b.memo||'', b.added||'']));
+  const rows = [['제목','저자','분류','칸','순위','증정자','받은날짜','보관기한','메모','등록일']];
+  db.books.forEach(b => rows.push([b.title, b.author||'', CATNAME[b.cat], b.slot||'', ranks[b.id]||'',
+    b.giver||'', b.received||'', b.permanent?'영구보관':(b.keepUntil||''), b.memo||'', b.added||'']));
   const csv = '﻿' + rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
