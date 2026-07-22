@@ -166,6 +166,7 @@
     <p><span class="k">긴급</span>: 긴급 버튼으로 추가하면 점이 찍힌 채 끝에 들어가 가장 먼저 하게 됩니다. 이미 있는 작업이 긴급해졌으면 그 작업을 탭해 ‘긴급으로 이동’을 선택하세요.</p>
     <p>오래 자리를 비웠다 돌아와 선택이 낡았으면 ‘재선택’으로 점을 지우고 새로 고르세요.</p>
     <p style="color:var(--sub);font-size:13px;">데이터는 이 브라우저에 저장됩니다. Safari로 열어 ‘홈 화면에 추가’ 후 사용하고, 내보내기로 백업하세요.</p>
+    <p style="color:var(--sub);font-size:13px;"><span class="k" style="color:var(--sub)">기기 간 병합</span>: 한 기기에서 내보낸 파일을 다른 기기에서 ‘가져오기’ 하면 병합·덮어쓰기를 고를 수 있어요. 병합은 양쪽 작업을 합치고 같은 작업은 더 최근에 고친 쪽을 남깁니다. 삭제한 작업은 30일간 기록으로 남아 되살아나지 않으며, ‘완료된 항목 정리’로 비웁니다. 병합이 어긋나지 않으려면 <span class="k" style="color:var(--sub)">한 번에 한 기기에서만</span> 쓰고, 마칠 때 내보내 다른 기기에서 병합하세요.</p>
     <button class="clear" onclick="clearDone()">완료된 항목 정리</button>
   </div>
 </div>
@@ -176,12 +177,30 @@
 'use strict';
 const KEY = 'finalversion-v1';
 
-let S = load() || { tasks: [], phase: 'idle' }; // phase: idle | select | work
-
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function load(){ try{ return JSON.parse(localStorage.getItem(KEY)); }catch(e){ return null; } }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function now(){ return Date.now(); }
+function touch(t){ t.m = now(); }
+function mkTask(text, dotted, url){
+  const n = now();
+  return {id: uid(), text, status: 'active', dotted: !!dotted, url: url || undefined, t: n, m: n};
+}
+
+// 저장/가져온 데이터에 생성시각(t)·수정시각(m)을 채워 병합이 가능하도록 보정
+function migrate(state){
+  if(!state || !Array.isArray(state.tasks)) state = { tasks: [], phase: 'idle' };
+  const len = state.tasks.length, base = now();
+  state.tasks.forEach((t, i) => {
+    if(typeof t.t !== 'number') t.t = base - (len - i);
+    if(typeof t.m !== 'number') t.m = t.t;
+  });
+  if(!state.phase) state.phase = 'idle';
+  return state;
+}
+
+let S = migrate(load()); // phase: idle | select | work
 
 function isActive(t){ return t.status === 'active'; }
 function activeTasks(){ return S.tasks.filter(isActive); }
@@ -198,7 +217,7 @@ function submitTask(urgent){
   const inp = document.getElementById('inp');
   const text = inp.value.trim();
   if(!text){ inp.focus(); return; }
-  S.tasks.push({id: uid(), text, status: 'active', dotted: !!urgent});
+  S.tasks.push(mkTask(text, urgent));
   if(urgent){
     if(S.phase === 'idle') S.phase = 'work';
     toast('점이 찍힌 채 추가 — 다음에 바로 하게 돼요');
@@ -257,7 +276,7 @@ function afterAction(){
 
 function completeCurrent(){
   const t = currentTask(); if(!t) return;
-  t.status = 'done';
+  t.status = 'done'; touch(t);
   afterAction();
 }
 
@@ -276,8 +295,8 @@ function confirmForward(id){
   const inp = document.getElementById('editInp');
   const text = (inp && inp.value.trim()) || t.text;
   const url = readUrlInput();
-  t.status = 'done'; t.fwd = true;
-  S.tasks.push({id: uid(), text, status: 'active', dotted: false, url: url || undefined});
+  t.status = 'done'; t.fwd = true; touch(t);
+  S.tasks.push(mkTask(text, false, url));
   toast('리스트 끝에 재기입했어요');
   afterAction();
 }
@@ -289,6 +308,7 @@ function confirmEdit(id){
   if(text) t.text = text;
   const url = readUrlInput();
   if(url) t.url = url; else delete t.url;
+  touch(t);
   closeSheet(); save(); render();
 }
 
@@ -353,7 +373,7 @@ function urgentize(id){
   const i = S.tasks.findIndex(t => t.id === id);
   if(i < 0) return;
   const t = S.tasks.splice(i, 1)[0];
-  t.dotted = true;
+  t.dotted = true; t.t = now(); touch(t); // 끝으로 재배치 (병합 정렬 기준도 갱신)
   S.tasks.push(t);
   if(S.phase === 'idle') S.phase = 'work';
   closeSheet(); save(); render();
@@ -361,18 +381,39 @@ function urgentize(id){
 }
 
 function deleteTask(id){
-  const i = S.tasks.findIndex(t => t.id === id);
-  if(i >= 0) S.tasks.splice(i, 1);
+  const t = S.tasks.find(x => x.id === id);
+  // 완전 제거 대신 '삭제됨'으로 표시(묘비) — 다른 기기와 병합할 때 되살아나지 않도록
+  if(t){ t.status = 'deleted'; t.dotted = false; touch(t); }
   if(S.phase !== 'idle' && chainCount() === 0) S.phase = 'idle';
   closeSheet(); save(); render();
 }
 
 function clearDone(){
-  const n = S.tasks.length;
-  S.tasks = S.tasks.filter(isActive);
+  const before = S.tasks.length;
+  const cutoff = now() - 30 * 24 * 3600 * 1000; // 삭제 묘비는 30일간 보존(그 사이 양쪽 기기 병합 완료 가정)
+  S.tasks = S.tasks.filter(t =>
+    t.status === 'active' || (t.status === 'deleted' && (t.m || 0) > cutoff)
+  );
   document.getElementById('helpOvl').classList.remove('show');
   save(); render();
-  toast((n - S.tasks.length) + '개 항목을 정리했어요');
+  toast((before - S.tasks.length) + '개 항목을 정리했어요');
+}
+
+/* ---------- merge (기기 간 병합) ---------- */
+function mergeInto(incoming){
+  incoming = migrate(incoming);
+  const map = {};
+  const consider = t => {
+    const ex = map[t.id];
+    if(!ex || (t.m || 0) >= (ex.m || 0)) map[t.id] = t; // 같은 ID면 더 최근 수정본 채택
+  };
+  S.tasks.forEach(consider);
+  incoming.tasks.forEach(consider);
+  const merged = Object.keys(map).map(k => map[k]);
+  merged.sort((a, b) => (a.t || 0) - (b.t || 0) || String(a.id).localeCompare(String(b.id)));
+  merged.forEach(t => { t.dotted = false; }); // 병합 후 선택 체인은 초기화
+  S.tasks = merged;
+  S.phase = 'idle';
 }
 
 /* ---------- render ---------- */
@@ -408,13 +449,14 @@ function render(){
   }
 
   const list = document.getElementById('list');
-  if(S.tasks.length === 0){
+  if(!S.tasks.some(t => t.status !== 'deleted')){
     list.innerHTML = '<div class="empty">아직 아무것도 없어요.<br>아래에서 할 일을 추가하세요.</div>';
     return;
   }
   const ldi = lastDottedIdx();
   let html = '';
   S.tasks.forEach((t, i) => {
+    if(t.status === 'deleted') return; // 묘비는 화면에서 숨김
     let cls = 'task';
     let on = '';
     if(t.status === 'done'){
@@ -454,6 +496,7 @@ function exportData(){
   a.click();
   URL.revokeObjectURL(a.href);
 }
+let pendingImport = null;
 function importData(input){
   const f = input.files[0];
   if(!f) return;
@@ -462,13 +505,33 @@ function importData(input){
     try{
       const d = JSON.parse(r.result);
       if(!d.tasks || !Array.isArray(d.tasks)) throw 0;
-      S = d;
-      save(); render();
-      toast('가져오기 완료');
+      pendingImport = d;
+      const inActive = d.tasks.filter(t => t.status === 'active').length;
+      document.getElementById('sheet').innerHTML =
+        '<div class="stitle">가져온 파일에 미처리 작업 ' + inActive + '개가 있어요. 어떻게 할까요?</div>'
+        + '<div class="shint">병합: 양쪽 기기의 작업을 합치고, 같은 작업은 더 최근에 고친 쪽을 남깁니다. 덮어쓰기: 이 기기 내용을 파일 내용으로 완전히 대체합니다.</div>'
+        + '<button onclick="doMerge()">병합 (양쪽 합치기)</button>'
+        + '<button class="warn" onclick="doOverwrite()">덮어쓰기 (이 기기 대체)</button>'
+        + '<button class="plain" onclick="pendingImport=null;closeSheet()">취소</button>';
+      document.getElementById('sheetOvl').classList.add('show');
     }catch(e){ toast('올바른 백업 파일이 아니에요'); }
   };
   r.readAsText(f);
   input.value = '';
+}
+function doMerge(){
+  if(!pendingImport) return;
+  mergeInto(pendingImport);
+  pendingImport = null;
+  closeSheet(); save(); render();
+  toast('병합했어요');
+}
+function doOverwrite(){
+  if(!pendingImport) return;
+  S = migrate(pendingImport);
+  pendingImport = null;
+  closeSheet(); save(); render();
+  toast('덮어썼어요');
 }
 
 document.getElementById('inp').addEventListener('keydown', e => {
