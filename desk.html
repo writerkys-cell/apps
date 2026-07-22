@@ -302,6 +302,7 @@ function render(){
   if(showNewForm || !x){ renderForm(); }
   else if(x.kind === "r"){ renderBook(x); }
   else{ renderProject(x); }
+  if(pipActive) pipDraw();   // 상태가 바뀔 때만 작은 창을 다시 그림
 }
 
 function renderTabs(){
@@ -483,7 +484,7 @@ function renderProject(p){
         <button class="gold-btn" id="btnRefs">자료들</button>
         <button class="primary" id="btnDone">${fmt(d.posInUnit * BLOCK_CHARS)}자 완료</button>
       </div>
-      ${ p.done > 0 ? `<button class="ghost" id="btnUndo">마지막 완료 되돌리기</button>` : "" }
+      <button class="ghost" id="btnPip">${pipActive ? "작은 창 닫기" : "작은 창"}</button>${ p.done > 0 ? `<button class="ghost" id="btnUndo">마지막 완료 되돌리기</button>` : "" }
     </div>`;
   }
 
@@ -630,7 +631,7 @@ function renderBook(b){
         <button class="gold-btn" id="btnRefs">자료들</button>
         <button class="primary" id="btnDone">${fmt(endPage)}쪽 완료</button>
       </div>
-      ${ b.done > 0 ? `<button class="ghost" id="btnUndo">마지막 완료 되돌리기</button>` : "" }
+      <button class="ghost" id="btnPip">${pipActive ? "작은 창 닫기" : "작은 창"}</button>${ b.done > 0 ? `<button class="ghost" id="btnUndo">마지막 완료 되돌리기</button>` : "" }
     </div>`;
   }
 
@@ -740,8 +741,131 @@ function bindBook(b, d){
   };
 }
 
+/* ================= 작은 창 (PiP) ================= */
+let pipCanvas = null, pipVideo = null, pipTimer = null, pipActive = false;
+
+function pipDraw(){
+  const x = item();
+  if(!x || !pipCanvas) return;
+  const c = pipCanvas.getContext("2d");
+  const W = 640, H = 360;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = "#f7f5f0";
+  c.fillRect(0, 0, W, H);
+
+  let title, goal, sub, f;
+  if(x.kind === "r"){
+    const d = deriveR(x);
+    title = x.title || "";
+    if(d.finished){ goal = "완독"; sub = fmt(d.totalPages) + "쪽"; f = 1; }
+    else{
+      const end = d.readPages + x.units[d.unitIdx].pages;
+      goal = fmt(end) + "쪽까지 읽기 중";
+      sub = "부분 " + (d.unitIdx + 1) + "/" + d.unitCount + " · 누적 " + fmt(d.readPages) + "쪽";
+      f = Math.min(1, d.totalPages ? d.readPages / d.totalPages : 0);
+    }
+  } else {
+    const d = deriveW(x);
+    title = x.name || "";
+    if(d.finished){ goal = "완성"; sub = fmt(x.totalPages) + "매"; f = 1; }
+    else{
+      const u = x.units[d.unitIdx];
+      goal = fmt(d.posInUnit * BLOCK_CHARS) + "자 쓰기 중";
+      sub = (u.title ? u.title : "부분 " + (d.unitIdx + 1)) + " · " + d.posInUnit + "/" + u.blocks;
+      f = fractionW(x, d).f;
+    }
+  }
+
+  // 왼쪽 텍스트
+  const clip = (s, font, max) => {
+    c.font = font;
+    while(s.length > 1 && c.measureText(s).width > max) s = s.slice(0, -1);
+    return s;
+  };
+  c.textAlign = "left"; c.textBaseline = "alphabetic";
+  c.fillStyle = "#26241f";
+  c.font = "800 40px -apple-system, 'Apple SD Gothic Neo', sans-serif";
+  c.fillText(clip(title, c.font, 360), 36, 120);
+  c.fillStyle = "#2f4858";
+  c.font = "700 34px -apple-system, 'Apple SD Gothic Neo', sans-serif";
+  c.fillText(clip(goal, c.font, 360), 36, 190);
+  c.fillStyle = "#8a857a";
+  c.font = "400 24px -apple-system, 'Apple SD Gothic Neo', sans-serif";
+  c.fillText(clip(sub, c.font, 360), 36, 246);
+
+  // 오른쪽 진행 원 (아래에서 시작, 시계 방향)
+  const cx = 510, cy = 180, R = 105;
+  c.lineWidth = 18; c.lineCap = "round";
+  c.strokeStyle = "#ece8de";
+  c.beginPath(); c.arc(cx, cy, R, 0, 2 * Math.PI); c.stroke();
+  if(f > 0.0001){
+    c.strokeStyle = "#7a9e7e";
+    c.beginPath();
+    c.arc(cx, cy, R, Math.PI / 2, Math.PI / 2 + f * 2 * Math.PI, false);
+    c.stroke();
+  }
+  c.fillStyle = "#26241f";
+  c.textAlign = "center"; c.textBaseline = "middle";
+  c.font = "800 52px -apple-system, 'Apple SD Gothic Neo', sans-serif";
+  c.fillText(Math.round(f * 100) + "%", cx, cy);
+}
+
+function stopPip(){
+  const was = pipActive;
+  pipActive = false;
+  if(pipTimer){ clearInterval(pipTimer); pipTimer = null; }
+  if(pipVideo){ try{ pipVideo.pause(); pipVideo.srcObject = null; }catch(e){} }
+  if(was) render();
+}
+
+async function togglePip(){
+  try{
+    if(pipActive){
+      if(document.pictureInPictureElement){ await document.exitPictureInPicture(); }
+      else if(pipVideo && pipVideo.webkitPresentationMode === "picture-in-picture"){
+        pipVideo.webkitSetPresentationMode("inline");
+      } else { stopPip(); }
+      return;
+    }
+    if(!pipCanvas){
+      pipCanvas = document.createElement("canvas");
+      pipCanvas.width = 640; pipCanvas.height = 360;
+      pipVideo = document.createElement("video");
+      pipVideo.muted = true;
+      pipVideo.setAttribute("playsinline", "");
+      pipVideo.style.cssText = "position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none;";
+      document.body.appendChild(pipVideo);
+      pipVideo.addEventListener("leavepictureinpicture", stopPip);
+      pipVideo.addEventListener("webkitpresentationmodechanged", () => {
+        if(pipActive && pipVideo.webkitPresentationMode !== "picture-in-picture") stopPip();
+      });
+    }
+    pipDraw();
+    const stream = pipCanvas.captureStream ? pipCanvas.captureStream(5) : null;
+    if(!stream) throw new Error("no captureStream");
+    pipVideo.srcObject = stream;
+    await pipVideo.play();
+    if(pipVideo.webkitSupportsPresentationMode && pipVideo.webkitSupportsPresentationMode("picture-in-picture")){
+      pipVideo.webkitSetPresentationMode("picture-in-picture");
+    } else if(pipVideo.requestPictureInPicture){
+      await pipVideo.requestPictureInPicture();
+    } else {
+      throw new Error("unsupported");
+    }
+    pipActive = true;
+    pipTimer = setInterval(pipDraw, 30000);   // 화면이 얼지 않도록 30초에 한 번만 유지용으로 갱신
+    render();
+    toast("작은 창을 열었습니다. 모서리를 끌면 크기를 조절할 수 있어요.");
+  }catch(e){
+    stopPip();
+    toast("작은 창을 열 수 없어요. 사파리 버전이나 설정에서 화면 속 화면을 확인해 주세요.");
+  }
+}
+
 /* ================= 공용 바인딩 ================= */
 function bindCommon(x){
+  const bp = document.getElementById("btnPip");
+  if(bp) bp.onclick = togglePip;
   const bu = document.getElementById("btnUndo");
   if(bu) bu.onclick = () => {
     if(x.done > 0){
