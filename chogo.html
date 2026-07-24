@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초고 쓰기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf8f4;
+    --card: #ffffff;
+    --ink: #2b2a28;
+    --ink-soft: #6b6862;
+    --ink-faint: #a09c94;
+    --line: #e8e4dc;
+    --accent: #8a6f4d;
+    --accent-soft: #f0e9df;
+    --good: #5a7d5a;
+    --good-soft: #eaf1ea;
+    --warn: #a3552f;
+    --serif: "Sandoll Myungjo", "SD Myungjo", "AppleMyungjo", "Noto Serif KR", "Nanum Myeongjo", "Noto Serif CJK KR", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #201e1b;
+      --card: #2a2724;
+      --ink: #e8e4dc;
+      --ink-soft: #a8a29a;
+      --ink-faint: #6e6a64;
+      --line: #3a3630;
+      --accent: #c2a678;
+      --accent-soft: #35302a;
+      --good: #8fb08f;
+      --good-soft: #2b332b;
+      --warn: #d08a63;
+    }
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+  header.top { display:flex; align-items:baseline; justify-content:space-between; margin-bottom: 28px; }
+  h1.logo { font-family: var(--sans); font-size: 20px; font-weight: 700; letter-spacing: -0.3px; cursor: pointer; }
+  .top-actions { display:flex; gap:8px; }
+
+  button {
+    font-family: var(--sans);
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { opacity:.9; color:#fff; }
+  button.ghost { border:none; background:none; color: var(--ink-faint); padding:4px 8px; }
+  button.ghost:hover { color: var(--warn); }
+
+  /* ---------- home ---------- */
+  .today-summary {
+    font-size: 13px; color: var(--ink-soft); margin-bottom: 20px;
+    padding: 10px 14px; background: var(--accent-soft); border-radius: 10px;
+  }
+  .today-summary b { color: var(--accent); }
+  .cards { display:flex; flex-direction:column; gap:14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 20px 22px; cursor: pointer;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.06); transform: translateY(-1px); }
+  .card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .card-title { font-family: var(--serif); font-size: 18px; font-weight: 500; }
+  .badge {
+    font-size: 11.5px; padding: 3px 10px; border-radius: 20px; white-space:nowrap;
+    background: var(--accent-soft); color: var(--ink-soft);
+  }
+  .badge.done { background: var(--good-soft); color: var(--good); font-weight:600; }
+  .card-today { margin-top:6px; font-size: 13.5px; color: var(--ink-soft); }
+  .card-today b { color: var(--ink); font-size: 15px; }
+  .bar { height: 5px; background: var(--line); border-radius: 3px; margin: 14px 0 10px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background: var(--accent); border-radius:3px; transition: width .3s; }
+  .card-stats { display:flex; flex-wrap:wrap; gap: 4px 18px; font-size: 12.5px; color: var(--ink-faint); }
+  .card-stats b { color: var(--ink-soft); font-weight: 600; }
+  .card-stats .alert { color: var(--warn); }
+  .empty { text-align:center; padding: 60px 0; color: var(--ink-faint); font-size: 14px; }
+  .empty .big { font-family: var(--serif); font-size: 18px; color: var(--ink-soft); margin-bottom: 8px; }
+  .add-row { margin-top: 20px; text-align: center; }
+
+  /* ---------- write view ---------- */
+  .write-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;}
+  .back { font-size: 13px; color: var(--ink-faint); cursor:pointer; background:none; border:none; padding:4px 0; }
+  .back:hover { color: var(--accent); }
+  .write-title { font-family: var(--serif); font-size: 20px; font-weight:500; margin: 4px 0 2px; }
+  .write-sub { font-size: 12.5px; color: var(--ink-faint); margin-bottom: 18px; }
+  .editor-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px 28px; margin-bottom: 14px;
+  }
+  .editor-wrap { position: relative; }
+  #backdrop, textarea#editor {
+    font-family: var(--sans);
+    font-size: 16.5px; line-height: 2.0; letter-spacing: .2px; font-weight: 400;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
+    padding: 0; margin: 0; border: none;
+  }
+  #backdrop {
+    position: absolute; inset: 0; pointer-events: none;
+    color: var(--ink); overflow: hidden;
+  }
+  #backdrop span { transition: color .25s; }
+  #backdrop.focusmode span { color: var(--ink-faint); }
+  #backdrop.focusmode span.cur { color: var(--ink); }
+  textarea#editor {
+    position: relative; display: block;
+    width: 100%; min-height: 320px; outline: none; resize: none; overflow: hidden;
+    background: transparent; color: transparent; caret-color: var(--accent);
+  }
+  textarea#editor::placeholder { color: var(--ink-faint); -webkit-text-fill-color: var(--ink-faint); }
+  .editor-foot {
+    display:flex; justify-content:space-between; align-items:center;
+    border-top: 1px solid var(--line); padding-top: 14px; margin-top: 6px;
+  }
+  .charcount { font-size: 14px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .charcount.reached { color: var(--good); font-weight: 600; }
+  .charcount .goalmark { font-size: 12px; margin-left: 6px; }
+  .editor-actions { display:flex; gap:8px; }
+  .mini-ring { width: 100%; height: 4px; background: var(--line); border-radius:2px; overflow:hidden; margin-bottom: 14px;}
+  .mini-ring > i { display:block; height:100%; background: var(--good); width:0; transition: width .2s; border-radius:2px;}
+
+  .write-info { display:flex; flex-wrap:wrap; gap: 6px 20px; font-size: 12.5px; color: var(--ink-faint); margin-bottom: 22px; }
+  .write-info b { color: var(--ink-soft); }
+
+  .history-title { font-size: 12px; letter-spacing: 1.5px; color: var(--ink-faint); margin: 26px 0 10px; }
+  .spark { display:flex; align-items:flex-end; gap: 5px; height: 56px; }
+  .spark .col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .spark .colbar { width: 100%; max-width: 26px; background: var(--accent-soft); border-radius: 3px 3px 0 0; min-height:2px; position:relative; }
+  .spark .colbar.has { background: var(--accent); }
+  .spark .lab { font-size: 9.5px; color: var(--ink-faint); }
+  .spark .num { font-size: 10px; color: var(--ink-soft); height: 14px; }
+  .log-list { font-size: 13px; color: var(--ink-soft); }
+  .log-list li { list-style:none; padding: 6px 0; border-bottom: 1px dashed var(--line); display:flex; justify-content:space-between; }
+
+  /* ---------- modal ---------- */
+  dialog {
+    border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink);
+    padding: 28px; width: min(420px, 92vw); margin: auto;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); backdrop-filter: blur(2px); }
+  dialog h2 { font-family: var(--serif); font-size: 18px; font-weight:500; margin-bottom: 18px; }
+  .field { margin-bottom: 14px; }
+  .field label { display:block; font-size: 12px; color: var(--ink-soft); margin-bottom: 4px; }
+  .field input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); color: var(--ink); font-size: 14px; font-family: var(--sans);
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field .hint { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top: 20px; }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: var(--bg); padding: 10px 20px; border-radius: 24px;
+    font-size: 13.5px; opacity: 0; pointer-events: none; transition: all .3s;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  footer.app-foot { margin-top: 48px; text-align:center; font-size: 11.5px; color: var(--ink-faint); }
+  footer.app-foot a { color: var(--ink-faint); cursor:pointer; text-decoration: underline; }
+  footer.app-foot a:hover { color: var(--accent); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1 class="logo" onclick="showHome()">초고 쓰기</h1>
+    <div class="top-actions" id="homeActions">
+      <button class="primary" onclick="openProjectModal()">+ 새 프로젝트</button>
+    </div>
+  </header>
+
+  <!-- ============ 메인 ============ -->
+  <section id="homeView">
+    <div class="today-summary" id="todaySummary"></div>
+    <div class="cards" id="cardList"></div>
+    <div class="empty hidden" id="emptyMsg">
+      <div class="big">아직 프로젝트가 없습니다</div>
+      오른쪽 위 ‘새 프로젝트’로 시작하세요.
+    </div>
+  </section>
+
+  <!-- ============ 쓰기 ============ -->
+  <section id="writeView" class="hidden">
+    <div class="write-head">
+      <button class="back" onclick="showHome()">← 프로젝트 목록</button>
+      <div style="display:flex; gap:8px;">
+        <button onclick="runShortcut()">초고 열기</button>
+        <button onclick="endOfDay()">글자수 입력</button>
+        <button class="ghost" onclick="openProjectModal(currentId)">설정</button>
+      </div>
+    </div>
+    <div class="write-title" id="wTitle"></div>
+    <div class="write-sub" id="wSub"></div>
+
+    <div class="editor-box">
+      <div class="editor-wrap">
+        <div id="backdrop" aria-hidden="true"></div>
+        <textarea id="editor" placeholder="한 줄에 한 문장씩 씁니다. ‘복사’를 누르면 모든 줄이 한 문단으로 이어져 복사됩니다." spellcheck="false"></textarea>
+      </div>
+      <div class="editor-foot">
+        <div class="charcount" id="charCount">0자</div>
+        <div class="editor-actions">
+          <button class="ghost" onclick="clearEditor()">비우기</button>
+          <button class="primary" id="copyBtn" onclick="copyAndRecord()">복사 (⌘↩)</button>
+        </div>
+      </div>
+    </div>
+    <div class="write-info" id="wInfo"></div>
+
+    <div class="history-title">최근 14일</div>
+    <div class="spark" id="spark"></div>
+    <div class="history-title">오늘의 기록</div>
+    <ul class="log-list" id="todayLog"></ul>
+  </section>
+
+  <!-- ============ 프로젝트 모달 ============ -->
+  <dialog id="projectModal">
+    <h2 id="modalTitle">새 프로젝트</h2>
+    <div class="field">
+      <label>프로젝트 이름</label>
+      <input id="fName" type="text" placeholder="예: 장편소설 — 겨울의 문장">
+    </div>
+    <div class="field">
+      <label>목표 매수 (200자 원고지)</label>
+      <input id="fGoal" type="number" min="1" placeholder="예: 80">
+      <div class="hint" id="goalHint">80매 = 16,000자</div>
+    </div>
+    <div class="field">
+      <label>마감일 (선택)</label>
+      <input id="fDeadline" type="date">
+      <div class="hint">정하면 하루에 몇 번의 400자 쓰기가 필요한지 자동 계산됩니다.</div>
+    </div>
+    <div class="field">
+      <label>하루 목표 회수 (선택 · 마감일이 없을 때 사용)</label>
+      <input id="fDaily" type="number" min="1" placeholder="기본 3회">
+      <div class="hint">달성 여부는 글자수 기준입니다. 기본 3회 = 하루 1,200자. 마감일이 있으면 하루 목표 글자수가 자동 계산됩니다.</div>
+    </div>
+    <div class="field">
+      <label>기존 원고 글자수 (선택)</label>
+      <input id="fBase" type="number" placeholder="0">
+      <div class="hint">다른 곳에서 쓰다가 가져온 프로젝트라면 이미 쓴 글자수를 입력하세요. 누적에 더해집니다.</div>
+    </div>
+    <div class="field">
+      <label>스크리브너 글자수로 보정 (선택)</label>
+      <input id="fSync" type="number" min="0" placeholder="스크리브너에 표시된 총 글자수">
+      <div class="hint" id="syncHint">입력하면 앱의 누적 글자수가 이 값과 정확히 같아지도록 자동 보정합니다.</div>
+    </div>
+    <div class="field">
+      <label>시작 단축어 이름</label>
+      <input id="fShortcut" type="text" placeholder="초고">
+      <div class="hint">‘초고 열기’를 누르면 실행됩니다. 프로젝트 이름이 입력값으로 전달됩니다.</div>
+    </div>
+    <div class="field">
+      <label>완료 단축어 이름</label>
+      <input id="fEndShortcut" type="text" placeholder="초고끝">
+      <div class="hint">400자 쓰기를 마치고 ‘복사’를 누르면 자동으로 실행됩니다.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost hidden" id="deleteBtn" onclick="deleteProject()">삭제</button>
+      <button onclick="document.getElementById('projectModal').close()">취소</button>
+      <button class="primary" onclick="saveProject()">저장</button>
+    </div>
+  </dialog>
+
+  <footer class="app-foot">
+    데이터는 이 브라우저에만 저장됩니다 ·
+    <a onclick="exportData()">백업 내보내기</a> ·
+    <a onclick="document.getElementById('importFile').click()">가져오기</a>
+    <input type="file" id="importFile" accept=".json" class="hidden" onchange="importData(event)">
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+const KEY = 'writing400.v1';
+const CHUNK = 400;          // 1회 쓰기 글자 수
+const PAGE = 200;           // 원고지 1매 = 200자
+
+let state = load();
+let currentId = null;
+let editingId = null;
+let currentGoal = CHUNK; // 이번 쓰기의 목표 글자수: 마감일이 있으면 하루 목표 글자수, 없으면 400자
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || { projects: [] }; }
+  catch(e) { return { projects: [] }; }
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+/* ---------- 날짜 유틸 ---------- */
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function diffDays(a, b) { return Math.round((parseDate(a) - parseDate(b)) / 86400000); }
+function addDays(s, n) {
+  const d = parseDate(s); d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function fmtDate(s) {
+  if (!s) return '';
+  const d = parseDate(s);
+  const yoil = ['일','월','화','수','목','금','토'][d.getDay()];
+  return (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + '년 ' : '') +
+         (d.getMonth()+1) + '월 ' + d.getDate() + '일(' + yoil + ')';
+}
+function fmtNum(n) { return n.toLocaleString('ko-KR'); }
+function esc(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- 통계 ---------- */
+function calcStats(p) {
+  const today = todayStr();
+  const goalChars = (p.goalPages || 0) * PAGE;
+  let sessionChars = 0, todayChars = 0, todayCount = 0;
+  const byDay = {};
+  for (const s of p.sessions) {
+    sessionChars += s.c;
+    byDay[s.d] = (byDay[s.d] || 0) + s.c;
+    if (s.d === today) { todayChars += s.c; todayCount++; }
+  }
+  // 스크리브너 체크포인트: 하루 작업이 끝나고 입력한 실제 총 글자수
+  const cps = (p.checkpoints || []).slice().sort((a, b) => a.t - b.t);
+  const lastCp = cps[cps.length - 1];
+  let postCpChars = 0;
+  if (lastCp) for (const s of p.sessions) if (s.t > lastCp.t) postCpChars += s.c;
+
+  // 체크포인트가 있으면 그것을 기준으로(이후 세션은 추정으로 더함), 없으면 앱 기록 기준
+  const total = lastCp ? lastCp.total + postCpChars : sessionChars + (p.baseChars || 0);
+  const totalPages = total / PAGE;
+  const remaining = Math.max(0, goalChars - total);
+  const doneAll = goalChars > 0 && remaining === 0;
+
+  // 오늘 실제 반영 분량 = 오늘 체크포인트 − 직전 체크포인트(없으면 기존 원고 글자수)
+  let todayActual = null;
+  const cpToday = cps.find(c => c.d === today);
+  if (cpToday) {
+    const prev = [...cps].reverse().find(c => c.d < today);
+    todayActual = cpToday.total - (prev ? prev.total : (p.baseChars || 0));
+  }
+
+  // 하루 평균 (첫 기록일부터 오늘까지 달력 기준, 실제 반영 분량 우선)
+  let avgChars = 0, eta = null;
+  if (p.sessions.length || cps.length) {
+    let first = p.sessions.length ? p.sessions.reduce((m, s) => s.d < m ? s.d : m, p.sessions[0].d) : cps[0].d;
+    if (cps.length && cps[0].d < first) first = cps[0].d;
+    const span = Math.max(1, diffDays(today, first) + 1);
+    const actualWritten = Math.max(0, total - (p.baseChars || 0)); // 앱 사용 기간의 실제 증가분
+    avgChars = actualWritten / span;
+    if (!doneAll && avgChars > 0) eta = addDays(today, Math.ceil(remaining / avgChars));
+  }
+
+  // 오늘 쓴 분량: 마감 입력(실제 반영)이 있으면 그것을, 없으면 앱 기록을 사용
+  const todayEffective = todayActual !== null ? todayActual : todayChars;
+
+  // 마감일 기반 필요량 — 글자수 기준. 하루 시작 시점의 남은 분량으로 계산해
+  // 오늘 쓰는 동안 목표치가 줄어들지 않게 한다.
+  let daysLeft = null, needChars = null, needSessions = null, overdue = false;
+  if (p.deadline && !doneAll) {
+    daysLeft = diffDays(p.deadline, today) + 1; // 오늘 포함
+    if (daysLeft < 1) { overdue = true; daysLeft = 0; needChars = remaining; }
+    else {
+      const remainingAtDayStart = remaining + todayEffective;
+      needChars = Math.max(1, Math.ceil(remainingAtDayStart / daysLeft));
+    }
+    needSessions = Math.ceil(needChars / CHUNK);
+  }
+  // 마감일이 없으면 하루 목표는 400자 쓰기 3회(1,200자)가 기본
+  const targetChars = doneAll ? 0 : (needChars !== null ? needChars : (p.dailyTarget || 3) * CHUNK);
+  const targetSessions = doneAll ? 0 : (needSessions !== null ? needSessions : (p.dailyTarget || 3));
+  const achieved = doneAll || (targetChars > 0 && todayEffective >= targetChars);
+
+  // 연속 작성일
+  let streak = 0, cur = byDay[today] ? today : addDays(today, -1);
+  while (byDay[cur]) { streak++; cur = addDays(cur, -1); }
+
+  return { goalChars, total, totalPages, remaining, doneAll, avgChars, eta,
+           daysLeft, needChars, needSessions, overdue, targetChars, targetSessions, achieved,
+           todayChars, todayCount, todayEffective, byDay, streak, todayActual, hasCp: cps.length > 0 };
+}
+
+/* ---------- 메인 화면 ---------- */
+function showHome() {
+  currentId = null;
+  document.getElementById('writeView').classList.add('hidden');
+  document.getElementById('homeView').classList.remove('hidden');
+  document.getElementById('homeActions').classList.remove('hidden');
+  renderHome();
+}
+function renderHome() {
+  const list = document.getElementById('cardList');
+  const empty = document.getElementById('emptyMsg');
+  list.innerHTML = '';
+  empty.classList.toggle('hidden', state.projects.length > 0);
+
+  // 오늘 목표가 달성되지 않은 프로젝트를 먼저 보여준다
+  const sorted = state.projects
+    .map(p => ({ p, st: calcStats(p) }))
+    .sort((a, b) => {
+      const rank = x => x.st.doneAll ? 2 : (x.st.achieved ? 1 : 0);
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      // 미달성끼리는 달성률이 낮은 순
+      return (a.st.todayEffective / (a.st.targetChars || 1)) - (b.st.todayEffective / (b.st.targetChars || 1));
+    });
+
+  let sumCount = 0, sumChars = 0;
+  for (const { p, st } of sorted) {
+    sumCount += st.todayCount; sumChars += st.todayChars;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => openWrite(p.id);
+
+    let badge;
+    if (st.doneAll) badge = '<span class="badge done">✓ 초고 완성</span>';
+    else if (st.achieved) badge = '<span class="badge done">✓ 오늘 목표 달성</span>';
+    else badge = `<span class="badge">오늘 ${fmtNum(st.todayEffective)} / ${fmtNum(st.targetChars)}자</span>`;
+
+    const pct = st.goalChars ? Math.min(100, st.total / st.goalChars * 100) : 0;
+    const stats = [];
+    stats.push(`<span><b>${st.totalPages.toFixed(1)}</b> / ${p.goalPages}매</span>`);
+    stats.push(`<span>누적 <b>${fmtNum(st.total)}</b>자</span>`);
+    if (st.avgChars > 0 && !st.doneAll)
+      stats.push(`<span>하루 평균 <b>${(st.avgChars/PAGE).toFixed(1)}매</b></span>`);
+    if (st.eta) stats.push(`<span>이 속도라면 <b>${fmtDate(st.eta)}</b> 완료</span>`);
+    if (p.deadline && !st.doneAll) {
+      if (st.overdue) stats.push(`<span class="alert">마감(${fmtDate(p.deadline)}) 지남 · 남은 ${(st.remaining/PAGE).toFixed(1)}매</span>`);
+      else stats.push(`<span>마감 <b>${fmtDate(p.deadline)}</b> (D-${st.daysLeft - 1 === 0 ? 'DAY' : st.daysLeft - 1}) · 하루 <b>${(st.needChars/PAGE).toFixed(1)}매</b> 필요</span>`);
+    }
+    if (st.streak >= 2) stats.push(`<span>🔥 ${st.streak}일 연속</span>`);
+
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="card-title">${esc(p.name)}</div>${badge}
+      </div>
+      <div class="card-today">오늘 <b>${st.todayCount}</b>회 · ${fmtNum(st.todayChars)}자${st.todayActual !== null ? ` · 실제 반영 <b>${fmtNum(st.todayActual)}</b>자` : ''}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="card-stats">${stats.join('')}</div>`;
+    list.appendChild(card);
+  }
+  document.getElementById('todaySummary').innerHTML =
+    `${fmtDate(todayStr())} — 오늘 모든 프로젝트에서 <b>${sumCount}회</b>, <b>${fmtNum(sumChars)}자</b>를 썼습니다.`;
+}
+
+/* ---------- 쓰기 화면 ---------- */
+function openWrite(id) {
+  currentId = id;
+  const p = getP(id);
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('homeActions').classList.add('hidden');
+  document.getElementById('writeView').classList.remove('hidden');
+  document.getElementById('wTitle').textContent = p.name;
+  const ed = document.getElementById('editor');
+  ed.value = p.draft || '';
+  updateCount();
+  renderWriteInfo();
+  ed.focus();
+}
+function getP(id) { return state.projects.find(p => p.id === id); }
+
+function renderWriteInfo() {
+  const p = getP(currentId);
+  const st = calcStats(p);
+
+  // 마감일이 있으면 이번 쓰기의 목표 = 하루 목표 글자수, 없으면 400자
+  currentGoal = (p.deadline && !st.doneAll && st.needChars) ? st.needChars : CHUNK;
+
+  document.getElementById('wSub').textContent =
+    `목표 ${p.goalPages}매 (${fmtNum(st.goalChars)}자)` +
+    (p.deadline
+      ? ` · 마감 ${fmtDate(p.deadline)} · 오늘 ${(currentGoal/PAGE).toFixed(1)}매 쓰기`
+      : ` · 하루 400자 쓰기 ${st.targetSessions}회`);
+  updateCount();
+
+  const info = [];
+  info.push(st.doneAll
+    ? `오늘 <b>${fmtNum(st.todayEffective)}자</b> (${st.todayCount}회)`
+    : `오늘 <b>${fmtNum(st.todayEffective)} / ${fmtNum(st.targetChars)}자</b> (${st.todayCount}회)${st.achieved ? ' ✓' : ''}`);
+  if (st.todayActual !== null)
+    info.push(`오늘 실제 반영 <b>${fmtNum(st.todayActual)}자</b> (앱 기록 ${fmtNum(st.todayChars)}자)`);
+  info.push(`누적 <b>${st.totalPages.toFixed(1)}매</b> (${fmtNum(st.total)}자${st.hasCp ? ' · 스크리브너 기준' : ''})`);
+  if (!st.doneAll) info.push(`남은 분량 <b>${(st.remaining/PAGE).toFixed(1)}매</b>` +
+    (p.deadline ? '' : ` · 400자 쓰기 약 ${Math.ceil(st.remaining/CHUNK)}회`));
+  if (st.eta) info.push(`예상 완료 <b>${fmtDate(st.eta)}</b>`);
+  if (st.doneAll) info.push(`<b>🎉 목표 분량을 모두 채웠습니다</b>`);
+  document.getElementById('wInfo').innerHTML = info.map(s => `<span>${s}</span>`).join('');
+
+  // 14일 스파크
+  const spark = document.getElementById('spark');
+  spark.innerHTML = '';
+  const max = Math.max(CHUNK, ...Object.values(st.byDay));
+  for (let i = 13; i >= 0; i--) {
+    const d = addDays(todayStr(), -i);
+    const c = st.byDay[d] || 0;
+    const h = c ? Math.max(8, c / max * 100) : 0;
+    const day = parseDate(d).getDate();
+    spark.innerHTML += `
+      <div class="col">
+        <div class="num">${c ? (c / PAGE).toFixed(1) : ''}</div>
+        <div class="colbar ${c ? 'has' : ''}" style="height:${Math.max(2, h * 0.38)}px" title="${d} · ${fmtNum(c)}자"></div>
+        <div class="lab">${i === 0 ? '오늘' : day}</div>
+      </div>`;
+  }
+
+  // 오늘 로그
+  const log = document.getElementById('todayLog');
+  const todays = p.sessions.filter(s => s.d === todayStr());
+  log.innerHTML = todays.length
+    ? todays.map((s, i) => `<li><span>${i+1}회차</span><span>${fmtNum(s.c)}자 · ${new Date(s.t).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}</span></li>`).reverse().join('')
+    : '<li><span style="color:var(--ink-faint)">아직 기록이 없습니다</span></li>';
+}
+
+/* 행갈이한 문장들을 스페이스 하나로 이어 한 문단으로 만든다 */
+function joinLines(v) {
+  return v.split('\n').map(s => s.trim()).filter(Boolean).join(' ');
+}
+
+function updateCount() {
+  const ed = document.getElementById('editor');
+  const n = joinLines(ed.value).length; // 복사될 기준(한 문단)으로 계산
+  document.getElementById('charCount').textContent = `${fmtNum(n)}자`;
+  autosize();
+  renderBackdrop();
+}
+
+function autosize() {
+  const ed = document.getElementById('editor');
+  ed.style.height = 'auto';
+  ed.style.height = Math.max(320, ed.scrollHeight) + 'px';
+}
+
+/* 현재 쓰고 있는 줄만 밝게, 나머지는 흐리게 */
+function renderBackdrop() {
+  const ed = document.getElementById('editor');
+  const bd = document.getElementById('backdrop');
+  const lines = ed.value.split('\n');
+  const curLine = ed.value.slice(0, ed.selectionStart).split('\n').length - 1;
+  const focused = document.activeElement === ed && lines.filter(l => l.trim()).length > 1;
+  bd.classList.toggle('focusmode', focused);
+  bd.innerHTML = lines.map((l, i) =>
+    `<span class="${i === curLine ? 'cur' : ''}">${esc(l)}</span>`
+  ).join('\n');
+}
+
+let draftTimer = null;
+function onInput() {
+  updateCount();
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    const p = getP(currentId);
+    if (p) { p.draft = document.getElementById('editor').value; save(); }
+  }, 400);
+}
+
+async function copyAndRecord() {
+  const ed = document.getElementById('editor');
+  if (!ed.value.trim()) { toast('내용이 없습니다'); return; }
+  const text = joinLines(ed.value); // 행갈이 → 한 문단
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch(e) {
+    const tmp = document.createElement('textarea');
+    tmp.value = text;
+    document.body.appendChild(tmp);
+    tmp.select();
+    try { ok = document.execCommand('copy'); } catch(e2) {}
+    tmp.remove();
+    ed.focus();
+  }
+  if (!ok) { toast('복사에 실패했습니다. 직접 선택해 복사해 주세요.'); return; }
+
+  const p = getP(currentId);
+  const wasAchieved = calcStats(p).achieved;
+  p.sessions.push({ d: todayStr(), c: text.length, t: Date.now() });
+  p.draft = '';
+  save();
+  ed.value = '';
+  updateCount();
+  renderWriteInfo();
+
+  const st = calcStats(p);
+  if (st.doneAll) toast(`복사 완료 · 🎉 목표 ${p.goalPages}매를 모두 채웠습니다!`);
+  else if (!wasAchieved && st.achieved) toast(`복사 완료 · 오늘 목표 ${fmtNum(st.targetChars)}자 달성! ✓`);
+  else toast(`복사 완료 · 오늘 ${fmtNum(st.todayEffective)}자 / ${fmtNum(st.targetChars)}자 (${st.todayCount}회)`);
+  ed.focus();
+
+  // 완료 단축어 실행 (클립보드 복사가 안정된 뒤)
+  setTimeout(() => {
+    const name = (p.endShortcut || '초고끝').trim();
+    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name) +
+                    '&input=text&text=' + encodeURIComponent(p.name);
+  }, 400);
+}
+
+function clearEditor() {
+  const ed = document.getElementById('editor');
+  if (ed.value && !confirm('쓰던 내용을 지울까요?')) return;
+  ed.value = '';
+  const p = getP(currentId);
+  if (p) { p.draft = ''; save(); }
+  updateCount();
+  ed.focus();
+}
+
+/* 오늘 마감: 스크리브너의 실제 총 글자수를 기록해 하루 실제 반영 분량을 계산 */
+function endOfDay() {
+  const p = getP(currentId);
+  const st = calcStats(p);
+  const v = prompt(
+    `오늘 작업을 마쳤다면, 스크리브너에 표시된 총 글자수를 입력하세요.\n` +
+    `(현재 앱 추정 누적: ${fmtNum(st.total)}자)`
+  );
+  if (v === null) return;
+  const total = parseInt(String(v).replace(/[^0-9]/g, ''));
+  if (isNaN(total)) { toast('숫자를 입력해 주세요'); return; }
+
+  p.checkpoints = (p.checkpoints || []).filter(c => c.d !== todayStr()); // 오늘 재입력 시 갱신
+  p.checkpoints.push({ d: todayStr(), total, t: Date.now() });
+  save();
+  renderWriteInfo();
+
+  const st2 = calcStats(p);
+  if (st2.todayActual !== null) {
+    const diff = st2.todayActual - st2.todayChars;
+    toast(`오늘 실제 반영 ${fmtNum(st2.todayActual)}자` +
+          (diff !== 0 ? ` (앱 기록보다 ${diff > 0 ? '+' : ''}${fmtNum(diff)}자)` : ''));
+  } else toast('스크리브너 글자수를 기록했습니다');
+}
+
+function runShortcut() {
+  const p = getP(currentId);
+  const name = (p.shortcut || '초고').trim();
+  location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name) +
+                  '&input=text&text=' + encodeURIComponent(p.name);
+}
+
+/* ---------- 프로젝트 CRUD ---------- */
+function openProjectModal(id) {
+  editingId = id || null;
+  const p = id ? getP(id) : null;
+  document.getElementById('modalTitle').textContent = p ? '프로젝트 설정' : '새 프로젝트';
+  document.getElementById('fName').value = p ? p.name : '';
+  document.getElementById('fGoal').value = p ? p.goalPages : '';
+  document.getElementById('fDeadline').value = p ? (p.deadline || '') : '';
+  document.getElementById('fDaily').value = p && p.dailyTarget ? p.dailyTarget : '';
+  document.getElementById('fBase').value = p && p.baseChars ? p.baseChars : '';
+  document.getElementById('fSync').value = '';
+  document.getElementById('syncHint').textContent = p
+    ? `현재 앱 누적 ${fmtNum(calcStats(p).total)}자 · 입력하면 누적이 이 값과 같아지도록 자동 보정합니다.`
+    : '입력하면 앱의 누적 글자수가 이 값과 정확히 같아지도록 자동 보정합니다.';
+  document.getElementById('fShortcut').value = p ? (p.shortcut || '초고') : '초고';
+  document.getElementById('fEndShortcut').value = p ? (p.endShortcut || '초고끝') : '초고끝';
+  document.getElementById('deleteBtn').classList.toggle('hidden', !p);
+  updateGoalHint();
+  document.getElementById('projectModal').showModal();
+}
+function updateGoalHint() {
+  const g = parseInt(document.getElementById('fGoal').value) || 0;
+  document.getElementById('goalHint').textContent = g
+    ? `${g}매 = ${fmtNum(g * PAGE)}자 = 400자 쓰기 약 ${Math.ceil(g * PAGE / CHUNK)}회`
+    : '80매 = 16,000자';
+}
+function saveProject() {
+  const name = document.getElementById('fName').value.trim();
+  const goal = parseInt(document.getElementById('fGoal').value);
+  if (!name) { toast('프로젝트 이름을 입력하세요'); return; }
+  if (!goal || goal < 1) { toast('목표 매수를 입력하세요'); return; }
+  const deadline = document.getElementById('fDeadline').value || '';
+  const daily = parseInt(document.getElementById('fDaily').value) || 0;
+  let baseChars = parseInt(document.getElementById('fBase').value) || 0;
+  const syncVal = document.getElementById('fSync').value.trim();
+  if (syncVal !== '') {
+    // 스크리브너 총 글자수에 맞춰 보정: base = 스크리브너 값 − 앱에서 쓴 글자수
+    const sessionChars = editingId ? getP(editingId).sessions.reduce((a, s) => a + s.c, 0) : 0;
+    baseChars = (parseInt(syncVal) || 0) - sessionChars;
+  }
+  const shortcut = document.getElementById('fShortcut').value.trim() || '초고';
+  const endShortcut = document.getElementById('fEndShortcut').value.trim() || '초고끝';
+
+  if (editingId) {
+    const p = getP(editingId);
+    Object.assign(p, { name, goalPages: goal, deadline, dailyTarget: daily, baseChars, shortcut, endShortcut });
+  } else {
+    state.projects.push({
+      id: 'p' + Date.now(), name, goalPages: goal, deadline, dailyTarget: daily, baseChars,
+      shortcut, endShortcut, sessions: [], draft: '', createdAt: todayStr()
+    });
+  }
+  save();
+  document.getElementById('projectModal').close();
+  if (currentId) { openWrite(currentId); } else renderHome();
+}
+function deleteProject() {
+  const p = getP(editingId);
+  if (!confirm(`‘${p.name}’ 프로젝트와 모든 기록을 삭제할까요?`)) return;
+  state.projects = state.projects.filter(x => x.id !== editingId);
+  save();
+  document.getElementById('projectModal').close();
+  showHome();
+}
+
+/* ---------- 백업 ---------- */
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `초고쓰기_백업_${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('백업 파일을 내려받았습니다');
+}
+function importData(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if (!Array.isArray(data.projects)) throw new Error();
+      if (!confirm('현재 데이터를 가져온 백업으로 교체할까요?')) return;
+      state = data; save(); showHome();
+      toast('백업을 불러왔습니다');
+    } catch(e) { toast('올바른 백업 파일이 아닙니다'); }
+  };
+  r.readAsText(f);
+  ev.target.value = '';
+}
+
+/* ---------- 기타 ---------- */
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+const _ed = document.getElementById('editor');
+_ed.addEventListener('input', onInput);
+_ed.addEventListener('keyup', renderBackdrop);
+_ed.addEventListener('click', renderBackdrop);
+_ed.addEventListener('focus', renderBackdrop);
+_ed.addEventListener('blur', renderBackdrop);
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && currentId) {
+    e.preventDefault(); copyAndRecord();
+  }
+});
+document.getElementById('fGoal').addEventListener('input', updateGoalHint);
+
+showHome();
+</script>
+</body>
+</html>
