@@ -79,8 +79,16 @@
   .sent-item span { flex: 1; white-space: pre-wrap; }
   .sent-del { background: none; border: none; cursor: pointer; color: #d8d8d3; font-size: 14px; padding: 0 2px; font-family: inherit; }
   .sent-del:hover { color: #1c1c1c; }
-  .cat-group { margin-bottom: 40px; }
-  .cat-group h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .cat-group { margin-bottom: 8px; }
+  .cat-group summary {
+    font-size: 14px; font-weight: 600; cursor: pointer; list-style: none;
+    padding: 10px 0; user-select: none;
+  }
+  .cat-group summary::-webkit-details-marker { display: none; }
+  .cat-group summary::before { content: '+'; color: #b5b5b0; display: inline-block; width: 20px; }
+  .cat-group[open] summary::before { content: '−'; }
+  .sent-body { padding-left: 20px; margin: 4px 0 24px; }
+  .data-actions { display: flex; gap: 32px; }
   .empty { font-size: 13px; color: #d8d8d3; padding: 8px 0; }
 </style>
 </head>
@@ -119,6 +127,15 @@
       <h1>설정</h1>
       <button class="icon-btn" onclick="showView('home')">닫기</button>
     </header>
+
+    <div class="setting-block">
+      <div class="setting-label">데이터</div>
+      <div class="data-actions">
+        <button class="txt-btn" onclick="exportData()">파일로 저장</button>
+        <button class="txt-btn" onclick="document.getElementById('import-file').click()">파일에서 불러오기</button>
+        <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+      </div>
+    </div>
 
     <div class="setting-block">
       <div class="setting-label">한 번에 입력하기 — 한 줄에 한 문장</div>
@@ -285,8 +302,9 @@ function renderSettings() {
     CATS.map(c => `<option value="${c}">${c}</option>`).join('');
   renderSentLists();
 }
+const openCats = new Set();
 function renderSentLists() {
-  document.getElementById('sent-lists').innerHTML = CATS.map(cat => {
+  document.getElementById('sent-lists').innerHTML = CATS.map((cat, i) => {
     const items = catSentences(cat);
     const list = items.length
       ? items.map(s => `
@@ -295,8 +313,15 @@ function renderSentLists() {
             <button class="sent-del" onclick="delSentence(${s.id})">×</button>
           </div>`).join('')
       : '<div class="empty">—</div>';
-    return `<div class="cat-group"><h3>${cat} <span class="cat-count">${items.length}</span></h3>${list}</div>`;
+    return `
+      <details class="cat-group" ${openCats.has(cat) ? 'open' : ''} ontoggle="trackOpen(this, '${cat}')">
+        <summary>${cat} <span class="cat-count">${items.length}</span></summary>
+        <div class="sent-body">${list}</div>
+      </details>`;
   }).join('');
+}
+function trackOpen(el, cat) {
+  if (el.open) openCats.add(cat); else openCats.delete(cat);
 }
 function bulkAdd() {
   const cat = document.getElementById('bulk-cat').value;
@@ -313,6 +338,38 @@ function delSentence(id) {
   save();
   renderSentLists();
 }
+/* ---------- 데이터 저장 / 불러오기 ---------- */
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '미래를기억하기-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+document.getElementById('import-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data.sentences)) throw new Error();
+      state = {
+        sentences: data.sentences,
+        bags: data.bags || {},
+        nextId: data.nextId || Math.max(0, ...data.sentences.map(s => s.id)) + 1
+      };
+      save();
+      renderSettings();
+    } catch (err) {
+      alert('파일을 읽을 수 없습니다.');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
 function escapeHtml(t) {
   const d = document.createElement('div');
   d.textContent = t;
