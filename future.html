@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>미래를 기억하기</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+    background: #fcfcfa;
+    color: #1c1c1c;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 72px 24px 96px; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 72px; }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: 0.02em; }
+  .icon-btn {
+    background: none; border: none; cursor: pointer; color: #b5b5b0;
+    font-size: 15px; font-family: inherit; padding: 4px;
+  }
+  .icon-btn:hover { color: #1c1c1c; }
+
+  /* home */
+  .cat { border-top: 1px solid #e8e8e4; padding: 26px 0; }
+  .cat:last-of-type { border-bottom: 1px solid #e8e8e4; }
+  .cat-row { display: flex; align-items: center; gap: 14px; }
+  .cat-name { font-size: 16px; font-weight: 500; flex: 1; }
+  .cat-count { font-size: 13px; color: #b5b5b0; margin-right: 4px; }
+  .txt-btn {
+    background: none; border: none; cursor: pointer; font-family: inherit;
+    font-size: 14px; color: #1c1c1c; padding: 6px 0; letter-spacing: 0.02em;
+  }
+  .txt-btn:hover { opacity: 0.5; }
+  .txt-btn.dim { color: #b5b5b0; }
+  .txt-btn.dim:hover { color: #1c1c1c; opacity: 1; }
+  .add-area { display: none; margin-top: 18px; }
+  .add-area.open { display: block; }
+  textarea {
+    width: 100%; border: 1px solid #e0e0db; border-radius: 2px; background: #fff;
+    font-family: inherit; font-size: 15px; line-height: 1.7; color: #1c1c1c;
+    padding: 14px; resize: vertical; min-height: 76px; outline: none;
+  }
+  textarea:focus { border-color: #1c1c1c; }
+  .add-actions { margin-top: 10px; text-align: right; }
+  .add-actions .txt-btn { margin-left: 18px; }
+
+  /* views */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* session */
+  .sess-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 64px; }
+  .sess-cat { font-size: 14px; color: #b5b5b0; }
+  .sess-prog { font-size: 14px; color: #b5b5b0; font-variant-numeric: tabular-nums; }
+  .sess-original {
+    font-size: 18px; line-height: 1.9; margin-bottom: 48px; white-space: pre-wrap;
+    font-weight: 500;
+  }
+  #sess-input { min-height: 140px; font-size: 17px; line-height: 1.9; }
+  .sess-actions { margin-top: 20px; display: flex; justify-content: space-between; align-items: center; }
+
+  /* settings */
+  .setting-block { margin-bottom: 64px; }
+  .setting-label { font-size: 13px; color: #b5b5b0; margin-bottom: 14px; letter-spacing: 0.04em; }
+  select {
+    font-family: inherit; font-size: 15px; color: #1c1c1c; background: #fff;
+    border: 1px solid #e0e0db; border-radius: 2px; padding: 8px 12px; outline: none;
+    margin-bottom: 10px;
+  }
+  #bulk-input { min-height: 180px; }
+  .sent-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 0; border-top: 1px solid #f0f0ec; font-size: 14px;
+  }
+  .sent-item span { flex: 1; white-space: pre-wrap; }
+  .sent-del { background: none; border: none; cursor: pointer; color: #d8d8d3; font-size: 14px; padding: 0 2px; font-family: inherit; }
+  .sent-del:hover { color: #1c1c1c; }
+  .cat-group { margin-bottom: 40px; }
+  .cat-group h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .empty { font-size: 13px; color: #d8d8d3; padding: 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 홈 -->
+  <div id="view-home" class="view active">
+    <header>
+      <h1>미래를 기억하기</h1>
+      <button class="icon-btn" onclick="showView('settings')">설정</button>
+    </header>
+    <div id="cat-list"></div>
+  </div>
+
+  <!-- 업데이트 세션 -->
+  <div id="view-session" class="view">
+    <div class="sess-top">
+      <span class="sess-cat" id="sess-cat"></span>
+      <span class="sess-prog" id="sess-prog"></span>
+    </div>
+    <div class="sess-original" id="sess-original"></div>
+    <textarea id="sess-input"></textarea>
+    <div class="sess-actions">
+      <button class="txt-btn dim" onclick="endSession()">그만두기</button>
+      <span>
+        <button class="txt-btn dim" onclick="deleteCurrent()" style="margin-right:24px">삭제</button>
+        <button class="txt-btn" onclick="nextRound()">다음</button>
+      </span>
+    </div>
+  </div>
+
+  <!-- 설정 -->
+  <div id="view-settings" class="view">
+    <header>
+      <h1>설정</h1>
+      <button class="icon-btn" onclick="showView('home')">닫기</button>
+    </header>
+
+    <div class="setting-block">
+      <div class="setting-label">한 번에 입력하기 — 한 줄에 한 문장</div>
+      <select id="bulk-cat"></select>
+      <textarea id="bulk-input"></textarea>
+      <div class="add-actions">
+        <button class="txt-btn" onclick="bulkAdd()">추가</button>
+      </div>
+    </div>
+
+    <div class="setting-block">
+      <div class="setting-label">모든 문장</div>
+      <div id="sent-lists"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const CATS = ['씨앗 뿌리기', '내면정화', '새로운 말', '새로운 생활'];
+const KEY = 'mirae-gieok-v1';
+
+let state = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { sentences: [], bags: {}, nextId: 1 };
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+
+function catSentences(cat) { return state.sentences.filter(s => s.cat === cat); }
+function shuffle(a) {
+  a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ---------- 뷰 ---------- */
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  if (name === 'home') renderHome();
+  if (name === 'settings') renderSettings();
+}
+
+/* ---------- 홈 ---------- */
+function renderHome() {
+  const el = document.getElementById('cat-list');
+  el.innerHTML = CATS.map((cat, i) => `
+    <div class="cat">
+      <div class="cat-row">
+        <span class="cat-name">${cat}</span>
+        <span class="cat-count">${catSentences(cat).length}</span>
+        <button class="txt-btn dim" onclick="toggleAdd(${i})">추가</button>
+        <button class="txt-btn" onclick="startSession('${cat}')">업데이트</button>
+      </div>
+      <div class="add-area" id="add-${i}">
+        <textarea id="add-input-${i}"></textarea>
+        <div class="add-actions">
+          <button class="txt-btn dim" onclick="toggleAdd(${i}, false)">취소</button>
+          <button class="txt-btn" onclick="addOne(${i}, '${cat}')">저장</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+function toggleAdd(i, open) {
+  const area = document.getElementById('add-' + i);
+  const willOpen = open !== undefined ? open : !area.classList.contains('open');
+  document.querySelectorAll('.add-area').forEach(a => a.classList.remove('open'));
+  if (willOpen) {
+    area.classList.add('open');
+    document.getElementById('add-input-' + i).focus();
+  }
+}
+function addOne(i, cat) {
+  const input = document.getElementById('add-input-' + i);
+  const text = input.value.trim();
+  if (!text) return;
+  insertSentence(cat, text);
+  save();
+  renderHome();
+}
+function insertSentence(cat, text) {
+  const id = state.nextId++;
+  state.sentences.push({ id, cat, text });
+  const bag = state.bags[cat];
+  if (bag && bag.length) bag.splice(Math.floor(Math.random() * (bag.length + 1)), 0, id);
+}
+
+/* ---------- 업데이트 세션 ---------- */
+const ROUNDS = 10;
+let sess = null;
+
+function drawId(cat) {
+  const ids = catSentences(cat).map(s => s.id);
+  if (!ids.length) return null;
+  let bag = (state.bags[cat] || []).filter(id => ids.includes(id));
+  if (!bag.length) bag = shuffle(ids);
+  const id = bag.pop();
+  state.bags[cat] = bag;
+  return id;
+}
+
+function startSession(cat) {
+  if (!catSentences(cat).length) return;
+  sess = { cat, round: 0 };
+  showView('session');
+  document.getElementById('sess-cat').textContent = cat;
+  showRound();
+}
+
+function showRound() {
+  const id = drawId(sess.cat);
+  if (id === null) { endSession(); return; }
+  sess.currentId = id;
+  sess.round++;
+  const s = state.sentences.find(x => x.id === id);
+  document.getElementById('sess-prog').textContent = sess.round + ' / ' + ROUNDS;
+  document.getElementById('sess-original').textContent = s.text;
+  const input = document.getElementById('sess-input');
+  input.value = '';
+  input.focus();
+  save();
+}
+
+function nextRound() {
+  const input = document.getElementById('sess-input');
+  const typed = input.value.trim();
+  if (!typed) { input.focus(); return; }
+  const s = state.sentences.find(x => x.id === sess.currentId);
+  if (s) s.text = typed;
+  save();
+  if (sess.round >= ROUNDS) endSession();
+  else showRound();
+}
+
+function deleteCurrent() {
+  state.sentences = state.sentences.filter(s => s.id !== sess.currentId);
+  save();
+  if (!catSentences(sess.cat).length) { endSession(); return; }
+  sess.round--;
+  showRound();
+}
+
+function endSession() {
+  sess = null;
+  showView('home');
+}
+
+document.getElementById('sess-input').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); nextRound(); }
+});
+
+/* ---------- 설정 ---------- */
+function renderSettings() {
+  document.getElementById('bulk-cat').innerHTML =
+    CATS.map(c => `<option value="${c}">${c}</option>`).join('');
+  renderSentLists();
+}
+function renderSentLists() {
+  document.getElementById('sent-lists').innerHTML = CATS.map(cat => {
+    const items = catSentences(cat);
+    const list = items.length
+      ? items.map(s => `
+          <div class="sent-item">
+            <span>${escapeHtml(s.text)}</span>
+            <button class="sent-del" onclick="delSentence(${s.id})">×</button>
+          </div>`).join('')
+      : '<div class="empty">—</div>';
+    return `<div class="cat-group"><h3>${cat} <span class="cat-count">${items.length}</span></h3>${list}</div>`;
+  }).join('');
+}
+function bulkAdd() {
+  const cat = document.getElementById('bulk-cat').value;
+  const input = document.getElementById('bulk-input');
+  const lines = input.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  lines.forEach(text => insertSentence(cat, text));
+  save();
+  input.value = '';
+  renderSentLists();
+}
+function delSentence(id) {
+  state.sentences = state.sentences.filter(s => s.id !== id);
+  save();
+  renderSentLists();
+}
+function escapeHtml(t) {
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+
+renderHome();
+</script>
+</body>
+</html>
