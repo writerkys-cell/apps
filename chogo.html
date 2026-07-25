@@ -181,6 +181,13 @@
   .field input:focus { outline: none; border-color: var(--accent); }
   .field .hint { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
   .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top: 20px; }
+  #promptText {
+    width: 100%; height: 340px; resize: vertical;
+    border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 12.5px; line-height: 1.6;
+  }
+  #promptText:focus { outline: none; border-color: var(--accent); }
 
   /* ---------- toast ---------- */
   #toast {
@@ -213,6 +220,10 @@
     <div class="empty hidden" id="emptyMsg">
       <div class="big">아직 프로젝트가 없습니다</div>
       오른쪽 위 ‘새 프로젝트’로 시작하세요.
+    </div>
+    <div id="archiveSec" class="hidden">
+      <div class="history-title" style="margin-top:36px;">아카이브</div>
+      <div id="archList"></div>
     </div>
   </section>
 
@@ -293,9 +304,22 @@
       <div class="hint">400자 쓰기를 마치고 ‘복사’를 누르면 자동으로 실행됩니다.</div>
     </div>
     <div class="modal-actions">
+      <button class="ghost hidden" id="archiveModalBtn" onclick="document.getElementById('projectModal').close(); archiveProject(editingId)">아카이브</button>
       <button class="ghost hidden" id="deleteBtn" onclick="deleteProject()">삭제</button>
       <button onclick="document.getElementById('projectModal').close()">취소</button>
       <button class="primary" onclick="saveProject()">저장</button>
+    </div>
+  </dialog>
+
+  <!-- ============ AI 프롬프트 모달 ============ -->
+  <dialog id="promptModal" style="width:min(640px, 94vw);">
+    <h2>AI 분석 프롬프트</h2>
+    <textarea id="promptText" spellcheck="false"></textarea>
+    <div class="hint" style="font-size:11px; color:var(--ink-faint); margin-top:6px;">자유롭게 수정하세요. ‘복사’를 누르면 수정한 내용이 저장되고 클립보드에 복사됩니다.</div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="regenPrompt()">원본으로 다시 생성</button>
+      <button onclick="document.getElementById('promptModal').close()">취소</button>
+      <button class="primary" onclick="savePromptAndCopy()">복사</button>
     </div>
   </dialog>
 
@@ -451,7 +475,7 @@ function renderHome() {
     card.onclick = () => openWrite(p.id);
 
     let badge;
-    if (st.doneAll) badge = '<span class="badge done">✓ 초고 완성</span>';
+    if (st.doneAll) badge = `<span class="badge done">✓ 초고 완성</span> <button class="ghost" onclick="event.stopPropagation(); archiveProject('${p.id}')" style="font-size:11.5px;">아카이브</button>`;
     else if (st.achieved) badge = '<span class="badge done">✓ 오늘 목표 달성</span>';
     else badge = `<span class="badge">오늘 ${fmtNum(st.todayEffective)} / ${fmtNum(st.targetChars)}자</span>`;
 
@@ -479,6 +503,7 @@ function renderHome() {
   }
   document.getElementById('todaySummary').innerHTML =
     `${fmtDate(todayStr())} — 오늘 모든 프로젝트에서 <b>${sumCount}회</b>, <b>${fmtNum(sumChars)}자</b>를 썼습니다.`;
+  renderArchive();
 }
 
 /* ---------- 쓰기 화면 ---------- */
@@ -700,6 +725,7 @@ function openProjectModal(id) {
   document.getElementById('fShortcut').value = p ? (p.shortcut || '초고') : '초고';
   document.getElementById('fEndShortcut').value = p ? (p.endShortcut || '초고끝') : '초고끝';
   document.getElementById('deleteBtn').classList.toggle('hidden', !p);
+  document.getElementById('archiveModalBtn').classList.toggle('hidden', !p);
   updateGoalHint();
   document.getElementById('projectModal').showModal();
 }
@@ -746,6 +772,164 @@ function deleteProject() {
   save();
   document.getElementById('projectModal').close();
   showHome();
+}
+
+/* ---------- 아카이브 ---------- */
+function archiveProject(id) {
+  const p = getP(id);
+  if (!p) return;
+  if (!confirm(`‘${p.name}’ 초고를 아카이브할까요?\n메인 목록에서 사라지고 아카이브에 보관됩니다.`)) return;
+  p.archivedAt = todayStr();
+  state.archive = state.archive || [];
+  state.archive.push(p);
+  state.projects = state.projects.filter(x => x.id !== id);
+  save();
+  showHome();
+  toast('아카이브했습니다. 아래에서 AI 분석 프롬프트를 복사할 수 있어요.');
+}
+function restoreArchive(id) {
+  state.archive = state.archive || [];
+  const p = state.archive.find(x => x.id === id);
+  if (!p) return;
+  delete p.archivedAt;
+  state.projects.push(p);
+  state.archive = state.archive.filter(x => x.id !== id);
+  save();
+  showHome();
+}
+function deleteArchive(id) {
+  const p = (state.archive || []).find(x => x.id === id);
+  if (!p || !confirm(`‘${p.name}’ 아카이브를 완전히 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  state.archive = state.archive.filter(x => x.id !== id);
+  save();
+  showHome();
+}
+
+function renderArchive() {
+  const arch = state.archive || [];
+  const sec = document.getElementById('archiveSec');
+  sec.classList.toggle('hidden', arch.length === 0);
+  const list = document.getElementById('archList');
+  list.innerHTML = '';
+  for (const p of arch.slice().reverse()) {
+    const st = calcStats(p);
+    const first = p.sessions.length ? p.sessions.reduce((m, s) => s.d < m ? s.d : m, p.sessions[0].d) : p.createdAt;
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.style.cursor = 'default';
+    el.innerHTML = `
+      <div class="card-head">
+        <div class="card-title" style="font-size:15px;">${esc(p.name)}</div>
+        <span class="badge">${fmtDate(first)} ~ ${fmtDate(p.archivedAt)}</span>
+      </div>
+      <div class="card-stats" style="margin-top:8px;">
+        <span><b>${st.totalPages.toFixed(1)}매</b> (${fmtNum(st.total)}자)</span>
+        <span>${p.sessions.length}회 쓰기</span>
+      </div>
+      <div style="margin-top:12px; display:flex; gap:8px;">
+        <button class="primary" onclick="copyAiPrompt('${p.id}')" style="font-size:12.5px;">AI 분석 프롬프트 복사</button>
+        <button class="ghost" onclick="restoreArchive('${p.id}')" style="font-size:12px;">복원</button>
+        <button class="ghost" onclick="deleteArchive('${p.id}')" style="font-size:12px;">삭제</button>
+      </div>`;
+    list.appendChild(el);
+  }
+}
+
+/* AI에게 작업 기록을 분석시키는 프롬프트 생성 */
+function buildAiPrompt(p) {
+  const st = calcStats(p);
+  const cps = (p.checkpoints || []).slice().sort((a, b) => a.t - b.t);
+  const first = p.sessions.length ? p.sessions.reduce((m, s) => s.d < m ? s.d : m, p.sessions[0].d) : p.createdAt;
+  const end = p.archivedAt || todayStr();
+
+  // 일자별 데이터: 앱 기록 글자수/회수 + 체크포인트 실측(있으면)
+  const byDay = {};
+  for (const s of p.sessions) {
+    byDay[s.d] = byDay[s.d] || { sessions: 0, appChars: 0, actualChars: null };
+    byDay[s.d].sessions++;
+    byDay[s.d].appChars += s.c;
+  }
+  let prevTotal = p.baseChars || 0;
+  for (const c of cps) {
+    byDay[c.d] = byDay[c.d] || { sessions: 0, appChars: 0, actualChars: null };
+    byDay[c.d].actualChars = c.total - prevTotal;
+    prevTotal = c.total;
+  }
+  const daily = Object.keys(byDay).sort().map(d => ({ date: d, ...byDay[d] }));
+
+  const yoil = ['일','월','화','수','목','금','토'];
+  const weekday = {};
+  for (const d of daily) {
+    const w = yoil[parseDate(d.date).getDay()];
+    weekday[w] = (weekday[w] || 0) + (d.actualChars !== null ? d.actualChars : d.appChars);
+  }
+
+  const data = {
+    프로젝트: p.name,
+    목표: { 매수: p.goalPages, 글자수: st.goalChars, 마감일: p.deadline || null },
+    결과: {
+      최종글자수: st.total, 최종매수: +st.totalPages.toFixed(1),
+      시작일: first, 완료일: end,
+      총기간_일: diffDays(end, first) + 1,
+      실제작업일수: daily.length,
+      총쓰기회수: p.sessions.length,
+      가져온기존원고_글자수: p.baseChars || 0
+    },
+    요일별_글자수: weekday,
+    일자별_기록: daily
+  };
+
+  return `당신은 경험 많은 글쓰기 코치다. 아래는 내가 초고 "${p.name}"을(를) 완성하기까지의 작업 기록 데이터다. 나는 400자 단위로 끊어 쓰는 방식으로 초고를 썼다. appChars는 앱에 기록된 쓰기 분량, actualChars는 하루를 마치고 원고 파일에서 실측한 실제 증가 분량이다(고쳐 쓰면서 진행해서 둘이 다를 수 있다).
+
+이 데이터를 분석해서 다음을 알려달라.
+
+1. 작업 패턴 분석: 요일별 경향, 연속 작성과 공백기, 속도의 변화, 슬럼프로 보이는 구간과 회복 과정.
+2. 계획 대비 실제: 목표와 마감 설정이 현실적이었는지, 실측(actualChars)과 앱 기록(appChars)의 차이가 말해주는 것.
+3. 다음 초고 계획을 위한 인사이트: 나에게 현실적인 하루 분량, 예상 소요 기간 산정법, 마감일을 정하는 방식에 대한 제안.
+4. 습관 개선 제안 2~3가지. 막연한 조언이 아니라 이 데이터에서 근거를 찾아 구체적으로.
+
+데이터:
+${JSON.stringify(data, null, 2)}`;
+}
+
+let promptTargetId = null;
+function findAnyProject(id) {
+  return (state.archive || []).find(x => x.id === id) || getP(id);
+}
+/* 프롬프트 편집 창 열기: 수정본이 저장돼 있으면 그것을, 없으면 새로 생성 */
+function copyAiPrompt(id) {
+  const p = findAnyProject(id);
+  if (!p) return;
+  promptTargetId = id;
+  document.getElementById('promptText').value = p.aiPrompt || buildAiPrompt(p);
+  document.getElementById('promptModal').showModal();
+}
+function regenPrompt() {
+  const p = findAnyProject(promptTargetId);
+  if (!p) return;
+  if (p.aiPrompt && !confirm('수정한 내용을 버리고 데이터로 다시 생성할까요?')) return;
+  delete p.aiPrompt;
+  save();
+  document.getElementById('promptText').value = buildAiPrompt(p);
+}
+async function savePromptAndCopy() {
+  const p = findAnyProject(promptTargetId);
+  if (!p) return;
+  const text = document.getElementById('promptText').value;
+  p.aiPrompt = text; // 수정본 저장 — 다음에 열어도 유지
+  save();
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch(e) {
+    const tmp = document.createElement('textarea');
+    tmp.value = text;
+    document.body.appendChild(tmp);
+    tmp.select();
+    try { ok = document.execCommand('copy'); } catch(e2) {}
+    tmp.remove();
+  }
+  document.getElementById('promptModal').close();
+  toast(ok ? '분석 프롬프트를 복사했습니다. AI 입력창에 붙여넣으세요.' : '복사에 실패했습니다');
 }
 
 /* ---------- 백업 ---------- */
