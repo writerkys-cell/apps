@@ -102,8 +102,14 @@
   .write-head { display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;}
   .back { font-size: 13px; color: var(--ink-faint); cursor:pointer; background:none; border:none; padding:4px 0; }
   .back:hover { color: var(--accent); }
-  .write-title { font-family: var(--serif); font-size: 20px; font-weight:500; margin: 4px 0 2px; }
-  .write-sub { font-size: 12.5px; color: var(--ink-faint); margin-bottom: 18px; }
+  .topic-memo {
+    width: 100%; margin: 8px 0 18px; padding: 8px 2px;
+    border: none; border-bottom: 1px dashed var(--line);
+    background: transparent; color: var(--ink-soft);
+    font-family: var(--sans); font-size: 14px;
+  }
+  .topic-memo:focus { outline: none; border-bottom-color: var(--accent); color: var(--ink); }
+  .topic-memo::placeholder { color: var(--ink-faint); }
   .editor-box {
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
     padding: 26px 28px; margin-bottom: 14px;
@@ -220,8 +226,7 @@
         <button class="ghost" onclick="openProjectModal(currentId)">설정</button>
       </div>
     </div>
-    <div class="write-title" id="wTitle"></div>
-    <div class="write-sub" id="wSub"></div>
+    <input id="memo" class="topic-memo" type="text" placeholder="지금 쓸 주제를 메모해 두세요" spellcheck="false">
 
     <div class="editor-box" id="editorBox">
       <div class="lock-notice" id="lockNotice">‘글쓰기 시작’을 누르면 스크리브너 초고가 열리고 입력이 활성화됩니다.</div>
@@ -484,7 +489,7 @@ function openWrite(id) {
   document.getElementById('homeView').classList.add('hidden');
   document.getElementById('homeActions').classList.add('hidden');
   document.getElementById('writeView').classList.remove('hidden');
-  document.getElementById('wTitle').textContent = p.name;
+  document.getElementById('memo').value = p.memo || '';
   const ed = document.getElementById('editor');
   ed.value = p.draft || '';
   applyLock();
@@ -512,17 +517,10 @@ function renderWriteInfo() {
   const p = getP(currentId);
   const st = calcStats(p);
 
-  // 마감일이 있으면 이번 쓰기의 목표 = 하루 목표 글자수, 없으면 400자
-  currentGoal = (p.deadline && !st.doneAll && st.needChars) ? st.needChars : CHUNK;
-
-  document.getElementById('wSub').textContent =
-    `목표 ${p.goalPages}매 (${fmtNum(st.goalChars)}자)` +
-    (p.deadline
-      ? ` · 마감 ${fmtDate(p.deadline)} · 오늘 ${(currentGoal/PAGE).toFixed(1)}매 쓰기`
-      : ` · 하루 400자 쓰기 ${st.targetSessions}회`);
   updateCount();
 
   const info = [];
+  info.push(`<b>${esc(p.name)}</b>`); // 초고 제목은 통계에 작게 남긴다
   info.push(st.doneAll
     ? `오늘 <b>${fmtNum(st.todayEffective)}자</b> (${st.todayCount}회)`
     : `오늘 <b>${fmtNum(st.todayEffective)} / ${fmtNum(st.targetChars)}자</b> (${st.todayCount}회)${st.achieved ? ' ✓' : ''}`);
@@ -785,6 +783,16 @@ function toast(msg) {
   clearTimeout(t._tm);
   t._tm = setTimeout(() => t.classList.remove('show'), 2600);
 }
+
+// 주제 메모: 수정하지 않는 한 계속 유지, 모두 지우면 비워짐
+let memoTimer = null;
+document.getElementById('memo').addEventListener('input', () => {
+  clearTimeout(memoTimer);
+  memoTimer = setTimeout(() => {
+    const p = getP(currentId);
+    if (p) { p.memo = document.getElementById('memo').value; save(); }
+  }, 400);
+});
 
 const _ed = document.getElementById('editor');
 _ed.addEventListener('input', onInput);
