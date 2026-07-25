@@ -108,6 +108,13 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
     padding: 26px 28px; margin-bottom: 14px;
   }
+  .lock-notice {
+    display: none; text-align: center; font-size: 13px; color: var(--ink-faint);
+    padding: 8px 0 16px;
+  }
+  .editor-box.locked .lock-notice { display: block; }
+  .editor-box.locked .editor-wrap { opacity: .35; pointer-events: none; }
+  .editor-box.locked .editor-foot button { opacity: .4; pointer-events: none; }
   .editor-wrap { position: relative; }
   #backdrop, textarea#editor {
     font-family: var(--sans);
@@ -208,7 +215,7 @@
     <div class="write-head">
       <button class="back" onclick="showHome()">← 프로젝트 목록</button>
       <div style="display:flex; gap:8px;">
-        <button onclick="runShortcut()">초고 열기</button>
+        <button class="primary" onclick="startWriting()">✍ 글쓰기 시작</button>
         <button onclick="endOfDay()">글자수 입력</button>
         <button class="ghost" onclick="openProjectModal(currentId)">설정</button>
       </div>
@@ -216,7 +223,8 @@
     <div class="write-title" id="wTitle"></div>
     <div class="write-sub" id="wSub"></div>
 
-    <div class="editor-box">
+    <div class="editor-box" id="editorBox">
+      <div class="lock-notice" id="lockNotice">‘글쓰기 시작’을 누르면 스크리브너 초고가 열리고 입력이 활성화됩니다.</div>
       <div class="editor-wrap">
         <div id="backdrop" aria-hidden="true"></div>
         <textarea id="editor" placeholder="한 줄에 한 문장씩 씁니다. ‘복사’를 누르면 모든 줄이 한 문단으로 이어져 복사됩니다." spellcheck="false"></textarea>
@@ -224,7 +232,7 @@
       <div class="editor-foot">
         <div class="charcount" id="charCount">0자</div>
         <div class="editor-actions">
-          <button class="ghost" onclick="clearEditor()">비우기</button>
+          <button class="ghost" id="clearBtn" onclick="clearEditor()">비우기</button>
           <button class="primary" id="copyBtn" onclick="copyAndRecord()">복사 (⌘↩)</button>
         </div>
       </div>
@@ -471,6 +479,7 @@ function renderHome() {
 /* ---------- 쓰기 화면 ---------- */
 function openWrite(id) {
   currentId = id;
+  writingStarted = false; // '글쓰기 시작'을 누르기 전까지 입력 잠금
   const p = getP(id);
   document.getElementById('homeView').classList.add('hidden');
   document.getElementById('homeActions').classList.add('hidden');
@@ -478,9 +487,24 @@ function openWrite(id) {
   document.getElementById('wTitle').textContent = p.name;
   const ed = document.getElementById('editor');
   ed.value = p.draft || '';
+  applyLock();
   updateCount();
   renderWriteInfo();
-  ed.focus();
+}
+
+let writingStarted = false;
+function applyLock() {
+  const ed = document.getElementById('editor');
+  ed.readOnly = !writingStarted;
+  document.getElementById('editorBox').classList.toggle('locked', !writingStarted);
+}
+
+/* 글쓰기 시작: 단축어로 스크리브너 초고를 열고 입력을 활성화 */
+function startWriting() {
+  writingStarted = true;
+  applyLock();
+  runShortcut();
+  document.getElementById('editor').focus();
 }
 function getP(id) { return state.projects.find(p => p.id === id); }
 
@@ -579,6 +603,7 @@ function onInput() {
 }
 
 async function copyAndRecord() {
+  if (!writingStarted) { toast('먼저 ‘글쓰기 시작’을 눌러주세요'); return; }
   const ed = document.getElementById('editor');
   if (!ed.value.trim()) { toast('내용이 없습니다'); return; }
   const text = joinLines(ed.value); // 행갈이 → 한 문단
