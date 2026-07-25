@@ -165,6 +165,31 @@
   .log-list { font-size: 13px; color: var(--ink-soft); }
   .log-list li { list-style:none; padding: 6px 0; border-bottom: 1px dashed var(--line); display:flex; justify-content:space-between; }
 
+  /* ---------- 기록 페이지 ---------- */
+  .stat-cards { display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 22px; }
+  .stat-card {
+    flex:1; min-width: 150px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .stat-card .k { font-size: 11px; color: var(--ink-faint); letter-spacing: .5px; margin-bottom: 4px; }
+  .stat-card .v { font-size: 18px; font-weight: 600; }
+  .stat-card .s { font-size: 11.5px; color: var(--ink-soft); margin-top: 2px; }
+  .heat { display:flex; gap:3px; overflow-x:auto; padding-bottom: 6px; }
+  .heat-col { display:flex; flex-direction:column; gap:3px; }
+  .heat-cell { width: 13px; height: 13px; border-radius: 3px; background: var(--line); }
+  .heat-cell.l1 { background: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+  .heat-cell.l2 { background: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+  .heat-cell.l3 { background: var(--accent); }
+  .heat-cell.future { background: transparent; }
+  .week-table { width:100%; border-collapse: collapse; font-size: 13px; }
+  .week-table td, .week-table th {
+    padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--line);
+    font-variant-numeric: tabular-nums;
+  }
+  .week-table th { font-size: 11px; color: var(--ink-faint); font-weight: 500; }
+  .week-table td:first-child, .week-table th:first-child { text-align: left; color: var(--ink-soft); }
+  .week-table .thisweek td { background: var(--accent-soft); }
+
   /* ---------- modal ---------- */
   dialog {
     border: 1px solid var(--line); border-radius: 16px; background: var(--card); color: var(--ink);
@@ -209,6 +234,7 @@
   <header class="top">
     <h1 class="logo" onclick="showHome()">초고 쓰기</h1>
     <div class="top-actions" id="homeActions">
+      <button onclick="showStats()">기록</button>
       <button class="primary" onclick="openProjectModal()">+ 새 프로젝트</button>
     </div>
   </header>
@@ -225,6 +251,15 @@
       <div class="history-title" style="margin-top:36px;">아카이브</div>
       <div id="archList"></div>
     </div>
+  </section>
+
+  <!-- ============ 기록 ============ -->
+  <section id="statsView" class="hidden">
+    <div class="write-head">
+      <button class="back" onclick="showHome()">← 프로젝트 목록</button>
+      <button onclick="openRoutinePrompt()">AI 루틴 분석 프롬프트</button>
+    </div>
+    <div id="statsBody"></div>
   </section>
 
   <!-- ============ 쓰기 ============ -->
@@ -446,6 +481,7 @@ function calcStats(p) {
 function showHome() {
   currentId = null;
   document.getElementById('writeView').classList.add('hidden');
+  document.getElementById('statsView').classList.add('hidden');
   document.getElementById('homeView').classList.remove('hidden');
   document.getElementById('homeActions').classList.remove('hidden');
   renderHome();
@@ -774,6 +810,180 @@ function deleteProject() {
   showHome();
 }
 
+/* ---------- 기록 페이지 ---------- */
+/* 모든 프로젝트(아카이브 포함)의 일자별 활동을 합산 */
+function collectDaily() {
+  const all = [...state.projects, ...(state.archive || [])];
+  const days = {}; // date -> {count, appChars, actualChars, hasActual}
+  for (const p of all) {
+    for (const s of p.sessions) {
+      const d = days[s.d] = days[s.d] || { count: 0, appChars: 0, actualChars: 0, hasActual: false };
+      d.count++; d.appChars += s.c;
+    }
+    const cps = (p.checkpoints || []).slice().sort((a, b) => a.t - b.t);
+    let prev = p.baseChars || 0;
+    for (const c of cps) {
+      const d = days[c.d] = days[c.d] || { count: 0, appChars: 0, actualChars: 0, hasActual: false };
+      d.actualChars += c.total - prev; d.hasActual = true;
+      prev = c.total;
+    }
+  }
+  return days;
+}
+function weekStartOf(dateStr) { // 월요일 시작
+  const d = parseDate(dateStr);
+  const shift = (d.getDay() + 6) % 7;
+  return addDays(dateStr, -shift);
+}
+
+function showStats() {
+  document.getElementById('homeView').classList.add('hidden');
+  document.getElementById('homeActions').classList.add('hidden');
+  document.getElementById('writeView').classList.add('hidden');
+  document.getElementById('statsView').classList.remove('hidden');
+  renderStats();
+}
+
+let weeksExpanded = false;
+function renderStats() {
+  const body = document.getElementById('statsBody');
+  const days = collectDaily();
+  const dates = Object.keys(days).sort();
+  if (!dates.length) {
+    body.innerHTML = '<div class="empty">아직 기록이 없습니다.</div>';
+    return;
+  }
+  const today = todayStr();
+  const first = dates[0];
+  const spanDays = diffDays(today, first) + 1;
+  const writingDays = dates.filter(d => days[d].count > 0 || days[d].hasActual).length;
+
+  let totalCount = 0, totalApp = 0, totalActual = 0, actualDays = 0;
+  for (const d of dates) {
+    totalCount += days[d].count;
+    totalApp += days[d].appChars;
+    if (days[d].hasActual) { totalActual += days[d].actualChars; actualDays++; }
+  }
+
+  // ---- 전체 요약 카드 ----
+  let html = `
+  <div class="history-title">전체 (${fmtDate(first)} ~ 오늘, ${spanDays}일)</div>
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="k">글 쓴 날</div>
+      <div class="v">${writingDays} / ${spanDays}일</div>
+      <div class="s">${Math.round(writingDays / spanDays * 100)}%</div>
+    </div>
+    <div class="stat-card">
+      <div class="k">하루 평균 (글 쓴 날 기준)</div>
+      <div class="v">${(totalCount / writingDays).toFixed(1)}회</div>
+      <div class="s">총 ${fmtNum(totalCount)}회</div>
+    </div>
+    <div class="stat-card">
+      <div class="k">하루 평균 · 앱 기록</div>
+      <div class="v">${(totalApp / PAGE / writingDays).toFixed(1)}매</div>
+      <div class="s">총 ${(totalApp / PAGE).toFixed(1)}매</div>
+    </div>
+    <div class="stat-card">
+      <div class="k">하루 평균 · 스크리브너 실측</div>
+      <div class="v">${actualDays ? (totalActual / PAGE / actualDays).toFixed(1) + '매' : '—'}</div>
+      <div class="s">${actualDays ? `총 ${(totalActual / PAGE).toFixed(1)}매 · 실측 ${actualDays}일` : '글자수 입력 기록 없음'}</div>
+    </div>
+  </div>`;
+
+  // ---- 일별 히트맵 (최근 24주) ----
+  const yoil = ['월', '화', '수', '목', '금', '토', '일'];
+  const thisWeekStart = weekStartOf(today);
+  html += `<div class="history-title">매일의 기록 (최근 24주 · 진할수록 많이 씀)</div><div class="heat">`;
+  for (let w = 23; w >= 0; w--) {
+    const ws = addDays(thisWeekStart, -7 * w);
+    html += '<div class="heat-col">';
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(ws, i);
+      if (d > today) { html += '<div class="heat-cell future"></div>'; continue; }
+      const rec = days[d];
+      const pages = rec ? (rec.hasActual ? rec.actualChars : rec.appChars) / PAGE : 0;
+      const lv = pages <= 0 ? '' : pages < 2 ? 'l1' : pages < 5 ? 'l2' : 'l3';
+      const tip = rec
+        ? `${fmtDate(d)} · ${rec.count}회 · 앱 ${(rec.appChars / PAGE).toFixed(1)}매${rec.hasActual ? ` · 실측 ${(rec.actualChars / PAGE).toFixed(1)}매` : ''}`
+        : `${fmtDate(d)} · 기록 없음`;
+      html += `<div class="heat-cell ${lv}" title="${tip}"></div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // ---- 주간 표 ----
+  const weeks = [];
+  for (let ws = thisWeekStart; ws >= weekStartOf(first); ws = addDays(ws, -7)) {
+    let wDays = 0, wCount = 0, wApp = 0, wActual = 0, wHasActual = false;
+    for (let i = 0; i < 7; i++) {
+      const rec = days[addDays(ws, i)];
+      if (!rec) continue;
+      if (rec.count > 0 || rec.hasActual) wDays++;
+      wCount += rec.count; wApp += rec.appChars;
+      if (rec.hasActual) { wActual += rec.actualChars; wHasActual = true; }
+    }
+    weeks.push({ ws, wDays, wCount, wApp, wActual, wHasActual });
+  }
+  const shown = weeksExpanded ? weeks : weeks.slice(0, 8);
+  const wfmt = s => { const d = parseDate(s); return `${d.getMonth() + 1}.${d.getDate()}`; };
+  html += `
+  <div class="history-title" style="margin-top:24px;">주간 기록</div>
+  <table class="week-table">
+    <tr><th>주</th><th>글 쓴 날</th><th>평균 회</th><th>평균 매(앱)</th><th>평균 매(실측)</th></tr>
+    ${shown.map((w, i) => `
+    <tr class="${i === 0 ? 'thisweek' : ''}">
+      <td>${wfmt(w.ws)} ~ ${wfmt(addDays(w.ws, 6))}${i === 0 ? ' (이번 주)' : ''}</td>
+      <td>${w.wDays} / 7</td>
+      <td>${w.wDays ? (w.wCount / w.wDays).toFixed(1) : '—'}</td>
+      <td>${w.wDays ? (w.wApp / PAGE / w.wDays).toFixed(1) : '—'}</td>
+      <td>${w.wHasActual ? (w.wActual / PAGE / w.wDays).toFixed(1) : '—'}</td>
+    </tr>`).join('')}
+  </table>`;
+  if (weeks.length > 8) {
+    html += `<div style="text-align:center; margin-top:10px;">
+      <button class="ghost" onclick="weeksExpanded=!weeksExpanded; renderStats();">${weeksExpanded ? '접기' : `전체 ${weeks.length}주 보기`}</button>
+    </div>`;
+  }
+  body.innerHTML = html;
+}
+
+/* 루틴 분석 프롬프트 */
+function buildRoutinePrompt() {
+  const days = collectDaily();
+  const dates = Object.keys(days).sort();
+  const today = todayStr(), first = dates[0] || today;
+  const daily = dates.map(d => ({
+    date: d,
+    요일: ['일','월','화','수','목','금','토'][parseDate(d).getDay()],
+    회수: days[d].count,
+    앱_글자수: days[d].appChars,
+    실측_글자수: days[d].hasActual ? days[d].actualChars : null
+  }));
+  const data = {
+    기간: { 시작: first, 오늘: today, 전체일수: diffDays(today, first) + 1, 글쓴날수: dates.length },
+    참고: '1매 = 200자 원고지. 앱_글자수는 400자 쓰기 앱에 기록된 분량, 실측_글자수는 하루를 마치고 스크리브너 원고에서 실측한 실제 증가 분량(고쳐 쓰면 둘이 다름).',
+    일별_기록: daily
+  };
+  return `당신은 경험 많은 글쓰기 코치다. 아래는 나의 매일 글쓰기 기록 전체다. 나는 400자 단위로 끊어 쓰는 방식으로 초고를 쓴다.
+
+이 데이터를 바탕으로 나의 글쓰기 루틴을 분석해 달라.
+
+1. 일관성과 리듬: 연속 작성과 공백기의 패턴, 요일별 경향, 일주일 단위의 리듬이 있는지.
+2. 분량의 추이: 하루 분량이 늘고 있는지 줄고 있는지, 지속 가능한 수준인지.
+3. 앱 기록과 실측의 차이: 고쳐 쓰기에 쓰는 비중이 어느 정도인지, 그것이 루틴에 주는 시사점.
+4. 루틴 개선 제안: 이 데이터에 근거한 현실적인 하루 목표(회수·매수), 쉬는 날 배치, 슬럼프를 줄이는 방법 2~3가지. 막연한 조언이 아니라 데이터에서 근거를 찾아 구체적으로.
+
+데이터:
+${JSON.stringify(data, null, 2)}`;
+}
+function openRoutinePrompt() {
+  promptTargetId = '__routine__';
+  document.getElementById('promptText').value = state.routinePrompt || buildRoutinePrompt();
+  document.getElementById('promptModal').showModal();
+}
+
 /* ---------- 아카이브 ---------- */
 function archiveProject(id) {
   const p = getP(id);
@@ -904,19 +1114,28 @@ function copyAiPrompt(id) {
   document.getElementById('promptText').value = p.aiPrompt || buildAiPrompt(p);
   document.getElementById('promptModal').showModal();
 }
-function regenPrompt() {
+/* 프롬프트 저장 위치: 루틴 분석이면 state, 프로젝트 분석이면 해당 프로젝트 */
+function promptStore() {
+  if (promptTargetId === '__routine__')
+    return { get: () => state.routinePrompt, set: v => state.routinePrompt = v,
+             del: () => delete state.routinePrompt, build: buildRoutinePrompt };
   const p = findAnyProject(promptTargetId);
-  if (!p) return;
-  if (p.aiPrompt && !confirm('수정한 내용을 버리고 데이터로 다시 생성할까요?')) return;
-  delete p.aiPrompt;
+  return p ? { get: () => p.aiPrompt, set: v => p.aiPrompt = v,
+               del: () => delete p.aiPrompt, build: () => buildAiPrompt(p) } : null;
+}
+function regenPrompt() {
+  const s = promptStore();
+  if (!s) return;
+  if (s.get() && !confirm('수정한 내용을 버리고 데이터로 다시 생성할까요?')) return;
+  s.del();
   save();
-  document.getElementById('promptText').value = buildAiPrompt(p);
+  document.getElementById('promptText').value = s.build();
 }
 async function savePromptAndCopy() {
-  const p = findAnyProject(promptTargetId);
-  if (!p) return;
+  const s = promptStore();
+  if (!s) return;
   const text = document.getElementById('promptText').value;
-  p.aiPrompt = text; // 수정본 저장 — 다음에 열어도 유지
+  s.set(text); // 수정본 저장 — 다음에 열어도 유지
   save();
   let ok = false;
   try { await navigator.clipboard.writeText(text); ok = true; }
