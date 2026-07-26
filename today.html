@@ -161,15 +161,21 @@
   .editor-box.locked .lock-notice{display:block}
   .editor-box.locked .editor-wrap{opacity:.32;pointer-events:none}
   .editor-box.locked .editor-foot button{opacity:.4;pointer-events:none}
-  .editor-wrap{position:relative}
+  /* 타이프라이터 스크롤 — 창이 늘어나는 대신 글이 위로 올라간다 */
+  .editor-wrap{position:relative;overflow:hidden}
+  .editor-wrap.scrolled::before{content:'';position:absolute;top:0;left:0;right:0;height:26px;z-index:3;
+    pointer-events:none;background:linear-gradient(var(--card) 25%,transparent)}
   #backdrop,textarea#editor{font-family:var(--sans);font-size:16.5px;line-height:2.0;letter-spacing:.2px;
     white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;padding:0;margin:0;border:none}
-  #backdrop{position:absolute;inset:0;pointer-events:none;color:var(--ink);overflow:hidden}
+  #backdrop{position:absolute;top:0;left:0;right:0;pointer-events:none;color:var(--ink)}
   #backdrop span{transition:color .25s}
   #backdrop.focusmode span{color:var(--ink-faint)}
   #backdrop.focusmode span.cur{color:var(--ink)}
-  textarea#editor{position:relative;display:block;width:100%;min-height:300px;outline:none;resize:none;overflow:hidden;
+  textarea#editor{position:relative;display:block;width:100%;outline:none;resize:none;
+    overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+    scrollbar-width:none;-ms-overflow-style:none;
     background:transparent;color:transparent;caret-color:var(--accent)}
+  textarea#editor::-webkit-scrollbar{width:0;height:0;display:none}
   textarea#editor::placeholder{color:var(--ink-faint);-webkit-text-fill-color:var(--ink-faint)}
   .editor-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;
     border-top:1px solid var(--line);padding-top:13px;margin-top:6px}
@@ -538,15 +544,17 @@
     </div>
     <div class="field2">
       <div class="field"><label>초고 시작 단축어</label><input id="sChogo" type="text" placeholder="초고"></div>
-      <div class="field"><label>초고 완료 단축어</label><input id="sChogoEnd" type="text" placeholder="초고끝"></div>
-    </div>
-    <div class="field2">
       <div class="field"><label>타이핑 단축어</label><input id="sTyping" type="text" placeholder="타이핑"></div>
-      <div class="field"><label>타이핑 세션 길이 (분)</label><input id="sMinutes" type="number" min="1" max="600"></div>
     </div>
+    <div class="field"><label>타이핑 세션 길이 (분)</label><input id="sMinutes" type="number" min="1" max="600"></div>
     <div class="field2">
       <div class="field"><label>하루 타이핑 최소 회수</label><input id="sDailyT" type="number" min="1"></div>
       <div class="field"><label>하루 초고 최소 회수</label><input id="sDailyC" type="number" min="1"></div>
+    </div>
+    <div class="field">
+      <label>초고 입력창 줄 수</label>
+      <input id="sLines" type="number" min="4" max="40">
+      <div class="hint">이 줄 수만큼만 보이고, 넘어가면 창이 늘어나는 대신 글이 위로 올라갑니다(타이프라이터 스크롤).</div>
     </div>
     <div class="field">
       <div class="hint">단축어는 <code>shortcuts://run-shortcut</code> 로 실행되며 프로젝트 이름이 입력값(텍스트)으로 전달됩니다. Safari에서 열면 가장 안정적으로 동작합니다.</div>
@@ -590,7 +598,7 @@
    쓰는 하루 — 초고 + 오전 타이핑 통합
    ---------------------------------------------------------------------
    state = {
-     settings:{chogoShortcut,chogoEndShortcut,typingShortcut,typingMinutes,dailyChogo,dailyTyping},
+     settings:{chogoShortcut,typingShortcut,typingMinutes,dailyChogo,dailyTyping,editorLines,projectSort},
      currentProjectId, projects:[…], archive:[…], sessions:[…], routinePrompt
    }
    project = {id,name,goalPages,deadline,dailyTarget,baseChars,draft,memo,createdAt,archivedAt?,aiPrompt?}
@@ -607,8 +615,8 @@ const DOW   = ['일','월','화','수','목','금','토'];
 
 const DEFAULTS = {
   version: 1,
-  settings: { chogoShortcut:'초고', chogoEndShortcut:'초고끝', typingShortcut:'타이핑',
-              typingMinutes:54, dailyChogo:3, dailyTyping:1, projectSort:'default' },
+  settings: { chogoShortcut:'초고', typingShortcut:'타이핑',
+              typingMinutes:54, dailyChogo:3, dailyTyping:1, projectSort:'default', editorLines:10 },
   currentProjectId: null,
   projects: [], archive: [], sessions: [], routinePrompt: null
 };
@@ -731,8 +739,10 @@ function calcProject(p){
     : draftAll;
   const projected = manuscript + pendingDraft;
 
+  /* ── 진척의 기준은 «원고 전체 글자수»(타이핑을 마치고 스크리브너에서 입력한 값)다.
+        아직 타이핑하지 않은 초고는 분량에 넣지 않고 «타이핑 대기»로만 따로 보여준다. ── */
   const goalChars = (p.goalPages||0)*PAGE;
-  const remaining = Math.max(0, goalChars - projected);
+  const remaining = Math.max(0, goalChars - manuscript);
   const doneAll   = goalChars>0 && remaining===0;
 
   // 초고 → 원고 변환율
@@ -744,24 +754,30 @@ function calcProject(p){
   const todayChogo = chogo.filter(s=>s.d===today);
   const todayChars = todayChogo.reduce((a,s)=>a+(s.chars||0),0);
   const todayTyping = ss.filter(s=>s.kind==='typing' && s.d===today);
+  // 오늘 원고가 실제로 늘어난 양
+  let todayGain = 0;
+  for(let i=0;i<cps.length;i++){
+    if(cps[i].d !== today) continue;
+    todayGain += cps[i].total - (i>0 ? cps[i-1].total : (p.baseChars||0));
+  }
 
-  // 하루 평균 · 예상 완료
+  // 하루 평균 · 예상 완료 — 모두 원고 기준
   const dates = [...new Set(ss.map(s=>s.d))].sort();
   let avgChars = 0, eta = null, span = 0;
   if(dates.length){
     span = Math.max(1, diffDays(today, dates[0]) + 1);
-    const written = Math.max(0, projected - (p.baseChars||0));
-    avgChars = written/span;
+    avgChars = Math.max(0, cpGain)/span;
     if(!doneAll && avgChars > 0) eta = addDays(today, Math.ceil(remaining/avgChars));
   }
 
-  // 마감 기반 하루 필요량
+  // 마감 기반 하루 필요량 — 원고 기준으로 계산하고, 초고 회수는 변환율로 환산한다
   let daysLeft=null, needChars=null, needSessions=null, overdue=false;
   if(p.deadline && !doneAll){
     daysLeft = diffDays(p.deadline, today) + 1;
     if(daysLeft < 1){ overdue=true; daysLeft=0; needChars=remaining; }
-    else needChars = Math.max(1, Math.ceil((remaining + todayChars)/daysLeft));
-    needSessions = Math.ceil(needChars/CHUNK);
+    else needChars = Math.max(1, Math.ceil((remaining + todayGain)/daysLeft));
+    const conv = (ratio && ratio > 0.2 && ratio < 5) ? ratio : 1;   // 표본이 이상하면 1:1로
+    needSessions = Math.max(1, Math.ceil(needChars/conv/CHUNK));
   }
   const targetSessions = doneAll ? 0 : (needSessions !== null ? needSessions : (p.dailyTarget || state.settings.dailyChogo || 3));
   const targetChars    = doneAll ? 0 : (needChars    !== null ? needChars    : targetSessions*CHUNK);
@@ -774,11 +790,13 @@ function calcProject(p){
 
   return { goalChars, manuscript, pendingDraft, projected, remaining, doneAll, draftAll,
            ratio, cpGain, hasCp: !!lastCp, lastCp,
-           todayCount: todayChogo.length, todayChars, todayTyping,
+           todayCount: todayChogo.length, todayChars, todayTyping, todayGain,
            avgChars, eta, daysLeft, needChars, needSessions, overdue,
            targetSessions, targetChars, achieved, streak,
-           rate: goalChars ? projected/goalChars : null,
-           pages: projected/PAGE, sessionCount: chogo.length, days: dates.length,
+           rate: goalChars ? manuscript/goalChars : null,          // 원고 기준 달성률
+           pages: manuscript/PAGE,                                  // 원고 기준 매수
+           pendingPages: pendingDraft/PAGE,
+           sessionCount: chogo.length, days: dates.length,
            first: dates[0]||null, last: dates.length ? dates[dates.length-1] : null };
 }
 
@@ -1162,8 +1180,10 @@ function renderProjects(){
     const bits = [];
     bits.push(`<span><b>${st.pages.toFixed(1)}</b> / ${p.goalPages}매</span>`);
     if(st.rate!==null) bits.push(`<span>달성 <b>${Math.round(st.rate*100)}%</b></span>`);
-    bits.push(`<span>원고 <b>${fmtNum(st.manuscript)}</b>자${st.hasCp?'':' (실측 없음)'}</span>`);
-    if(st.pendingDraft>0) bits.push(`<span>타이핑 대기 <b>${fmtNum(st.pendingDraft)}</b>자</span>`);
+    bits.push(st.hasCp
+      ? `<span>원고 <b>${fmtNum(st.manuscript)}</b>자</span>`
+      : `<span class="alert">원고 글자수 미입력</span>`);
+    if(st.pendingDraft>0) bits.push(`<span>타이핑 대기 <b>${(st.pendingPages).toFixed(1)}매</b> (${fmtNum(st.pendingDraft)}자)</span>`);
     if(st.ratio!==null) bits.push(`<span>초고 100자 → 원고 <b>${Math.round(st.ratio*100)}</b>자</span>`);
     if(st.avgChars>0 && !st.doneAll) bits.push(`<span>하루 평균 <b>${(st.avgChars/PAGE).toFixed(1)}매</b></span>`);
     if(st.eta) bits.push(`<span>이 속도라면 <b>${fmtDate(st.eta)}</b></span>`);
@@ -1211,7 +1231,7 @@ function renderArchive(){
     const first = st.first || p.createdAt;
     const end = p.archivedAt || todayStr();
     const total = diffDays(end, first) + 1;
-    const pct = st.goalChars ? Math.round(st.projected/st.goalChars*100) : null;
+    const pct = st.rate!==null ? Math.round(st.rate*100) : null;
 
     /* 요일 경향 */
     const dow = {};
@@ -1222,12 +1242,16 @@ function renderArchive(){
     const topDow = Object.keys(dow).sort((a,b)=>dow[b]-dow[a])[0];
 
     const lines = [];
+    if(st.hasCp && st.days)
+      lines.push(`작업한 날 하루 평균 <b>${(st.cpGain/st.days/PAGE).toFixed(1)}매</b> · 전체 기간 하루 평균 <b>${(st.cpGain/total/PAGE).toFixed(1)}매</b> <span style="opacity:.75">(원고 기준)</span>`);
+    else
+      lines.push(`<span style="opacity:.8">원고 글자수 기록이 없어 매수는 계산하지 못했습니다</span>`);
     lines.push(`초고 <b>${st.sessionCount}회</b> · ${st.days}일 작업 (${total}일 중 ${Math.round(st.days/total*100)}%)` +
                (st.sessionCount ? ` · 회당 평균 <b>${fmtNum(Math.round(st.draftAll/st.sessionCount))}자</b>` : ''));
     lines.push(`타이핑 완주 <b>${tDone.length}회</b>` + (typing.length>tDone.length?` (미완성 ${typing.length-tDone.length}회)`:'') +
                ` · 모두 <b>${hm(tMin)}</b>`);
-    if(st.days) lines.push(`작업한 날 하루 평균 <b>${(st.draftAll/st.days/PAGE).toFixed(1)}매</b> · 전체 기간 하루 평균 ${(st.draftAll/total/PAGE).toFixed(1)}매`);
-    if(topDow) lines.push(`가장 많이 쓴 요일 <b>${topDow}</b> (${fmtNum(dow[topDow])}자)`);
+    if(st.pendingDraft>0) lines.push(`아직 타이핑하지 않은 초고 ${fmtNum(st.pendingDraft)}자 (분량에 넣지 않음)`);
+    if(topDow) lines.push(`초고를 가장 많이 쓴 요일 <b>${topDow}</b> (${fmtNum(dow[topDow])}자)`);
     if(p.deadline) lines.push(`마감 ${fmtDate(p.deadline)} · 완료 ${fmtDate(end)} — ` +
       (diffDays(end, p.deadline) <= 0 ? `<b>${Math.abs(diffDays(end,p.deadline))}일 일찍</b>` : `<b>${diffDays(end,p.deadline)}일 늦게</b>`));
     if(p.baseChars) lines.push(`가져온 기존 원고 ${fmtNum(p.baseChars)}자`);
@@ -1240,11 +1264,12 @@ function renderArchive(){
         <div class="rec-period">${fmtDate(first)} ~ ${fmtDate(end)} · ${total}일</div>
       </div>
       <div class="rec-grid">
-        <div><div class="k">최종 분량</div><div class="v">${st.pages.toFixed(1)}매</div><div class="s">${fmtNum(st.projected)}자</div></div>
+        <div><div class="k">최종 원고</div><div class="v">${st.pages.toFixed(1)}매</div>
+             <div class="s">${st.hasCp?fmtNum(st.manuscript)+'자':'글자수 기록 없음'}</div></div>
         <div><div class="k">목표</div><div class="v">${p.goalPages?p.goalPages+'매':'—'}</div>
              <div class="s">${pct!==null?`달성 ${pct}%`:'목표 없음'}</div></div>
-        <div><div class="k">원고 실측</div><div class="v">${st.hasCp?fmtNum(st.manuscript)+'자':'—'}</div>
-             <div class="s">${st.hasCp?(st.manuscript/PAGE).toFixed(1)+'매':'글자수 기록 없음'}</div></div>
+        <div><div class="k">이 원고에서 늘린 분량</div><div class="v">${st.hasCp?(st.cpGain/PAGE).toFixed(1)+'매':'—'}</div>
+             <div class="s">${st.hasCp?fmtNum(st.cpGain)+'자':'—'}</div></div>
         <div><div class="k">초고 → 원고</div><div class="v">${st.ratio!==null?Math.round(st.ratio*100)+'%':'—'}</div>
              <div class="s">${st.ratio!==null?`초고 100자 → ${Math.round(st.ratio*100)}자`:'실측 없음'}</div></div>
       </div>
@@ -1388,7 +1413,9 @@ function openWrite(id){
   document.getElementById('memo').value = p.memo || '';
   document.getElementById('editor').value = p.draft || '';
   applyLock();
+  applyEditorMetrics();
   renderWriteInfo();
+  editorToEnd();
   window.scrollTo(0,0);
 }
 function applyLock(){
@@ -1403,14 +1430,44 @@ function startWriting(){
 }
 function joinLines(v){ return v.split('\n').map(s=>s.trim()).filter(Boolean).join(' '); }
 function updateCount(){
-  const ed = document.getElementById('editor');
-  const n = joinLines(ed.value).length;
+  const n = joinLines(document.getElementById('editor').value).length;
   const el = document.getElementById('charCount');
   el.textContent = `${fmtNum(n)}자 / ${fmtNum(CHUNK)}자`;
   el.classList.toggle('reached', n >= CHUNK);
-  ed.style.height = 'auto';
-  ed.style.height = Math.max(300, ed.scrollHeight) + 'px';
   renderBackdrop();
+}
+
+/* ---------- 타이프라이터 스크롤 ----------
+   입력창 높이를 정해진 줄 수로 고정한다. 그 줄을 넘어가면 창이 아래로 늘어나는 대신
+   textarea가 스스로 한 줄만큼 스크롤해 커서가 늘 같은 자리에 머문다.
+   겹쳐 놓은 backdrop(현재 줄만 진하게 보여주는 층)은 같은 양만큼 밀어 맞춘다. */
+function editorLineHeight(){
+  const cs = getComputedStyle(document.getElementById('editor'));
+  const fs = parseFloat(cs.fontSize) || 16.5;
+  const lh = parseFloat(cs.lineHeight);
+  if(lh > 6) return lh;        // px로 계산된 값
+  if(lh > 0) return fs * lh;   // 배수로만 알려주는 경우
+  return fs * 2;               // normal
+}
+function editorLines(){ return Math.max(4, Math.min(40, state.settings.editorLines || 10)); }
+function applyEditorMetrics(){
+  const ed = document.getElementById('editor');
+  if(!ed) return;
+  const h = Math.round(editorLines() * editorLineHeight());
+  ed.style.height = h + 'px';
+  ed.parentElement.style.height = h + 'px';
+  syncScroll();
+}
+/* backdrop을 textarea의 스크롤 위치에 맞춘다 */
+function syncScroll(){
+  const ed = document.getElementById('editor');
+  const bd = document.getElementById('backdrop');
+  if(!ed || !bd) return;
+  const top = ed.scrollTop;
+  bd.style.transform = 'translateY(' + (-top) + 'px)';
+  const wrap = ed.parentElement;
+  if(wrap.scrollTop) wrap.scrollTop = 0;      // 감싼 상자는 움직이지 않는다
+  wrap.classList.toggle('scrolled', top > 2);
 }
 function renderBackdrop(){
   const ed = document.getElementById('editor');
@@ -1420,6 +1477,16 @@ function renderBackdrop(){
   const focused = document.activeElement===ed && lines.filter(l=>l.trim()).length > 1;
   bd.classList.toggle('focusmode', focused);
   bd.innerHTML = lines.map((l,i)=>`<span class="${i===curLine?'cur':''}">${esc(l)}</span>`).join('\n');
+  syncScroll();
+  requestAnimationFrame(syncScroll);          // 브라우저가 커서를 따라간 뒤 한 번 더
+}
+/* 이어 쓸 때는 마지막 줄이 보이도록 */
+function editorToEnd(){
+  const ed = document.getElementById('editor');
+  const n = ed.value.length;
+  try{ ed.setSelectionRange(n, n); }catch(e){}
+  ed.scrollTop = ed.scrollHeight;
+  renderBackdrop();
 }
 function clearEditor(){
   const ed = document.getElementById('editor');
@@ -1453,6 +1520,7 @@ async function copyAndRecord(){
   p.draft = '';
   save(); reindex();
   ed.value = '';
+  ed.scrollTop = 0;
   renderWriteInfo();
 
   const st = calcProject(p);
@@ -1460,7 +1528,6 @@ async function copyAndRecord(){
   else if(!before.achieved && st.achieved) toast(`복사 완료 · 오늘 초고 ${st.todayCount}회 · 원칙을 지켰습니다`);
   else toast(`복사 완료 · 오늘 ${st.todayCount} / ${st.targetSessions}회 · ${fmtNum(st.todayChars)}자`);
   ed.focus();
-  setTimeout(()=>runShortcut(state.settings.chogoEndShortcut, p.name), 400);
 }
 
 /* 원고 실제 글자수 기록 */
@@ -1501,10 +1568,12 @@ function renderWriteInfo(){
   info.push(st.doneAll
     ? `오늘 초고 <b>${st.todayCount}회</b> · ${fmtNum(st.todayChars)}자`
     : `오늘 초고 <b>${st.todayCount} / ${st.targetSessions}회</b> · ${fmtNum(st.todayChars)}자${st.achieved?' ✓':''}`);
-  info.push(`원고 <b>${(st.manuscript/PAGE).toFixed(1)}매</b> (${fmtNum(st.manuscript)}자${st.hasCp?' · 실측':''})`);
-  if(st.pendingDraft>0) info.push(`타이핑 대기 초고 <b>${fmtNum(st.pendingDraft)}자</b>`);
+  info.push(st.hasCp
+    ? `원고 <b>${st.pages.toFixed(1)}매</b> (${fmtNum(st.manuscript)}자)` + (p.goalPages?` · 목표의 ${Math.round(st.rate*100)}%`:'')
+    : `원고 글자수를 아직 입력하지 않았습니다`);
+  if(st.pendingDraft>0) info.push(`타이핑 대기 초고 <b>${st.pendingPages.toFixed(1)}매</b> (${fmtNum(st.pendingDraft)}자)`);
   if(st.ratio!==null) info.push(`초고 100자 → 원고 <b>${Math.round(st.ratio*100)}자</b>`);
-  if(!st.doneAll) info.push(`남은 분량 <b>${(st.remaining/PAGE).toFixed(1)}매</b>` + (p.deadline?'':` · 초고 약 ${Math.ceil(st.remaining/CHUNK)}회`));
+  if(!st.doneAll) info.push(`남은 분량 <b>${(st.remaining/PAGE).toFixed(1)}매</b>`);
   if(st.eta) info.push(`예상 완료 <b>${fmtDate(st.eta)}</b>`);
   if(st.doneAll) info.push(`<b>목표 분량을 모두 채웠습니다</b>`);
   document.getElementById('wInfo').innerHTML = info.map(s=>`<span>${s}</span>`).join('');
@@ -1994,11 +2063,11 @@ function deleteArchive(id){
 function openSettings(){
   const s = state.settings;
   document.getElementById('sChogo').value = s.chogoShortcut;
-  document.getElementById('sChogoEnd').value = s.chogoEndShortcut;
   document.getElementById('sTyping').value = s.typingShortcut;
   document.getElementById('sMinutes').value = s.typingMinutes;
   document.getElementById('sDailyT').value = s.dailyTyping;
   document.getElementById('sDailyC').value = s.dailyChogo;
+  document.getElementById('sLines').value = s.editorLines || 10;
   document.getElementById('ruleT').textContent = s.dailyTyping;
   document.getElementById('ruleC').textContent = s.dailyChogo;
   openDlg('settingsModal');
@@ -2006,13 +2075,13 @@ function openSettings(){
 function saveSettings(){
   const s = state.settings;
   s.chogoShortcut = document.getElementById('sChogo').value.trim() || '초고';
-  s.chogoEndShortcut = document.getElementById('sChogoEnd').value.trim() || '초고끝';
   s.typingShortcut = document.getElementById('sTyping').value.trim() || '타이핑';
   const m = parseInt(document.getElementById('sMinutes').value,10);
   s.typingMinutes = (m>0 && m<600) ? m : 54;
   s.dailyTyping = Math.max(1, parseInt(document.getElementById('sDailyT').value,10) || 1);
   s.dailyChogo  = Math.max(1, parseInt(document.getElementById('sDailyC').value,10) || 3);
-  save(); closeDlg('settingsModal');
+  s.editorLines = Math.max(4, Math.min(40, parseInt(document.getElementById('sLines').value,10) || 10));
+  save(); applyEditorMetrics(); closeDlg('settingsModal');
   renderHome();
   if(!document.getElementById('statsView').classList.contains('hidden')){ renderCalendar(); renderStats(); }
   toast('설정을 저장했습니다');
@@ -2072,12 +2141,13 @@ function ruleBlock(){
   const s = state.settings;
   return [
     '## 나의 작업 방식과 원칙',
-    `- 오후에 «초고»를 쓴다. 한 번에 ${CHUNK}자씩 끊어 쓰고, 하루 ${s.dailyChogo}회 이상이 원칙이다. (애플 단축어 «${s.chogoShortcut}» / «${s.chogoEndShortcut}»)`,
+    `- 오후에 «초고»를 쓴다. 한 번에 ${CHUNK}자씩 끊어 쓰고, 하루 ${s.dailyChogo}회 이상이 원칙이다. (애플 단축어 «${s.chogoShortcut}»)`,
     `- 다음날 오전에 «타이핑»으로 그 초고를 다듬어 원고에 반영한다. 한 세션 ${s.typingMinutes}분, 하루 ${s.dailyTyping}회 이상이 원칙이다. (단축어 «${s.typingShortcut}»)`,
     '- 아침에 타이핑하는 것이 가장 좋다. 오후·저녁으로 밀렸는지도 기록한다.',
     `- ${s.typingMinutes}분을 채우면 «완주», 중간에 그만두면 «미완성»이다.`,
     '- 두 원칙을 모두 지킨 날을 «완전한 하루»라 부른다.',
-    '- 「초고 글자수」는 초고 앱에 기록한 분량, 「원고 전체 글자수」는 타이핑을 마친 뒤 원고(스크리브너)에서 실측한 총 글자수다.',
+    '- 「초고 글자수」는 초고를 쓸 때 기록한 분량이고, 「원고 전체 글자수」는 타이핑을 마친 뒤 원고(스크리브너)에서 확인한 총 글자수다.',
+    '- 진척과 매수는 언제나 «원고 전체 글자수»를 기준으로 센다. 아직 타이핑하지 않은 초고는 분량에 넣지 않는다.',
     '- 그래서 «원고 증가분 ÷ 초고 분량»이 다듬는 과정의 증폭·압축 정도를 보여준다. 퇴고로 줄어든 날은 음수가 될 수 있다.',
     '- 1매 = 200자 원고지.'
   ].join('\n');
@@ -2347,7 +2417,10 @@ _ed.addEventListener('input', ()=>{
     if(p){ p.draft = _ed.value; save(); }
   }, 400);
 });
-['keyup','click','focus','blur'].forEach(e=>_ed.addEventListener(e, renderBackdrop));
+['keyup','click','focus','blur','select'].forEach(e=>_ed.addEventListener(e, renderBackdrop));
+_ed.addEventListener('scroll', syncScroll);
+document.addEventListener('selectionchange', ()=>{ if(document.activeElement===_ed) renderBackdrop(); });
+window.addEventListener('resize', ()=>{ applyEditorMetrics(); });
 document.addEventListener('keydown', e=>{
   if((e.metaKey||e.ctrlKey) && e.key==='Enter' && currentId){ e.preventDefault(); copyAndRecord(); }
 });
@@ -2371,6 +2444,7 @@ document.addEventListener('visibilitychange', ()=>{
 
 resolveStale();
 reindex();
+applyEditorMetrics();
 showHome();
 </script>
 </body>
