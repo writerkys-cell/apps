@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>draft</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #949494;
+    --faint: #c9c9c9;
+    --line: #e7e5e2;
+    --bg: #fcfbfa;
+    --card: #ffffff;
+    --serif: 'Noto Serif KR', 'Apple Myungjo', 'Nanum Myeongjo', Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .wrap { max-width: 620px; margin: 0 auto; padding: 48px 20px 120px; }
+
+  header { margin-bottom: 40px; }
+  h1 {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: 0.5em;
+    text-indent: 0.5em;
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  nav { display: flex; justify-content: center; gap: 4px; border-bottom: 1px solid var(--line); }
+  nav button {
+    background: none; border: none; cursor: pointer;
+    font-family: var(--sans); font-size: 13.5px; color: var(--muted);
+    padding: 8px 14px; margin-bottom: -1px;
+    border-bottom: 1px solid transparent;
+    transition: color .15s;
+  }
+  nav button:hover { color: var(--ink); }
+  nav button.active { color: var(--ink); border-bottom-color: var(--ink); }
+
+  .view { display: none; }
+  .view.active { display: block; animation: fade .2s ease; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ── 공용 ── */
+  textarea, input[type=text] {
+    width: 100%;
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.9;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 16px 18px;
+    outline: none;
+    resize: vertical;
+    transition: border-color .15s;
+  }
+  textarea:focus, input[type=text]:focus { border-color: var(--muted); }
+  input.tags-input { font-family: var(--sans); font-size: 13.5px; padding: 9px 14px; }
+  ::placeholder { color: var(--faint); }
+
+  .btn {
+    font-family: var(--sans); font-size: 13.5px;
+    background: var(--ink); color: #fff;
+    border: 1px solid var(--ink); border-radius: 2px;
+    padding: 8px 20px; cursor: pointer;
+    transition: opacity .15s;
+  }
+  .btn:hover { opacity: .8; }
+  .btn.ghost { background: none; color: var(--ink); border-color: var(--line); }
+  .btn.ghost:hover { opacity: 1; border-color: var(--muted); }
+  .btn.quiet { background: none; color: var(--muted); border: none; padding: 8px 10px; }
+  .btn.quiet:hover { color: var(--ink); }
+  .btn:disabled { opacity: .3; cursor: default; }
+
+  .small { font-size: 12.5px; color: var(--muted); }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .spread { justify-content: space-between; }
+  .mt8 { margin-top: 8px; } .mt16 { margin-top: 16px; } .mt24 { margin-top: 24px; } .mt40 { margin-top: 40px; }
+
+  .tag-chip {
+    display: inline-block; font-size: 11.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 20px;
+    padding: 1px 9px; margin-right: 4px;
+  }
+  .badge-used { font-size: 11px; color: var(--muted); border: 1px dotted var(--faint); border-radius: 20px; padding: 1px 8px; }
+  .badge-rev { font-size: 11px; color: var(--ink); border: 1px solid var(--faint); border-radius: 20px; padding: 1px 8px; }
+  .star-mark { color: var(--ink); }
+
+  select {
+    font-family: var(--sans); font-size: 13px; color: var(--ink);
+    background: none; border: none; border-bottom: 1px solid var(--line);
+    padding: 4px 2px; outline: none; cursor: pointer;
+  }
+
+  /* ── 카드 ── */
+  .note-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 2px;
+    padding: 22px 24px; margin-top: 16px;
+  }
+  .note-text {
+    font-family: var(--serif); font-size: 16px; line-height: 2;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .note-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .note-date { font-size: 12px; color: var(--muted); letter-spacing: .03em; }
+
+  /* ── 뽑기 ── */
+  .draw-stage { min-height: 200px; }
+  .draw-empty {
+    text-align: center; color: var(--muted); font-size: 14px;
+    padding: 70px 0; border: 1px dashed var(--line); border-radius: 2px; margin-top: 16px;
+  }
+  .star-btn {
+    background: none; border: none; cursor: pointer;
+    font-size: 21px; line-height: 1; color: var(--faint);
+    transition: color .15s; padding: 2px 6px;
+  }
+  .star-btn:hover { color: var(--muted); }
+  .star-btn.on { color: var(--ink); }
+
+  /* ── 서랍 목록 ── */
+  .list-item {
+    border-bottom: 1px solid var(--line); padding: 18px 2px; cursor: pointer;
+  }
+  .list-item:hover { background: rgba(0,0,0,.015); }
+  .list-text {
+    font-family: var(--serif); font-size: 15px; line-height: 1.9;
+    white-space: pre-wrap; word-break: break-word;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .list-item.open .list-text { display: block; }
+
+  /* ── 책상 ── */
+  .desk-card { display: flex; gap: 14px; align-items: flex-start; }
+  .desk-card input[type=checkbox] { margin-top: 8px; accent-color: var(--ink); width: 15px; height: 15px; cursor: pointer; }
+  .prompt-box {
+    font-family: var(--sans); font-size: 13.5px; line-height: 1.8;
+  }
+
+  /* ── 통계 ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); margin-top: 16px; }
+  .stat-cell { background: var(--card); padding: 18px 8px; text-align: center; }
+  .stat-num { font-family: var(--serif); font-size: 26px; line-height: 1.2; }
+  .stat-label { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .heatmap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; margin-top: 16px; overflow-x: auto; padding-bottom: 6px; }
+  .hm-cell { width: 11px; height: 11px; border-radius: 2px; background: #efedea; }
+  .hm-1 { background: #d4d0ca; } .hm-2 { background: #a8a29a; } .hm-3 { background: #6f6a63; } .hm-4 { background: #1a1a1a; }
+  .section-title {
+    font-size: 12px; color: var(--muted); letter-spacing: .15em;
+    margin-top: 44px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+
+  /* ── 연결 ── */
+  .links-block { margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .link-item {
+    font-size: 13px; color: var(--muted); cursor: pointer; padding: 3px 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .link-item:hover { color: var(--ink); }
+  .link-expand { background: #f6f4f1; border-radius: 2px; padding: 14px 16px; margin: 6px 0 10px; }
+
+  /* ── 태그 관리 ── */
+  .tag-manage-chip { cursor: pointer; transition: border-color .15s; }
+  .tag-manage-chip:hover { border-color: var(--muted); color: var(--ink); }
+  .tag-edit-panel { border: 1px solid var(--line); background: var(--card); border-radius: 2px; padding: 14px 16px; margin-top: 12px; }
+
+  .toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; font-size: 13px;
+    padding: 9px 22px; border-radius: 20px; opacity: 0;
+    pointer-events: none; transition: opacity .25s;
+  }
+  .toast.show { opacity: .92; }
+
+  .today-item { padding: 10px 2px; border-bottom: 1px solid var(--line); }
+  .today-item .list-text { -webkit-line-clamp: 2; font-size: 14px; }
+
+  .backup-warn { font-size: 12.5px; color: #9a6b2f; }
+
+  @media (max-width: 480px) {
+    .wrap { padding: 32px 16px 100px; }
+    nav button { padding: 8px 9px; font-size: 13px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>draft</h1>
+    <nav>
+      <button data-view="write" class="active">쓰기</button>
+      <button data-view="draw">뽑기</button>
+      <button data-view="desk">책상</button>
+      <button data-view="drawer">서랍</button>
+      <button data-view="stats">통계</button>
+    </nav>
+  </header>
+
+  <!-- ══ 쓰기 ══ -->
+  <section id="view-write" class="view active">
+    <textarea id="write-text" rows="7" placeholder="쓰다 만 글, 책에서 옮겨 적은 문장, 스쳐간 생각 —"></textarea>
+    <input type="text" id="write-tags" class="tags-input mt8" placeholder="태그 (쉼표로 구분, 비워도 됨)" list="tag-datalist">
+    <datalist id="tag-datalist"></datalist>
+    <div class="row spread mt16">
+      <span class="small" id="write-count"></span>
+      <button class="btn" id="write-save">저장</button>
+    </div>
+    <div id="today-list" class="mt40"></div>
+  </section>
+
+  <!-- ══ 뽑기 ══ -->
+  <section id="view-draw" class="view">
+    <div class="row spread">
+      <div class="row">
+        <span class="small">범위</span>
+        <select id="draw-filter"></select>
+      </div>
+      <span class="small" id="draw-pool-info"></span>
+    </div>
+    <div class="draw-stage" id="draw-stage"></div>
+    <div class="row spread mt16">
+      <span class="small">별표를 친 쪽글은 책상으로 옮겨지고, 뽑기에서 제외됩니다.</span>
+      <button class="btn ghost" id="draw-next">다음 뽑기</button>
+    </div>
+    <div id="draw-prompt-area" class="mt24" style="display:none">
+      <div class="section-title" style="margin-top:0">프롬프트</div>
+      <textarea id="draw-prompt-text" class="prompt-box mt16" rows="18"></textarea>
+      <div class="row mt8" style="justify-content:flex-end">
+        <button class="btn quiet" id="draw-prompt-close">닫기</button>
+        <button class="btn ghost" id="draw-prompt-copy">복사</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 책상 ══ -->
+  <section id="view-desk" class="view">
+    <p class="small">별표를 친 쪽글들이 여기 모입니다. 두 개 이상을 골라, 이질적인 조각들이 어떻게 하나의 글이 될 수 있을지 묻는 프롬프트를 만들어 보세요.</p>
+    <div id="desk-list"></div>
+    <div class="row spread mt24">
+      <span class="small" id="desk-sel-info"></span>
+      <div class="row">
+        <button class="btn quiet" id="tpl-open">프롬프트 양식</button>
+        <button class="btn ghost" id="desk-link">서로 연결</button>
+        <button class="btn ghost" id="desk-used">선택한 쪽글 사용됨 처리</button>
+        <button class="btn" id="desk-prompt">프롬프트 만들기</button>
+      </div>
+    </div>
+    <div id="tpl-area" class="mt24" style="display:none">
+      <div class="section-title" style="margin-top:0">프롬프트 양식</div>
+      <p class="small mt16"><code>{{조각들}}</code> 자리에 선택한 쪽글들이 들어갑니다.</p>
+      <textarea id="tpl-text" class="prompt-box mt8" rows="16"></textarea>
+      <div class="row mt8" style="justify-content:flex-end">
+        <button class="btn quiet" id="tpl-reset">기본값으로</button>
+        <button class="btn quiet" id="tpl-cancel">취소</button>
+        <button class="btn ghost" id="tpl-save">양식 저장</button>
+      </div>
+    </div>
+    <div id="prompt-area" class="mt24" style="display:none">
+      <div class="section-title" style="margin-top:0">프롬프트</div>
+      <textarea id="prompt-text" class="prompt-box mt16" rows="18"></textarea>
+      <div class="row" style="justify-content:flex-end" class="mt8">
+        <button class="btn ghost mt8" id="prompt-copy">복사</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══ 서랍 ══ -->
+  <section id="view-drawer" class="view">
+    <input type="text" id="search-input" class="tags-input" placeholder="검색">
+    <div class="row mt16">
+      <select id="drawer-tag"></select>
+      <select id="drawer-state">
+        <option value="all">전체</option>
+        <option value="starred">별표만</option>
+        <option value="used">사용된 것만</option>
+        <option value="fresh">한 번도 안 쓴 것만</option>
+      </select>
+      <span class="small" id="drawer-count" style="margin-left:auto"></span>
+    </div>
+    <div id="drawer-list" class="mt8"></div>
+  </section>
+
+  <!-- ══ 통계 ══ -->
+  <section id="view-stats" class="view">
+    <div class="stat-grid" id="stat-grid"></div>
+    <div class="section-title">지난 1년</div>
+    <div class="heatmap" id="heatmap"></div>
+    <div class="small" id="heatmap-legend"></div>
+    <div class="section-title">태그</div>
+    <div id="tag-stats" class="mt16 small"></div>
+    <div class="section-title">백업</div>
+    <p class="small mt16">쪽글은 이 브라우저 안에만 저장됩니다. 브라우저 데이터를 지우면 함께 사라지니, 이따금 파일로 내려받아 두세요.</p>
+    <div class="row mt16">
+      <button class="btn ghost" id="backup-export">파일로 내보내기</button>
+      <button class="btn ghost" id="backup-import">파일 가져오기</button>
+      <input type="file" id="backup-file" accept=".json" style="display:none">
+    </div>
+    <p class="mt8" id="backup-info"></p>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ───────────────────── 저장소 ───────────────────── */
+const KEY = 'jjokgeul-v1';
+const DEFAULT_PROMPT =
+'아래에 서로 다른 시기에 적힌 글 조각들이 있다. 쓰다 만 소설의 일부일 수도, 책에서 옮겨 적은 문장일 수도, 스쳐 지나간 생각의 메모일 수도 있다.\n\n' +
+'{{조각들}}\n\n' +
+'이 조각들은 서로 이질적이다. 나는 이것들을 섞어 새로운 소설을 시작하려 한다. 다음을 도와달라.\n\n' +
+'1. 각 조각이 품고 있는 핵심 이미지, 정서, 목소리를 짚어달라.\n' +
+'2. 조각들 사이의 긴장 또는 공명 — 서로 부딪히는 지점과 스며드는 지점을 찾아달라.\n' +
+'3. 이 조각들이 한 편의 소설 안에서 공존할 수 있는 서로 다른 방식을 세 가지 제안해달라. 예컨대 하나는 장면으로, 하나는 인물의 기억으로, 하나는 문체의 톤으로 스밀 수 있다.\n' +
+'4. 각 방식마다 소설의 첫 문단이 어떻게 열릴 수 있을지 두어 문장씩만 스케치해달라. 완성하지 말고, 문을 여는 데까지만.\n\n' +
+'결론을 서두르지 말 것. 조각들이 원래 품고 있던 결을 매끈하게 다듬어 없애지 말 것. 어색한 이음매가 오히려 글의 시작이 될 수 있다.';
+let db = { notes: [], lastBackupAt: null, promptTemplate: null };
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) db = Object.assign({ notes: [], lastBackupAt: null, promptTemplate: null }, JSON.parse(raw));
+  } catch (e) { console.error(e); }
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch (e) { toast('저장 공간이 가득 찼습니다. 백업 후 정리해 주세요.'); }
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function nowISO() { return new Date().toISOString(); }
+function dayKey(iso) {
+  const d = new Date(iso);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
+}
+function esc(s) {
+  return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function parseTags(str) {
+  return [...new Set(str.split(',').map(t => t.trim()).filter(Boolean))];
+}
+function snippet(t, len) {
+  len = len || 42;
+  const s = t.replace(/\s+/g, ' ').trim();
+  return s.length > len ? s.slice(0, len) + '…' : s;
+}
+function linkedNotes(n) {
+  return (n.links || []).map(id => db.notes.find(x => x.id === id)).filter(Boolean);
+}
+function linksHTML(n) {
+  const linked = linkedNotes(n);
+  if (linked.length === 0) return '';
+  return '<div class="links-block"><div class="small" style="margin-bottom:2px">연결된 쪽글 ' + linked.length + '개</div>' +
+    linked.map(m =>
+      '<div class="link-holder" data-link="' + m.id + '">' +
+        '<div class="link-item">⌁ ' + fmtDate(m.createdAt) + ' · ' + esc(snippet(m.text)) + (m.starred ? ' ★' : '') + '</div>' +
+        '<div class="link-expand" style="display:none"></div>' +
+      '</div>'
+    ).join('') + '</div>';
+}
+function wireLinks(root, n, rerender) {
+  root.querySelectorAll('.link-holder').forEach(h => {
+    const m = db.notes.find(x => x.id === h.dataset.link);
+    if (!m) return;
+    const exp = h.querySelector('.link-expand');
+    h.querySelector('.link-item').addEventListener('click', e => {
+      e.stopPropagation();
+      if (exp.style.display === 'block') { exp.style.display = 'none'; exp.innerHTML = ''; return; }
+      exp.style.display = 'block';
+      exp.innerHTML =
+        '<div class="note-meta"><span class="note-date">' + fmtDate(m.createdAt) + '</span>' +
+          m.tags.map(t => '<span class="tag-chip">' + esc(t) + '</span>').join('') + badges(m) + '</div>' +
+        '<div class="note-text" style="font-size:14px">' + esc(m.text) + '</div>' +
+        '<div class="row mt8" style="justify-content:flex-end">' +
+          '<button class="btn quiet lk-unlink">연결 끊기</button>' +
+          '<button class="btn quiet lk-star">' + (m.starred ? '별표 해제' : '별표해서 책상으로') + '</button>' +
+        '</div>';
+      exp.querySelector('.lk-star').addEventListener('click', ev => {
+        ev.stopPropagation();
+        m.starred = !m.starred; m.updatedAt = nowISO(); persist();
+        toast(m.starred ? '책상 위에 올렸습니다 ★' : '별표를 거뒀습니다');
+        rerender();
+      });
+      exp.querySelector('.lk-unlink').addEventListener('click', ev => {
+        ev.stopPropagation();
+        if (!confirm('이 두 쪽글의 연결을 끊을까요?')) return;
+        n.links = (n.links || []).filter(id => id !== m.id);
+        m.links = (m.links || []).filter(id => id !== n.id);
+        persist(); toast('연결을 끊었습니다');
+        rerender();
+      });
+    });
+  });
+}
+function badges(n) {
+  let s = '';
+  if ((n.revisedCount || 0) > 0) s += '<span class="badge-rev">' + n.revisedCount + '번 고쳐 씀</span>';
+  if ((n.usedCount || 0) > 0) s += '<span class="badge-used">' + n.usedCount + '번 사용됨</span>';
+  return s;
+}
+function allTags() {
+  const s = new Set();
+  db.notes.forEach(n => n.tags.forEach(t => s.add(t)));
+  return [...s].sort();
+}
+
+/* ───────────────────── 화면 전환 ───────────────────── */
+const views = ['write', 'draw', 'desk', 'drawer', 'stats'];
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => showView(btn.dataset.view));
+});
+function showView(name) {
+  views.forEach(v => {
+    document.getElementById('view-' + v).classList.toggle('active', v === name);
+  });
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  if (name === 'write') renderWrite();
+  if (name === 'draw') renderDraw(false);
+  if (name === 'desk') renderDesk();
+  if (name === 'drawer') renderDrawer();
+  if (name === 'stats') renderStats();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ───────────────────── 쓰기 ───────────────────── */
+function renderWrite() {
+  const todayK = dayKey(nowISO());
+  const todays = db.notes.filter(n => dayKey(n.createdAt) === todayK)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const streak = calcStreak();
+  let msg = todays.length > 0 ? '오늘 ' + todays.length + '개' : '오늘의 첫 쪽글을 기다립니다';
+  if (streak >= 2) msg += ' · ' + streak + '일째 이어지는 중';
+  document.getElementById('write-count').textContent = msg;
+
+  const dl = document.getElementById('tag-datalist');
+  dl.innerHTML = allTags().map(t => '<option value="' + esc(t) + '">').join('');
+
+  const wrap = document.getElementById('today-list');
+  if (todays.length === 0) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div class="section-title" style="margin-top:0">오늘 쓴 쪽글</div>' +
+    todays.map(n =>
+      '<div class="today-item">' +
+        '<div class="note-meta"><span class="note-date">' +
+          new Date(n.createdAt).toTimeString().slice(0, 5) + '</span>' +
+          n.tags.map(t => '<span class="tag-chip">' + esc(t) + '</span>').join('') +
+        '</div><div class="list-text">' + esc(n.text) + '</div></div>'
+    ).join('');
+}
+
+document.getElementById('write-save').addEventListener('click', saveNote);
+document.getElementById('write-text').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') saveNote();
+});
+function saveNote() {
+  const ta = document.getElementById('write-text');
+  const text = ta.value.trim();
+  if (!text) { toast('내용이 비어 있습니다'); return; }
+  const tags = parseTags(document.getElementById('write-tags').value);
+  db.notes.push({
+    id: uid(), text, tags,
+    createdAt: nowISO(), updatedAt: nowISO(),
+    starred: false, usedCount: 0
+  });
+  persist();
+  ta.value = '';
+  ta.focus();
+  toast('저장했습니다');
+  renderWrite();
+}
+
+/* ───────────────────── 뽑기 ───────────────────── */
+let currentDrawId = null;
+let seenThisSession = [];
+
+function drawPool() {
+  const filter = document.getElementById('draw-filter').value;
+  return db.notes.filter(n => !n.starred && (filter === '__all__' || n.tags.includes(filter)));
+}
+function renderDrawFilter() {
+  const sel = document.getElementById('draw-filter');
+  const cur = sel.value || '__all__';
+  sel.innerHTML = '<option value="__all__">전체</option>' +
+    allTags().map(t => '<option value="' + esc(t) + '">' + esc(t) + '</option>').join('');
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : '__all__';
+}
+document.getElementById('draw-filter').addEventListener('change', () => { seenThisSession = []; renderDraw(true); });
+document.getElementById('draw-next').addEventListener('click', () => renderDraw(true));
+document.getElementById('draw-prompt-close').addEventListener('click', () => {
+  document.getElementById('draw-prompt-area').style.display = 'none';
+});
+document.getElementById('draw-prompt-copy').addEventListener('click', () => {
+  const el = document.getElementById('draw-prompt-text');
+  navigator.clipboard.writeText(el.value).then(
+    () => toast('복사했습니다'),
+    () => { el.select(); document.execCommand('copy'); toast('복사했습니다'); }
+  );
+});
+
+function renderDraw(pickNew) {
+  renderDrawFilter();
+  if (pickNew) document.getElementById('draw-prompt-area').style.display = 'none';
+  const pool = drawPool();
+  const stage = document.getElementById('draw-stage');
+  const starredCount = db.notes.filter(n => n.starred).length;
+  document.getElementById('draw-pool-info').textContent =
+    '뽑기 풀 ' + pool.length + '개 · 책상 위 ' + starredCount + '개';
+
+  if (pool.length === 0) {
+    currentDrawId = null;
+    stage.innerHTML = '<div class="draw-empty">뽑을 쪽글이 없습니다.<br>먼저 몇 개를 적어 두세요.</div>';
+    return;
+  }
+
+  if (pickNew || !currentDrawId || !pool.some(n => n.id === currentDrawId)) {
+    let candidates = pool.filter(n => !seenThisSession.includes(n.id));
+    if (candidates.length === 0) { seenThisSession = []; candidates = pool; }
+    const others = candidates.filter(n => n.id !== currentDrawId);
+    const pickFrom = others.length > 0 ? others : candidates;
+    const pick = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+    currentDrawId = pick.id;
+    seenThisSession.push(pick.id);
+  }
+  const n = db.notes.find(x => x.id === currentDrawId);
+  stage.innerHTML =
+    '<div class="note-card">' +
+      '<div class="note-meta">' +
+        '<span class="note-date">' + fmtDate(n.createdAt) + '</span>' +
+        n.tags.map(t => '<span class="tag-chip">' + esc(t) + '</span>').join('') +
+        badges(n) +
+        '<span style="margin-left:auto"></span>' +
+        '<button class="star-btn" id="draw-star" title="글의 시작이 될 수 있겠다 싶으면">☆</button>' +
+      '</div>' +
+      '<div class="note-text" id="draw-text-view">' + esc(n.text) + '</div>' +
+      linksHTML(n) +
+      '<div id="draw-edit-area" style="display:none">' +
+        '<div class="small" style="margin:18px 0 6px; padding-top:14px; border-top:1px solid var(--line)">위의 원문을 보면서 새로 써 내려가세요. 저장하면 원문을 대체합니다.</div>' +
+        '<textarea id="draw-edit-text" rows="8" placeholder="새로 쓰기 —"></textarea>' +
+        '<input type="text" id="draw-edit-tags" class="tags-input mt8" placeholder="태그" list="tag-datalist">' +
+        '<div class="row mt8 spread">' +
+          '<button class="btn quiet" id="draw-edit-copy">원문 가져와서 고치기</button>' +
+          '<span class="row">' +
+            '<button class="btn quiet" id="draw-edit-cancel">취소</button>' +
+            '<button class="btn ghost" id="draw-edit-save">저장</button>' +
+          '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="row mt16 spread">' +
+        '<button class="btn quiet" id="draw-delete" style="color:var(--faint)">지우기</button>' +
+        '<span class="row">' +
+          (linkedNotes(n).length > 0 ? '<button class="btn ghost" id="draw-link-prompt">연결과 함께 프롬프트</button>' : '') +
+          '<button class="btn quiet" id="draw-edit-btn">고쳐 쓰기</button>' +
+        '</span>' +
+      '</div>' +
+    '</div>';
+
+  wireLinks(stage, n, () => renderDraw(false));
+  document.getElementById('draw-delete').addEventListener('click', () => {
+    if (!confirm('이 쪽글을 지울까요? 되돌릴 수 없습니다.')) return;
+    db.notes = db.notes.filter(x => x.id !== n.id);
+    db.notes.forEach(x => { if (x.links) x.links = x.links.filter(id => id !== n.id); });
+    currentDrawId = null;
+    persist();
+    toast('지웠습니다 · 다음 쪽글');
+    renderDraw(true);
+  });
+  const lp = document.getElementById('draw-link-prompt');
+  if (lp) lp.addEventListener('click', () => {
+    const sel = [n].concat(linkedNotes(n));
+    const area = document.getElementById('draw-prompt-area');
+    area.style.display = 'block';
+    document.getElementById('draw-prompt-text').value = buildPrompt(sel);
+    area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  document.getElementById('draw-star').addEventListener('click', () => {
+    n.starred = true;
+    n.updatedAt = nowISO();
+    persist();
+    toast('책상 위에 올려 두었습니다 ★');
+    renderDraw(true);
+  });
+  document.getElementById('draw-edit-btn').addEventListener('click', () => {
+    document.getElementById('draw-edit-btn').style.display = 'none';
+    const view = document.getElementById('draw-text-view');
+    view.style.opacity = '.55';
+    view.style.fontSize = '14.5px';
+    const area = document.getElementById('draw-edit-area');
+    area.style.display = 'block';
+    document.getElementById('draw-edit-text').value = '';
+    document.getElementById('draw-edit-tags').value = n.tags.join(', ');
+    document.getElementById('draw-edit-text').focus();
+  });
+  document.getElementById('draw-edit-copy').addEventListener('click', () => {
+    const ta = document.getElementById('draw-edit-text');
+    if (ta.value.trim() && !confirm('쓰던 내용을 지우고 원문을 가져올까요?')) return;
+    ta.value = n.text;
+    ta.focus();
+  });
+  document.getElementById('draw-edit-cancel').addEventListener('click', () => renderDraw(false));
+  document.getElementById('draw-edit-save').addEventListener('click', () => {
+    const t = document.getElementById('draw-edit-text').value.trim();
+    if (!t) { toast('내용이 비어 있습니다'); return; }
+    if (t !== n.text) n.revisedCount = (n.revisedCount || 0) + 1;
+    n.text = t;
+    n.tags = parseTags(document.getElementById('draw-edit-tags').value);
+    n.updatedAt = nowISO();
+    persist();
+    toast('고쳐 썼습니다 · ' + (n.revisedCount || 0) + '번째');
+    renderDraw(false);
+  });
+}
+
+/* ───────────────────── 책상 ───────────────────── */
+const deskSelected = new Set();
+
+function renderDesk() {
+  const starred = db.notes.filter(n => n.starred)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  [...deskSelected].forEach(id => { if (!starred.some(n => n.id === id)) deskSelected.delete(id); });
+
+  const wrap = document.getElementById('desk-list');
+  if (starred.length === 0) {
+    wrap.innerHTML = '<div class="draw-empty">아직 책상 위가 비어 있습니다.<br>뽑기에서 별표를 쳐 보세요.</div>';
+  } else {
+    wrap.innerHTML = starred.map(n =>
+      '<div class="note-card desk-card">' +
+        '<input type="checkbox" data-id="' + n.id + '"' + (deskSelected.has(n.id) ? ' checked' : '') + '>' +
+        '<div style="flex:1">' +
+          '<div class="note-meta">' +
+            '<span class="note-date">' + fmtDate(n.createdAt) + '</span>' +
+            n.tags.map(t => '<span class="tag-chip">' + esc(t) + '</span>').join('') +
+            badges(n) +
+            '<span style="margin-left:auto"></span>' +
+            '<button class="star-btn on" data-unstar="' + n.id + '" title="책상에서 내리기">★</button>' +
+          '</div>' +
+          '<div class="note-text" style="font-size:15px">' + esc(n.text) + '</div>' +
+          linksHTML(n) +
+        '</div>' +
+      '</div>'
+    ).join('');
+    wrap.querySelectorAll('.desk-card').forEach(card => {
+      const cb0 = card.querySelector('input[type=checkbox]');
+      const note = db.notes.find(x => x.id === cb0.dataset.id);
+      if (note) wireLinks(card, note, renderDesk);
+    });
+    wrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        cb.checked ? deskSelected.add(cb.dataset.id) : deskSelected.delete(cb.dataset.id);
+        updateDeskInfo();
+      });
+    });
+    wrap.querySelectorAll('[data-unstar]').forEach(b => {
+      b.addEventListener('click', () => {
+        const n = db.notes.find(x => x.id === b.dataset.unstar);
+        n.starred = false; n.updatedAt = nowISO();
+        deskSelected.delete(n.id);
+        persist(); renderDesk();
+        toast('서랍으로 돌려보냈습니다');
+      });
+    });
+  }
+  updateDeskInfo();
+}
+function updateDeskInfo() {
+  const c = deskSelected.size;
+  document.getElementById('desk-sel-info').textContent = c > 0 ? c + '개 선택됨' : '';
+  document.getElementById('desk-prompt').disabled = c < 2;
+  document.getElementById('desk-link').disabled = c < 2;
+  document.getElementById('desk-used').disabled = c < 1;
+}
+
+document.getElementById('desk-link').addEventListener('click', () => {
+  const sel = db.notes.filter(n => deskSelected.has(n.id));
+  if (sel.length < 2) return;
+  let made = 0;
+  sel.forEach(a => {
+    sel.forEach(b => {
+      if (a.id === b.id) return;
+      a.links = a.links || [];
+      if (!a.links.includes(b.id)) { a.links.push(b.id); made++; }
+    });
+  });
+  if (made === 0) { toast('이미 서로 연결되어 있습니다'); return; }
+  sel.forEach(n => { n.updatedAt = nowISO(); });
+  persist(); renderDesk();
+  toast(sel.length + '개의 쪽글을 서로 연결했습니다 ⌁');
+});
+
+function buildPrompt(sel) {
+  const frags = sel.map((n, i) =>
+    '[조각 ' + (i + 1) + ' — ' + fmtDate(n.createdAt) +
+    (n.tags.length ? ' · ' + n.tags.join(', ') : '') + ']\n' + n.text
+  ).join('\n\n');
+  const tpl = db.promptTemplate || DEFAULT_PROMPT;
+  return tpl.includes('{{조각들}}')
+    ? tpl.split('{{조각들}}').join(frags)
+    : tpl + '\n\n' + frags;
+}
+
+document.getElementById('desk-prompt').addEventListener('click', () => {
+  const sel = db.notes.filter(n => deskSelected.has(n.id));
+  if (sel.length < 2) return;
+  document.getElementById('tpl-area').style.display = 'none';
+  document.getElementById('prompt-area').style.display = 'block';
+  document.getElementById('prompt-text').value = buildPrompt(sel);
+  document.getElementById('prompt-text').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.getElementById('tpl-open').addEventListener('click', () => {
+  const area = document.getElementById('tpl-area');
+  if (area.style.display === 'block') { area.style.display = 'none'; return; }
+  document.getElementById('prompt-area').style.display = 'none';
+  area.style.display = 'block';
+  document.getElementById('tpl-text').value = db.promptTemplate || DEFAULT_PROMPT;
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.getElementById('tpl-cancel').addEventListener('click', () => {
+  document.getElementById('tpl-area').style.display = 'none';
+});
+document.getElementById('tpl-reset').addEventListener('click', () => {
+  document.getElementById('tpl-text').value = DEFAULT_PROMPT;
+  toast('기본 양식을 불러왔습니다. 저장해야 적용됩니다.');
+});
+document.getElementById('tpl-save').addEventListener('click', () => {
+  const t = document.getElementById('tpl-text').value.trim();
+  if (!t) { toast('양식이 비어 있습니다'); return; }
+  if (!t.includes('{{조각들}}')) {
+    if (!confirm('양식에 {{조각들}} 자리가 없습니다.\n이 경우 쪽글들은 양식 뒤에 붙습니다. 저장할까요?')) return;
+  }
+  db.promptTemplate = (t === DEFAULT_PROMPT) ? null : t;
+  persist();
+  document.getElementById('tpl-area').style.display = 'none';
+  toast('양식을 저장했습니다');
+});
+
+document.getElementById('prompt-copy').addEventListener('click', () => {
+  const txt = document.getElementById('prompt-text').value;
+  navigator.clipboard.writeText(txt).then(
+    () => toast('복사했습니다'),
+    () => { document.getElementById('prompt-text').select(); document.execCommand('copy'); toast('복사했습니다'); }
+  );
+});
+
+document.getElementById('desk-used').addEventListener('click', () => {
+  const sel = db.notes.filter(n => deskSelected.has(n.id));
+  if (sel.length === 0) return;
+  if (!confirm(sel.length + '개의 쪽글을 사용됨으로 표시하고 책상에서 내릴까요?\n(쪽글은 지워지지 않고 서랍에 남습니다)')) return;
+  sel.forEach(n => {
+    n.usedCount = (n.usedCount || 0) + 1;
+    n.starred = false;
+    n.updatedAt = nowISO();
+    deskSelected.delete(n.id);
+  });
+  persist(); renderDesk();
+  toast('사용됨으로 표시했습니다. 씨앗은 서랍에 남아 있습니다.');
+});
+
+/* ───────────────────── 서랍 ───────────────────── */
+document.getElementById('search-input').addEventListener('input', renderDrawerList);
+document.getElementById('drawer-tag').addEventListener('change', renderDrawerList);
+document.getElementById('drawer-state').addEventListener('change', renderDrawerList);
+
+function renderDrawer() {
+  const sel = document.getElementById('drawer-tag');
+  const cur = sel.value || '__all__';
+  sel.innerHTML = '<option value="__all__">모든 태그</option>' +
+    allTags().map(t => '<option value="' + esc(t) + '">' + esc(t) + '</option>').join('');
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : '__all__';
+  renderDrawerList();
+}
+function renderDrawerList() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  const tag = document.getElementById('drawer-tag').value;
+  const state = document.getElementById('drawer-state').value;
+  let list = db.notes.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (tag !== '__all__') list = list.filter(n => n.tags.includes(tag));
+  if (state === 'starred') list = list.filter(n => n.starred);
+  if (state === 'used') list = list.filter(n => n.usedCount > 0);
+  if (state === 'fresh') list = list.filter(n => n.usedCount === 0 && !n.starred);
+  if (q) list = list.filter(n => n.text.toLowerCase().includes(q) || n.tags.some(t => t.toLowerCase().includes(q)));
+
+  document.getElementById('drawer-count').textContent = list.length + '개';
+  const wrap = document.getElementById('drawer-list');
+  if (list.length === 0) {
+    wrap.innerHTML = '<div class="draw-empty">해당하는 쪽글이 없습니다.</div>';
+    return;
+  }
+  wrap.innerHTML = list.map(n =>
+    '<div class="list-item" data-id="' + n.id + '">' +
+      '<div class="note-meta" style="margin-bottom:6px">' +
+        '<span class="note-date">' + fmtDate(n.createdAt) + '</span>' +
+        (n.starred ? '<span class="star-mark">★</span>' : '') +
+        n.tags.map(t => '<span class="tag-chip">' + esc(t) + '</span>').join('') +
+        badges(n) +
+      '</div>' +
+      '<div class="list-text">' + esc(n.text) + '</div>' +
+      '<div class="item-actions" style="display:none" ></div>' +
+    '</div>'
+  ).join('');
+
+  wrap.querySelectorAll('.list-item').forEach(item => {
+    item.addEventListener('click', e => {
+      if (e.target.closest('button, textarea, input, .links-block')) return;
+      openDrawerItem(item);
+    });
+  });
+}
+function openDrawerItem(item) {
+  const already = item.classList.contains('open');
+  document.querySelectorAll('.list-item.open').forEach(i => {
+    i.classList.remove('open');
+    i.querySelector('.item-actions').style.display = 'none';
+    i.querySelector('.item-actions').innerHTML = '';
+  });
+  if (already) return;
+  const n = db.notes.find(x => x.id === item.dataset.id);
+  item.classList.add('open');
+  const box = item.querySelector('.item-actions');
+  box.style.display = 'block';
+  box.innerHTML =
+    linksHTML(n) +
+    '<div class="row mt8" style="justify-content:flex-end">' +
+      '<button class="btn quiet" data-act="delete">지우기</button>' +
+      '<button class="btn quiet" data-act="star">' + (n.starred ? '별표 해제' : '별표') + '</button>' +
+      '<button class="btn ghost" data-act="edit">고쳐 쓰기</button>' +
+    '</div>';
+  wireLinks(box, n, () => renderDrawerList());
+  box.querySelector('[data-act=star]').addEventListener('click', () => {
+    n.starred = !n.starred; n.updatedAt = nowISO(); persist(); renderDrawerList();
+    toast(n.starred ? '책상 위에 올렸습니다 ★' : '별표를 거뒀습니다');
+  });
+  box.querySelector('[data-act=delete]').addEventListener('click', () => {
+    if (!confirm('이 쪽글을 지울까요? 되돌릴 수 없습니다.')) return;
+    db.notes = db.notes.filter(x => x.id !== n.id);
+    db.notes.forEach(x => { if (x.links) x.links = x.links.filter(id => id !== n.id); });
+    persist(); renderDrawerList();
+    toast('지웠습니다');
+  });
+  box.querySelector('[data-act=edit]').addEventListener('click', () => {
+    box.innerHTML =
+      '<textarea rows="7" class="mt8" id="dr-edit-text"></textarea>' +
+      '<input type="text" id="dr-edit-tags" class="tags-input mt8" placeholder="태그" list="tag-datalist">' +
+      '<div class="row mt8" style="justify-content:flex-end">' +
+        '<button class="btn quiet" id="dr-edit-cancel">취소</button>' +
+        '<button class="btn ghost" id="dr-edit-save">저장</button>' +
+      '</div>';
+    document.getElementById('dr-edit-text').value = n.text;
+    document.getElementById('dr-edit-tags').value = n.tags.join(', ');
+    document.getElementById('dr-edit-cancel').addEventListener('click', () => renderDrawerList());
+    document.getElementById('dr-edit-save').addEventListener('click', () => {
+      const t = document.getElementById('dr-edit-text').value.trim();
+      if (!t) { toast('내용이 비어 있습니다'); return; }
+      if (t !== n.text) n.revisedCount = (n.revisedCount || 0) + 1;
+      n.text = t;
+      n.tags = parseTags(document.getElementById('dr-edit-tags').value);
+      n.updatedAt = nowISO();
+      persist(); renderDrawer();
+      toast('고쳐 썼습니다');
+    });
+  });
+}
+
+/* ───────────────────── 통계 ───────────────────── */
+function calcStreak() {
+  const days = new Set(db.notes.map(n => dayKey(n.createdAt)));
+  if (days.size === 0) return 0;
+  let streak = 0;
+  const d = new Date();
+  if (!days.has(dayKey(d.toISOString()))) d.setDate(d.getDate() - 1); // 오늘 아직 안 썼으면 어제부터
+  while (days.has(dayKey(d.toISOString()))) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+function renderStats() {
+  const notes = db.notes;
+  const now = new Date();
+  const todayK = dayKey(now.toISOString());
+  const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 6);
+  const monthK = todayK.slice(0, 7);
+
+  const total = notes.length;
+  const thisWeek = notes.filter(n => new Date(n.createdAt) >= new Date(weekAgo.getFullYear(), weekAgo.getMonth(), weekAgo.getDate())).length;
+  const thisMonth = notes.filter(n => dayKey(n.createdAt).slice(0, 7) === monthK).length;
+  const streak = calcStreak();
+  const starred = notes.filter(n => n.starred).length;
+  const used = notes.filter(n => n.usedCount > 0).length;
+  const revisions = notes.reduce((s, n) => s + (n.revisedCount || 0), 0);
+  const activeDays = new Set(notes.map(n => dayKey(n.createdAt))).size;
+  const avgLen = total ? Math.round(notes.reduce((s, n) => s + n.text.length, 0) / total) : 0;
+
+  const cells = [
+    [total, '전체 쪽글'], [thisMonth, '이번 달'], [thisWeek, '최근 7일'],
+    [streak, '연속 일수'], [activeDays, '쓴 날'], [avgLen, '평균 글자 수'],
+    [starred, '책상 위'], [revisions, '고쳐 쓴 횟수'], [used, '사용된 씨앗']
+  ];
+  document.getElementById('stat-grid').innerHTML = cells.map(c =>
+    '<div class="stat-cell"><div class="stat-num">' + c[0] + '</div><div class="stat-label">' + c[1] + '</div></div>'
+  ).join('');
+
+  // 히트맵: 오늘이 포함된 주의 토요일까지, 거꾸로 53주
+  const byDay = {};
+  notes.forEach(n => { const k = dayKey(n.createdAt); byDay[k] = (byDay[k] || 0) + 1; });
+  const end = new Date(now);
+  end.setDate(end.getDate() + (6 - end.getDay())); // 이번 주 토요일
+  const start = new Date(end);
+  start.setDate(end.getDate() - 53 * 7 + 1);
+  let html = '';
+  const d = new Date(start);
+  while (d <= end) {
+    const k = dayKey(d.toISOString());
+    const c = byDay[k] || 0;
+    const future = d > now;
+    let cls = 'hm-cell';
+    if (!future) {
+      if (c >= 7) cls += ' hm-4';
+      else if (c >= 4) cls += ' hm-3';
+      else if (c >= 2) cls += ' hm-2';
+      else if (c >= 1) cls += ' hm-1';
+    }
+    html += '<div class="' + cls + '" title="' + k + ' · ' + c + '개"' + (future ? ' style="opacity:0"' : '') + '></div>';
+    d.setDate(d.getDate() + 1);
+  }
+  document.getElementById('heatmap').innerHTML = html;
+  document.getElementById('heatmap-legend').textContent = '옅음 1 · 2 · 4 · 7개 이상 짙음';
+
+  // 태그
+  const tagCount = {};
+  notes.forEach(n => n.tags.forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+  const entries = Object.entries(tagCount).sort((a, b) => b[1] - a[1]);
+  const box = document.getElementById('tag-stats');
+  if (entries.length === 0) {
+    box.innerHTML = '아직 태그가 없습니다.';
+  } else {
+    box.innerHTML =
+      '<p class="small" style="margin-bottom:10px">태그를 누르면 이름을 바꾸거나 지울 수 있습니다.</p>' +
+      entries.map(e =>
+        '<span class="tag-chip tag-manage-chip" data-tag="' + esc(e[0]) + '" style="font-size:12.5px;margin-bottom:6px">' + esc(e[0]) + ' ' + e[1] + '</span>'
+      ).join(' ') +
+      '<div id="tag-edit-panel" style="display:none"></div>';
+    box.querySelectorAll('.tag-manage-chip').forEach(chip => {
+      chip.addEventListener('click', () => openTagEditor(chip.dataset.tag, tagCount[chip.dataset.tag]));
+    });
+  }
+
+  renderBackupInfo();
+}
+
+function openTagEditor(tag, count) {
+  const panel = document.getElementById('tag-edit-panel');
+  panel.style.display = 'block';
+  panel.className = 'tag-edit-panel';
+  panel.innerHTML =
+    '<div class="small" style="margin-bottom:8px">태그 「' + esc(tag) + '」 · ' + count + '개의 쪽글에 붙어 있음</div>' +
+    '<input type="text" id="tag-rename-input" class="tags-input" value="' + esc(tag) + '">' +
+    '<div class="row mt8" style="justify-content:flex-end">' +
+      '<button class="btn quiet" id="tag-delete">태그 지우기</button>' +
+      '<button class="btn quiet" id="tag-cancel">취소</button>' +
+      '<button class="btn ghost" id="tag-rename">이름 바꾸기</button>' +
+    '</div>';
+  document.getElementById('tag-cancel').addEventListener('click', () => {
+    panel.style.display = 'none'; panel.innerHTML = '';
+  });
+  document.getElementById('tag-rename').addEventListener('click', () => {
+    const newName = document.getElementById('tag-rename-input').value.trim();
+    if (!newName) { toast('새 이름이 비어 있습니다'); return; }
+    if (newName === tag) { panel.style.display = 'none'; return; }
+    db.notes.forEach(n => {
+      if (n.tags.includes(tag)) {
+        n.tags = [...new Set(n.tags.map(t => t === tag ? newName : t))];
+        n.updatedAt = nowISO();
+      }
+    });
+    persist(); renderStats();
+    toast('「' + tag + '」 → 「' + newName + '」');
+  });
+  document.getElementById('tag-delete').addEventListener('click', () => {
+    if (!confirm('태그 「' + tag + '」를 모든 쪽글에서 지울까요?\n쪽글 자체는 지워지지 않습니다.')) return;
+    db.notes.forEach(n => {
+      if (n.tags.includes(tag)) {
+        n.tags = n.tags.filter(t => t !== tag);
+        n.updatedAt = nowISO();
+      }
+    });
+    persist(); renderStats();
+    toast('태그를 지웠습니다');
+  });
+}
+
+/* ───────────────────── 백업 ───────────────────── */
+function renderBackupInfo() {
+  const el = document.getElementById('backup-info');
+  if (!db.lastBackupAt) {
+    el.innerHTML = db.notes.length > 0
+      ? '<span class="backup-warn">아직 한 번도 백업하지 않았습니다.</span>'
+      : '<span class="small">아직 백업 기록이 없습니다.</span>';
+    return;
+  }
+  const days = Math.floor((Date.now() - new Date(db.lastBackupAt)) / 86400000);
+  const newSince = db.notes.filter(n => n.createdAt > db.lastBackupAt).length;
+  let s = '<span class="small">마지막 백업: ' + fmtDate(db.lastBackupAt) + (days === 0 ? ' (오늘)' : ' (' + days + '일 전)') + '</span>';
+  if (days >= 14 && newSince > 0) s += ' <span class="backup-warn">그 뒤로 ' + newSince + '개가 새로 쌓였습니다.</span>';
+  el.innerHTML = s;
+}
+document.getElementById('backup-export').addEventListener('click', () => {
+  db.lastBackupAt = nowISO();
+  persist();
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'draft-백업-' + dayKey(nowISO()) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  renderBackupInfo();
+  toast('백업 파일을 내려받습니다');
+});
+document.getElementById('backup-import').addEventListener('click', () => {
+  document.getElementById('backup-file').click();
+});
+document.getElementById('backup-file').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!Array.isArray(data.notes)) throw new Error('형식 오류');
+      const byId = {};
+      db.notes.forEach(n => { byId[n.id] = n; });
+      let added = 0, updated = 0;
+      data.notes.forEach(n => {
+        if (!n.id || !n.text) return;
+        const mine = byId[n.id];
+        if (!mine) { db.notes.push(n); added++; }
+        else if ((n.updatedAt || '') > (mine.updatedAt || '')) { Object.assign(mine, n); updated++; }
+      });
+      persist();
+      renderStats();
+      toast('가져오기 완료: 새 쪽글 ' + added + '개, 갱신 ' + updated + '개');
+    } catch (err) {
+      toast('파일을 읽을 수 없습니다');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+/* ───────────────────── 시작 ───────────────────── */
+load();
+renderWrite();
+window.addEventListener('beforeunload', () => persist());
+</script>
+</body>
+</html>
