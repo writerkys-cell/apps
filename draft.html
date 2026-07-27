@@ -327,12 +327,13 @@ const DEFAULT_PROMPT =
 '3. 이 조각들이 한 편의 소설 안에서 공존할 수 있는 서로 다른 방식을 세 가지 제안해달라. 예컨대 하나는 장면으로, 하나는 인물의 기억으로, 하나는 문체의 톤으로 스밀 수 있다.\n' +
 '4. 각 방식마다 소설의 첫 문단이 어떻게 열릴 수 있을지 두어 문장씩만 스케치해달라. 완성하지 말고, 문을 여는 데까지만.\n\n' +
 '결론을 서두르지 말 것. 조각들이 원래 품고 있던 결을 매끈하게 다듬어 없애지 말 것. 어색한 이음매가 오히려 글의 시작이 될 수 있다.';
-let db = { notes: [], lastBackupAt: null, promptTemplate: null };
+let db = { notes: [], deleted: {}, lastBackupAt: null, promptTemplate: null, templateUpdatedAt: null };
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) db = Object.assign({ notes: [], lastBackupAt: null, promptTemplate: null }, JSON.parse(raw));
+    if (raw) db = Object.assign({ notes: [], deleted: {}, lastBackupAt: null, promptTemplate: null, templateUpdatedAt: null }, JSON.parse(raw));
+    if (!db.deleted) db.deleted = {};
   } catch (e) { console.error(e); }
 }
 function persist() {
@@ -579,6 +580,7 @@ function renderDraw(pickNew) {
   wireLinks(stage, n, () => renderDraw(false));
   document.getElementById('draw-delete').addEventListener('click', () => {
     if (!confirm('이 쪽글을 지울까요? 되돌릴 수 없습니다.')) return;
+    db.deleted[n.id] = nowISO();
     db.notes = db.notes.filter(x => x.id !== n.id);
     db.notes.forEach(x => { if (x.links) x.links = x.links.filter(id => id !== n.id); });
     currentDrawId = null;
@@ -750,6 +752,7 @@ document.getElementById('tpl-save').addEventListener('click', () => {
     if (!confirm('양식에 {{조각들}} 자리가 없습니다.\n이 경우 쪽글들은 양식 뒤에 붙습니다. 저장할까요?')) return;
   }
   db.promptTemplate = (t === DEFAULT_PROMPT) ? null : t;
+  db.templateUpdatedAt = nowISO();
   persist();
   document.getElementById('tpl-area').style.display = 'none';
   toast('양식을 저장했습니다');
@@ -853,6 +856,7 @@ function openDrawerItem(item) {
   });
   box.querySelector('[data-act=delete]').addEventListener('click', () => {
     if (!confirm('이 쪽글을 지울까요? 되돌릴 수 없습니다.')) return;
+    db.deleted[n.id] = nowISO();
     db.notes = db.notes.filter(x => x.id !== n.id);
     db.notes.forEach(x => { if (x.links) x.links = x.links.filter(id => id !== n.id); });
     persist(); renderDrawerList();
@@ -1048,6 +1052,12 @@ document.getElementById('backup-file').addEventListener('change', e => {
     try {
       const data = JSON.parse(reader.result);
       if (!Array.isArray(data.notes)) throw new Error('형식 오류');
+      // 1. 삭제 기록 병합 (더 최근 기록이 남음)
+      const inDel = data.deleted || {};
+      Object.keys(inDel).forEach(id => {
+        if (!db.deleted[id] || inDel[id] > db.deleted[id]) db.deleted[id] = inDel[id];
+      });
+      // 2. 쪽글 병합 (없으면 추가, 있으면 더 최근 수정본이 남음)
       const byId = {};
       db.notes.forEach(n => { byId[n.id] = n; });
       let added = 0, updated = 0;
@@ -1057,9 +1067,28 @@ document.getElementById('backup-file').addEventListener('change', e => {
         if (!mine) { db.notes.push(n); added++; }
         else if ((n.updatedAt || '') > (mine.updatedAt || '')) { Object.assign(mine, n); updated++; }
       });
+      // 3. 삭제 반영: 삭제가 마지막 수정보다 최근이면 지움
+      let removed = 0;
+      db.notes = db.notes.filter(n => {
+        const delAt = db.deleted[n.id];
+        if (delAt && delAt >= (n.updatedAt || '')) { removed++; return false; }
+        return true;
+      });
+      // 삭제 후에 다시 고쳐 쓴 쪽글은 살리고 삭제 기록을 거둠
+      db.notes.forEach(n => {
+        if (db.deleted[n.id] && (n.updatedAt || '') > db.deleted[n.id]) delete db.deleted[n.id];
+      });
+      // 4. 사라진 쪽글을 가리키는 연결 정리
+      const ids = new Set(db.notes.map(n => n.id));
+      db.notes.forEach(n => { if (n.links) n.links = n.links.filter(id => ids.has(id)); });
+      // 5. 프롬프트 양식: 더 최근에 고친 쪽이 남음
+      if (data.promptTemplate !== undefined && (data.templateUpdatedAt || '') > (db.templateUpdatedAt || '')) {
+        db.promptTemplate = data.promptTemplate;
+        db.templateUpdatedAt = data.templateUpdatedAt;
+      }
       persist();
       renderStats();
-      toast('가져오기 완료: 새 쪽글 ' + added + '개, 갱신 ' + updated + '개');
+      toast('병합 완료: 추가 ' + added + ' · 갱신 ' + updated + (removed > 0 ? ' · 삭제 반영 ' + removed : ''));
     } catch (err) {
       toast('파일을 읽을 수 없습니다');
     }
