@@ -133,8 +133,27 @@
   .empty{text-align:center;padding:52px 0;color:var(--ink-faint);font-size:14px}
   .empty .big{font-family:var(--serif);font-size:18px;color:var(--ink-soft);margin-bottom:8px}
 
-  /* 완료한 원고 기록 */
-  .rec{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin-bottom:12px}
+  /* 완료한 원고 기록 — 평소엔 한 줄, 누르면 펼쳐진다 */
+  .rec-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+           font-size:12.5px;color:var(--ink-soft);margin-bottom:10px}
+  .rec-top b{color:var(--ink)}
+  .rec-year{font-size:11px;letter-spacing:1.2px;color:var(--ink-faint);margin:16px 0 6px}
+  .rec-year:first-child{margin-top:0}
+  .rec{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:7px;overflow:hidden}
+  .rec[open]{border-radius:var(--radius);margin-bottom:12px}
+  .rec-sum{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+           padding:12px 16px;font-variant-numeric:tabular-nums}
+  .rec-sum::-webkit-details-marker{display:none}
+  .rec-sum:hover{background:var(--accent-soft)}
+  .rec[open] .rec-sum{border-bottom:1px solid var(--line)}
+  .rec-sum .t{font-family:var(--serif);font-size:15.5px;flex:1;min-width:120px}
+  .rec-sum .p{font-size:11.5px;color:var(--ink-faint)}
+  .rec-sum .v{font-size:13px;font-weight:600}
+  .rec-sum .g{font-size:11.5px;color:var(--ink-faint)}
+  .rec-sum .g.full{color:var(--good);font-weight:600}
+  .rec-sum::after{content:'+';color:var(--ink-faint);font-size:13px;width:12px;text-align:center}
+  .rec[open] .rec-sum::after{content:'−'}
+  .rec-body{padding:16px 20px 18px}
   .rec-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
   .rec-title{font-family:var(--serif);font-size:16.5px}
   .rec-period{font-size:11.5px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
@@ -277,6 +296,17 @@
   .field .hint{font-size:11px;color:var(--ink-faint);margin-top:3px;line-height:1.5}
   .field2{display:flex;gap:10px}
   .field2>*{flex:1}
+  /* 타이핑 마무리 — 원고별 글자수 입력 */
+  .totrow{padding:9px 0;border-bottom:1px dashed var(--line)}
+  .totrow:last-child{border-bottom:none}
+  .totrow .top{display:flex;gap:10px;align-items:center}
+  .totrow .nm{flex:1;min-width:0;font-size:13.5px}
+  .totrow .nm b{font-weight:600}
+  .totrow .nm small{display:block;font-size:10.5px;color:var(--ink-faint);font-weight:400}
+  .totrow .tag{font-size:10px;color:var(--am);border:1px solid var(--am);border-radius:20px;padding:0 6px;margin-left:5px;white-space:nowrap}
+  .totrow input{width:124px;flex:0 0 auto;text-align:right}
+  .totrow .dl{font-size:11px;color:var(--ink-faint);margin-top:4px;min-height:14px;font-variant-numeric:tabular-nums}
+  .totrow.filled .nm b{color:var(--accent)}
   .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
   .seg button{flex:1;background:none;border:none;font-size:12.5px;padding:9px 0;color:var(--ink-soft);border-radius:0}
   .seg button:hover{color:var(--ink);background:var(--line)}
@@ -404,6 +434,10 @@
 
     <div id="archiveSec" class="hidden">
       <div class="sect-title">완료한 원고</div>
+      <div class="rec-top">
+        <span id="archSummary"></span>
+        <button class="mini" id="archToggle" onclick="toggleAllRecords()">모두 펼치기</button>
+      </div>
       <div id="archList"></div>
     </div>
   </section>
@@ -464,8 +498,8 @@
     </div>
     <div class="field">
       <label>지금 원고 전체 글자수</label>
-      <input id="fnTotal" type="number" min="0" placeholder="비워두면 기록하지 않습니다">
-      <div class="hint" id="fnDelta"></div>
+      <div id="fnTotals"></div>
+      <div class="hint" id="fnHint"></div>
     </div>
     <div class="field">
       <label>한 줄 메모</label>
@@ -1222,6 +1256,21 @@ function renderArchive(){
   list.innerHTML = '';
   const byRecent = arch.slice().sort((a,b)=> (b.archivedAt||'').localeCompare(a.archivedAt||''));
 
+  /* 편수와 총 매수 요약 — 아래 목록은 접힌 채로 시작한다 */
+  let sumPages = 0, sumDraft = 0;
+  const yearCount = {};
+  for(const p of byRecent){
+    sumPages += calcProject(p).pages;
+    sumDraft += calcProject(p).sessionCount;
+    const y = (p.archivedAt||'').slice(0,4);
+    yearCount[y] = (yearCount[y]||0) + 1;
+  }
+  document.getElementById('archSummary').innerHTML =
+    `<b>${arch.length}</b>편 · 모두 <b>${sumPages.toFixed(1)}매</b> · 초고 ${fmtNum(sumDraft)}회`;
+  document.getElementById('archToggle').textContent = '모두 펼치기';
+  document.getElementById('archToggle').style.display = arch.length > 1 ? '' : 'none';
+
+  let lastYear = null;
   for(const p of byRecent){
     const st = calcProject(p);
     const ss = projSessions(p.id);
@@ -1256,9 +1305,25 @@ function renderArchive(){
       (diffDays(end, p.deadline) <= 0 ? `<b>${Math.abs(diffDays(end,p.deadline))}일 일찍</b>` : `<b>${diffDays(end,p.deadline)}일 늦게</b>`));
     if(p.baseChars) lines.push(`가져온 기존 원고 ${fmtNum(p.baseChars)}자`);
 
-    const el = document.createElement('div');
+    const year = (p.archivedAt||'').slice(0,4);
+    if(year && year !== lastYear){
+      const h = document.createElement('div');
+      h.className = 'rec-year';
+      h.textContent = `${year}년 · ${yearCount[year]}편`;
+      list.appendChild(h);
+      lastYear = year;
+    }
+
+    const el = document.createElement('details');
     el.className = 'rec';
     el.innerHTML = `
+      <summary class="rec-sum">
+        <span class="t">${esc(p.name)}</span>
+        <span class="p">${fmtShort(first)} ~ ${fmtShort(end)}</span>
+        <span class="v">${st.pages.toFixed(1)}매</span>
+        <span class="g${pct!==null && pct>=100 ? ' full' : ''}">${pct!==null ? '달성 '+pct+'%' : '목표 없음'}</span>
+      </summary>
+      <div class="rec-body">
       <div class="rec-head">
         <div class="rec-title">${esc(p.name)}</div>
         <div class="rec-period">${fmtDate(first)} ~ ${fmtDate(end)} · ${total}일</div>
@@ -1278,9 +1343,16 @@ function renderArchive(){
         <button class="primary mini" onclick="openPromptModal('${p.id}')">AI 분석 프롬프트</button>
         <button class="mini" onclick="restoreArchive('${p.id}')">다시 진행중으로</button>
         <button class="ghost mini" onclick="deleteArchive('${p.id}')">기록 삭제</button>
+      </div>
       </div>`;
     list.appendChild(el);
   }
+}
+function toggleAllRecords(){
+  const items = [...document.querySelectorAll('#archList details.rec')];
+  const open = items.some(x=>!x.open);
+  for(const x of items) x.open = open;
+  document.getElementById('archToggle').textContent = open ? '모두 접기' : '모두 펼치기';
 }
 
 /* =======================================================================
@@ -1338,22 +1410,62 @@ function openFinish(mode){
   document.getElementById('fnSub').textContent = (p?p.name+' · ':'') + rec.time + ' 시작 · 목표 ' + target + '분';
   document.getElementById('fnMinWrap').classList.toggle('hidden', mode==='done');
   document.getElementById('fnMin').value = Math.min(target, Math.max(1, elapsedMin(rec)));
-  document.getElementById('fnTotal').value = '';
   document.getElementById('fnMemo').value = rec.memo || '';
   document.getElementById('fnSave').textContent = mode==='done' ? '완주로 저장' : '미완성으로 남기기';
   document.getElementById('fnDel').textContent = mode==='done' ? '글자수 없이 저장' : '이 기록 지우기';
-  updateFnDelta();
+  renderFnTotals();
   openDlg('finishModal');
+}
+/* 이번 세션의 원고를 맨 위에, 나머지 진행중 원고를 아래에 — 두 개 이상을 다듬었으면 함께 적는다 */
+function fnProjects(){
+  const rec = pendingTyping();
+  const list = [];
+  if(rec && rec.projectId){ const p = getP(rec.projectId); if(p) list.push(p); }
+  for(const p of state.projects) if(!list.some(x=>x.id===p.id)) list.push(p);
+  return list;
+}
+function renderFnTotals(){
+  const rec = pendingTyping();
+  const box = document.getElementById('fnTotals');
+  box.innerHTML = '';
+  const list = fnProjects();
+  for(const p of list){
+    const st = calcProject(p);
+    const primary = !!(rec && rec.projectId === p.id);
+    const row = document.createElement('div');
+    row.className = 'totrow';
+    row.innerHTML = `
+      <div class="top">
+        <div class="nm"><b>${esc(p.name)}</b>${primary && list.length>1 ? '<span class="tag">이번 세션</span>' : ''}
+          <small>${st.hasCp ? '현재 '+fmtNum(st.manuscript)+'자 · '+st.pages.toFixed(1)+'매' : '아직 글자수 기록 없음'}${
+            st.pendingDraft ? ' · 타이핑 대기 '+fmtNum(st.pendingDraft)+'자' : ''}</small></div>
+        <input type="number" min="0" inputmode="numeric" data-pid="${p.id}"
+               placeholder="${st.hasCp ? fmtNum(st.manuscript) : '글자수'}">
+      </div>
+      <div class="dl"></div>`;
+    box.appendChild(row);
+  }
+  for(const i of box.querySelectorAll('input')) i.addEventListener('input', updateFnDelta);
+  document.getElementById('fnHint').textContent = list.length > 1
+    ? '이번에 다듬은 원고마다 지금의 전체 글자수를 적으세요. 비워 두면 그 원고는 기록하지 않습니다.'
+    : '타이핑해서 원고에 반영한 뒤의 전체 글자수입니다. 이 값이 매수의 기준이 됩니다.';
+  updateFnDelta();
 }
 function updateFnDelta(){
   const rec = pendingTyping();
-  const total = numOf('fnTotal');
-  const el = document.getElementById('fnDelta');
-  if(!rec || total===null){ el.textContent = '초고를 타이핑해 원고에 반영한 뒤의 전체 글자수를 적으면 진척이 정확해집니다.'; return; }
-  const d = previewDelta(rec.projectId, rec.id, total, rec.t);
-  const p = getP(rec.projectId);
-  el.textContent = `직전 기록보다 ${signed(d)}자` +
-    (p && p.goalPages ? ` · 목표까지 ${fmtNum(Math.max(0, p.goalPages*PAGE - total))}자` : '');
+  for(const input of document.querySelectorAll('#fnTotals input')){
+    const row = input.closest('.totrow');
+    const el = row.querySelector('.dl');
+    const raw = String(input.value).replace(/[^0-9]/g,'');
+    const total = raw === '' ? null : parseInt(raw,10);
+    row.classList.toggle('filled', total!==null);
+    if(total===null || isNaN(total)){ el.textContent = ''; continue; }
+    const pid = input.dataset.pid;
+    const p = getP(pid);
+    const dl = previewDelta(pid, rec ? rec.id : null, total, rec ? rec.t : Date.now());
+    el.textContent = `직전 기록보다 ${signed(dl)}자 · ${(total/PAGE).toFixed(1)}매` +
+      (p && p.goalPages ? ` · 목표까지 ${fmtNum(Math.max(0, p.goalPages*PAGE - total))}자` : '');
+  }
 }
 /* 아직 저장 전인 값으로 증가분 미리보기 */
 function previewDelta(pid, selfId, total, t){
@@ -1367,7 +1479,6 @@ function previewDelta(pid, selfId, total, t){
 function finishSave(){
   const rec = pendingTyping(); if(!rec){ closeDlg('finishModal'); return; }
   const target = rec.target || state.settings.typingMinutes;
-  rec.total = numOf('fnTotal');
   rec.memo = document.getElementById('fnMemo').value.trim();
   if(finishMode==='done'){ rec.status='done'; rec.minutes=target; }
   else{
@@ -1377,10 +1488,33 @@ function finishSave(){
     rec.status = m >= target ? 'done' : 'partial';
   }
   delete rec.startedAt;
-  save(); closeDlg('finishModal'); reindex();
-  const d = rec.total!==null ? previewDelta(rec.projectId, rec.id, rec.total, rec.t) : null;
+
+  /* 입력한 원고마다 글자수를 기록한다. 이번 세션의 원고는 세션에 직접, 나머지는 따로 남긴다. */
+  rec.total = null;
+  const others = [];
+  let primaryDelta = null;
+  for(const input of document.querySelectorAll('#fnTotals input')){
+    const raw = String(input.value).replace(/[^0-9]/g,'');
+    if(raw === '') continue;
+    const total = parseInt(raw,10);
+    if(isNaN(total)) continue;
+    const pid = input.dataset.pid;
+    if(rec.projectId && pid === rec.projectId){
+      primaryDelta = previewDelta(pid, rec.id, total, rec.t);
+      rec.total = total;
+    }else{
+      others.push({pid, total, delta: previewDelta(pid, rec.id, total, rec.t)});
+    }
+  }
+  save(); reindex();
+  for(const o of others) recordMark(o.pid, o.total, '타이핑');
+  closeDlg('finishModal');
   renderCurrentView();
-  toast((rec.status==='done' ? '완주로 기록했습니다' : `미완성 ${rec.minutes}분`) + (d!==null ? ` · 원고 ${signed(d)}자` : ''));
+
+  const parts = [rec.status==='done' ? '완주로 기록했습니다' : `미완성 ${rec.minutes}분`];
+  if(primaryDelta !== null) parts.push(`${projName(rec.projectId)} ${signed(primaryDelta)}자`);
+  for(const o of others) parts.push(`${projName(o.pid)} ${signed(o.delta)}자`);
+  toast(parts.join(' · '));
 }
 function finishDiscard(){
   const rec = pendingTyping(); if(!rec){ closeDlg('finishModal'); return; }
@@ -2425,7 +2559,6 @@ document.addEventListener('keydown', e=>{
   if((e.metaKey||e.ctrlKey) && e.key==='Enter' && currentId){ e.preventDefault(); copyAndRecord(); }
 });
 document.getElementById('fGoal').addEventListener('input', updateGoalHint);
-document.getElementById('fnTotal').addEventListener('input', updateFnDelta);
 document.getElementById('dTotal').addEventListener('input', updateDDelta);
 document.getElementById('dProj').addEventListener('change', updateDDelta);
 for(const b of document.querySelectorAll('#dKind button')){
