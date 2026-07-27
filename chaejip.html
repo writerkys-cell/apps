@@ -69,6 +69,9 @@ header{
   color:var(--ink-soft); letter-spacing:.1em; padding:4px 6px; cursor:pointer;
 }
 .small-link:active{color:var(--seal);}
+.small-link.dim{opacity:.32;}
+#todayBtn{color:var(--seal); letter-spacing:.14em;}
+.date-main{cursor:pointer;}
 .today-mark{color:var(--seal);}
 
 /* ── 본문: 기록 목록 ── */
@@ -161,11 +164,13 @@ textarea#noteInput:focus{border-color:var(--ink-soft);}
   flex:0 0 auto;
 }
 .save-btn:active{background:var(--seal);}
+.prompt-row{display:flex; gap:8px; margin-top:8px;}
 .prompt-btn{
-  width:100%; margin-top:8px;
+  flex:1;
   border:1px solid var(--seal); background:none; color:var(--seal);
-  font-family:inherit; font-size:.9rem; letter-spacing:.18em;
+  font-family:inherit; font-size:.84rem; letter-spacing:.06em;
   padding:10px 0; border-radius:3px; cursor:pointer;
+  white-space:nowrap;
 }
 .prompt-btn:active{background:rgba(166,58,46,.06);}
 
@@ -218,6 +223,31 @@ textarea#tplInput{
   color:var(--ink-soft); text-decoration:underline; text-underline-offset:3px;
   cursor:pointer; width:100%;
 }
+.rand-row{
+  display:none; align-items:center; gap:10px; margin-bottom:12px;
+}
+.rand-row.show{display:flex;}
+.rand-row label{font-size:.82rem; color:var(--ink-soft); letter-spacing:.08em;}
+.rand-row select{
+  border:1px solid rgba(43,41,36,.16); border-radius:3px;
+  background:var(--card); color:var(--ink); font-family:inherit;
+  font-size:16px; padding:8px 10px; outline:none;
+}
+.time-row{
+  display:flex; align-items:center; gap:10px; margin-bottom:12px;
+}
+.time-row label{font-size:.82rem; color:var(--ink-soft); letter-spacing:.08em;}
+.time-row input[type="time"]{
+  flex:1; border:1px solid rgba(43,41,36,.16); border-radius:3px;
+  background:var(--card); color:var(--ink); font-family:inherit;
+  font-size:16px; padding:8px 10px; outline:none;
+}
+.time-now{
+  border:1px solid rgba(43,41,36,.16); background:none; color:var(--ink-soft);
+  font-family:inherit; font-size:.82rem; letter-spacing:.08em;
+  padding:9px 12px; border-radius:3px; cursor:pointer;
+}
+.time-now:active{color:var(--seal); border-color:var(--seal);}
 .arc-item{
   display:flex; justify-content:space-between; align-items:center;
   padding:12px 4px; border-bottom:1px dotted var(--stitch);
@@ -246,11 +276,12 @@ textarea#tplInput{
 <header>
   <div class="top-row">
     <button class="small-link" id="archiveBtn">기록 목록</button>
+    <button class="small-link" id="todayBtn">오늘로</button>
     <button class="small-link" id="backupBtn">보관·복원</button>
   </div>
   <div class="date-nav">
     <button class="nav-btn" id="prevDay" aria-label="이전 날">◀</button>
-    <div class="date-main">
+    <div class="date-main" id="dateMain">
       <div class="date-title" id="dateTitle">—</div>
       <div class="date-sub" id="dateSub">—</div>
     </div>
@@ -275,7 +306,10 @@ textarea#tplInput{
     <textarea id="noteInput" rows="1" placeholder="지금 본 것, 들은 것을 적는다"></textarea>
     <button class="save-btn" id="saveBtn">담기</button>
   </div>
-  <button class="prompt-btn" id="promptBtn">글감 청하기 — 오늘의 기록으로</button>
+  <div class="prompt-row">
+    <button class="prompt-btn" id="promptBtn">이 날의 기록으로</button>
+    <button class="prompt-btn" id="randomBtn">지난 기록에서 무작위로</button>
+  </div>
 </div>
 
 <!-- 글감 프롬프트 시트 -->
@@ -283,6 +317,14 @@ textarea#tplInput{
 <div class="sheet" id="promptSheet">
   <h2>글감 청하기</h2>
   <div class="s-sub" id="promptSub">기록을 엮어 AI에게 건넬 프롬프트입니다. 고쳐 써도 됩니다.</div>
+  <div class="rand-row" id="randRow">
+    <label for="randN">뽑을 개수</label>
+    <select id="randN">
+      <option>3</option><option>5</option><option>7</option>
+      <option>10</option><option>15</option><option>20</option>
+    </select>
+    <button class="time-now" id="reshuffle">다시 뽑기</button>
+  </div>
   <div class="sheet-body">
     <textarea id="promptOut"></textarea>
   </div>
@@ -295,8 +337,8 @@ textarea#tplInput{
 
 <!-- 템플릿 편집 시트 -->
 <div class="sheet" id="tplSheet">
-  <h2>청하는 말</h2>
-  <div class="s-sub">{날짜}와 {기록} 자리에 그날의 내용이 들어갑니다.</div>
+  <h2 id="tplTitle">청하는 말</h2>
+  <div class="s-sub" id="tplSub">{날짜}와 {기록} 자리에 그날의 내용이 들어갑니다.</div>
   <div class="sheet-body">
     <textarea id="tplInput"></textarea>
   </div>
@@ -309,8 +351,13 @@ textarea#tplInput{
 <!-- 기록 고치기 시트 -->
 <div class="sheet" id="editSheet">
   <h2>기록 고치기</h2>
-  <div class="s-sub">갈래를 바꾸거나 문장을 다듬습니다.</div>
+  <div class="s-sub">갈래와 채집한 시각을 바꾸거나 문장을 다듬습니다.</div>
   <div class="sheet-body">
+    <div class="time-row">
+      <label for="editTime">채집한 시각</label>
+      <input type="time" id="editTime">
+      <button class="time-now" id="setNow">지금</button>
+    </div>
     <div class="type-row" id="editTypeRow" style="margin-bottom:10px;">
       <button class="type-btn" data-type="seen"><span class="t-seal">見</span>본 것</button>
       <button class="type-btn" data-type="heard"><span class="t-seal">聞</span>들은 것</button>
@@ -369,6 +416,8 @@ var store = {
 };
 var KEY_DATA = "chaejip.entries.v1";
 var KEY_TPL  = "chaejip.template.v1";
+var KEY_RTPL = "chaejip.template.random.v1";
+var KEY_RN   = "chaejip.random.count.v1";
 
 var DEFAULT_TPL =
 "아래는 {날짜} 하루 동안 길에서, 일상에서 채집한 관찰 기록입니다.\n" +
@@ -378,6 +427,17 @@ var DEFAULT_TPL =
 "1. 단편소설의 글감 세 가지. 각각 핵심 갈등, 인물 스케치, 어울리는 시점(1인칭/3인칭)을 함께.\n" +
 "2. 서로 다른 기록 두세 개를 연결했을 때 이야기가 될 만한 조합 하나.\n" +
 "3. 첫 문장 후보 세 개. 관찰의 구체성이 살아 있게.\n\n" +
+"설명보다 장면으로, 요약보다 구체로 답해 주세요.";
+
+var DEFAULT_RTPL =
+"아래는 여러 날에 걸쳐 채집한 관찰 기록 가운데 무작위로 뽑은 {개수}개입니다.\n" +
+"서로 다른 날, 서로 다른 감각에서 온 것이라 사이에 아무 연관이 없을 수도 있습니다.\n" +
+"각 기록에는 채집한 날짜와 갈래, 시각이 붙어 있습니다.\n\n" +
+"{기록}\n\n" +
+"이 우연한 조합을 재료 삼아 다음을 제안해 주세요.\n\n" +
+"1. 이 기록들이 한 이야기 안에 놓인다면 어떤 이야기일지, 글감 두 가지.\n" +
+"2. 가장 멀어 보이는 두 기록을 잇는 연결 고리 하나. 억지로라도 좋습니다.\n" +
+"3. 이 중 하나의 기록만으로 쓸 수 있는 짧은 장면의 첫 문장 세 개.\n\n" +
 "설명보다 장면으로, 요약보다 구체로 답해 주세요.";
 
 var TYPE_INFO = {
@@ -454,6 +514,8 @@ function render(){
     sub.appendChild(sp);
   }
 
+  $("todayBtn").classList.toggle("dim", curDate === todayKey());
+
   var list = data[curDate] || [];
   var wrap = $("entryList");
   wrap.innerHTML = "";
@@ -525,6 +587,7 @@ function addEntry(){
     type: curType,
     text: text
   });
+  sortDay(curDate);
   saveData(data);
   ta.value = ""; autoGrow(ta);
   render();
@@ -540,8 +603,18 @@ function editEntry(id){
   editingId = id;
   editingType = e.type;
   $("editInput").value = e.text;
+  $("editTime").value = /^\d{2}:\d{2}$/.test(e.time) ? e.time : "";
   syncEditTypeRow();
   openSheet("editSheet");
+}
+function sortDay(k){
+  if(!data[k]) return;
+  data[k].sort(function(a,b){
+    var ta = /^\d{2}:\d{2}$/.test(a.time) ? a.time : "99:99";
+    var tb = /^\d{2}:\d{2}$/.test(b.time) ? b.time : "99:99";
+    if(ta === tb) return 0;
+    return ta < tb ? -1 : 1;
+  });
 }
 function syncEditTypeRow(){
   Array.prototype.forEach.call(document.querySelectorAll("#editTypeRow .type-btn"), function(b){
@@ -564,6 +637,11 @@ function autoGrow(ta){
 
 /* ── 글감 프롬프트 ── */
 function getTpl(){ return store.get(KEY_TPL) || DEFAULT_TPL; }
+function getRandTpl(){ return store.get(KEY_RTPL) || DEFAULT_RTPL; }
+function getRandN(){
+  var n = parseInt(store.get(KEY_RN), 10);
+  return (n >= 1 && n <= 30) ? n : 5;
+}
 function buildPrompt(){
   var list = data[curDate] || [];
   var lines = list.map(function(e){
@@ -572,6 +650,32 @@ function buildPrompt(){
   }).join("\n\n");
   return getTpl()
     .split("{날짜}").join(fmtTitle(curDate))
+    .split("{기록}").join(lines);
+}
+
+/* ── 무작위 채집 ── */
+function allEntries(){
+  var out = [];
+  Object.keys(data).forEach(function(k){
+    (data[k]||[]).forEach(function(e){ out.push({ dateKey:k, e:e }); });
+  });
+  return out;
+}
+function pickRandom(n){
+  var pool = allEntries();
+  for(var i = pool.length - 1; i > 0; i--){
+    var j = Math.floor(Math.random() * (i + 1));
+    var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+  }
+  return pool.slice(0, n);
+}
+function buildRandomPrompt(picked){
+  var lines = picked.map(function(p){
+    var info = TYPE_INFO[p.e.type] || TYPE_INFO.seen;
+    return "[" + fmtTitle(p.dateKey) + " · " + info.name + " · " + p.e.time + "] " + p.e.text;
+  }).join("\n\n");
+  return getRandTpl()
+    .split("{개수}").join(picked.length)
     .split("{기록}").join(lines);
 }
 
@@ -620,7 +724,7 @@ function fallbackCopy(text){
 
 /* ── 보관/복원 ── */
 function exportJSON(){
-  var payload = JSON.stringify({ exportedAt:new Date().toISOString(), template:getTpl(), entries:data }, null, 2);
+  var payload = JSON.stringify({ exportedAt:new Date().toISOString(), template:getTpl(), randomTemplate:getRandTpl(), entries:data }, null, 2);
   var blob = new Blob([payload], {type:"application/json"});
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a");
@@ -647,6 +751,7 @@ function importJSON(file){
         });
       });
       if(obj.template) store.set(KEY_TPL, obj.template);
+      if(obj.randomTemplate) store.set(KEY_RTPL, obj.randomTemplate);
       saveData(data); render(); closeSheets();
       toast("되살렸습니다");
     }catch(e){ toast("파일을 읽지 못했습니다"); }
@@ -682,6 +787,14 @@ Array.prototype.forEach.call(document.querySelectorAll(".type-btn"), function(b)
   };
 });
 
+function goToday(){
+  if(curDate === todayKey()){ toast("이미 오늘입니다"); return; }
+  curDate = todayKey(); openEntryId = null; render();
+  window.scrollTo({top:0});
+}
+$("todayBtn").onclick = goToday;
+$("dateMain").onclick = goToday;
+
 $("prevDay").onclick = function(){
   var d = parseKey(curDate); d.setDate(d.getDate()-1);
   curDate = fmtKey(d); openEntryId = null; render();
@@ -691,13 +804,38 @@ $("nextDay").onclick = function(){
   curDate = fmtKey(d); openEntryId = null; render();
 };
 
+var promptMode = "day";
+
 $("promptBtn").onclick = function(){
   var list = data[curDate] || [];
   if(!list.length){ toast("이 날의 기록이 아직 없습니다"); return; }
+  promptMode = "day";
+  $("randRow").classList.remove("show");
   $("promptSub").textContent = fmtTitle(curDate) + " · 채집 " + list.length + "건. 아래를 자유롭게 고쳐 쓴 뒤 복사하세요.";
   $("promptOut").value = buildPrompt();
   openSheet("promptSheet");
 };
+
+function doRandom(){
+  var pool = allEntries();
+  if(!pool.length){ toast("아직 기록이 없습니다"); return false; }
+  var n = Math.min(parseInt($("randN").value, 10) || 5, pool.length);
+  var picked = pickRandom(n);
+  store.set(KEY_RN, String($("randN").value));
+  $("promptSub").textContent =
+    "전체 " + pool.length + "건 가운데 " + picked.length + "건을 무작위로 뽑았습니다.";
+  $("promptOut").value = buildRandomPrompt(picked);
+  return true;
+}
+$("randomBtn").onclick = function(){
+  promptMode = "random";
+  $("randN").value = String(getRandN());
+  if(!doRandom()) return;
+  $("randRow").classList.add("show");
+  openSheet("promptSheet");
+};
+$("reshuffle").onclick = doRandom;
+$("randN").onchange = doRandom;
 $("copyPrompt").onclick = function(){ copyText($("promptOut").value); };
 $("sharePrompt").onclick = function(){
   var text = $("promptOut").value;
@@ -707,17 +845,22 @@ $("sharePrompt").onclick = function(){
 };
 
 $("editTplBtn").onclick = function(){
-  $("tplInput").value = getTpl();
+  var isRand = (promptMode === "random");
+  $("tplTitle").textContent = isRand ? "청하는 말 — 무작위" : "청하는 말 — 그날의 기록";
+  $("tplSub").textContent = isRand
+    ? "{개수}와 {기록} 자리에 뽑은 내용이 들어갑니다."
+    : "{날짜}와 {기록} 자리에 그날의 내용이 들어갑니다.";
+  $("tplInput").value = isRand ? getRandTpl() : getTpl();
   openSheet("tplSheet");
 };
 $("saveTpl").onclick = function(){
   var v = $("tplInput").value.trim();
-  if(v) store.set(KEY_TPL, v);
+  if(v) store.set(promptMode === "random" ? KEY_RTPL : KEY_TPL, v);
   toast("저장했습니다");
   closeSheets();
 };
 $("resetTpl").onclick = function(){
-  $("tplInput").value = DEFAULT_TPL;
+  $("tplInput").value = (promptMode === "random") ? DEFAULT_RTPL : DEFAULT_TPL;
 };
 
 Array.prototype.forEach.call(document.querySelectorAll("#editTypeRow .type-btn"), function(b){
@@ -726,6 +869,7 @@ Array.prototype.forEach.call(document.querySelectorAll("#editTypeRow .type-btn")
     syncEditTypeRow();
   };
 });
+$("setNow").onclick = function(){ $("editTime").value = nowTime(); };
 $("saveEdit").onclick = function(){
   var list = data[curDate] || [];
   var e = list.find(function(x){ return x.id === editingId; });
@@ -733,6 +877,9 @@ $("saveEdit").onclick = function(){
     var nv = $("editInput").value.trim();
     if(nv) e.text = nv;
     e.type = editingType;
+    var tv = $("editTime").value;
+    e.time = /^\d{2}:\d{2}$/.test(tv) ? tv : "—";
+    sortDay(curDate);
     saveData(data);
   }
   editingId = null;
