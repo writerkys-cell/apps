@@ -161,6 +161,11 @@ html[data-theme="dark"] .chip.on{color:#1a1610}
 .arow .num:nth-of-type(1){width:38px}
 @media(max-width:640px){.arow .num{display:none}.arow .num:last-of-type{display:inline;width:74px}}
 
+/* AI 리포트 미리보기 */
+.aiprev{margin:0;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--bg);
+  max-height:190px;overflow:auto;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--tx2)}
+
 /* heatmap */
 .heat{display:flex;gap:3px;overflow-x:auto;padding:2px 0}
 .heat .col{display:flex;flex-direction:column;gap:3px}
@@ -270,7 +275,9 @@ textarea.inp{resize:vertical;min-height:76px;line-height:1.6}
   </div>
 
   <div class="sec">
-    <div class="sec-h"><h2>전체 현황</h2><span class="sub" id="allSub"></span></div>
+    <div class="sec-h"><h2>전체 현황</h2><span class="sub" id="allSub"></span>
+      <div class="sp"></div>
+      <button class="btn sm" id="btnAI">✦ AI 조언</button></div>
     <div class="card" style="padding:18px">
       <div class="stats" id="allStats"></div>
       <div style="margin-top:16px">
@@ -735,6 +742,7 @@ function renderBook(){
       ${b.author?`<div class="muted" style="font-size:13.5px">${esc(b.author)}</div>`:""}
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn" id="bkAI">✦ AI 조언</button>
       <button class="btn" id="bkEdit">설정</button>
       <button class="btn pri" id="bkRead">독서</button>
       <button class="btn" id="bkEnd">독서 끝</button>
@@ -822,6 +830,7 @@ function renderBook(){
 
   const $=id=>document.getElementById(id);
   $("bkBack").onclick=()=>{view="main";noteFilter="";window.scrollTo(0,0);render();};
+  $("bkAI").onclick=()=>openAI(b.id);
   $("bkEdit").onclick=()=>openBookForm(b.id);
   $("bkRead").onclick=()=>startSession(b.id);
   $("bkEnd").onclick=()=>endSession();
@@ -869,6 +878,259 @@ function notesText(bookId){
   const ns=S.notes.filter(n=>n.bookId===bookId).sort((a,c)=>a.page-c.page||a.createdAt-c.createdAt);
   return `${b.title}${b.author?" · "+b.author:""}\n${"-".repeat(28)}\n\n`+
     ns.map(n=>`[${n.page}p]${n.quote?" (인용)":""}\n${n.text}`).join("\n\n")+"\n";
+}
+
+/* ============================ AI 조언 리포트 ============================ */
+const DOW=["일","월","화","수","목","금","토"];
+const dowOf = k => DOW[new Date(k+"T00:00:00").getDay()];
+
+const FOCUS={
+  pace:{label:"습관과 페이스", def:true,
+    all:["최근 기록에서 내 독서 습관이 어디서 무너지는지 짚어줘. 요일·연속성·세션 길이 같은 패턴을 근거로 들어줘.",
+         "지금의 하한선이 내 생활에 비해 높은지 낮은지 판단해줘. '가장 바쁜 날에도 지킬 수 있는가'가 기준이야.",
+         "달성한 날과 실패한 날의 차이를 만든 요인이 데이터에 보이면 알려줘."],
+    book:["이 책의 진도와 속도를 보고, 기한 안에 완독할 수 있을지 판단해줘.",
+          "이 책을 읽는 리듬(세션 길이·간격·속도)에 눈에 띄는 문제가 있는지 알려줘."]},
+  balance:{label:"병렬 독서의 균형", def:true,
+    all:["필독서와 자유 독서에 실제 배분된 페이지를 보고, 병렬 독서가 의도대로 작동하는지 판단해줘.",
+         "방치되는 책이 있다면 어떤 책이고 왜 밀리는 것 같은지, 계속 붙들지 내릴지 의견을 줘.",
+         "7권 상한과 필독서 권수를 지금처럼 유지하는 게 맞는지, 조정한다면 어떻게 할지 제안해줘."],
+    book:["다른 책들과 비교해 이 책이 얼마나 우선순위를 받고 있는지 알려줘.",
+          "이 책이 밀리고 있다면 원인이 책 자체인지 배분 문제인지 판단해줘."]},
+  writing:{label:"글쓰기와의 연결", def:false,
+    all:["메모와 구절을 보고, 여러 책의 영감이 실제로 한 지점에서 만나고 있는지 판단해줘.",
+         "지금 함께 읽는 책들의 조합에서 글로 발전시킬 만한 교차 지점을 짚어줘."],
+    book:["이 책의 메모에서 글로 발전시킬 만한 실마리를 짚어줘.",
+          "이 책의 관심사와 이어지는 다른 책이 내 기록에 있는지 알려줘."]},
+  next:{label:"다음에 읽을 책", def:true,
+    all:["지금까지의 기록을 보고 내가 어떤 영역에 치우쳐 있고 무엇이 빠져 있는지 알려줘.",
+         "다음 필독서로 삼을 만한 책을 3~5권 추천하고, 각각 왜 지금의 나에게 맞는지 한 줄로 설명해줘.",
+         "이미 읽었거나 읽는 중인 책과 겹치지 않게 추천해줘."],
+    book:["이 책을 마친 뒤 이어서 읽으면 좋을 책을 3권 추천하고 이유를 한 줄로 설명해줘."]}
+};
+
+function aiReport(o){
+  const L=[], P=s=>L.push(s);
+  const days=o.days===0?0:(o.days||30), from=days?addDays(today(),-(days-1)):null;
+  const inRange=s=>!from||s.date>=from;
+  const st=S.settings;
+
+  P("# 나의 독서 기록");
+  P("기준일: "+today()+" ("+dowOf(today())+")"+(days?" · 최근 "+days+"일":" · 전체 기간"));
+  P("");
+  P("## 내가 정한 규칙");
+  P("- 여러 책을 함께 읽는 병렬 독서를 하고, 읽은 것이 매일 쓰는 글에 반영되기를 바란다.");
+  P("- 하루 하한선 = max("+st.pageUnit+"p × 필독서 권수, "+st.baseFloor+"p). 상한이 아니라 하한이고, 잘 읽히는 날은 더 읽는다.");
+  P("- 필독서에는 완독 기한을 정하고 매일 최소 "+st.pageUnit+"p를 배정한다. 나머지는 자유 독서.");
+  P("- 목록은 최대 "+st.listCap+"권. 완독하거나 포기해야 새 책을 추가할 수 있다.");
+  P("- "+st.autoDropDays+"일 동안 한 페이지도 읽지 않은 책은 자동으로 목록에서 내린다.");
+  P("");
+
+  if(o.scope==="book"){
+    const b=book(o.bookId), s=bookStats(b), ss=bookSessions(b.id).filter(inRange)
+      .sort((a,c)=>String(a.date).localeCompare(String(c.date)));
+    P("## 이 책");
+    P("- 제목: "+b.title+(b.author?" / "+b.author:""));
+    P("- 구분: "+(b.isCore?"필독서":"자유 독서")+(b.targetDate?" · 완독 기한 "+b.targetDate+" (D-"+dayDiff(today(),b.targetDate)+")":""));
+    P("- 범위: "+b.startPage+"–"+b.endPage+"p (총 "+(b.endPage-b.startPage)+"p)");
+    P("- 진도: "+b.currentPage+"p · "+s.pct+"% · 남은 "+s.left+"p");
+    P("- 목록에 올린 날: "+b.addedAt+" ("+(dayDiff(b.addedAt,today())+1)+"일째)");
+    P("- 누적: "+s.readPages+"p / "+fmtMin(s.minutes)+" · 시간당 "+Math.round(s.pph)+"p · 세션 "+bookSessions(b.id).length+"회");
+    P("- 최근 14일 일평균: "+Math.round(s.avgDay)+"p · 마지막으로 읽은 날: "+lastReadDate(b)+" ("+idleDays(b)+"일 전)");
+    if(s.needDaily!=null) P("- 기한을 지키려면 하루 "+s.needDaily+"p · 현재 속도 기준 예상 완독일 "+(s.eta||"산출 불가"));
+    P("");
+    P("### 세션 기록");
+    P("| 날짜 | 요일 | 구간 | 페이지 | 시간 | 속도 |");
+    P("|---|---|---|---|---|---|");
+    ss.forEach(x=>P("| "+x.date+" | "+dowOf(x.date)+" | "+x.startPage+"→"+x.endPage+" | "+x.pages+"p | "+x.minutes+"분 | "+
+      (x.minutes?Math.round(x.pages/(x.minutes/60)):0)+"p/h |"));
+    if(!ss.length) P("| (기록 없음) | | | | | |");
+    P("");
+    P("### 같은 기간 다른 책들 (배분 비교)");
+    reading().filter(x=>x.id!==b.id).forEach(x=>{
+      const p=S.sessions.filter(s2=>s2.bookId===x.id&&inRange(s2)).reduce((a,s2)=>a+s2.pages,0);
+      P("- "+x.title+" ("+(x.isCore?"필독":"자유")+"): 같은 기간 "+p+"p · 진도 "+bookStats(x).pct+"%");
+    });
+    P("");
+    if(o.notes){
+      const ns=S.notes.filter(n=>n.bookId===b.id).sort((a,c)=>a.page-c.page).slice(0,150);
+      P("### 이 책에 남긴 메모 ("+ns.length+"개)");
+      ns.forEach(n=>P("- ["+n.page+"p]"+(n.quote?" (인용)":"")+" "+n.text.replace(/\n+/g," ")));
+      if(!ns.length) P("- (없음)");
+      P("");
+    }
+  }else{
+    // ---- 전체 ----
+    const dates=[]; for(let i=days-1;i>=0;i--) dates.push(addDays(today(),-i));
+    let range=days?dates:[...new Set(S.sessions.map(s=>s.date))].sort();
+    if(!range.length) range=[today()];
+    const tot=range.reduce((a,k)=>a+dayPages(k),0);
+    const mins=range.reduce((a,k)=>a+dayMinutes(k),0);
+    const met=range.filter(k=>dayPages(k)>=(S.dayFloor[k]||st.baseFloor)&&dayPages(k)>0).length;
+    const zero=range.filter(k=>dayPages(k)===0).length;
+    const cores=coreBooks();
+
+    P("## 최근 요약");
+    P("- 기간: "+range[0]+" ~ "+range[range.length-1]+" ("+range.length+"일)");
+    P("- 총 "+tot+"p / "+fmtMin(mins)+" · 일평균 "+Math.round(tot/range.length)+"p · 시간당 "+(mins?Math.round(tot/(mins/60)):0)+"p");
+    P("- 오늘의 하한선: "+floorToday()+"p (필독서 "+cores.length+"권)");
+    P("- 하한선 달성: "+met+"/"+range.length+"일 ("+Math.round(met/range.length*100)+"%) · 한 페이지도 안 읽은 날: "+zero+"일");
+    P("- 현재 연속 달성: "+streak()+"일");
+    P("");
+    P("### 요일별 평균");
+    P("| 요일 | 일수 | 평균 페이지 | 평균 시간(분) |");
+    P("|---|---|---|---|");
+    DOW.forEach((d,i)=>{
+      const ks=range.filter(k=>new Date(k+"T00:00:00").getDay()===i);
+      if(!ks.length) return;
+      P("| "+d+" | "+ks.length+" | "+Math.round(ks.reduce((a,k)=>a+dayPages(k),0)/ks.length)+
+        "p | "+Math.round(ks.reduce((a,k)=>a+dayMinutes(k),0)/ks.length)+" |");
+    });
+    P("");
+    const cp=S.sessions.filter(inRange).filter(s=>{const b=book(s.bookId);return b&&b.isCore;}).reduce((a,s)=>a+s.pages,0);
+    P("### 필독서 vs 자유 독서");
+    P("- 필독서 "+cp+"p / 자유 독서 "+(tot-cp)+"p"+(tot?" ("+Math.round(cp/tot*100)+"% : "+(100-Math.round(cp/tot*100))+"%)":""));
+    P("- 참고: 필독서에 배정된 하한선은 "+(st.pageUnit*cores.length)+"p, 자유 독서 몫은 "+Math.max(0,st.baseFloor-st.pageUnit*cores.length)+"p로 설계되어 있다.");
+    P("");
+    P("## 지금 읽는 중인 책 ("+reading().length+"/"+st.listCap+"권)");
+    P("| 책 | 구분 | 기한 | 진도 | 남은 | 기간 내 | 마지막 읽은 날 | 쉼 | 필요 페이스 | 예상 완독 |");
+    P("|---|---|---|---|---|---|---|---|---|---|");
+    reading().forEach(b=>{
+      const s=bookStats(b), p=S.sessions.filter(x=>x.bookId===b.id&&inRange(x)).reduce((a,x)=>a+x.pages,0);
+      P("| "+b.title+(b.author?" / "+b.author:"")+" | "+(b.isCore?"필독":"자유")+" | "+(b.targetDate||"—")+" | "+
+        s.pct+"% | "+s.left+"p | "+p+"p | "+lastReadDate(b)+" | "+idleDays(b)+"일 | "+
+        (s.needDaily!=null?s.needDaily+"p/일":"—")+" | "+(s.eta||"—")+" |");
+    });
+    if(!reading().length) P("| (없음) | | | | | | | | | |");
+    P("");
+    const arc=S.books.filter(b=>b.status!=="reading")
+      .sort((a,c)=>String(c.finishedAt||c.droppedAt||"").localeCompare(String(a.finishedAt||a.droppedAt||""))).slice(0,25);
+    P("## 최근 완독·내린 책 (최대 25권)");
+    P("| 책 | 결과 | 날짜 | 진도 | 읽은 양 | 걸린 기간 | 속도 |");
+    P("|---|---|---|---|---|---|---|");
+    arc.forEach(b=>{
+      const s=bookStats(b), end=b.finishedAt||b.droppedAt||"";
+      P("| "+b.title+(b.author?" / "+b.author:"")+" | "+(b.status==="done"?"완독":b.droppedReason==="auto"?"자동 내림":"포기")+
+        " | "+end+" | "+s.pct+"% | "+s.readPages+"p | "+(end&&b.addedAt?(dayDiff(b.addedAt,end)+1)+"일":"—")+" | "+
+        (s.pph?Math.round(s.pph)+"p/h":"—")+" |");
+    });
+    if(!arc.length) P("| (없음) | | | | | | |");
+    P("");
+    if(o.daily){
+      P("## 일별 기록");
+      P("| 날짜 | 요일 | 페이지 | 하한선 | 달성 | 시간(분) | 읽은 책 |");
+      P("|---|---|---|---|---|---|---|");
+      range.forEach(k=>{
+        const p=dayPages(k), f=S.dayFloor[k]||st.baseFloor;
+        const bs=[...new Set(daySessions(k).map(s=>{const b=book(s.bookId);return b?b.title:"?";}))];
+        P("| "+k+" | "+dowOf(k)+" | "+p+" | "+f+" | "+(p>=f&&p>0?"O":"X")+" | "+dayMinutes(k)+" | "+(bs.join(", ")||"—")+" |");
+      });
+      P("");
+    }
+    if(o.notes){
+      const ns=S.notes.slice().sort((a,c)=>c.createdAt-a.createdAt).slice(0,120);
+      P("## 최근 메모·구절 ("+ns.length+"개)");
+      let last=null;
+      ns.slice().reverse().forEach(n=>{
+        const b=book(n.bookId); const t=b?b.title:"(삭제된 책)";
+        if(t!==last){ P(""); P("**"+t+"**"); last=t; }
+        P("- ["+n.page+"p]"+(n.quote?" (인용)":"")+" "+n.text.replace(/\n+/g," "));
+      });
+      if(!ns.length) P("- (없음)");
+      P("");
+    }
+  }
+
+  P("---");
+  P("");
+  P("## 부탁");
+  P("위 기록은 내가 직접 쌓은 것이고, 숫자는 모두 실제 값이야. 아래 질문에 답해줘.");
+  P("- 근거로 삼은 숫자나 책 제목을 반드시 인용해서 말해줘. 일반론은 필요 없어.");
+  P("- 잘하고 있다는 격려보다, 내가 놓치고 있는 것을 정확히 짚어주는 게 더 도움이 돼.");
+  P("- 규칙을 바꾸자고 제안할 때는 무엇을 근거로 그렇게 판단했는지 함께 말해줘.");
+  P("");
+  let i=1;
+  Object.entries(FOCUS).forEach(([k,f])=>{
+    if(!o.focus.includes(k)) return;
+    P("### "+f.label);
+    (o.scope==="book"?f.book:f.all).forEach(q=>P(i+++". "+q));
+    P("");
+  });
+  if(o.custom&&o.custom.trim()){
+    P("### 추가로 묻고 싶은 것");
+    o.custom.trim().split("\n").filter(x=>x.trim()).forEach(x=>P(i+++". "+x.trim()));
+    P("");
+  }
+  return L.join("\n");
+}
+
+let aiOpt=null;
+function openAI(bookId){
+  if(!aiOpt) aiOpt=S.settings.ai||{days:30,notes:true,daily:true,custom:"",
+    focus:Object.entries(FOCUS).filter(([,f])=>f.def).map(([k])=>k)};
+  const o=Object.assign({},aiOpt,{scope:bookId?"book":"all",bookId});
+  const b=bookId?book(bookId):null;
+  const paint=()=>{
+    const txt=aiReport(o);
+    document.getElementById("aiLen").textContent=txt.length.toLocaleString()+"자 · 약 "+Math.round(txt.length/2.2).toLocaleString()+" 토큰";
+    document.getElementById("aiPrev").textContent=txt.slice(0,700)+(txt.length>700?"\n\n… (이하 생략)":"");
+    return txt;
+  };
+  modal(`
+    <h3>AI 조언 받기</h3>
+    <div class="mh-sub">${b?esc(b.title)+" 한 권에 대한 리포트":"전체 독서 기록 리포트"} · 클립보드에 복사해서 Claude나 ChatGPT에 붙여넣으세요.</div>
+
+    <div class="field"><label>무엇에 대한 조언인가</label>
+      ${Object.entries(FOCUS).map(([k,f])=>`<label class="chk"><input type="checkbox" class="ai-f" value="${k}" ${o.focus.includes(k)?"checked":""}> ${f.label}</label>`).join("")}
+    </div>
+    <div class="field"><label>추가 질문 <span class="muted">(한 줄에 하나씩 · 선택)</span></label>
+      <textarea class="inp" id="aiC" placeholder="예) 요즘 글이 잘 안 써지는데 독서 쪽에 원인이 있을까?" style="min-height:56px">${esc(o.custom)}</textarea></div>
+
+    <div class="field"><label>포함할 데이터</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px">
+        ${[[30,"최근 30일"],[90,"최근 90일"],[0,"전체 기간"]].map(([d,l])=>
+          `<button class="chip ${o.days===d?"on":""}" data-d="${d}">${l}</button>`).join("")}
+      </div>
+      <label class="chk"><input type="checkbox" id="aiDaily" ${o.daily?"checked":""}> 일별 기록 표${b?" <span class='muted'>(전체 리포트에만 적용)</span>":""}</label>
+      <label class="chk"><input type="checkbox" id="aiNotes" ${o.notes?"checked":""}> 메모·구절 본문</label>
+    </div>
+
+    <div class="field"><label>미리보기 · <span id="aiLen" class="muted"></span></label>
+      <pre id="aiPrev" class="aiprev"></pre></div>
+
+    <div class="mdl-ft">
+      <button class="btn" id="aiFile">.md 파일로</button>
+      <div class="sp"></div>
+      <button class="btn" onclick="closeModal()">닫기</button>
+      <button class="btn pri" id="aiCopy">클립보드에 복사</button>
+    </div>`,{wide:true});
+
+  const $=x=>document.getElementById(x);
+  const sync=()=>{
+    o.focus=[...document.querySelectorAll(".ai-f:checked")].map(el=>el.value);
+    o.daily=$("aiDaily").checked; o.notes=$("aiNotes").checked; o.custom=$("aiC").value;
+    aiOpt={days:o.days,notes:o.notes,daily:o.daily,custom:o.custom,focus:o.focus};
+    S.settings.ai=aiOpt; save(); paint();
+  };
+  document.querySelectorAll(".ai-f").forEach(el=>el.onchange=sync);
+  ["aiDaily","aiNotes"].forEach(x=>$(x).onchange=sync);
+  $("aiC").oninput=()=>{ o.custom=$("aiC").value; aiOpt.custom=o.custom; paint(); };
+  document.querySelectorAll("[data-d]").forEach(el=>el.onclick=()=>{
+    o.days=+el.dataset.d;
+    document.querySelectorAll("[data-d]").forEach(x=>x.classList.toggle("on",+x.dataset.d===o.days));
+    sync();
+  });
+  $("aiCopy").onclick=()=>{
+    if(!o.focus.length&&!o.custom.trim()) return toast("조언 받을 주제를 하나 이상 고르세요");
+    copyText(paint(),"리포트 복사");
+  };
+  $("aiFile").onclick=()=>{
+    const blob=new Blob([paint()],{type:"text/markdown"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="reader-report-"+(b?b.title.slice(0,20).replace(/[\\/:*?"<>|]/g,""):"전체")+"-"+today()+".md";
+    a.click(); URL.revokeObjectURL(a.href); toast("파일로 저장했습니다");
+  };
+  paint();
 }
 
 /* --- 보관함 --- */
@@ -1325,6 +1587,7 @@ function openSettings(){
 document.getElementById("btnRead").onclick=()=>startSession();
 document.getElementById("btnReadEnd").onclick=()=>endSession();
 document.getElementById("btnAddBook").onclick=()=>openBookForm();
+document.getElementById("btnAI").onclick=()=>openAI();
 document.getElementById("btnSettings").onclick=openSettings;
 document.getElementById("btnArchive").onclick=()=>{
   if(view!=="archive"){ arcQ=""; arcFilter="all"; arcShown=ARC_PAGE; arcFold={}; view="archive"; }
