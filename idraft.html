@@ -257,6 +257,7 @@
     #draw-stage { grid-area: stage; }
     #view-draw.active > .row.mt16 { grid-area: foot; }
     #draw-prompt-area { grid-area: prompt; margin-top: 16px; }
+    #ptpl-area { grid-area: prompt; margin-top: 16px; }
 
     /* 뽑기 고쳐 쓰기: 원문 왼쪽 · 새로 쓰기 오른쪽 */
     #view-draw.active.editing {
@@ -324,6 +325,7 @@
         <span class="small">범위</span>
         <select id="draw-filter"></select>
         <button class="btn quiet" id="draw-scope-prompt" style="display:none">범위 전체 분석 프롬프트</button>
+        <button class="btn quiet" id="ptpl-open" style="display:none">분석 양식</button>
       </div>
       <span class="small" id="draw-pool-info"></span>
     </div>
@@ -338,6 +340,16 @@
       <div class="row mt8" style="justify-content:flex-end">
         <button class="btn quiet" id="draw-prompt-close">닫기</button>
         <button class="btn ghost" id="draw-prompt-copy">복사</button>
+      </div>
+    </div>
+    <div id="ptpl-area" class="mt24" style="display:none">
+      <div class="section-title" style="margin-top:0">범위 분석 양식</div>
+      <p class="small mt16"><code>{{태그}}</code> 자리에 범위 이름이, <code>{{조각들}}</code> 자리에 쪽글들이 들어갑니다.</p>
+      <textarea id="ptpl-text" class="prompt-box mt8" rows="16"></textarea>
+      <div class="row mt8" style="justify-content:flex-end">
+        <button class="btn quiet" id="ptpl-reset">기본값으로</button>
+        <button class="btn quiet" id="ptpl-cancel">취소</button>
+        <button class="btn ghost" id="ptpl-save">양식 저장</button>
       </div>
     </div>
   </section>
@@ -434,12 +446,12 @@ const DEFAULT_PROJECT_PROMPT =
 '4. 갈등 상황 — 조각들이 품고 있는 긴장을 바탕으로, 이야기를 밀고 갈 갈등을 외적 갈등과 내적 갈등으로 나눠 제안해달라.\n' +
 '5. 이 이야기에 잘 붙지 않는 조각들도 따로 짚어달라. 버릴 씨앗이 아니라 다른 이야기의 씨앗일 수 있다.\n\n' +
 '단정하지 말고 제안할 것. 조각들에 없는 것을 지어내기보다, 조각들이 이미 품고 있는 것을 끌어낼 것.';
-let db = { notes: [], deleted: {}, lastBackupAt: null, promptTemplate: null, templateUpdatedAt: null };
+let db = { notes: [], deleted: {}, lastBackupAt: null, promptTemplate: null, templateUpdatedAt: null, projectTemplate: null, projectTemplateUpdatedAt: null };
 
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) db = Object.assign({ notes: [], deleted: {}, lastBackupAt: null, promptTemplate: null, templateUpdatedAt: null }, JSON.parse(raw));
+    if (raw) db = Object.assign({ notes: [], deleted: {}, lastBackupAt: null, promptTemplate: null, templateUpdatedAt: null, projectTemplate: null, projectTemplateUpdatedAt: null }, JSON.parse(raw));
     if (!db.deleted) db.deleted = {};
   } catch (e) { console.error(e); }
 }
@@ -625,12 +637,41 @@ document.getElementById('draw-scope-prompt').addEventListener('click', () => {
   const frags = sel.map((n, i) =>
     '[조각 ' + (i + 1) + ' — ' + fmtDate(n.createdAt) + ']\n' + n.text
   ).join('\n\n');
-  const prompt = DEFAULT_PROJECT_PROMPT.split('{{태그}}').join(tag).split('{{조각들}}').join(frags);
+  const tpl = db.projectTemplate || DEFAULT_PROJECT_PROMPT;
+  const prompt = tpl.split('{{태그}}').join(tag).split('{{조각들}}').join(frags);
+  document.getElementById('ptpl-area').style.display = 'none';
   const area = document.getElementById('draw-prompt-area');
   area.style.display = 'block';
   document.getElementById('draw-prompt-text').value = prompt;
   area.scrollIntoView({ behavior: 'smooth', block: 'start' });
   toast('「' + tag + '」 쪽글 ' + sel.length + '개를 담았습니다');
+});
+document.getElementById('ptpl-open').addEventListener('click', () => {
+  const area = document.getElementById('ptpl-area');
+  if (area.style.display === 'block') { area.style.display = 'none'; return; }
+  document.getElementById('draw-prompt-area').style.display = 'none';
+  area.style.display = 'block';
+  document.getElementById('ptpl-text').value = db.projectTemplate || DEFAULT_PROJECT_PROMPT;
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+document.getElementById('ptpl-cancel').addEventListener('click', () => {
+  document.getElementById('ptpl-area').style.display = 'none';
+});
+document.getElementById('ptpl-reset').addEventListener('click', () => {
+  document.getElementById('ptpl-text').value = DEFAULT_PROJECT_PROMPT;
+  toast('기본 양식을 불러왔습니다. 저장해야 적용됩니다.');
+});
+document.getElementById('ptpl-save').addEventListener('click', () => {
+  const t = document.getElementById('ptpl-text').value.trim();
+  if (!t) { toast('양식이 비어 있습니다'); return; }
+  if (!t.includes('{{조각들}}')) {
+    if (!confirm('양식에 {{조각들}} 자리가 없습니다.\n이 경우 쪽글들은 양식 뒤에 붙지 않고 빠집니다. 저장할까요?')) return;
+  }
+  db.projectTemplate = (t === DEFAULT_PROJECT_PROMPT) ? null : t;
+  db.projectTemplateUpdatedAt = nowISO();
+  persist();
+  document.getElementById('ptpl-area').style.display = 'none';
+  toast('분석 양식을 저장했습니다');
 });
 document.getElementById('draw-prompt-close').addEventListener('click', () => {
   document.getElementById('draw-prompt-area').style.display = 'none';
@@ -646,9 +687,13 @@ document.getElementById('draw-prompt-copy').addEventListener('click', () => {
 function renderDraw(pickNew) {
   renderDrawFilter();
   document.getElementById('view-draw').classList.remove('editing');
-  document.getElementById('draw-scope-prompt').style.display =
-    document.getElementById('draw-filter').value === '__all__' ? 'none' : '';
-  if (pickNew) document.getElementById('draw-prompt-area').style.display = 'none';
+  const scopeOn = document.getElementById('draw-filter').value !== '__all__';
+  document.getElementById('draw-scope-prompt').style.display = scopeOn ? '' : 'none';
+  document.getElementById('ptpl-open').style.display = scopeOn ? '' : 'none';
+  if (pickNew) {
+    document.getElementById('draw-prompt-area').style.display = 'none';
+    document.getElementById('ptpl-area').style.display = 'none';
+  }
   const pool = drawPool();
   const stage = document.getElementById('draw-stage');
   const starredCount = db.notes.filter(n => n.starred).length;
@@ -1213,6 +1258,10 @@ document.getElementById('backup-file').addEventListener('change', e => {
       if (data.promptTemplate !== undefined && (data.templateUpdatedAt || '') > (db.templateUpdatedAt || '')) {
         db.promptTemplate = data.promptTemplate;
         db.templateUpdatedAt = data.templateUpdatedAt;
+      }
+      if (data.projectTemplate !== undefined && (data.projectTemplateUpdatedAt || '') > (db.projectTemplateUpdatedAt || '')) {
+        db.projectTemplate = data.projectTemplate;
+        db.projectTemplateUpdatedAt = data.projectTemplateUpdatedAt;
       }
       persist();
       renderStats();
