@@ -108,6 +108,9 @@ label.f>input,label.f>select{color:var(--fg)}
 .body{white-space:pre-wrap;line-height:1.95;font-size:16px;margin:16px 0 18px}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.banner{border:1px solid var(--fg);border-radius:10px;padding:13px 16px;margin-bottom:22px;
+  display:flex;align-items:center;gap:14px;font-size:13.5px;line-height:1.55;flex-wrap:wrap}
+.banner .btn{margin-left:auto;flex:none}
 .filters input[type=text]{flex:1;min-width:140px}
 
 /* projects */
@@ -463,6 +466,13 @@ function renderList(){
   const open=items.filter(isOpen), lock=items.filter(e=>!isOpen(e))
     .sort((a,b)=>a.unlockAt-b.unlockAt);
   let h='';
+  if(open.length){
+    const today=ymd(Date.now());
+    const merged=D.lastMobileImport&&ymd(D.lastMobileImport)===today;
+    if(!merged) h+=`<div class="banner"><span>글이 열렸습니다. 모바일에서 쓴 글이 있다면 지금 함께 병합하세요.<br>
+      <span class="xs fnt">${D.lastMobileImport?'마지막 병합 '+fmtD(D.lastMobileImport):'아직 병합한 적 없습니다'}</span></span>
+      <button class="btn" id="dsync">모바일 글 가져오기</button></div>`;
+  }
   if(open.length){ h+=`<div class="lbl">열린 글 ${open.length}</div>`+open.map(card).join(''); }
   if(lock.length){ h+=`<div class="lbl" style="margin-top:38px">잠긴 글 ${lock.length}</div>`+lock.map(card).join(''); }
   $('#list').innerHTML=h;
@@ -496,6 +506,7 @@ function card(e){
   </div></div>`;
 }
 function bindList(){
+  if($('#dsync')) $('#dsync').onclick=()=>$('#syncInF').click();
   $$('#list [data-act]').forEach(b=>b.onclick=()=>{
     const e=D.entries.find(x=>x.id===b.dataset.id); if(!e) return;
     const a=b.dataset.act;
@@ -710,7 +721,9 @@ $('#syncInF').onchange=e=>{
       add++;
     });
     D.entries.sort((a,b)=>b.createdAt-a.createdAt);
+    D.lastMobileImport=Date.now();
     save(); refreshBadge();
+    if($('#v-drawer').classList.contains('on')) renderList();
     const dev=j.device?` (${j.device})`:'';
     $('#syncLog').innerHTML=`병합 완료${dev}: 새 글 <b>${add}편</b>, 중복 건너뜀 ${dup}편.
       잠금 시각은 그대로 유지됩니다.`;
