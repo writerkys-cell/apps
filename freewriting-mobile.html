@@ -82,6 +82,8 @@ label.f>*{color:var(--fg)}
 #stage #pad.blind{color:transparent;text-shadow:0 0 11px rgba(160,158,150,.5);caret-color:#e8e6e1}
 #stage #stagefoot{color:#5d5c56}
 #stage .btn{border-color:transparent;color:#7d7c76}
+#stage #stghead{font-size:13.5px;color:#7d7c76;padding:2px 0 14px;display:none}
+#stage #stghead b{color:#b8b6b0;font-weight:500}
 #stage.on{display:flex}
 #clock{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.1em;
   color:var(--faint);text-align:center;padding:16px 0 6px}
@@ -131,6 +133,7 @@ label.f>*{color:var(--fg)}
     <div class="big" id="greet">15분.</div>
     <div class="hint">여기서는 쓰기만 합니다. 쓰는 동안 글자는 가려지고, 쓴 글은 데스크톱으로 가져가 병합합니다.</div>
     <div class="opts" id="durs"></div>
+    <label class="f">제목<input type="text" id="wtitle" placeholder="예: 주인공에 대해서 쓴다"></label>
     <label class="f">프로젝트<select id="wproj"></select></label>
     <label class="f">열리는 시각
       <select id="wlock">
@@ -181,6 +184,7 @@ label.f>*{color:var(--fg)}
 <div id="stage">
   <div id="clock">15:00</div>
   <div id="bar"><i></i></div>
+  <div id="stghead"></div>
   <textarea id="pad" spellcheck="false" autocapitalize="sentences" placeholder="…"></textarea>
   <div id="stagefoot"><span id="cnt">0자</span><button class="btn ghost" id="stop">종료</button></div>
 </div>
@@ -248,9 +252,16 @@ function renderSetup(){
 function unlockTime(){const d=new Date();d.setDate(d.getDate()+(+$('#wlock').value||1));
   d.setHours(S().hour,0,0,0);if(d.getTime()<=Date.now())d.setTime(d.getTime()+DAY);return d.getTime();}
 
-let endAt=0,tick=null,startedAt=0,over=false;
+let endAt=0,tick=null,startedAt=0,over=false,curTitle='';
 function start(pre){
   startedAt=Date.now();endAt=Date.now()+dur*60000;over=false;
+  curTitle=$('#wtitle').value.trim();
+  const pj=$('#wproj').value?pname($('#wproj').value):'';
+  const hd=$('#stghead');
+  if(pj&&curTitle)hd.innerHTML=`${esc(pj)} — <b>${esc(curTitle)}</b>`;
+  else if(curTitle)hd.innerHTML=`<b>${esc(curTitle)}</b>`;
+  else if(pj)hd.innerHTML=esc(pj);
+  hd.style.display=(pj||curTitle)?'block':'none';
   const pd=$('#pad');pd.value=pre||'';pd.classList.add('blind');
   $('#stop').textContent='종료';
   $('#stage').classList.add('on');pd.focus();
@@ -280,8 +291,9 @@ function finish(){
   $('#stage').classList.remove('on');
   if(!text.trim()){D.draft=null;save();renderSetup();return;}
   const ut=unlockTime();
-  D.entries.unshift({id:uid(),projectId:$('#wproj').value||null,text,createdAt:Date.now(),
+  D.entries.unshift({id:uid(),projectId:$('#wproj').value||null,title:curTitle,text,createdAt:Date.now(),
     unlockAt:ut,sec:spent,seen:false,src:'mobile',exported:false});
+  $('#wtitle').value='';curTitle='';
   D.draft=null;localStorage.setItem('fwm.lastproj',$('#wproj').value||'');save();
   $('#pad').value='';$('#cnt').textContent='0자';
   renderSetup();refreshBadge();
@@ -323,7 +335,8 @@ function renderList(){
       D.entries=D.entries.filter(x=>x.id!==e.id);save();renderList();refreshBadge();}});}
 function card(e){
   const o=isOpen(e);
-  const head=`<div class="top"><strong class="sm">${fmtD(e.createdAt)}</strong>
+  const head=`<div class="top"><strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
+    ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
     <span class="tag">${esc(pname(e.projectId))}</span>
     <span class="xs fnt num">${chars(e.text)}자</span>
     <span style="margin-left:auto" class="xs mut num">${o?(e.exported?'옮김':'미전송'):'🔒 '+until(e.unlockAt)}</span></div>`;
