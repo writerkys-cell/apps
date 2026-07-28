@@ -141,6 +141,8 @@ label.f>*{color:var(--fg)}
         <option value="3">사흘 뒤</option><option value="7">일주일 뒤</option>
       </select></label>
     <button class="btn pri blk" id="go" style="padding:14px;margin-top:22px">시작</button>
+    <button class="btn blk" id="gohand" style="margin-top:10px">쓰기 — 노트에 손으로</button>
+    <div class="hint xs" style="margin-top:10px">‘쓰기’는 단축어 ‘시간’으로 타이머를 걸고, 노트 참조 기록을 서랍에 남깁니다.</div>
     <div class="hint xs" style="margin-top:12px" id="resume"></div>
     <div class="hint xs" id="setupwarn" style="margin-top:18px"></div>
   </section>
@@ -198,8 +200,9 @@ label.f>*{color:var(--fg)}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const KEY='freewrite.mobile.v1';
 const DEF={entries:[],draft:null,projects:[],device:null,lastImport:null,
-  settings:{dur:15,hour:6}};
+  settings:{dur:25,hour:6}};
 let D=load();
+if(!D.m25){ if(D.settings.dur===15) D.settings.dur=25; D.m25=true; }
 function load(){ try{ const r=JSON.parse(localStorage.getItem(KEY));
   if(r&&r.settings) return Object.assign({},DEF,r,{settings:Object.assign({},DEF.settings,r.settings)});}catch(e){}
   return JSON.parse(JSON.stringify(DEF)); }
@@ -234,9 +237,13 @@ $$('#tabs button').forEach(b=>b.onclick=()=>{
 let dur=null;
 function renderSetup(){
   dur=dur||S().dur;
-  const opts=[...new Set([5,10,15,20,30,S().dur,dur])].sort((a,b)=>a-b);
-  $('#durs').innerHTML=opts.map(m=>`<button class="chip${m===dur?' on':''}" data-m="${m}">${m}분</button>`).join('');
-  $$('#durs .chip').forEach(c=>c.onclick=()=>{dur=+c.dataset.m;$('#greet').textContent=`${dur}분.`;renderSetup();});
+  const opts=[...new Set([5,10,15,25,50,dur])].sort((a,b)=>a-b);
+  $('#durs').innerHTML=opts.map(m=>`<button class="chip${m===dur?' on':''}" data-m="${m}">${m}분</button>`).join('')
+    +`<button class="chip" data-m="x">직접</button>`;
+  $$('#durs .chip').forEach(c=>c.onclick=()=>{
+    if(c.dataset.m==='x'){const v=parseInt(prompt('몇 분?',dur),10);if(v>0)dur=v;}
+    else dur=+c.dataset.m;
+    $('#greet').textContent=`${dur}분.`;renderSetup();});
   $('#greet').textContent=`${dur}분.`;
   $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
     D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
@@ -280,6 +287,25 @@ function run(){
 $('#pad').oninput=e=>{$('#cnt').textContent=chars(e.target.value)+'자';};
 $('#stop').onclick=()=>finish();
 $('#go').onclick=()=>start('');
+$('#gohand').onclick=()=>{
+  const ut=unlockTime();
+  const pj=$('#wproj').value||null, title=$('#wtitle').value.trim();
+  const n=new Date();
+  const dt=`${n.getFullYear()}년 ${n.getMonth()+1}월 ${n.getDate()}일 ${pad2(n.getHours())}:${pad2(n.getMinutes())}`;
+  let txt=`${dt}에 노트에 손으로 쓴 내용을 참조하세요.`;
+  if(pj)txt+=`\n프로젝트: ${pname(pj)}`;
+  if(title)txt+=`\n제목: ${title}`;
+  txt+=`\n프리라이팅 시간: ${dur}분`;
+  D.entries.unshift({id:uid(),projectId:pj,title,text:txt,createdAt:Date.now(),unlockAt:ut,
+    sec:dur*60,seen:false,src:'mobile',exported:false,hand:true});
+  localStorage.setItem('fwm.lastproj',pj||'');save();
+  $('#wtitle').value='';
+  const a=document.createElement('a');
+  a.href=`shortcuts://run-shortcut?name=${encodeURIComponent('시간')}&input=text&text=${encodeURIComponent(String(dur))}`;
+  document.body.appendChild(a);a.click();a.remove();
+  renderSetup();refreshBadge();
+  toast(`단축어 ‘시간’ 실행 · 노트에 ${dur}분 쓰세요`);
+};
 
 function finish(){
   if(tick){clearInterval(tick);tick=null;}
@@ -294,10 +320,14 @@ function finish(){
   D.draft=null;localStorage.setItem('fwm.lastproj',$('#wproj').value||'');save();
   $('#pad').value='';$('#cnt').textContent='0자';
   renderSetup();refreshBadge();
+  const ne=D.entries[0];
   modal(`<h3>넣어 두었습니다</h3>
     <div class="hint" style="line-height:1.8">${chars(text)}자 · ${Math.floor(spent/60)}분<br>
     ${until(ut)} 열립니다. 데스크톱에 병합해도 잠금 시각은 그대로 갑니다.</div>
-    <button class="btn pri blk" id="okm" style="margin-top:18px">닫기</button>`);
+    <label class="f" style="margin-top:16px">제목 — 중단한 지점이나 다음에 이어 쓸 것
+      <input type="text" id="mtitle" value="${esc(ne.title||'')}" placeholder="예: 결말 직전에서 멈춤"></label>
+    <button class="btn pri blk" id="okm" style="margin-top:14px">닫기</button>`);
+  $('#mtitle').oninput=ev=>{ne.title=ev.target.value.trim();save();};
   $('#okm').onclick=closeModal;
 }
 
@@ -315,10 +345,25 @@ function renderBanner(){
   el.innerHTML=n?`<div class="banner"><span>열린 글 <b>${n}편</b> —<br>데스크톱으로 옮길 시간입니다.</span>
     <button class="btn pri" id="bexp">내보내기</button></div>`:'';
   if($('#bexp'))$('#bexp').onclick=doExport;}
+/* 버린 글의 날짜·시간·글자수는 장부에 남긴다 */
+function logGone(e){
+  D.ledger=D.ledger||[];
+  D.ledger.push({date:ymd(e.createdAt),sec:e.sec||0,chars:chars(e.text||'')});
+}
+function daySums(){
+  const today=ymd(Date.now());const m={};
+  D.entries.forEach(e=>{const d=ymd(e.createdAt);if(d<today)m[d]=(m[d]||0)+(e.sec||0);});
+  (D.ledger||[]).forEach(g=>{if(g.date<today)m[g.date]=(m[g.date]||0)+(g.sec||0);});
+  const days=Object.keys(m).sort().reverse().slice(0,7);
+  if(!days.length)return'';
+  return `<div class="lbl">하루 합산</div><div class="card" style="padding:8px 16px;margin-bottom:24px">`+
+    days.map(d=>`<div class="stat"><span class="mut num">${d.slice(5).replace('-','. ')}.</span>
+      <span class="num">${Math.round(m[d]/60)}분</span></div>`).join('')+`</div>`;
+}
 function renderList(){
-  if(!D.entries.length){$('#list').innerHTML=`<div class="empty">아직 없습니다.</div>`;return;}
+  if(!D.entries.length){$('#list').innerHTML=daySums()+`<div class="empty">아직 없습니다.</div>`;return;}
   const open=D.entries.filter(isOpen),lock=D.entries.filter(e=>!isOpen(e)).sort((a,b)=>a.unlockAt-b.unlockAt);
-  let h='';
+  let h=daySums();
   if(open.length)h+=`<div class="lbl">열린 글 ${open.length}</div>`+open.map(card).join('');
   if(lock.length)h+=`<div class="lbl">잠긴 글 ${lock.length}</div>`+lock.map(card).join('');
   $('#list').innerHTML=h;
@@ -329,14 +374,14 @@ function renderList(){
     if(a==='fold'){e._exp=false;renderList();}
     if(a==='copy')navigator.clipboard.writeText(e.text).then(()=>toast('복사했습니다'));
     if(a==='title'){const t=prompt('제목',e.title||'');if(t!==null){e.title=t.trim();save();renderList();}}
-    if(a==='del'&&confirm('버립니다. 되돌릴 수 없습니다.')){
-      D.entries=D.entries.filter(x=>x.id!==e.id);save();renderList();refreshBadge();}});}
+    if(a==='del'&&confirm('본문을 버립니다. 되돌릴 수 없습니다.\n쓴 날짜와 시간 기록은 남습니다.')){
+      logGone(e);D.entries=D.entries.filter(x=>x.id!==e.id);save();renderList();refreshBadge();}});}
 function card(e){
   const o=isOpen(e);
   const head=`<div class="top"><strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
     ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
-    <span class="tag">${esc(pname(e.projectId))}</span>
-    <span class="xs fnt num">${chars(e.text)}자</span>
+    <span class="tag">${esc(pname(e.projectId))}</span>${e.hand?'<span class="tag">손글씨</span>':''}
+    <span class="xs fnt num">${e.hand?Math.round(e.sec/60)+'분':chars(e.text)+'자'}</span>
     <span style="margin-left:auto" class="xs mut num">${o?(e.exported?'옮김':'미전송'):'🔒 '+until(e.unlockAt)}</span></div>`;
   if(!o)return`<div class="item">${head}<div class="prev fnt">잠겨 있습니다. 데스크톱에 병합해도 시각은 유지됩니다.</div>
     <button class="btn ghost xs" data-act="title" data-id="${e.id}" style="padding-left:0">제목 수정</button></div>`;
