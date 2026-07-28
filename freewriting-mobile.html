@@ -260,11 +260,16 @@ function run(){
   if(Date.now()%5000<1100)save();
   if(left<=0){clearInterval(tick);tick=null;$('#clock').textContent='끝';finish();}}
 $('#pad').oninput=e=>{$('#cnt').textContent=chars(e.target.value)+'자';};
-$('#pad').onkeydown=e=>{if(noDel&&(e.key==='Backspace'||e.key==='Delete'))e.preventDefault();};
+let composing=false;
+$('#pad').addEventListener('compositionstart',()=>composing=true);
+$('#pad').addEventListener('compositionend',()=>composing=false);
+$('#pad').onkeydown=e=>{
+  if(noDel&&!composing&&!e.isComposing&&e.keyCode!==229&&(e.key==='Backspace'||e.key==='Delete'))e.preventDefault();};
 $('#pad').addEventListener('beforeinput',e=>{
   if(!noDel)return;
+  if(e.inputType==='insertFromPaste'){e.preventDefault();toast('붙여넣기는 막혀 있습니다');return;}
+  if(composing||e.isComposing)return; /* 한글 조합 중에는 IME가 지우기 신호를 쓰므로 막지 않는다 */
   if(e.inputType&&e.inputType.startsWith('delete'))e.preventDefault();
-  if(e.inputType==='insertFromPaste'){e.preventDefault();toast('붙여넣기는 막혀 있습니다');}
 });
 $('#pad').onpaste=e=>{if(noDel){e.preventDefault();toast('붙여넣기는 막혀 있습니다');}};
 $('#stop').onclick=()=>finish();
