@@ -90,6 +90,8 @@ label.f>input,label.f>select{color:var(--fg)}
 #clock.low{color:#d99a5b}
 #bar{width:100%;max-width:660px;height:1px;background:#2a2926;margin-bottom:26px}
 #bar>i{display:block;height:100%;background:#e8e6e1;width:0;transition:width 1s linear}
+#stghead{width:100%;max-width:660px;font-size:13.5px;color:#7d7c76;padding:0 0 16px;display:none}
+#stghead b{color:#b8b6b0;font-weight:500}
 #pad{width:100%;max-width:660px;flex:1;background:transparent;border:none;outline:none;resize:none;
   font-size:17px;line-height:1.95;padding-bottom:60px;font-family:inherit;color:#e8e6e1}
 #pad::placeholder{color:#4a4945}
@@ -172,6 +174,9 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
 
       <div class="opts" id="durs"></div>
 
+      <label class="f" style="margin-bottom:14px">제목
+        <input type="text" id="wtitle" placeholder="예: 주인공에 대해서 쓴다 · 그 강연을 할 것인가?" style="width:100%">
+      </label>
       <div class="row" style="gap:12px">
         <label class="f" style="flex:1;min-width:180px">프로젝트
           <select id="wproj"></select>
@@ -286,6 +291,7 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
 <div id="stage">
   <div id="clock">15:00</div>
   <div id="bar"><i></i></div>
+  <div id="stghead"></div>
   <textarea id="pad" spellcheck="false" placeholder="…"></textarea>
   <div id="stagefoot">
     <span id="cnt">0자</span>
@@ -391,8 +397,16 @@ function unlockTime(){
 }
 
 let endAt=0, tick=null, startedAt=0, over=false;
+let curTitle='';
 function start(pre){
   startedAt=Date.now(); endAt=Date.now()+dur*60000; over=false;
+  curTitle=$('#wtitle').value.trim();
+  const pj=$('#wproj').value?pname($('#wproj').value):'';
+  const hd=$('#stghead');
+  if(pj&&curTitle) hd.innerHTML=`${esc(pj)} — <b>${esc(curTitle)}</b>`;
+  else if(curTitle) hd.innerHTML=`<b>${esc(curTitle)}</b>`;
+  else if(pj) hd.innerHTML=esc(pj);
+  hd.style.display=(pj||curTitle)?'block':'none';
   const pd=$('#pad');
   pd.value=pre||''; pd.classList.toggle('blind',blind);
   $('#stage').classList.add('on'); $('#stop').textContent=hard?'남은 시간':'종료';
@@ -430,8 +444,9 @@ function finish(auto){
   const spent=Math.round((Date.now()-startedAt)/1000);
   if(!text.trim()){ $('#stage').classList.remove('on'); D.draft=null; save(); renderSetup(); return; }
   const ut=unlockTime();
-  const e={id:uid(),projectId:$('#wproj').value||null,text,createdAt:Date.now(),
+  const e={id:uid(),projectId:$('#wproj').value||null,title:curTitle,text,createdAt:Date.now(),
     unlockAt:ut,sec:spent,seen:false,auto:!!auto};
+  $('#wtitle').value=''; curTitle='';
   D.entries.unshift(e); D.draft=null;
   localStorage.setItem('fw.lastproj',e.projectId||'');
   save();
@@ -488,7 +503,8 @@ function renderList(){
 function card(e){
   const o=isOpen(e);
   const head=`<div class="top">
-      <strong class="sm">${fmtD(e.createdAt)}</strong>
+      <strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
+      ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
       <span class="tag">${esc(pname(e.projectId))}</span>
       <span class="xs fnt num">${chars(e.text)}자 · ${Math.round(e.sec/60)}분</span>
       <span style="margin-left:auto" class="lock">${o?'':'🔒 '+until(e.unlockAt)}</span>
@@ -521,7 +537,8 @@ function bindList(){
     if(a==='fold'){ e._exp=false; renderList(); }
     if(a==='type'){ e.seen=true; save(); runShortcut(e); }
     if(a==='copy'){ navigator.clipboard.writeText(e.text).then(()=>toast('복사했습니다')); }
-    if(a==='txt'){ dl(`${ymd(e.createdAt)}_${pname(e.projectId)}.txt`,e.text,'text/plain'); }
+    if(a==='txt'){ const t=e.title?'_'+e.title.replace(/[\\/:*?"<>|]/g,''):'';
+      dl(`${ymd(e.createdAt)}_${pname(e.projectId)}${t}.txt`,e.text,'text/plain'); }
     if(a==='del'){ if(confirm('버립니다. 되돌릴 수 없습니다.')){
       D.entries=D.entries.filter(x=>x.id!==e.id); save(); renderList(); } }
     if(a==='unlockedit') editUnlock(e.id);
@@ -723,7 +740,7 @@ $('#syncInF').onchange=e=>{
     j.entries.forEach(en=>{
       if(have.has(en.id)){ dup++; return; }
       const known=en.projectId&&proj(en.projectId)?en.projectId:null;
-      D.entries.push({id:en.id,projectId:known,text:en.text||'',createdAt:en.createdAt||Date.now(),
+      D.entries.push({id:en.id,projectId:known,title:en.title||'',text:en.text||'',createdAt:en.createdAt||Date.now(),
         unlockAt:en.unlockAt||Date.now(),sec:en.sec||0,seen:false,src:'mobile'});
       add++;
     });
