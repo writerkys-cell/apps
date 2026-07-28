@@ -84,6 +84,8 @@ label.f>*{color:var(--fg)}
 #stage .btn{border-color:transparent;color:#7d7c76}
 #stage #stghead{font-size:13.5px;color:#7d7c76;padding:2px 0 14px;display:none}
 #stage #stghead b{color:#b8b6b0;font-weight:500}
+#stage #stghead .rel{border:1px solid #3a3936;color:#8b8a84;border-radius:4px;
+  padding:1px 7px;font-size:11.5px;margin-right:8px}
 #stage.on{display:flex}
 #clock{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:.1em;
   color:var(--faint);text-align:center;padding:16px 0 6px}
@@ -135,6 +137,11 @@ label.f>*{color:var(--fg)}
     <div class="opts" id="durs"></div>
     <label class="f">제목<input type="text" id="wtitle" placeholder="예: 주인공에 대해서 쓴다"></label>
     <label class="f">프로젝트<select id="wproj"></select></label>
+    <label class="f">관계<select id="wrel">
+      <option value="이어짐">이어짐</option>
+      <option value="다시">다시</option>
+      <option value="딴갈래">딴갈래</option>
+    </select></label>
     <label class="f">열리는 시각
       <select id="wlock">
         <option value="1">내일 아침</option><option value="2">이틀 뒤</option>
@@ -248,6 +255,7 @@ function renderSetup(){
   $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
     D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const lp=localStorage.getItem('fwm.lastproj'); if(lp)$('#wproj').value=lp;
+  $('#wrel').value=localStorage.getItem('fwm.lastrel')||'이어짐';
   $('#setupwarn').innerHTML=D.projects.length?'':'프로젝트가 비어 있습니다. 동기화 탭에서 데스크톱 설정 파일을 불러오면 채워집니다.';
   const dr=D.draft;
   $('#resume').innerHTML=dr&&dr.text&&dr.text.trim()
@@ -259,16 +267,18 @@ function renderSetup(){
 function unlockTime(){const d=new Date();d.setDate(d.getDate()+(+$('#wlock').value||1));
   d.setHours(S().hour,0,0,0);if(d.getTime()<=Date.now())d.setTime(d.getTime()+DAY);return d.getTime();}
 
-let endAt=0,tick=null,startedAt=0,over=false,curTitle='';
+let endAt=0,tick=null,startedAt=0,over=false,curTitle='',curRel='이어짐';
 function start(pre){
   startedAt=Date.now();endAt=Date.now()+dur*60000;over=false;
-  curTitle=$('#wtitle').value.trim();
+  curTitle=$('#wtitle').value.trim();curRel=$('#wrel').value;
   const pj=$('#wproj').value?pname($('#wproj').value):'';
   const hd=$('#stghead');
-  if(pj&&curTitle)hd.innerHTML=`${esc(pj)} — <b>${esc(curTitle)}</b>`;
-  else if(curTitle)hd.innerHTML=`<b>${esc(curTitle)}</b>`;
-  else if(pj)hd.innerHTML=esc(pj);
-  hd.style.display=(pj||curTitle)?'block':'none';
+  const rel=`<span class="rel">${esc(curRel)}</span>`;
+  if(pj&&curTitle)hd.innerHTML=`${rel}${esc(pj)} — <b>${esc(curTitle)}</b>`;
+  else if(curTitle)hd.innerHTML=`${rel}<b>${esc(curTitle)}</b>`;
+  else if(pj)hd.innerHTML=rel+esc(pj);
+  else hd.innerHTML=rel;
+  hd.style.display='block';
   const pd=$('#pad');pd.value=pre||'';pd.classList.add('blind');
   $('#stop').textContent='종료';
   $('#stage').classList.add('on');pd.focus();
@@ -314,9 +324,10 @@ function finish(){
   $('#stage').classList.remove('on');
   if(!text.trim()){D.draft=null;save();renderSetup();return;}
   const ut=unlockTime();
-  D.entries.unshift({id:uid(),projectId:$('#wproj').value||null,title:curTitle,text,createdAt:Date.now(),
+  D.entries.unshift({id:uid(),projectId:$('#wproj').value||null,rel:curRel,title:curTitle,text,createdAt:Date.now(),
     unlockAt:ut,sec:spent,seen:false,src:'mobile',exported:false});
   $('#wtitle').value='';curTitle='';
+  localStorage.setItem('fwm.lastrel',curRel);
   D.draft=null;localStorage.setItem('fwm.lastproj',$('#wproj').value||'');save();
   $('#pad').value='';$('#cnt').textContent='0자';
   renderSetup();refreshBadge();
@@ -380,6 +391,7 @@ function card(e){
   const o=isOpen(e);
   const head=`<div class="top"><strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
     ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
+    ${e.rel?`<span class="tag">${esc(e.rel)}</span>`:''}
     <span class="tag">${esc(pname(e.projectId))}</span>${e.hand?'<span class="tag">손글씨</span>':''}
     <span class="xs fnt num">${e.hand?Math.round(e.sec/60)+'분':chars(e.text)+'자'}</span>
     <span style="margin-left:auto" class="xs mut num">${o?(e.exported?'옮김':'미전송'):'🔒 '+until(e.unlockAt)}</span></div>`;
