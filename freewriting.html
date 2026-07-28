@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>프리라이팅</title>
+<style>
+:root{
+  --bg:#fbfbfa; --fg:#1c1c1a; --muted:#8b8b85; --faint:#c4c4bd;
+  --line:#e6e5e0; --card:#ffffff; --accent:#1c1c1a;
+  --ok:#3d7a5a; --warn:#b06a2c; --bad:#a8443a;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#141413; --fg:#e8e6e1; --muted:#7d7c76; --faint:#4a4945;
+    --line:#2a2926; --card:#1b1b19; --accent:#e8e6e1;
+    --ok:#6fae8a; --warn:#d99a5b; --bad:#d4796e; }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--fg);
+  font:15px/1.65 -apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer}
+a{color:inherit}
+
+/* layout */
+#shell{max-width:760px;margin:0 auto;padding:0 28px 120px}
+header{display:flex;align-items:baseline;gap:22px;padding:44px 0 30px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:600;letter-spacing:-.01em}
+nav{display:flex;gap:18px;margin-left:auto}
+nav button{font-size:14px;color:var(--muted);padding:2px 0;border-bottom:1px solid transparent}
+nav button:hover{color:var(--fg)}
+nav button.on{color:var(--fg);border-bottom-color:var(--fg)}
+.badge{display:inline-block;min-width:17px;height:17px;line-height:17px;padding:0 5px;
+  border-radius:9px;background:var(--accent);color:var(--bg);font-size:11px;text-align:center;
+  font-variant-numeric:tabular-nums;margin-left:5px;vertical-align:1px}
+.view{display:none} .view.on{display:block}
+
+/* generic */
+.sec{margin-bottom:46px}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:10px}
+.row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.mut{color:var(--muted)} .fnt{color:var(--faint)}
+.sm{font-size:13px} .xs{font-size:12px}
+.num{font-variant-numeric:tabular-nums}
+.empty{color:var(--muted);font-size:14px;padding:34px 0;text-align:center;
+  border:1px dashed var(--line);border-radius:10px}
+hr{border:none;border-top:1px solid var(--line);margin:22px 0}
+
+input[type=text],input[type=number],input[type=date],input[type=datetime-local],select{
+  background:transparent;border:1px solid var(--line);border-radius:7px;
+  padding:8px 11px;outline:none;min-width:0;border-radius:7px}
+input:focus,select:focus{border-color:var(--muted)}
+label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
+label.f>input,label.f>select{color:var(--fg)}
+
+.btn{border:1px solid var(--line);border-radius:7px;padding:8px 15px;font-size:13px;
+  transition:border-color .12s,background .12s}
+.btn:hover{border-color:var(--muted)}
+.btn.pri{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.btn.pri:hover{opacity:.85}
+.btn.ghost{border-color:transparent;color:var(--muted);padding:8px 6px}
+.btn.ghost:hover{color:var(--fg)}
+.btn:disabled{opacity:.35;cursor:default}
+
+/* write */
+#setup{padding-top:8px}
+.big{font-size:26px;font-weight:500;letter-spacing:-.02em;margin-bottom:8px}
+.hint{color:var(--muted);font-size:13.5px;line-height:1.7}
+.opts{display:flex;gap:10px;flex-wrap:wrap;margin:26px 0}
+.chip{border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:13px;color:var(--muted)}
+.chip.on{border-color:var(--fg);color:var(--fg)}
+.toggles{display:flex;flex-direction:column;gap:11px;margin:26px 0 30px}
+.tg{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;cursor:pointer}
+.tg input{margin-top:4px;accent-color:var(--fg)}
+.tg span small{display:block;color:var(--muted);font-size:12.5px}
+
+#stage{position:fixed;inset:0;background:var(--bg);z-index:50;display:none;
+  flex-direction:column;align-items:center;padding:0 24px}
+#stage.on{display:flex}
+#clock{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--faint);
+  padding:26px 0 4px;font-variant-numeric:tabular-nums}
+#clock.low{color:var(--warn)}
+#bar{width:100%;max-width:660px;height:1px;background:var(--line);margin-bottom:26px}
+#bar>i{display:block;height:100%;background:var(--fg);width:0;transition:width 1s linear}
+#pad{width:100%;max-width:660px;flex:1;background:transparent;border:none;outline:none;resize:none;
+  font-size:17px;line-height:1.95;padding-bottom:60px;font-family:inherit}
+#pad.blind{color:transparent;text-shadow:0 0 11px rgba(128,128,128,.55);caret-color:var(--fg)}
+#stagefoot{width:100%;max-width:660px;display:flex;justify-content:space-between;
+  align-items:center;padding:14px 0 22px;font-size:12px;color:var(--faint)}
+
+/* drawer */
+.item{border-bottom:1px solid var(--line);padding:17px 2px}
+.item:last-child{border-bottom:none}
+.item .top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tag{font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+.lock{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.prev{color:var(--muted);font-size:13.5px;margin-top:7px;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item.new .top strong::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--bad);vertical-align:3px;margin-left:7px}
+.body{white-space:pre-wrap;line-height:1.95;font-size:16px;margin:16px 0 18px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center}
+.filters input[type=text]{flex:1;min-width:140px}
+
+/* projects */
+.pbar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin:15px 0 12px}
+.pbar>i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .3s}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:16px 12px;margin-top:16px}
+.st .k{font-size:11px;color:var(--muted);letter-spacing:.03em}
+.st .v{font-size:17px;font-variant-numeric:tabular-nums;margin-top:3px;letter-spacing:-.01em}
+.st .v small{font-size:12px;color:var(--muted);letter-spacing:0}
+.verdict{font-size:13.5px;margin-top:16px;padding:12px 14px;border-radius:8px;
+  background:var(--bg);border:1px solid var(--line);line-height:1.6}
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.spark{display:flex;align-items:flex-end;gap:3px;height:34px;margin-top:14px}
+.spark>i{flex:1;background:var(--line);border-radius:1px;min-height:2px}
+.spark>i.last{background:var(--accent)}
+details summary{cursor:pointer;font-size:12.5px;color:var(--muted);list-style:none}
+details summary::-webkit-details-marker{display:none}
+details summary:before{content:"+ ";}
+details[open] summary:before{content:"− ";}
+.log{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:10px}
+.log div{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)}
+
+/* modal */
+#veil{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;z-index:60;
+  align-items:center;justify-content:center;padding:24px}
+#veil.on{display:flex}
+#modal{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:26px 26px 22px;width:100%;max-width:420px;max-height:86vh;overflow:auto}
+#modal h3{font-size:15px;font-weight:600;margin-bottom:16px}
+#modal .f{margin-bottom:14px}
+.toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:var(--fg);
+  color:var(--bg);font-size:13px;padding:9px 17px;border-radius:20px;z-index:80;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1>프리라이팅</h1>
+    <nav>
+      <button data-v="write" class="on">쓰기</button>
+      <button data-v="drawer">서랍<span id="nbadge"></span></button>
+      <button data-v="proj">원고</button>
+      <button data-v="set">설정</button>
+    </nav>
+  </header>
+
+  <!-- 쓰기 -->
+  <section class="view on" id="v-write">
+    <div id="setup">
+      <div class="big" id="greet">오늘 15분.</div>
+      <div class="hint">멈추지 않고 씁니다. 고치지 않습니다. 다 쓴 글은 정해진 시간까지 열리지 않습니다.</div>
+
+      <div class="opts" id="durs"></div>
+
+      <div class="row" style="gap:12px">
+        <label class="f" style="flex:1;min-width:180px">프로젝트
+          <select id="wproj"></select>
+        </label>
+        <label class="f" style="min-width:180px">열리는 시각
+          <select id="wlock">
+            <option value="1">내일 아침</option>
+            <option value="2">이틀 뒤</option>
+            <option value="3">사흘 뒤</option>
+            <option value="7">일주일 뒤</option>
+            <option value="custom">직접 지정…</option>
+          </select>
+        </label>
+      </div>
+      <div class="row" id="customwrap" style="display:none;margin-top:12px">
+        <label class="f" style="flex:1">열리는 날짜와 시각
+          <input type="datetime-local" id="wcustom">
+        </label>
+      </div>
+
+      <div class="toggles">
+        <label class="tg"><input type="checkbox" id="tNoDel">
+          <span>지우기 금지<small>백스페이스와 붙여넣기를 막습니다. 되돌아가지 않는 것이 프리라이팅의 핵심입니다.</small></span></label>
+        <label class="tg"><input type="checkbox" id="tBlind">
+          <span>안 보고 쓰기<small>쓰는 글자를 흐리게 가립니다. 읽으면 고치게 됩니다.</small></span></label>
+        <label class="tg"><input type="checkbox" id="tHard">
+          <span>중도 종료 금지<small>시간이 끝날 때까지 저장할 수 없습니다.</small></span></label>
+      </div>
+
+      <button class="btn pri" id="go" style="padding:11px 26px">시작</button>
+      <div class="hint xs" style="margin-top:14px" id="resume"></div>
+    </div>
+  </section>
+
+  <!-- 서랍 -->
+  <section class="view" id="v-drawer">
+    <div class="filters">
+      <input type="text" id="q" placeholder="열린 글 검색">
+      <select id="fproj"><option value="">전체 프로젝트</option></select>
+      <select id="fstate">
+        <option value="all">전체</option>
+        <option value="open">열린 글</option>
+        <option value="locked">잠긴 글</option>
+      </select>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <!-- 원고 -->
+  <section class="view" id="v-proj">
+    <div id="plist"></div>
+    <button class="btn" id="addproj" style="margin-top:18px">＋ 프로젝트</button>
+  </section>
+
+  <!-- 설정 -->
+  <section class="view" id="v-set">
+    <div class="sec">
+      <div class="lbl">기본값</div>
+      <div class="card">
+        <div class="row" style="gap:18px">
+          <label class="f">기본 시간(분)<input type="number" id="sDur" min="1" max="120" style="width:90px"></label>
+          <label class="f">열리는 시각(시)<input type="number" id="sHour" min="0" max="23" style="width:90px"></label>
+          <label class="f">원고지 1매(자)<input type="number" id="sPer" min="1" style="width:90px"></label>
+        </div>
+        <div class="hint xs" style="margin-top:12px">‘내일 아침’은 다음 날 이 시각에 열립니다. 매수 환산에는 1매당 글자수를 씁니다.</div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="lbl">단축어</div>
+      <div class="card">
+        <label class="f">실행할 애플 단축어 이름<input type="text" id="sShort" style="max-width:280px"></label>
+        <label class="tg" style="margin-top:14px"><input type="checkbox" id="sPass">
+          <span>본문을 단축어 입력으로 넘기기<small>끄면 단축어만 실행하고, 본문은 클립보드로 복사합니다.</small></span></label>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="lbl">모바일 동기화</div>
+      <div class="card">
+        <div class="hint">아이폰·아이패드용 앱(freewriting-mobile.html)과 파일로 주고받습니다.
+          프로젝트와 설정은 <b>데스크톱이 원본</b>이고, 모바일에서 쓴 글은 여기로 가져와 병합합니다.</div>
+        <hr>
+        <div class="row">
+          <button class="btn" id="syncOut">모바일로 설정 내보내기</button>
+          <button class="btn" id="syncIn">모바일 글 가져오기</button>
+          <input type="file" id="syncInF" accept=".json,application/json" hidden>
+        </div>
+        <div class="hint xs" style="margin-top:12px" id="syncLog">설정 파일은 AirDrop·iCloud로 기기에 옮긴 뒤 모바일 앱의 동기화 탭에서 불러옵니다.
+          모바일에서 만든 글 파일은 여기서 가져오면 같은 글은 건너뛰고 새 글만 병합됩니다.</div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="lbl">기록</div>
+      <div class="card">
+        <div id="stats" class="grid"></div>
+        <hr>
+        <div class="row">
+          <button class="btn" id="exp">전체 백업 내보내기</button>
+          <button class="btn" id="imp">백업 불러오기</button>
+          <input type="file" id="impf" accept="application/json" hidden>
+        </div>
+        <div class="hint xs" style="margin-top:12px">기록은 이 브라우저에 저장됩니다. 가끔 백업해 두세요.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>단축키 · ⌘⏎ 시작·저장 · esc 닫기</span>
+  </footer>
+</div>
+
+<!-- 쓰기 화면 -->
+<div id="stage">
+  <div id="clock">15:00</div>
+  <div id="bar"><i></i></div>
+  <textarea id="pad" spellcheck="false" placeholder="…"></textarea>
+  <div id="stagefoot">
+    <span id="cnt">0자</span>
+    <span><button class="btn ghost xs" id="stop">종료</button></span>
+  </div>
+</div>
+
+<div id="veil"><div id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEY='freewrite.v1';
+const DEF={projects:[],entries:[],draft:null,settings:{
+  dur:15,hour:6,per:200,shortcut:'타이핑',pass:true,noDel:true,blind:false,hard:false}};
+
+let D=load();
+function load(){ try{ const r=JSON.parse(localStorage.getItem(KEY)); if(r&&r.settings)
+  return Object.assign({},DEF,r,{settings:Object.assign({},DEF.settings,r.settings)}); }catch(e){}
+  return JSON.parse(JSON.stringify(DEF)); }
+function save(){ localStorage.setItem(KEY,JSON.stringify(D)); }
+const S=()=>D.settings;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ---- util ---- */
+const pad2=n=>String(n).padStart(2,'0');
+const DAY=86400000;
+function fmtDT(t){const d=new Date(t);const n=new Date();
+  const same=d.toDateString()===n.toDateString();
+  const tm=`${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return same?`오늘 ${tm}`:`${d.getMonth()+1}월 ${d.getDate()}일 ${tm}`;}
+function fmtD(t){const d=new Date(t);return `${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}.`;}
+function ymd(t){const d=new Date(t);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;}
+function until(t){ let s=Math.max(0,Math.round((t-Date.now())/1000));
+  const d=Math.floor(s/86400); s-=d*86400; const h=Math.floor(s/3600); s-=h*3600;
+  const m=Math.floor(s/60);
+  if(d>0) return `${d}일 ${h}시간 뒤`;
+  if(h>0) return `${h}시간 ${m}분 뒤`;
+  return `${m}분 뒤`; }
+function daysBetween(a,b){ return Math.round((new Date(ymd(b))-new Date(ymd(a)))/DAY); }
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function chars(t){return t.replace(/\s/g,'').length;}
+let tmr; function toast(m){ const el=$('#toast'); el.textContent=m; el.classList.add('on');
+  clearTimeout(tmr); tmr=setTimeout(()=>el.classList.remove('on'),1900); }
+const isOpen=e=>Date.now()>=e.unlockAt;
+const proj=id=>D.projects.find(p=>p.id===id);
+const pname=id=>{const p=proj(id);return p?p.name:'분류 없음';};
+
+/* ---- nav ---- */
+$$('nav button').forEach(b=>b.onclick=()=>{
+  $$('nav button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  $$('.view').forEach(v=>v.classList.remove('on')); $('#v-'+b.dataset.v).classList.add('on');
+  if(b.dataset.v==='drawer') renderList();
+  if(b.dataset.v==='proj') renderProjects();
+  if(b.dataset.v==='set') renderStats();
+  window.scrollTo(0,0);
+});
+const goto=v=>$(`nav button[data-v="${v}"]`).click();
+
+/* ================= 쓰기 ================= */
+let dur=null, blind=false, noDel=false, hard=false;
+
+function renderSetup(){
+  dur=dur||S().dur;
+  const opts=[...new Set([5,10,15,20,30,S().dur,dur])].sort((a,b)=>a-b);
+  $('#durs').innerHTML=opts.map(m=>`<button class="chip${m===dur?' on':''}" data-m="${m}">${m}분</button>`).join('')
+    +`<button class="chip" data-m="x">직접</button>`;
+  $$('#durs .chip').forEach(c=>c.onclick=()=>{
+    if(c.dataset.m==='x'){ const v=parseInt(prompt('몇 분?',dur),10); if(v>0) dur=v; }
+    else dur=+c.dataset.m;
+    $('#greet').textContent=`오늘 ${dur}분.`; renderSetup(); });
+  $('#greet').textContent=`오늘 ${dur}분.`;
+
+  $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
+    D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const lastP=localStorage.getItem('fw.lastproj'); if(lastP) $('#wproj').value=lastP;
+
+  $('#tNoDel').checked=noDel=S().noDel;
+  $('#tBlind').checked=blind=S().blind;
+  $('#tHard').checked=hard=S().hard;
+
+  const dr=D.draft;
+  $('#resume').innerHTML = dr&&dr.text&&dr.text.trim()
+    ? `저장하지 않은 글이 있습니다 (${chars(dr.text)}자). <button class="btn ghost xs" id="rsm" style="padding:0">이어 쓰기</button> · <button class="btn ghost xs" id="dsc" style="padding:0">버리기</button>`
+    : '';
+  if($('#rsm')) $('#rsm').onclick=()=>start(D.draft.text);
+  if($('#dsc')) $('#dsc').onclick=()=>{ D.draft=null; save(); renderSetup(); };
+}
+$('#tNoDel').onchange=e=>{noDel=S().noDel=e.target.checked;save();};
+$('#tBlind').onchange=e=>{blind=S().blind=e.target.checked;save();};
+$('#tHard').onchange=e=>{hard=S().hard=e.target.checked;save();};
+$('#wlock').onchange=e=>{ $('#customwrap').style.display = e.target.value==='custom'?'flex':'none'; };
+
+function unlockTime(){
+  const v=$('#wlock').value;
+  if(v==='custom'){ const t=$('#wcustom').value; if(t) return new Date(t).getTime(); }
+  const d=new Date(); d.setDate(d.getDate()+(+v||1));
+  d.setHours(S().hour,0,0,0);
+  if(d.getTime()<=Date.now()) d.setTime(d.getTime()+DAY);
+  return d.getTime();
+}
+
+let endAt=0, tick=null, startedAt=0;
+function start(pre){
+  startedAt=Date.now(); endAt=Date.now()+dur*60000;
+  const pd=$('#pad');
+  pd.value=pre||''; pd.classList.toggle('blind',blind);
+  $('#stage').classList.add('on'); $('#stop').textContent=hard?'남은 시간':'종료';
+  $('#stop').disabled=!!hard;
+  pd.focus(); pd.setSelectionRange(pd.value.length,pd.value.length);
+  run();
+  tick=setInterval(run,1000);
+}
+function run(){
+  const left=Math.max(0,endAt-Date.now());
+  const m=Math.floor(left/60000), s=Math.floor(left%60000/1000);
+  $('#clock').textContent=`${pad2(m)}:${pad2(s)}`;
+  $('#clock').classList.toggle('low',left<60000&&left>0);
+  $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
+  D.draft={text:$('#pad').value,at:Date.now()};
+  if(Date.now()%5000<1100) save();
+  if(left<=0){ clearInterval(tick); tick=null; $('#stop').disabled=false;
+    $('#clock').textContent='끝'; finish(true); }
+}
+$('#pad').oninput=e=>{ $('#cnt').textContent=chars(e.target.value)+'자'; };
+$('#pad').onkeydown=e=>{
+  if(noDel&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); return; }
+  if(noDel&&(e.metaKey||e.ctrlKey)&&['z','x'].includes(e.key.toLowerCase())){ e.preventDefault(); }
+};
+$('#pad').onpaste=e=>{ if(noDel){ e.preventDefault(); toast('붙여넣기는 막혀 있습니다'); } };
+$('#stop').onclick=()=>finish(false);
+
+function finish(auto){
+  if(tick){ clearInterval(tick); tick=null; }
+  const text=$('#pad').value;
+  const spent=Math.round((Date.now()-startedAt)/1000);
+  if(!text.trim()){ $('#stage').classList.remove('on'); D.draft=null; save(); renderSetup(); return; }
+  const ut=unlockTime();
+  const e={id:uid(),projectId:$('#wproj').value||null,text,createdAt:Date.now(),
+    unlockAt:ut,sec:spent,seen:false,auto:!!auto};
+  D.entries.unshift(e); D.draft=null;
+  localStorage.setItem('fw.lastproj',e.projectId||'');
+  save();
+  $('#stage').classList.remove('on'); $('#pad').value=''; $('#cnt').textContent='0자';
+  renderSetup(); refreshBadge();
+  modal(`<h3>넣어 두었습니다</h3>
+    <div class="hint" style="line-height:1.8">
+      ${chars(text)}자 · ${Math.floor(spent/60)}분 ${spent%60}초<br>
+      <b>${fmtDT(ut)}</b>에 열립니다. (${until(ut)})
+    </div>
+    <div class="hint xs" style="margin-top:14px;color:var(--muted)">그때까지는 읽을 수 없습니다. 그게 요점입니다.</div>
+    <div class="row" style="margin-top:20px;justify-content:flex-end">
+      <button class="btn ghost" id="chg">시간 바꾸기</button>
+      <button class="btn pri" id="okm">닫기</button></div>`);
+  $('#okm').onclick=closeModal;
+  $('#chg').onclick=()=>{ closeModal(); editUnlock(e.id); };
+}
+
+/* ================= 서랍 ================= */
+function refreshBadge(){
+  const n=D.entries.filter(e=>isOpen(e)&&!e.seen).length;
+  $('#nbadge').innerHTML=n?`<span class="badge">${n}</span>`:'';
+  if(n) document.title=`(${n}) 프리라이팅`; else document.title='프리라이팅';
+}
+$('#q').oninput=$('#fproj').onchange=$('#fstate').onchange=()=>renderList();
+
+function renderList(){
+  $('#fproj').innerHTML=`<option value="">전체 프로젝트</option>`+
+    D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')+
+    `<option value="none">분류 없음</option>`;
+  const q=$('#q').value.trim(), fp=$('#fproj').value, fs=$('#fstate').value;
+  let items=D.entries.slice();
+  if(fp) items=items.filter(e=>fp==='none'?!e.projectId:e.projectId===fp);
+  if(fs==='open') items=items.filter(isOpen); if(fs==='locked') items=items.filter(e=>!isOpen(e));
+  if(q) items=items.filter(e=>isOpen(e)&&e.text.includes(q));
+
+  if(!items.length){ $('#list').innerHTML=`<div class="empty">아직 없습니다.</div>`; refreshBadge(); return; }
+
+  const open=items.filter(isOpen), lock=items.filter(e=>!isOpen(e))
+    .sort((a,b)=>a.unlockAt-b.unlockAt);
+  let h='';
+  if(open.length){ h+=`<div class="lbl">열린 글 ${open.length}</div>`+open.map(card).join(''); }
+  if(lock.length){ h+=`<div class="lbl" style="margin-top:38px">잠긴 글 ${lock.length}</div>`+lock.map(card).join(''); }
+  $('#list').innerHTML=h;
+  bindList(); refreshBadge();
+}
+function card(e){
+  const o=isOpen(e);
+  const head=`<div class="top">
+      <strong class="sm">${fmtD(e.createdAt)}</strong>
+      <span class="tag">${esc(pname(e.projectId))}</span>
+      <span class="xs fnt num">${chars(e.text)}자 · ${Math.round(e.sec/60)}분</span>
+      <span style="margin-left:auto" class="lock">${o?'':'🔒 '+until(e.unlockAt)}</span>
+    </div>`;
+  if(!o) return `<div class="item"><div class="ci">${head}
+      <div class="prev fnt">${fmtDT(e.unlockAt)}에 열립니다.</div>
+      <div class="acts"><button class="btn ghost xs" data-act="unlockedit" data-id="${e.id}">시간 바꾸기</button>
+      <button class="btn ghost xs" data-act="del" data-id="${e.id}">버리기</button></div></div></div>`;
+  const exp=e._exp;
+  return `<div class="item${e.seen?'':' new'}"><div class="ci">${head}
+    ${exp?`<div class="body">${esc(e.text)}</div>
+      <div class="acts">
+        <button class="btn pri" data-act="type" data-id="${e.id}">타이핑 실행</button>
+        <button class="btn" data-act="copy" data-id="${e.id}">본문 복사</button>
+        <button class="btn" data-act="txt" data-id="${e.id}">텍스트로 저장</button>
+        <button class="btn ghost" data-act="fold" data-id="${e.id}">접기</button>
+        <button class="btn ghost" data-act="del" data-id="${e.id}">버리기</button>
+      </div>`
+    :`<div class="prev">${esc(e.text.slice(0,120))}</div>
+      <div class="acts"><button class="btn ghost xs" data-act="open" data-id="${e.id}">펼치기</button>
+      <button class="btn ghost xs" data-act="type" data-id="${e.id}">타이핑 실행</button></div>`}
+  </div></div>`;
+}
+function bindList(){
+  $$('#list [data-act]').forEach(b=>b.onclick=()=>{
+    const e=D.entries.find(x=>x.id===b.dataset.id); if(!e) return;
+    const a=b.dataset.act;
+    if(a==='open'){ e._exp=true; e.seen=true; save(); renderList(); }
+    if(a==='fold'){ e._exp=false; renderList(); }
+    if(a==='type'){ e.seen=true; save(); runShortcut(e); }
+    if(a==='copy'){ navigator.clipboard.writeText(e.text).then(()=>toast('복사했습니다')); }
+    if(a==='txt'){ dl(`${ymd(e.createdAt)}_${pname(e.projectId)}.txt`,e.text,'text/plain'); }
+    if(a==='del'){ if(confirm('버립니다. 되돌릴 수 없습니다.')){
+      D.entries=D.entries.filter(x=>x.id!==e.id); save(); renderList(); } }
+    if(a==='unlockedit') editUnlock(e.id);
+  });
+}
+function runShortcut(e){
+  const name=S().shortcut||'타이핑';
+  let url=`shortcuts://run-shortcut?name=${encodeURIComponent(name)}`;
+  if(S().pass) url+=`&input=text&text=${encodeURIComponent(e.text)}`;
+  navigator.clipboard.writeText(e.text).catch(()=>{});
+  const a=document.createElement('a'); a.href=url; document.body.appendChild(a); a.click(); a.remove();
+  toast(`‘${name}’ 실행 · 본문은 클립보드에도 있습니다`);
+}
+function editUnlock(id){
+  const e=D.entries.find(x=>x.id===id);
+  const d=new Date(e.unlockAt);
+  const v=`${ymd(e.unlockAt)}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  modal(`<h3>열리는 시각</h3>
+    <label class="f">날짜와 시각<input type="datetime-local" id="mu" value="${v}"></label>
+    <div class="hint xs" style="margin-top:10px">앞당길 수는 없습니다. 미루는 것만 됩니다.</div>
+    <div class="row" style="margin-top:20px;justify-content:flex-end">
+      <button class="btn ghost" id="mc">취소</button><button class="btn pri" id="ms">저장</button></div>`);
+  $('#mc').onclick=closeModal;
+  $('#ms').onclick=()=>{ const t=new Date($('#mu').value).getTime();
+    if(!t){toast('시각을 확인해 주세요');return;}
+    if(t<e.unlockAt){ toast('앞당길 수 없습니다'); return; }
+    e.unlockAt=t; save(); closeModal(); renderList(); };
+}
+
+/* ================= 원고 ================= */
+$('#addproj').onclick=()=>projForm();
+function projForm(id){
+  const p=id?proj(id):{name:'',pages:'',deadline:'',counts:[]};
+  modal(`<h3>${id?'프로젝트 수정':'새 프로젝트'}</h3>
+    <label class="f">이름<input type="text" id="pn" value="${esc(p.name)}" placeholder="예: 장편 초고"></label>
+    <label class="f">마감 매수 (원고지)<input type="number" id="pp" value="${p.pages||''}" placeholder="800"></label>
+    <label class="f">마감 날짜<input type="date" id="pd" value="${p.deadline||''}"></label>
+    ${id?'':`<label class="f">현재 스크리브너 글자수<input type="number" id="pc" placeholder="0"></label>`}
+    <div class="row" style="margin-top:20px;justify-content:flex-end">
+      ${id?`<button class="btn ghost bad" id="pdel" style="margin-right:auto;color:var(--bad)">삭제</button>`:''}
+      <button class="btn ghost" id="pcx">취소</button><button class="btn pri" id="psv">저장</button></div>`);
+  $('#pcx').onclick=closeModal;
+  if($('#pdel')) $('#pdel').onclick=()=>{ if(confirm('프로젝트를 삭제합니다. 글은 남습니다.')){
+    D.projects=D.projects.filter(x=>x.id!==id); save(); closeModal(); renderProjects(); } };
+  $('#psv').onclick=()=>{
+    const n=$('#pn').value.trim(); if(!n){toast('이름을 넣어 주세요');return;}
+    if(id){ Object.assign(proj(id),{name:n,pages:+$('#pp').value||0,deadline:$('#pd').value}); }
+    else{ const np={id:uid(),name:n,pages:+$('#pp').value||0,deadline:$('#pd').value,
+        counts:[],createdAt:Date.now()};
+      const c=+$('#pc').value; if(c>0) np.counts.push({date:ymd(Date.now()),chars:c});
+      D.projects.push(np); }
+    save(); closeModal(); renderProjects(); renderSetup(); };
+}
+function logCount(id){
+  const p=proj(id); const last=p.counts[p.counts.length-1];
+  modal(`<h3>스크리브너 글자수</h3>
+    <label class="f">오늘 기준 전체 글자수<input type="number" id="cc" value="${last?last.chars:''}" autofocus></label>
+    <label class="f">날짜<input type="date" id="cd" value="${ymd(Date.now())}"></label>
+    ${last?`<div class="hint xs">직전 기록 ${last.date} · ${last.chars.toLocaleString()}자</div>`:''}
+    <div class="row" style="margin-top:20px;justify-content:flex-end">
+      <button class="btn ghost" id="cx">취소</button><button class="btn pri" id="cs">기록</button></div>`);
+  $('#cx').onclick=closeModal;
+  $('#cs').onclick=()=>{ const v=+$('#cc').value, d=$('#cd').value;
+    if(!(v>=0)||!d){toast('값을 확인해 주세요');return;}
+    p.counts=p.counts.filter(c=>c.date!==d);
+    p.counts.push({date:d,chars:v}); p.counts.sort((a,b)=>a.date<b.date?-1:1);
+    save(); closeModal(); renderProjects(); };
+  setTimeout(()=>$('#cc').select(),30);
+}
+
+function analyze(p){
+  const per=S().per||200;
+  const target=(p.pages||0)*per;
+  const cs=p.counts||[];
+  const now=cs.length?cs[cs.length-1].chars:0;
+  const pct=target?Math.min(100,now/target*100):0;
+  const remain=Math.max(0,target-now);
+  let pace=null;
+  if(cs.length>=2){
+    const win=cs.slice(-8);
+    const days=Math.max(1,daysBetween(win[0].date,win[win.length-1].date));
+    pace=(win[win.length-1].chars-win[0].chars)/days;
+  }
+  let dleft=null, need=null, eta=null, gap=null;
+  if(p.deadline){ dleft=daysBetween(Date.now(),p.deadline);
+    need = dleft>0 ? remain/dleft : (remain>0?Infinity:0); }
+  if(pace&&pace>0&&remain>0){
+    const dn=Math.ceil(remain/pace);
+    eta=Date.now()+dn*DAY;
+    if(p.deadline) gap=daysBetween(p.deadline,eta); // +면 초과
+  }
+  return {per,target,now,pct,remain,pace,dleft,need,eta,gap,cs};
+}
+function renderProjects(){
+  if(!D.projects.length){ $('#plist').innerHTML=`<div class="empty">프로젝트를 만들면 마감까지의 진척을 볼 수 있습니다.</div>`; return; }
+  $('#plist').innerHTML=D.projects.map(p=>{
+    const a=analyze(p);
+    const nEnt=D.entries.filter(e=>e.projectId===p.id).length;
+    let verdict='';
+    if(!a.target) verdict=`<div class="verdict mut">마감 매수를 넣으면 진척률이 계산됩니다.</div>`;
+    else if(a.remain<=0) verdict=`<div class="verdict ok">분량을 채웠습니다.</div>`;
+    else if(!a.pace) verdict=`<div class="verdict mut">글자수를 두 번 이상 기록하면 속도와 예상 마감일이 나옵니다.</div>`;
+    else if(a.pace<=0) verdict=`<div class="verdict bad">최근 분량이 늘지 않았습니다. 프리라이팅부터 다시 시작해 보세요.</div>`;
+    else if(a.gap===null) verdict=`<div class="verdict">지금 속도로 <b>${fmtD(a.eta)}</b>쯤 끝납니다. 마감 날짜를 넣으면 비교해 드립니다.</div>`;
+    else if(a.gap<=0) verdict=`<div class="verdict ok">지금 속도면 마감보다 <b>${Math.abs(a.gap)}일 빠릅니다.</b> (예상 ${fmtD(a.eta)})</div>`;
+    else verdict=`<div class="verdict bad">지금 속도면 마감을 <b>${a.gap}일 넘깁니다.</b> 예상 ${fmtD(a.eta)} · 하루 <b>${Math.ceil(a.need).toLocaleString()}자</b>씩 써야 맞출 수 있습니다. (지금 ${Math.round(a.pace).toLocaleString()}자)</div>`;
+
+    const cs=a.cs.slice(-14);
+    const deltas=cs.map((c,i)=>i?Math.max(0,c.chars-cs[i-1].chars):0).slice(1);
+    const mx=Math.max(1,...deltas);
+    const spark=deltas.length?`<div class="spark">${deltas.map((d,i)=>
+      `<i style="height:${Math.max(6,d/mx*100)}%" class="${i===deltas.length-1?'last':''}" title="${d.toLocaleString()}자"></i>`).join('')}</div>
+      <div class="xs fnt" style="margin-top:6px">최근 기록 사이의 증가분</div>`:'';
+
+    return `<div class="card" style="padding:24px">
+      <div class="spread">
+        <div><strong style="font-size:16px">${esc(p.name)}</strong>
+          <span class="xs fnt" style="margin-left:8px">${p.deadline?fmtD(p.deadline)+' 마감':'마감 미정'}</span></div>
+        <button class="btn ghost xs" data-p="${p.id}" data-a="edit">수정</button>
+      </div>
+      <div class="pbar"><i style="width:${a.pct}%"></i></div>
+      <div class="spread xs mut"><span class="num">${a.now.toLocaleString()}자 · ${(a.now/a.per).toFixed(1)}매</span>
+        <span class="num">${a.pct.toFixed(1)}%</span>
+        <span class="num">${a.target?a.target.toLocaleString()+'자 · '+p.pages+'매':'—'}</span></div>
+
+      <div class="grid st">
+        <div><div class="k">남은 분량</div><div class="v num">${a.remain.toLocaleString()}<small>자</small></div></div>
+        <div><div class="k">남은 날</div><div class="v num">${a.dleft===null?'—':(a.dleft<0?'지남':a.dleft+'<small>일</small>')}</div></div>
+        <div><div class="k">필요 속도</div><div class="v num">${a.need===null?'—':(isFinite(a.need)?Math.ceil(a.need).toLocaleString()+'<small>자/일</small>':'—')}</div></div>
+        <div><div class="k">현재 속도</div><div class="v num ${a.pace&&a.need&&a.pace>=a.need?'ok':(a.pace?'bad':'')}">${a.pace===null?'—':Math.round(a.pace).toLocaleString()+'<small>자/일</small>'}</div></div>
+      </div>
+      ${verdict}
+      ${spark}
+      <hr>
+      <div class="row">
+        <button class="btn pri" data-p="${p.id}" data-a="log">글자수 기록</button>
+        <button class="btn" data-p="${p.id}" data-a="write">이 프로젝트로 쓰기</button>
+        <span class="xs fnt" style="margin-left:auto">프리라이팅 ${nEnt}편</span>
+      </div>
+      ${a.cs.length?`<details style="margin-top:14px"><summary>기록 ${a.cs.length}건</summary>
+        <div class="log">${a.cs.slice().reverse().map((c,i,arr)=>{
+          const prev=arr[i+1]; const d=prev?c.chars-prev.chars:null;
+          return `<div><span>${c.date}</span><span>${c.chars.toLocaleString()}자${d!==null?` <span class="${d>0?'ok':'fnt'}">${d>0?'+':''}${d.toLocaleString()}</span>`:''}</span></div>`;
+        }).join('')}</div></details>`:''}
+    </div>`;
+  }).join('');
+  $$('#plist [data-a]').forEach(b=>b.onclick=()=>{
+    const id=b.dataset.p;
+    if(b.dataset.a==='edit') projForm(id);
+    if(b.dataset.a==='log') logCount(id);
+    if(b.dataset.a==='write'){ goto('write'); localStorage.setItem('fw.lastproj',id);
+      renderSetup(); $('#wproj').value=id; }
+  });
+}
+
+/* ================= 설정 ================= */
+function bindSettings(){
+  const m={sDur:'dur',sHour:'hour',sPer:'per',sShort:'shortcut',sPass:'pass'};
+  Object.entries(m).forEach(([el,k])=>{
+    const n=$('#'+el);
+    if(n.type==='checkbox') n.checked=S()[k]; else n.value=S()[k];
+    n.onchange=()=>{ S()[k]= n.type==='checkbox'?n.checked:(n.type==='number'?+n.value:n.value);
+      save(); renderSetup(); renderProjects(); toast('저장했습니다'); };
+  });
+}
+function renderStats(){
+  const es=D.entries;
+  const tot=es.reduce((s,e)=>s+chars(e.text),0);
+  const min=Math.round(es.reduce((s,e)=>s+e.sec,0)/60);
+  const days=[...new Set(es.map(e=>ymd(e.createdAt)))].sort();
+  let streak=0; let d=new Date();
+  if(days.length){ if(!days.includes(ymd(d))) d.setDate(d.getDate()-1);
+    while(days.includes(ymd(d))){ streak++; d.setDate(d.getDate()-1); } }
+  const cpm=min?Math.round(tot/min):0;
+  $('#stats').innerHTML=[['글','편',es.length],['총 글자','자',tot],['총 시간','분',min],
+    ['분당','자',cpm],['연속','일',streak]]
+    .map(([k,u,v])=>`<div class="st"><div class="k">${k}</div><div class="v num">${v.toLocaleString()}<small>${u}</small></div></div>`).join('');
+}
+$('#exp').onclick=()=>dl(`freewriting-${ymd(Date.now())}.json`,JSON.stringify(D,null,1),'application/json');
+
+/* ---- 모바일 동기화 ---- */
+$('#syncOut').onclick=()=>{
+  const payload={type:'fw.settings',v:1,exportedAt:Date.now(),
+    projects:D.projects.map(p=>({id:p.id,name:p.name})),
+    settings:{dur:S().dur,hour:S().hour}};
+  dl(`fw-settings-${ymd(Date.now())}.json`,JSON.stringify(payload),'application/json');
+  $('#syncLog').innerHTML=`설정 파일을 내보냈습니다. 프로젝트 ${payload.projects.length}개 ·
+    기본 ${S().dur}분 · 열림 ${S().hour}시. 이 파일을 기기로 옮겨 모바일 앱에서 불러오세요.`;
+};
+$('#syncIn').onclick=()=>$('#syncInF').click();
+$('#syncInF').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+    const j=JSON.parse(r.result);
+    if(j.type!=='fw.mobile'||!Array.isArray(j.entries)) throw new Error('형식');
+    const have=new Set(D.entries.map(x=>x.id));
+    let add=0,dup=0;
+    j.entries.forEach(en=>{
+      if(have.has(en.id)){ dup++; return; }
+      const known=en.projectId&&proj(en.projectId)?en.projectId:null;
+      D.entries.push({id:en.id,projectId:known,text:en.text||'',createdAt:en.createdAt||Date.now(),
+        unlockAt:en.unlockAt||Date.now(),sec:en.sec||0,seen:false,src:'mobile'});
+      add++;
+    });
+    D.entries.sort((a,b)=>b.createdAt-a.createdAt);
+    save(); refreshBadge();
+    const dev=j.device?` (${j.device})`:'';
+    $('#syncLog').innerHTML=`병합 완료${dev}: 새 글 <b>${add}편</b>, 중복 건너뜀 ${dup}편.
+      잠금 시각은 그대로 유지됩니다.`;
+    toast(add?`${add}편을 병합했습니다`:'모두 이미 있는 글입니다');
+  }catch(x){ toast('모바일 앱의 ‘글 내보내기’ 파일이 아닙니다'); } };
+  r.readAsText(f); e.target.value='';
+};
+$('#imp').onclick=()=>$('#impf').click();
+$('#impf').onchange=e=>{ const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ try{ const j=JSON.parse(r.result);
+    if(!j.entries) throw 0;
+    if(confirm('현재 기록을 덮어씁니다. 계속할까요?')){ D=Object.assign({},DEF,j,
+      {settings:Object.assign({},DEF.settings,j.settings)}); save(); location.reload(); }
+  }catch(x){ toast('읽을 수 없는 파일입니다'); } }; r.readAsText(f); };
+function dl(name,content,type){ const b=new Blob([content],{type}); const u=URL.createObjectURL(b);
+  const a=document.createElement('a'); a.href=u; a.download=name; a.click(); URL.revokeObjectURL(u); }
+
+/* ---- modal ---- */
+function modal(html){ $('#modal').innerHTML=html; $('#veil').classList.add('on'); }
+function closeModal(){ $('#veil').classList.remove('on'); }
+$('#veil').onclick=e=>{ if(e.target.id==='veil') closeModal(); };
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ if($('#veil').classList.contains('on')) closeModal();
+    else if($('#stage').classList.contains('on')&&!hard) finish(false); }
+  if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){
+    if($('#stage').classList.contains('on')){ if(!hard) finish(false); }
+    else if($('#v-write').classList.contains('on')) $('#go').click(); }
+});
+$('#go').onclick=()=>start('');
+
+/* ---- boot ---- */
+renderSetup(); bindSettings(); refreshBadge();
+setInterval(()=>{ const n=D.entries.filter(e=>isOpen(e)&&!e.seen).length;
+  refreshBadge(); if($('#v-drawer').classList.contains('on')) renderList(); },30000);
+})();
+</script>
+</body>
+</html>
