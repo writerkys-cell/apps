@@ -275,10 +275,7 @@ function run(){
     $('#clock').classList.toggle('low',left<60000);
     $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
   }else{
-    if(!over){over=true;$('#stop').textContent='저장하고 끝내기';
-      $('#clock').classList.remove('low');$('#bar>i').style.width='100%';}
-    const ot=Date.now()-endAt;
-    $('#clock').textContent=`+${pad2(Math.floor(ot/60000))}:${pad2(Math.floor(ot%60000/1000))}`;
+    clearInterval(tick);tick=null;$('#clock').textContent='끝';finish();
   }}
 $('#pad').oninput=e=>{$('#cnt').textContent=chars(e.target.value)+'자';};
 $('#stop').onclick=()=>finish();
@@ -331,6 +328,7 @@ function renderList(){
     if(a==='open'){e._exp=true;e.seen=true;save();renderList();refreshBadge();}
     if(a==='fold'){e._exp=false;renderList();}
     if(a==='copy')navigator.clipboard.writeText(e.text).then(()=>toast('복사했습니다'));
+    if(a==='title'){const t=prompt('제목',e.title||'');if(t!==null){e.title=t.trim();save();renderList();}}
     if(a==='del'&&confirm('버립니다. 되돌릴 수 없습니다.')){
       D.entries=D.entries.filter(x=>x.id!==e.id);save();renderList();refreshBadge();}});}
 function card(e){
@@ -340,10 +338,12 @@ function card(e){
     <span class="tag">${esc(pname(e.projectId))}</span>
     <span class="xs fnt num">${chars(e.text)}자</span>
     <span style="margin-left:auto" class="xs mut num">${o?(e.exported?'옮김':'미전송'):'🔒 '+until(e.unlockAt)}</span></div>`;
-  if(!o)return`<div class="item">${head}<div class="prev fnt">잠겨 있습니다. 데스크톱에 병합해도 시각은 유지됩니다.</div></div>`;
+  if(!o)return`<div class="item">${head}<div class="prev fnt">잠겨 있습니다. 데스크톱에 병합해도 시각은 유지됩니다.</div>
+    <button class="btn ghost xs" data-act="title" data-id="${e.id}" style="padding-left:0">제목 수정</button></div>`;
   return`<div class="item"><div class="${e.seen?'':'dot'}"></div>${head}
     ${e._exp?`<div class="body">${esc(e.text)}</div>
       <div class="row"><button class="btn" data-act="copy" data-id="${e.id}">복사</button>
+      <button class="btn ghost" data-act="title" data-id="${e.id}">제목 수정</button>
       <button class="btn ghost" data-act="fold" data-id="${e.id}">접기</button>
       <button class="btn ghost" data-act="del" data-id="${e.id}">버리기</button></div>`
     :`<div class="prev">${esc(e.text.slice(0,100))}</div>
