@@ -93,6 +93,8 @@ label.f>input,label.f>select{color:var(--fg)}
 #bar>i{display:block;height:100%;background:#e8e6e1;width:0;transition:width 1s linear}
 #stghead{width:100%;max-width:660px;font-size:13.5px;color:#7d7c76;padding:0 0 16px;display:none}
 #stghead b{color:#b8b6b0;font-weight:500}
+#stghead .rel{border:1px solid #3a3936;color:#8b8a84;border-radius:4px;
+  padding:1px 7px;font-size:11.5px;margin-right:9px}
 #pad{width:100%;max-width:660px;flex:1;background:transparent;border:none;outline:none;resize:none;
   font-size:17px;line-height:1.95;padding-bottom:60px;font-family:inherit;color:#e8e6e1}
 #pad::placeholder{color:#4a4945}
@@ -182,6 +184,13 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
           <select id="wproj"></select>
         </label>
         <button class="btn" id="newproj" title="새 프로젝트">＋</button>
+        <label class="f" style="min-width:150px">관계
+          <select id="wrel">
+            <option value="이어짐">이어짐</option>
+            <option value="다시">다시</option>
+            <option value="딴갈래">딴갈래</option>
+          </select>
+        </label>
         <label class="f" style="min-width:180px">열리는 시각
           <select id="wlock">
             <option value="1">내일 아침</option>
@@ -221,6 +230,12 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
     <div class="filters">
       <input type="text" id="q" placeholder="열린 글 검색">
       <select id="fproj"><option value="">전체 프로젝트</option></select>
+      <select id="frel">
+        <option value="">전체 관계</option>
+        <option value="이어짐">이어짐</option>
+        <option value="다시">다시</option>
+        <option value="딴갈래">딴갈래</option>
+      </select>
       <select id="fstate">
         <option value="all">전체</option>
         <option value="open">열린 글</option>
@@ -369,6 +384,7 @@ function renderSetup(){
   $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
     D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const lastP=localStorage.getItem('fw.lastproj'); if(lastP) $('#wproj').value=lastP;
+  $('#wrel').value=localStorage.getItem('fw.lastrel')||'이어짐';
 
   $('#tNoDel').checked=noDel=S().noDel;
   $('#tBlind').checked=blind=S().blind;
@@ -396,16 +412,19 @@ function unlockTime(){
 }
 
 let endAt=0, tick=null, startedAt=0, over=false;
-let curTitle='';
+let curTitle='',curRel='이어짐';
 function start(pre){
   startedAt=Date.now(); endAt=Date.now()+dur*60000; over=false;
   curTitle=$('#wtitle').value.trim();
+  curRel=$('#wrel').value;
   const pj=$('#wproj').value?pname($('#wproj').value):'';
   const hd=$('#stghead');
-  if(pj&&curTitle) hd.innerHTML=`${esc(pj)} — <b>${esc(curTitle)}</b>`;
-  else if(curTitle) hd.innerHTML=`<b>${esc(curTitle)}</b>`;
-  else if(pj) hd.innerHTML=esc(pj);
-  hd.style.display=(pj||curTitle)?'block':'none';
+  const rel=`<span class="rel">${esc(curRel)}</span>`;
+  if(pj&&curTitle) hd.innerHTML=`${rel}${esc(pj)} — <b>${esc(curTitle)}</b>`;
+  else if(curTitle) hd.innerHTML=`${rel}<b>${esc(curTitle)}</b>`;
+  else if(pj) hd.innerHTML=rel+esc(pj);
+  else hd.innerHTML=rel;
+  hd.style.display='block';
   const pd=$('#pad');
   pd.value=pre||''; pd.classList.toggle('blind',blind);
   $('#stage').classList.add('on'); $('#stop').textContent=hard?'남은 시간':'종료';
@@ -441,9 +460,10 @@ function finish(auto){
   const spent=Math.round((Date.now()-startedAt)/1000);
   if(!text.trim()){ $('#stage').classList.remove('on'); D.draft=null; save(); renderSetup(); return; }
   const ut=unlockTime();
-  const e={id:uid(),projectId:$('#wproj').value||null,title:curTitle,text,createdAt:Date.now(),
+  const e={id:uid(),projectId:$('#wproj').value||null,rel:curRel,title:curTitle,text,createdAt:Date.now(),
     unlockAt:ut,sec:spent,seen:false,auto:!!auto};
   $('#wtitle').value=''; curTitle='';
+  localStorage.setItem('fw.lastrel',curRel);
   D.entries.unshift(e); D.draft=null;
   localStorage.setItem('fw.lastproj',e.projectId||'');
   save();
@@ -471,7 +491,7 @@ function refreshBadge(){
   $('#nbadge').innerHTML=n?`<span class="badge">${n}</span>`:'';
   if(n) document.title=`(${n}) 프리라이팅`; else document.title='프리라이팅';
 }
-$('#q').oninput=$('#fproj').onchange=$('#fstate').onchange=()=>renderList();
+$('#q').oninput=$('#fproj').onchange=$('#fstate').onchange=$('#frel').onchange=()=>renderList();
 
 function renderList(){
   $('#fproj').innerHTML=`<option value="">전체 프로젝트</option>`+
@@ -480,6 +500,7 @@ function renderList(){
   const q=$('#q').value.trim(), fp=$('#fproj').value, fs=$('#fstate').value;
   let items=D.entries.slice();
   if(fp) items=items.filter(e=>fp==='none'?!e.projectId:e.projectId===fp);
+  const fr=$('#frel').value; if(fr) items=items.filter(e=>e.rel===fr);
   if(fs==='open') items=items.filter(isOpen); if(fs==='locked') items=items.filter(e=>!isOpen(e));
   if(q) items=items.filter(e=>isOpen(e)&&e.text.includes(q));
 
@@ -521,6 +542,7 @@ function card(e){
   const head=`<div class="top">
       <strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
       ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
+      ${e.rel?`<span class="tag">${esc(e.rel)}</span>`:''}
       <span class="tag">${esc(pname(e.projectId))}</span>${e.hand?'<span class="tag">손글씨</span>':''}
       <span class="xs fnt num">${e.hand?'':chars(e.text)+'자 · '}${Math.round(e.sec/60)}분</span>
       <span style="margin-left:auto" class="lock">${o?'':'🔒 '+until(e.unlockAt)}</span>
@@ -765,7 +787,7 @@ $('#syncInF').onchange=e=>{
     j.entries.forEach(en=>{
       if(have.has(en.id)){ dup++; return; }
       const known=en.projectId&&proj(en.projectId)?en.projectId:null;
-      D.entries.push({id:en.id,projectId:known,title:en.title||'',text:en.text||'',createdAt:en.createdAt||Date.now(),
+      D.entries.push({id:en.id,projectId:known,rel:en.rel||'',title:en.title||'',text:en.text||'',createdAt:en.createdAt||Date.now(),
         unlockAt:en.unlockAt||Date.now(),sec:en.sec||0,seen:false,src:'mobile',hand:!!en.hand});
       add++;
     });
