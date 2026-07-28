@@ -207,8 +207,12 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
           <span>중도 종료 금지<small>시간이 끝날 때까지 저장할 수 없습니다.</small></span></label>
       </div>
 
-      <button class="btn pri" id="go" style="padding:11px 26px">시작</button>
-      <div class="hint xs" style="margin-top:14px" id="resume"></div>
+      <div class="row">
+        <button class="btn pri" id="go" style="padding:11px 26px">시작</button>
+        <button class="btn" id="gohand" style="padding:11px 22px">쓰기 — 노트에 손으로</button>
+      </div>
+      <div class="hint xs" style="margin-top:12px">‘쓰기’는 단축어 ‘시간’에 설정한 분량을 보내 타이머를 걸고, 노트에 손으로 쓴 기록을 서랍에 남깁니다.</div>
+      <div class="hint xs" style="margin-top:10px" id="resume"></div>
     </div>
   </section>
 
@@ -241,7 +245,8 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
     <div class="sec">
       <div class="lbl">단축어</div>
       <div class="card">
-        <label class="f">실행할 애플 단축어 이름<input type="text" id="sShort" style="max-width:280px"></label>
+        <label class="f">타이핑 단축어 이름<input type="text" id="sShort" style="max-width:280px"></label>
+        <label class="f" style="margin-top:12px">타이머 단축어 이름 (쓰기 버튼)<input type="text" id="sTimer" style="max-width:280px"></label>
         <label class="tg" style="margin-top:14px"><input type="checkbox" id="sPass">
           <span>본문을 단축어 입력으로 넘기기<small>끄면 단축어만 실행하고, 본문은 클립보드로 복사합니다.</small></span></label>
       </div>
@@ -302,9 +307,10 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const KEY='freewrite.v1';
 const DEF={projects:[],entries:[],draft:null,settings:{
-  dur:15,hour:6,per:200,shortcut:'타이핑',pass:true,noDel:true,blind:false,hard:false}};
+  dur:25,hour:6,per:200,shortcut:'타이핑',timer:'시간',pass:true,noDel:true,blind:false,hard:false}};
 
 let D=load();
+if(!D.m25){ if(D.settings.dur===15) D.settings.dur=25; D.m25=true; }
 function load(){ try{ const r=JSON.parse(localStorage.getItem(KEY)); if(r&&r.settings)
   return Object.assign({},DEF,r,{settings:Object.assign({},DEF.settings,r.settings)}); }catch(e){}
   return JSON.parse(JSON.stringify(DEF)); }
@@ -351,7 +357,7 @@ let dur=null, blind=false, noDel=false, hard=false;
 
 function renderSetup(){
   dur=dur||S().dur;
-  const opts=[...new Set([5,10,15,20,30,S().dur,dur])].sort((a,b)=>a-b);
+  const opts=[...new Set([5,10,15,25,50,dur])].sort((a,b)=>a-b);
   $('#durs').innerHTML=opts.map(m=>`<button class="chip${m===dur?' on':''}" data-m="${m}">${m}분</button>`).join('')
     +`<button class="chip" data-m="x">직접</button>`;
   $$('#durs .chip').forEach(c=>c.onclick=()=>{
@@ -448,10 +454,13 @@ function finish(auto){
       ${chars(text)}자 · ${Math.floor(spent/60)}분 ${spent%60}초<br>
       <b>${fmtDT(ut)}</b>에 열립니다. (${until(ut)})
     </div>
-    <div class="hint xs" style="margin-top:14px;color:var(--muted)">그때까지는 읽을 수 없습니다. 그게 요점입니다.</div>
+    <label class="f" style="margin-top:16px">제목 — 중단한 지점이나 다음에 이어 쓸 것을 적어두세요
+      <input type="text" id="mtitle" value="${esc(e.title||'')}" placeholder="예: 결말 직전에서 멈춤, 다음엔 대화부터" style="width:100%"></label>
+    <div class="hint xs" style="margin-top:10px;color:var(--muted)">본문은 열리기 전까지 읽을 수 없지만, 제목은 언제든 보고 고칠 수 있습니다.</div>
     <div class="row" style="margin-top:20px;justify-content:flex-end">
       <button class="btn ghost" id="chg">시간 바꾸기</button>
       <button class="btn pri" id="okm">닫기</button></div>`);
+  $('#mtitle').oninput=ev=>{ e.title=ev.target.value.trim(); save(); };
   $('#okm').onclick=closeModal;
   $('#chg').onclick=()=>{ closeModal(); editUnlock(e.id); };
 }
@@ -474,7 +483,7 @@ function renderList(){
   if(fs==='open') items=items.filter(isOpen); if(fs==='locked') items=items.filter(e=>!isOpen(e));
   if(q) items=items.filter(e=>isOpen(e)&&e.text.includes(q));
 
-  if(!items.length){ $('#list').innerHTML=`<div class="empty">아직 없습니다.</div>`; refreshBadge(); return; }
+  if(!items.length){ $('#list').innerHTML=daySums()+`<div class="empty">아직 없습니다.</div>`; refreshBadge(); return; }
 
   const open=items.filter(isOpen), lock=items.filter(e=>!isOpen(e))
     .sort((a,b)=>a.unlockAt-b.unlockAt);
@@ -486,18 +495,34 @@ function renderList(){
       <span class="xs fnt">${D.lastMobileImport?'마지막 병합 '+fmtD(D.lastMobileImport):'아직 병합한 적 없습니다'}</span></span>
       <button class="btn" id="dsync">모바일 글 가져오기</button></div>`;
   }
+  h+=daySums();
   if(open.length){ h+=`<div class="lbl">열린 글 ${open.length}</div>`+open.map(card).join(''); }
   if(lock.length){ h+=`<div class="lbl" style="margin-top:38px">잠긴 글 ${lock.length}</div>`+lock.map(card).join(''); }
   $('#list').innerHTML=h;
   bindList(); refreshBadge();
+}
+/* 버린 글의 날짜·시간·글자수는 장부에 남긴다 */
+function logGone(e){
+  D.ledger=D.ledger||[];
+  D.ledger.push({date:ymd(e.createdAt),sec:e.sec||0,chars:e.hand?0:chars(e.text||'')});
+}
+function daySums(){
+  const today=ymd(Date.now()); const m={};
+  D.entries.forEach(e=>{ const d=ymd(e.createdAt); if(d<today) m[d]=(m[d]||0)+(e.sec||0); });
+  (D.ledger||[]).forEach(g=>{ if(g.date<today) m[g.date]=(m[g.date]||0)+(g.sec||0); });
+  const days=Object.keys(m).sort().reverse().slice(0,7);
+  if(!days.length) return '';
+  return `<div class="lbl">하루 합산</div><div class="card" style="padding:12px 18px;margin-bottom:30px">`+
+    days.map(d=>`<div class="spread sm num" style="padding:3px 0">
+      <span class="mut">${d.slice(5).replace('-','. ')}.</span><span>${Math.round(m[d]/60)}분</span></div>`).join('')+`</div>`;
 }
 function card(e){
   const o=isOpen(e);
   const head=`<div class="top">
       <strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
       ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
-      <span class="tag">${esc(pname(e.projectId))}</span>
-      <span class="xs fnt num">${chars(e.text)}자 · ${Math.round(e.sec/60)}분</span>
+      <span class="tag">${esc(pname(e.projectId))}</span>${e.hand?'<span class="tag">손글씨</span>':''}
+      <span class="xs fnt num">${e.hand?'':chars(e.text)+'자 · '}${Math.round(e.sec/60)}분</span>
       <span style="margin-left:auto" class="lock">${o?'':'🔒 '+until(e.unlockAt)}</span>
     </div>`;
   if(!o) return `<div class="item"><div class="ci">${head}
@@ -532,8 +557,8 @@ function bindList(){
     if(a==='copy'){ navigator.clipboard.writeText(e.text).then(()=>toast('복사했습니다')); }
     if(a==='txt'){ const t=e.title?'_'+e.title.replace(/[\\/:*?"<>|]/g,''):'';
       dl(`${ymd(e.createdAt)}_${pname(e.projectId)}${t}.txt`,e.text,'text/plain'); }
-    if(a==='del'){ if(confirm('버립니다. 되돌릴 수 없습니다.')){
-      D.entries=D.entries.filter(x=>x.id!==e.id); save(); renderList(); } }
+    if(a==='del'){ if(confirm('본문을 버립니다. 되돌릴 수 없습니다.\n쓴 날짜와 시간 기록은 남습니다.')){
+      logGone(e); D.entries=D.entries.filter(x=>x.id!==e.id); save(); renderList(); } }
     if(a==='unlockedit') editUnlock(e.id);
     if(a==='title'){ const t=prompt('제목',e.title||''); if(t!==null){ e.title=t.trim(); save(); renderList(); } }
   });
@@ -696,7 +721,7 @@ function renderProjects(){
 
 /* ================= 설정 ================= */
 function bindSettings(){
-  const m={sDur:'dur',sHour:'hour',sShort:'shortcut',sPass:'pass'};
+  const m={sDur:'dur',sHour:'hour',sShort:'shortcut',sTimer:'timer',sPass:'pass'};
   Object.entries(m).forEach(([el,k])=>{
     const n=$('#'+el);
     if(n.type==='checkbox') n.checked=S()[k]; else n.value=S()[k];
@@ -705,15 +730,15 @@ function bindSettings(){
   });
 }
 function renderStats(){
-  const es=D.entries;
-  const tot=es.reduce((s,e)=>s+chars(e.text),0);
-  const min=Math.round(es.reduce((s,e)=>s+e.sec,0)/60);
-  const days=[...new Set(es.map(e=>ymd(e.createdAt)))].sort();
+  const es=D.entries, lg=D.ledger||[];
+  const tot=es.reduce((s,e)=>s+(e.hand?0:chars(e.text)),0)+lg.reduce((s,g)=>s+(g.chars||0),0);
+  const min=Math.round((es.reduce((s,e)=>s+e.sec,0)+lg.reduce((s,g)=>s+(g.sec||0),0))/60);
+  const days=[...new Set(es.map(e=>ymd(e.createdAt)).concat(lg.map(g=>g.date)))].sort();
   let streak=0; let d=new Date();
   if(days.length){ if(!days.includes(ymd(d))) d.setDate(d.getDate()-1);
     while(days.includes(ymd(d))){ streak++; d.setDate(d.getDate()-1); } }
   const cpm=min?Math.round(tot/min):0;
-  $('#stats').innerHTML=[['글','편',es.length],['총 글자','자',tot],['총 시간','분',min],
+  $('#stats').innerHTML=[['글','편',es.length+lg.length],['총 글자','자',tot],['총 시간','분',min],
     ['분당','자',cpm],['연속','일',streak]]
     .map(([k,u,v])=>`<div class="st"><div class="k">${k}</div><div class="v num">${v.toLocaleString()}<small>${u}</small></div></div>`).join('');
 }
@@ -741,7 +766,7 @@ $('#syncInF').onchange=e=>{
       if(have.has(en.id)){ dup++; return; }
       const known=en.projectId&&proj(en.projectId)?en.projectId:null;
       D.entries.push({id:en.id,projectId:known,title:en.title||'',text:en.text||'',createdAt:en.createdAt||Date.now(),
-        unlockAt:en.unlockAt||Date.now(),sec:en.sec||0,seen:false,src:'mobile'});
+        unlockAt:en.unlockAt||Date.now(),sec:en.sec||0,seen:false,src:'mobile',hand:!!en.hand});
       add++;
     });
     D.entries.sort((a,b)=>b.createdAt-a.createdAt);
@@ -777,6 +802,35 @@ document.addEventListener('keydown',e=>{
     else if($('#v-write').classList.contains('on')) $('#go').click(); }
 });
 $('#go').onclick=()=>start('');
+$('#gohand').onclick=()=>{
+  const ut=unlockTime();
+  const pj=$('#wproj').value||null, title=$('#wtitle').value.trim();
+  const n=new Date();
+  const dt=`${n.getFullYear()}년 ${n.getMonth()+1}월 ${n.getDate()}일 ${pad2(n.getHours())}:${pad2(n.getMinutes())}`;
+  let txt=`${dt}에 노트에 손으로 쓴 내용을 참조하세요.`;
+  if(pj) txt+=`\n프로젝트: ${pname(pj)}`;
+  if(title) txt+=`\n제목: ${title}`;
+  txt+=`\n프리라이팅 시간: ${dur}분`;
+  const e={id:uid(),projectId:pj,title,text:txt,createdAt:Date.now(),unlockAt:ut,
+    sec:dur*60,seen:false,hand:true};
+  D.entries.unshift(e);
+  localStorage.setItem('fw.lastproj',pj||''); save();
+  $('#wtitle').value='';
+  const tn=S().timer||'시간';
+  const a=document.createElement('a');
+  a.href=`shortcuts://run-shortcut?name=${encodeURIComponent(tn)}&input=text&text=${encodeURIComponent(String(dur))}`;
+  document.body.appendChild(a); a.click(); a.remove();
+  renderSetup(); refreshBadge();
+  modal(`<h3>노트에 ${dur}분 쓰세요</h3>
+    <div class="hint" style="line-height:1.8">단축어 ‘${esc(tn)}’를 실행했습니다.<br>
+    이 기록은 <b>${fmtDT(ut)}</b>에 열려 노트를 참조하라고 알려줍니다.</div>
+    <label class="f" style="margin-top:16px">제목 — 무엇을 쓸지, 어디서 멈췄는지
+      <input type="text" id="mtitle" value="${esc(title)}" style="width:100%"></label>
+    <div class="row" style="margin-top:20px;justify-content:flex-end">
+      <button class="btn pri" id="okm">닫기</button></div>`);
+  $('#mtitle').oninput=ev=>{ e.title=ev.target.value.trim(); save(); };
+  $('#okm').onclick=closeModal;
+};
 
 /* ---- boot ---- */
 renderSetup(); bindSettings(); refreshBadge();
