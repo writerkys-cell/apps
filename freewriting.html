@@ -55,7 +55,8 @@ hr{border:none;border-top:1px solid var(--line);margin:22px 0}
 
 input[type=text],input[type=number],input[type=date],input[type=datetime-local],select{
   background:transparent;border:1px solid var(--line);border-radius:7px;
-  padding:8px 11px;outline:none;min-width:0;border-radius:7px}
+  padding:8px 11px;outline:none;min-width:0;height:41px;box-sizing:border-box}
+#newproj{height:41px;width:41px;padding:0;align-self:flex-end}
 input:focus,select:focus{border-color:var(--muted)}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
 label.f>input,label.f>select{color:var(--fg)}
@@ -161,7 +162,6 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
     <nav>
       <button data-v="write" class="on">쓰기</button>
       <button data-v="drawer">서랍<span id="nbadge"></span></button>
-      <button data-v="proj">원고</button>
       <button data-v="set">설정</button>
     </nav>
   </header>
@@ -181,6 +181,7 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
         <label class="f" style="flex:1;min-width:180px">프로젝트
           <select id="wproj"></select>
         </label>
+        <button class="btn" id="newproj" title="새 프로젝트">＋</button>
         <label class="f" style="min-width:180px">열리는 시각
           <select id="wlock">
             <option value="1">내일 아침</option>
@@ -225,12 +226,6 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
     <div id="list"></div>
   </section>
 
-  <!-- 원고 -->
-  <section class="view" id="v-proj">
-    <div id="plist"></div>
-    <button class="btn" id="addproj" style="margin-top:18px">＋ 프로젝트</button>
-  </section>
-
   <!-- 설정 -->
   <section class="view" id="v-set">
     <div class="sec">
@@ -239,9 +234,8 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
         <div class="row" style="gap:18px">
           <label class="f">기본 시간(분)<input type="number" id="sDur" min="1" max="120" style="width:90px"></label>
           <label class="f">열리는 시각(시)<input type="number" id="sHour" min="0" max="23" style="width:90px"></label>
-          <label class="f">원고지 1매(자)<input type="number" id="sPer" min="1" style="width:90px"></label>
         </div>
-        <div class="hint xs" style="margin-top:12px">‘내일 아침’은 다음 날 이 시각에 열립니다. 매수 환산에는 1매당 글자수를 씁니다.</div>
+        <div class="hint xs" style="margin-top:12px">‘내일 아침’은 다음 날 이 시각에 열립니다.</div>
       </div>
     </div>
     <div class="sec">
@@ -347,7 +341,6 @@ $$('nav button').forEach(b=>b.onclick=()=>{
   $$('nav button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
   $$('.view').forEach(v=>v.classList.remove('on')); $('#v-'+b.dataset.v).classList.add('on');
   if(b.dataset.v==='drawer') renderList();
-  if(b.dataset.v==='proj') renderProjects();
   if(b.dataset.v==='set') renderStats();
   window.scrollTo(0,0);
 });
@@ -424,10 +417,8 @@ function run(){
     $('#clock').classList.toggle('low',left<60000);
     $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
   }else{
-    if(!over){ over=true; $('#stop').disabled=false; $('#stop').textContent='저장하고 끝내기';
-      $('#clock').classList.remove('low'); $('#bar>i').style.width='100%'; }
-    const ot=Date.now()-endAt;
-    $('#clock').textContent=`+${pad2(Math.floor(ot/60000))}:${pad2(Math.floor(ot%60000/1000))}`;
+    clearInterval(tick); tick=null; $('#stop').disabled=false;
+    $('#clock').textContent='끝'; finish(true);
   }
 }
 $('#pad').oninput=e=>{ $('#cnt').textContent=chars(e.target.value)+'자'; };
@@ -511,7 +502,8 @@ function card(e){
     </div>`;
   if(!o) return `<div class="item"><div class="ci">${head}
       <div class="prev fnt">${fmtDT(e.unlockAt)}에 열립니다.</div>
-      <div class="acts"><button class="btn ghost xs" data-act="unlockedit" data-id="${e.id}">시간 바꾸기</button>
+      <div class="acts"><button class="btn ghost xs" data-act="title" data-id="${e.id}">제목 수정</button>
+      <button class="btn ghost xs" data-act="unlockedit" data-id="${e.id}">시간 바꾸기</button>
       <button class="btn ghost xs" data-act="del" data-id="${e.id}">버리기</button></div></div></div>`;
   const exp=e._exp;
   return `<div class="item${e.seen?'':' new'}"><div class="ci">${head}
@@ -520,6 +512,7 @@ function card(e){
         <button class="btn pri" data-act="type" data-id="${e.id}">타이핑 실행</button>
         <button class="btn" data-act="copy" data-id="${e.id}">본문 복사</button>
         <button class="btn" data-act="txt" data-id="${e.id}">텍스트로 저장</button>
+        <button class="btn ghost" data-act="title" data-id="${e.id}">제목 수정</button>
         <button class="btn ghost" data-act="fold" data-id="${e.id}">접기</button>
         <button class="btn ghost" data-act="del" data-id="${e.id}">버리기</button>
       </div>`
@@ -542,6 +535,7 @@ function bindList(){
     if(a==='del'){ if(confirm('버립니다. 되돌릴 수 없습니다.')){
       D.entries=D.entries.filter(x=>x.id!==e.id); save(); renderList(); } }
     if(a==='unlockedit') editUnlock(e.id);
+    if(a==='title'){ const t=prompt('제목',e.title||''); if(t!==null){ e.title=t.trim(); save(); renderList(); } }
   });
 }
 function runShortcut(e){
@@ -568,8 +562,14 @@ function editUnlock(id){
     e.unlockAt=t; save(); closeModal(); renderList(); };
 }
 
-/* ================= 원고 ================= */
-$('#addproj').onclick=()=>projForm();
+/* ================= 프로젝트 ================= */
+$('#newproj').onclick=()=>{
+  const n=prompt('새 프로젝트 이름'); if(!n||!n.trim()) return;
+  const p={id:uid(),name:n.trim(),counts:[],createdAt:Date.now()};
+  D.projects.push(p); save();
+  localStorage.setItem('fw.lastproj',p.id);
+  renderSetup(); toast('프로젝트를 만들었습니다');
+};
 function projForm(id){
   const p=id?proj(id):{name:'',pages:'',deadline:'',counts:[]};
   modal(`<h3>${id?'프로젝트 수정':'새 프로젝트'}</h3>
@@ -696,12 +696,12 @@ function renderProjects(){
 
 /* ================= 설정 ================= */
 function bindSettings(){
-  const m={sDur:'dur',sHour:'hour',sPer:'per',sShort:'shortcut',sPass:'pass'};
+  const m={sDur:'dur',sHour:'hour',sShort:'shortcut',sPass:'pass'};
   Object.entries(m).forEach(([el,k])=>{
     const n=$('#'+el);
     if(n.type==='checkbox') n.checked=S()[k]; else n.value=S()[k];
     n.onchange=()=>{ S()[k]= n.type==='checkbox'?n.checked:(n.type==='number'?+n.value:n.value);
-      save(); renderSetup(); renderProjects(); toast('저장했습니다'); };
+      save(); renderSetup(); toast('저장했습니다'); };
   });
 }
 function renderStats(){
