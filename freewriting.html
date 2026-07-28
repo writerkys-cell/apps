@@ -387,9 +387,9 @@ function unlockTime(){
   return d.getTime();
 }
 
-let endAt=0, tick=null, startedAt=0;
+let endAt=0, tick=null, startedAt=0, over=false;
 function start(pre){
-  startedAt=Date.now(); endAt=Date.now()+dur*60000;
+  startedAt=Date.now(); endAt=Date.now()+dur*60000; over=false;
   const pd=$('#pad');
   pd.value=pre||''; pd.classList.toggle('blind',blind);
   $('#stage').classList.add('on'); $('#stop').textContent=hard?'남은 시간':'종료';
@@ -400,18 +400,22 @@ function start(pre){
 }
 function run(){
   const left=Math.max(0,endAt-Date.now());
-  const m=Math.floor(left/60000), s=Math.floor(left%60000/1000);
-  $('#clock').textContent=`${pad2(m)}:${pad2(s)}`;
-  $('#clock').classList.toggle('low',left<60000&&left>0);
-  $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
   D.draft={text:$('#pad').value,at:Date.now()};
   if(Date.now()%5000<1100) save();
-  if(left<=0){ clearInterval(tick); tick=null; $('#stop').disabled=false;
-    $('#clock').textContent='끝'; finish(true); }
+  if(left>0){
+    $('#clock').textContent=`${pad2(Math.floor(left/60000))}:${pad2(Math.floor(left%60000/1000))}`;
+    $('#clock').classList.toggle('low',left<60000);
+    $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
+  }else{
+    if(!over){ over=true; $('#stop').disabled=false; $('#stop').textContent='저장하고 끝내기';
+      $('#clock').classList.remove('low'); $('#bar>i').style.width='100%'; }
+    const ot=Date.now()-endAt;
+    $('#clock').textContent=`+${pad2(Math.floor(ot/60000))}:${pad2(Math.floor(ot%60000/1000))}`;
+  }
 }
 $('#pad').oninput=e=>{ $('#cnt').textContent=chars(e.target.value)+'자'; };
 $('#pad').onkeydown=e=>{
-  if(noDel&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); return; }
+  if(noDel&&!e.isComposing&&e.keyCode!==229&&(e.key==='Backspace'||e.key==='Delete')){ e.preventDefault(); return; }
   if(noDel&&(e.metaKey||e.ctrlKey)&&['z','x'].includes(e.key.toLowerCase())){ e.preventDefault(); }
 };
 $('#pad').onpaste=e=>{ if(noDel){ e.preventDefault(); toast('붙여넣기는 막혀 있습니다'); } };
@@ -747,9 +751,9 @@ function closeModal(){ $('#veil').classList.remove('on'); }
 $('#veil').onclick=e=>{ if(e.target.id==='veil') closeModal(); };
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){ if($('#veil').classList.contains('on')) closeModal();
-    else if($('#stage').classList.contains('on')&&!hard) finish(false); }
+    else if($('#stage').classList.contains('on')&&(!hard||over)) finish(false); }
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){
-    if($('#stage').classList.contains('on')){ if(!hard) finish(false); }
+    if($('#stage').classList.contains('on')){ if(!hard||over) finish(false); }
     else if($('#v-write').classList.contains('on')) $('#go').click(); }
 });
 $('#go').onclick=()=>start('');
