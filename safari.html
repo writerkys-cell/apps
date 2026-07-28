@@ -118,6 +118,8 @@
   .entry-meta{font-size:13px;color:var(--dim);margin-top:4px}
   .tag{display:inline-block;font-size:11px;letter-spacing:.08em;padding:2px 8px;border-radius:20px;margin-left:8px;vertical-align:1px;background:rgba(201,99,63,.15);color:#e29470;border:1px solid rgba(201,99,63,.3)}
   .empty{color:var(--dim);font-size:15px;padding:24px 0}
+  .more{width:100%;margin-top:8px;padding:13px 20px;font-size:14px;color:var(--dim);background:transparent;border:1px dashed var(--line)}
+  .more:hover{color:var(--ink);background:var(--bg2);border-style:solid}
   .foot{margin-top:32px;padding-top:20px;border-top:1px solid var(--line);display:flex;gap:6px;flex-wrap:wrap}
   @media (max-width:520px){
     h1{font-size:24px}.purpose{font-size:25px}.clock{font-size:46px}
@@ -394,7 +396,7 @@
     saveActive(null);
     session = null;
     $("purpose").value = ""; $("ego-pre").checked = false; $("btn-start").disabled = true;
-    updateWeekAlert(); renderLog(); show("s-log");
+    updateWeekAlert(); shown = PAGE; renderLog(); show("s-log");
   }
 
   function updateWeekAlert(){
@@ -408,9 +410,12 @@
   }
 
   /* ── 기록 ── */
+  var PAGE = 15, shown = PAGE;
+
   function renderLog(){
-    var list = load().sort(function(a,b){ return b.start-a.start; });
-    var wk = thisWeek(list);
+    var all = load().sort(function(a,b){ return b.start-a.start; });
+    var list = all.slice(0, shown);
+    var wk = thisWeek(all);
     var ego = wk.filter(function(s){ return s.ego; }).length;
     var total = wk.reduce(function(a,s){ return a+(s.duration||0); },0);
 
@@ -424,7 +429,7 @@
     $("week-avg").textContent = wk.length ? minutesText(total/wk.length) : "0분";
 
     var box = $("log-list"); box.innerHTML = "";
-    if (!list.length){ box.innerHTML = '<p class="empty">아직 기록이 없습니다.</p>'; return; }
+    if (!all.length){ box.innerHTML = '<p class="empty">아직 기록이 없습니다.</p>'; return; }
 
     var groups = [], cur = null;
     list.forEach(function(s){
@@ -453,6 +458,26 @@
       });
       box.appendChild(wrap);
     });
+
+    var rest = all.length - list.length;
+    if (rest > 0){
+      var more = document.createElement("button");
+      more.className = "more";
+      more.textContent = "이전 기록 " + Math.min(rest, PAGE) + "개 더 보기 (남은 " + rest + "개)";
+      more.addEventListener("click", function(){
+        shown += PAGE;
+        var y = window.scrollY;
+        renderLog();
+        window.scrollTo(0, y);
+      });
+      box.appendChild(more);
+    } else if (all.length > PAGE){
+      var fold = document.createElement("button");
+      fold.className = "more";
+      fold.textContent = "접기";
+      fold.addEventListener("click", function(){ shown = PAGE; renderLog(); window.scrollTo(0,0); });
+      box.appendChild(fold);
+    }
   }
 
   /* ── 백업 ── */
@@ -524,7 +549,7 @@
   $("btn-save").addEventListener("click", saveSession);
   $("ov-continue").addEventListener("click", closeOverlay);
   $("ov-end").addEventListener("click", endSession);
-  $("btn-log-1").addEventListener("click", function(){ renderLog(); show("s-log"); });
+  $("btn-log-1").addEventListener("click", function(){ shown = PAGE; renderLog(); show("s-log"); });
   $("btn-back").addEventListener("click", function(){
     if (session) enterRun();
     else { updateWeekAlert(); show("s-gate"); }
