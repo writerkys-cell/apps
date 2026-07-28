@@ -119,7 +119,7 @@ label.f>*{color:var(--fg)}
   <section class="view on" id="v-write">
     <div id="banner"></div>
     <div class="big" id="greet">15분.</div>
-    <div class="hint">여기서는 쓰기만 합니다. 쓴 글은 데스크톱으로 가져가 병합합니다.</div>
+    <div class="hint">여기서는 쓰기만 합니다. 쓰는 동안 글자는 가려지고, 쓴 글은 데스크톱으로 가져가 병합합니다.</div>
     <div class="opts" id="durs"></div>
     <label class="f">프로젝트<select id="wproj"></select></label>
     <label class="f">열리는 시각
@@ -127,11 +127,7 @@ label.f>*{color:var(--fg)}
         <option value="1">내일 아침</option><option value="2">이틀 뒤</option>
         <option value="3">사흘 뒤</option><option value="7">일주일 뒤</option>
       </select></label>
-    <div style="margin:18px 0 22px">
-      <label class="tg"><input type="checkbox" id="tNoDel"><span>지우기 금지<small>백스페이스를 막습니다.</small></span></label>
-      <label class="tg"><input type="checkbox" id="tBlind"><span>안 보고 쓰기<small>글자를 흐리게 가립니다.</small></span></label>
-    </div>
-    <button class="btn pri blk" id="go" style="padding:14px">시작</button>
+    <button class="btn pri blk" id="go" style="padding:14px;margin-top:22px">시작</button>
     <div class="hint xs" style="margin-top:12px" id="resume"></div>
     <div class="hint xs" id="setupwarn" style="margin-top:18px"></div>
   </section>
@@ -188,7 +184,7 @@ label.f>*{color:var(--fg)}
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const KEY='freewrite.mobile.v1';
 const DEF={entries:[],draft:null,projects:[],device:null,lastImport:null,
-  settings:{dur:15,hour:6,noDel:true,blind:false}};
+  settings:{dur:15,hour:6}};
 let D=load();
 function load(){ try{ const r=JSON.parse(localStorage.getItem(KEY));
   if(r&&r.settings) return Object.assign({},DEF,r,{settings:Object.assign({},DEF.settings,r.settings)});}catch(e){}
@@ -221,7 +217,7 @@ $$('#tabs button').forEach(b=>b.onclick=()=>{
   window.scrollTo(0,0);});
 
 /* write */
-let dur=null,blind=false,noDel=false;
+let dur=null;
 function renderSetup(){
   dur=dur||S().dur;
   const opts=[...new Set([5,10,15,20,30,S().dur,dur])].sort((a,b)=>a-b);
@@ -231,7 +227,6 @@ function renderSetup(){
   $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
     D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const lp=localStorage.getItem('fwm.lastproj'); if(lp)$('#wproj').value=lp;
-  $('#tNoDel').checked=noDel=S().noDel; $('#tBlind').checked=blind=S().blind;
   $('#setupwarn').innerHTML=D.projects.length?'':'프로젝트가 비어 있습니다. 동기화 탭에서 데스크톱 설정 파일을 불러오면 채워집니다.';
   const dr=D.draft;
   $('#resume').innerHTML=dr&&dr.text&&dr.text.trim()
@@ -239,39 +234,32 @@ function renderSetup(){
   if($('#rsm'))$('#rsm').onclick=()=>start(D.draft.text);
   if($('#dsc'))$('#dsc').onclick=()=>{D.draft=null;save();renderSetup();};
 }
-$('#tNoDel').onchange=e=>{noDel=S().noDel=e.target.checked;save();};
-$('#tBlind').onchange=e=>{blind=S().blind=e.target.checked;save();};
 
 function unlockTime(){const d=new Date();d.setDate(d.getDate()+(+$('#wlock').value||1));
   d.setHours(S().hour,0,0,0);if(d.getTime()<=Date.now())d.setTime(d.getTime()+DAY);return d.getTime();}
 
-let endAt=0,tick=null,startedAt=0;
+let endAt=0,tick=null,startedAt=0,over=false;
 function start(pre){
-  startedAt=Date.now();endAt=Date.now()+dur*60000;
-  const pd=$('#pad');pd.value=pre||'';pd.classList.toggle('blind',blind);
+  startedAt=Date.now();endAt=Date.now()+dur*60000;over=false;
+  const pd=$('#pad');pd.value=pre||'';pd.classList.add('blind');
+  $('#stop').textContent='종료';
   $('#stage').classList.add('on');pd.focus();
   run();tick=setInterval(run,1000);}
 function run(){
   const left=Math.max(0,endAt-Date.now());
-  $('#clock').textContent=`${pad2(Math.floor(left/60000))}:${pad2(Math.floor(left%60000/1000))}`;
-  $('#clock').classList.toggle('low',left<60000&&left>0);
-  $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
   D.draft={text:$('#pad').value,at:Date.now()};
   if(Date.now()%5000<1100)save();
-  if(left<=0){clearInterval(tick);tick=null;$('#clock').textContent='끝';finish();}}
+  if(left>0){
+    $('#clock').textContent=`${pad2(Math.floor(left/60000))}:${pad2(Math.floor(left%60000/1000))}`;
+    $('#clock').classList.toggle('low',left<60000);
+    $('#bar>i').style.width=(100-left/(dur*60000)*100)+'%';
+  }else{
+    if(!over){over=true;$('#stop').textContent='저장하고 끝내기';
+      $('#clock').classList.remove('low');$('#bar>i').style.width='100%';}
+    const ot=Date.now()-endAt;
+    $('#clock').textContent=`+${pad2(Math.floor(ot/60000))}:${pad2(Math.floor(ot%60000/1000))}`;
+  }}
 $('#pad').oninput=e=>{$('#cnt').textContent=chars(e.target.value)+'자';};
-let composing=false;
-$('#pad').addEventListener('compositionstart',()=>composing=true);
-$('#pad').addEventListener('compositionend',()=>composing=false);
-$('#pad').onkeydown=e=>{
-  if(noDel&&!composing&&!e.isComposing&&e.keyCode!==229&&(e.key==='Backspace'||e.key==='Delete'))e.preventDefault();};
-$('#pad').addEventListener('beforeinput',e=>{
-  if(!noDel)return;
-  if(e.inputType==='insertFromPaste'){e.preventDefault();toast('붙여넣기는 막혀 있습니다');return;}
-  if(composing||e.isComposing)return; /* 한글 조합 중에는 IME가 지우기 신호를 쓰므로 막지 않는다 */
-  if(e.inputType&&e.inputType.startsWith('delete'))e.preventDefault();
-});
-$('#pad').onpaste=e=>{if(noDel){e.preventDefault();toast('붙여넣기는 막혀 있습니다');}};
 $('#stop').onclick=()=>finish();
 $('#go').onclick=()=>start('');
 
