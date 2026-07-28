@@ -106,6 +106,9 @@ label.f>*{color:var(--fg)}
 .toast.on{opacity:1}
 .stat{display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-bottom:1px solid var(--line)}
 .stat:last-child{border-bottom:none}
+.banner{border:1px solid var(--fg);border-radius:12px;padding:13px 15px;margin-bottom:20px;
+  display:flex;align-items:center;gap:12px;font-size:14px;line-height:1.5}
+.banner .btn{margin-left:auto;flex:none}
 </style>
 </head>
 <body>
@@ -114,6 +117,7 @@ label.f>*{color:var(--fg)}
 
   <!-- 쓰기 -->
   <section class="view on" id="v-write">
+    <div id="banner"></div>
     <div class="big" id="greet">15분.</div>
     <div class="hint">여기서는 쓰기만 합니다. 쓴 글은 데스크톱으로 가져가 병합합니다.</div>
     <div class="opts" id="durs"></div>
@@ -290,7 +294,15 @@ function refreshBadge(){
   const n=D.entries.filter(e=>isOpen(e)&&!e.seen).length;
   $('#nbadge').innerHTML=n?`<span class="badge">${n}</span>`:'';
   const x=D.entries.filter(e=>!e.exported).length;
-  $('#sbadge').innerHTML=x?`<span class="badge" style="background:var(--muted)">${x}</span>`:'';}
+  const hot=D.entries.some(e=>isOpen(e)&&!e.exported);
+  $('#sbadge').innerHTML=x?`<span class="badge"${hot?'':' style="background:var(--muted)"'}>${x}</span>`:'';
+  renderBanner();}
+function renderBanner(){
+  const el=$('#banner'); if(!el)return;
+  const n=D.entries.filter(e=>isOpen(e)&&!e.exported).length;
+  el.innerHTML=n?`<div class="banner"><span>열린 글 <b>${n}편</b> —<br>데스크톱으로 옮길 시간입니다.</span>
+    <button class="btn pri" id="bexp">내보내기</button></div>`:'';
+  if($('#bexp'))$('#bexp').onclick=doExport;}
 function renderList(){
   if(!D.entries.length){$('#list').innerHTML=`<div class="empty">아직 없습니다.</div>`;return;}
   const open=D.entries.filter(isOpen),lock=D.entries.filter(e=>!isOpen(e)).sort((a,b)=>a.unlockAt-b.unlockAt);
@@ -335,7 +347,7 @@ function renderSync(){
     <div class="stat"><span class="mut">글</span><span class="num">${D.entries.length}편</span></div>
     <div class="stat"><span class="mut">총 글자</span><span class="num">${tot.toLocaleString()}자</span></div>
     <div class="stat"><span class="mut">기기 ID</span><span class="num">${D.device}</span></div>`;}
-$('#exp').onclick=()=>{
+function doExport(){
   if(!D.entries.length){toast('내보낼 글이 없습니다');return;}
   const payload={type:'fw.mobile',v:1,device:D.device,exportedAt:Date.now(),
     entries:D.entries.map(({_exp,...e})=>e)};
@@ -345,7 +357,8 @@ $('#exp').onclick=()=>{
   a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(u),4000);
   D.entries.forEach(e=>e.exported=true);save();renderSync();refreshBadge();
-  toast('내보냈습니다 · 데스크톱에서 병합하세요');};
+  toast('내보냈습니다 · 데스크톱에서 병합하세요');}
+$('#exp').onclick=doExport;
 $('#clean').onclick=()=>{
   const ex=D.entries.filter(e=>e.exported);
   if(!ex.length){toast('정리할 글이 없습니다');return;}
