@@ -135,13 +135,12 @@ label.f>*{color:var(--fg)}
     <div class="big" id="greet">15분.</div>
     <div class="hint">여기서는 쓰기만 합니다. 쓰는 동안 글자는 가려지고, 쓴 글은 데스크톱으로 가져가 병합합니다.</div>
     <div class="opts" id="durs"></div>
-    <label class="f">제목<input type="text" id="wtitle" placeholder="예: 주인공에 대해서 쓴다"></label>
+    <label class="f">제목
+      <input type="text" id="wtitle" placeholder="예: 주인공에 대해서 쓴다">
+      <select id="wpick" style="margin-top:8px"></select>
+      <span class="xs fnt" id="conthint"></span>
+    </label>
     <label class="f">프로젝트<select id="wproj"></select></label>
-    <label class="f">관계<select id="wrel">
-      <option value="이어짐">이어짐</option>
-      <option value="다시">다시</option>
-      <option value="딴갈래">딴갈래</option>
-    </select></label>
     <label class="f">열리는 시각
       <select id="wlock">
         <option value="1">내일 아침</option><option value="2">이틀 뒤</option>
@@ -255,7 +254,7 @@ function renderSetup(){
   $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
     D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const lp=localStorage.getItem('fwm.lastproj'); if(lp)$('#wproj').value=lp;
-  $('#wrel').value=localStorage.getItem('fwm.lastrel')||'이어짐';
+  renderPick();showCont();
   $('#setupwarn').innerHTML=D.projects.length?'':'프로젝트가 비어 있습니다. 동기화 탭에서 데스크톱 설정 파일을 불러오면 채워집니다.';
   const dr=D.draft;
   $('#resume').innerHTML=dr&&dr.text&&dr.text.trim()
@@ -264,21 +263,42 @@ function renderSetup(){
   if($('#dsc'))$('#dsc').onclick=()=>{D.draft=null;save();renderSetup();};
 }
 
+/* 서랍에 있는 제목을 골라 이어 쓴다 */
+function threads(){
+  const seen=new Map();
+  D.entries.forEach(e=>{if(!e.title)return;
+    const t=seen.get(e.title);
+    if(!t)seen.set(e.title,{title:e.title,n:1,last:e.createdAt,locked:!isOpen(e)});
+    else{t.n++;if(e.createdAt>t.last){t.last=e.createdAt;t.locked=!isOpen(e);}}});
+  return [...seen.values()].sort((a,b)=>b.last-a.last);}
+function renderPick(){
+  const ts=threads();
+  $('#wpick').innerHTML=`<option value="">서랍에서 고르기…</option>`+
+    ts.map(t=>`<option value="${esc(t.title)}">${t.locked?'🔒 ':''}${esc(t.title)}${t.n>1?` (${t.n})`:''}</option>`).join('');
+  $('#wpick').disabled=!ts.length;}
+function showCont(){
+  const v=$('#wtitle').value.trim();
+  const t=threads().find(x=>x.title===v);
+  $('#conthint').textContent=t?`이어 씁니다 — 이 제목으로 ${t.n}편 있습니다`:(v?'새로 시작합니다':'');}
+$('#wpick').onchange=e=>{if(e.target.value){$('#wtitle').value=e.target.value;e.target.value='';showCont();}};
+$('#wtitle').oninput=showCont;
+
 function unlockTime(){const d=new Date();d.setDate(d.getDate()+(+$('#wlock').value||1));
   d.setHours(S().hour,0,0,0);if(d.getTime()<=Date.now())d.setTime(d.getTime()+DAY);return d.getTime();}
 
-let endAt=0,tick=null,startedAt=0,over=false,curTitle='',curRel='이어짐';
+let endAt=0,tick=null,startedAt=0,over=false,curTitle='',curCont=false;
 function start(pre){
   startedAt=Date.now();endAt=Date.now()+dur*60000;over=false;
-  curTitle=$('#wtitle').value.trim();curRel=$('#wrel').value;
+  curTitle=$('#wtitle').value.trim();
+  curCont=!!curTitle&&D.entries.some(x=>x.title===curTitle);
   const pj=$('#wproj').value?pname($('#wproj').value):'';
   const hd=$('#stghead');
-  const rel=`<span class="rel">${esc(curRel)}</span>`;
+  const rel=curCont?`<span class="rel">이어짐</span>`:'';
   if(pj&&curTitle)hd.innerHTML=`${rel}${esc(pj)} — <b>${esc(curTitle)}</b>`;
   else if(curTitle)hd.innerHTML=`${rel}<b>${esc(curTitle)}</b>`;
-  else if(pj)hd.innerHTML=rel+esc(pj);
-  else hd.innerHTML=rel;
-  hd.style.display='block';
+  else if(pj)hd.innerHTML=esc(pj);
+  else hd.innerHTML='';
+  hd.style.display=(pj||curTitle)?'block':'none';
   const pd=$('#pad');pd.value=pre||'';pd.classList.add('blind');
   $('#stop').textContent='종료';
   $('#stage').classList.add('on');pd.focus();
@@ -324,10 +344,9 @@ function finish(){
   $('#stage').classList.remove('on');
   if(!text.trim()){D.draft=null;save();renderSetup();return;}
   const ut=unlockTime();
-  D.entries.unshift({id:uid(),projectId:$('#wproj').value||null,rel:curRel,title:curTitle,text,createdAt:Date.now(),
+  D.entries.unshift({id:uid(),projectId:$('#wproj').value||null,cont:curCont,title:curTitle,text,createdAt:Date.now(),
     unlockAt:ut,sec:spent,seen:false,src:'mobile',exported:false});
   $('#wtitle').value='';curTitle='';
-  localStorage.setItem('fwm.lastrel',curRel);
   D.draft=null;localStorage.setItem('fwm.lastproj',$('#wproj').value||'');save();
   $('#pad').value='';$('#cnt').textContent='0자';
   renderSetup();refreshBadge();
@@ -338,7 +357,8 @@ function finish(){
     <label class="f" style="margin-top:16px">제목 — 중단한 지점이나 다음에 이어 쓸 것
       <input type="text" id="mtitle" value="${esc(ne.title||'')}" placeholder="예: 결말 직전에서 멈춤"></label>
     <button class="btn pri blk" id="okm" style="margin-top:14px">닫기</button>`);
-  $('#mtitle').oninput=ev=>{ne.title=ev.target.value.trim();save();};
+  $('#mtitle').oninput=ev=>{ne.title=ev.target.value.trim();
+    ne.cont=!!ne.title&&D.entries.some(x=>x.id!==ne.id&&x.title===ne.title);save();};
   $('#okm').onclick=closeModal;
 }
 
@@ -384,14 +404,15 @@ function renderList(){
     if(a==='open'){e._exp=true;e.seen=true;save();renderList();refreshBadge();}
     if(a==='fold'){e._exp=false;renderList();}
     if(a==='copy')navigator.clipboard.writeText(e.text).then(()=>toast('복사했습니다'));
-    if(a==='title'){const t=prompt('제목',e.title||'');if(t!==null){e.title=t.trim();save();renderList();}}
+    if(a==='title'){const t=prompt('제목',e.title||'');if(t!==null){e.title=t.trim();
+      e.cont=!!e.title&&D.entries.some(x=>x.id!==e.id&&x.title===e.title);save();renderList();}}
     if(a==='del'&&confirm('본문을 버립니다. 되돌릴 수 없습니다.\n쓴 날짜와 시간 기록은 남습니다.')){
       logGone(e);D.entries=D.entries.filter(x=>x.id!==e.id);save();renderList();refreshBadge();}});}
 function card(e){
   const o=isOpen(e);
   const head=`<div class="top"><strong class="sm">${e.title?esc(e.title):fmtD(e.createdAt)}</strong>
     ${e.title?`<span class="xs fnt num">${fmtD(e.createdAt)}</span>`:''}
-    ${e.rel?`<span class="tag">${esc(e.rel)}</span>`:''}
+    ${e.cont?'<span class="tag">이어짐</span>':''}
     <span class="tag">${esc(pname(e.projectId))}</span>${e.hand?'<span class="tag">손글씨</span>':''}
     <span class="xs fnt num">${e.hand?Math.round(e.sec/60)+'분':chars(e.text)+'자'}</span>
     <span style="margin-left:auto" class="xs mut num">${o?(e.exported?'옮김':'미전송'):'🔒 '+until(e.unlockAt)}</span></div>`;
