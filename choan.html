@@ -252,7 +252,8 @@ const PER=200; // 1매 = 공백 포함 200자
 
 /* ═══════════════ 상태 ═══════════════ */
 let db=load();
-let ui={dash:false,cast:false,exp:{},cexp:{},selMode:false,sel:{}};
+function freshUI(){return {dash:false,cast:false,exp:{},cexp:{},selMode:false,sel:{}};}
+let ui=freshUI();
 
 function load(){
   try{const r=localStorage.getItem(KEY);if(r){const d=JSON.parse(r);if(d&&d.projects)return migrate(d);}}catch(e){}
@@ -326,6 +327,7 @@ function toast(msg){
 
 /* ═══════════════ 렌더 ═══════════════ */
 function render(){
+  ui=Object.assign(freshUI(),ui);   /* 상태 키 누락 방어 */
   const p=cur();
   let h='';
 
@@ -828,21 +830,28 @@ A.backup=async()=>{
 A.restore=()=>openSheet(`
   <h3>복원</h3><div class="sub">백업 파일을 고르거나 내용을 붙여넣습니다</div>
   <label class="f"><span class="u">백업 파일</span><input id="file" type="file" accept=".json,application/json"></label>
-  <label class="f"><span class="u">또는 붙여넣기</span><textarea id="json" rows="5" placeholder='{"v":1,"projects":[...]}'></textarea></label>
+  <label class="f"><span class="u">또는 붙여넣기</span><textarea id="json" rows="5" placeholder='{"v":2,"projects":[...]}'></textarea></label>
   <div class="hint">복원하면 <b>지금 저장된 내용을 모두 덮어씁니다.</b> 먼저 백업해 두세요.</div>
   <div class="sbtns"><div class="sp"></div><button class="cx" data-act="cancel">취소</button><button class="go" data-act="ok">덮어쓰기</button></div>`,
   {cancel:closeSheet,ok:()=>{
     const fi=document.getElementById('file');
     const apply=(txt)=>{
-      try{
-        const d=JSON.parse(txt);
-        if(!d||!Array.isArray(d.projects))throw 0;
-        db=d;if(!cur()&&db.projects.length)db.currentId=db.projects[0].id;
-        ui={dash:false,exp:{},selMode:false,sel:{}};
-        save();closeSheet();render();toast('복원했습니다');
-      }catch(e){toast('읽을 수 없는 백업입니다');}
+      let d;
+      try{d=JSON.parse(String(txt).replace(/^\uFEFF/,''));}
+      catch(e){toast('JSON 형식이 깨져 있습니다');return;}
+      if(!d||!Array.isArray(d.projects)){toast('초안 백업 파일이 아닙니다');return;}
+      db=migrate(d);
+      if(!cur()&&db.projects.length)db.currentId=db.projects[0].id;
+      ui=freshUI();
+      save();closeSheet();render();
+      toast(`복원했습니다 · 프로젝트 ${db.projects.length}`);
     };
-    if(fi&&fi.files&&fi.files[0]){const r=new FileReader();r.onload=()=>apply(r.result);r.readAsText(fi.files[0]);return;}
+    if(fi&&fi.files&&fi.files[0]){
+      const r=new FileReader();
+      r.onload=()=>apply(r.result);
+      r.onerror=()=>toast('파일을 읽지 못했습니다');
+      r.readAsText(fi.files[0]);return;
+    }
     const t=raw('json').trim();
     if(!t){toast('파일을 고르거나 내용을 붙여넣으세요');return;}
     apply(t);
