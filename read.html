@@ -179,6 +179,19 @@ mark{background:var(--mark);color:inherit;padding:0 1px}
 .spark i{flex:1;background:var(--indigo);opacity:.45;min-height:1px}
 .spark i.today{opacity:.9;background:var(--seal)}
 
+/* 한 줄 보기 */
+.densrow{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
+  padding:11px 2px;border-bottom:1px solid var(--line);background:transparent}
+.densrow:active{background:var(--paper2)}
+.densrow .page{font-family:"Gowun Batang",serif;font-size:11px;color:var(--seal);letter-spacing:.06em}
+.densrow .src{font-size:11px;color:var(--ink3)}
+
+/* 맨 위로 */
+#totop{position:fixed;right:16px;bottom:calc(88px + env(safe-area-inset-bottom));z-index:45;
+  width:40px;height:40px;border:1px solid var(--line);background:var(--card);color:var(--ink2);
+  font-size:15px;border-radius:999px;opacity:0;pointer-events:none;transition:opacity .2s}
+#totop.show{opacity:.95;pointer-events:auto}
+
 .bar{display:block;height:2px;background:var(--line)}
 .bar i{display:block;height:2px;background:var(--indigo);opacity:.7}
 .chip.bookf{color:var(--ink);border-color:var(--ink2);background:transparent}
@@ -295,7 +308,7 @@ function hl(text,q){
 }
 
 /* ═══════════ 상태 ═══════════ */
-const S={view:"desk",bookId:null,memoId:null,q:"",tag:null,kind:null,sort:"new",star:false,untagged:false,fromBook:null,trail:[],years:{},aq:""};
+const S={view:"desk",bookId:null,memoId:null,q:"",tag:null,kind:null,sort:"new",star:false,untagged:false,fromBook:null,trail:[],years:{},aq:"",groups:{},more:{},limit:40,dense:false};
 
 /* ═══════════ 검색 ═══════════ */
 function haystack(m){
@@ -331,7 +344,7 @@ function render(){
   if(S.view!=="inbox")window.scrollTo(0,0);
   if(S.view==="inbox"){
     const inp=el("#q");
-    if(inp){inp.value=S.q;inp.addEventListener("input",()=>{S.q=inp.value;el("#list").innerHTML=listHTML(query());});}
+    if(inp){inp.value=S.q;inp.addEventListener("input",()=>{S.q=inp.value;S.limit=40;refreshList();});}
   }
   if(S.view==="archive"){
     const aq=el("#aq");
@@ -547,16 +560,78 @@ function vInbox(){
     <div class="search"><span class="dim">Q</span><input id="q" type="search" placeholder="본문·생각·주석·태그·책 이름" autocomplete="off" enterkeyhint="search"></div>
     <div class="filters">
       <button class="chip" data-act="sort">정렬 · ${({new:"최근",old:"오래된",book:"책·쪽"})[S.sort]}</button>
+      <button class="chip ${S.dense?"on":""}" data-act="dense">한 줄</button>
       <button class="chip ${S.star?"on":""}" data-act="fstar">★ 표시</button>
       <button class="chip ${S.untagged?"on":""}" data-act="funtag">태그 없음</button>
       ${tagline}${bookline}${kindChips}
     </div></div>
     <div class="viewhead" style="padding:20px 0 10px"><h2>메모함</h2><p class="num">${list.length}장${db.memos.length!==list.length?` / 전체 ${db.memos.length}장`:""}</p></div>
     ${list.length?`<div class="btnrow" style="margin-bottom:16px"><button class="btn sm ghost" data-act="mdview">보이는 메모 복사</button></div>`:""}
-    <div id="list">${listHTML(list)}</div>`;
+    <div id="list">${inboxList()}</div>
+    <button id="totop" data-act="top" aria-label="맨 위로">↑</button>`;
 }
+
+/* 묶음 이름 — 정렬 방식에 따라 시기 또는 책 */
+function groupKey(m){
+  if(S.sort==="book"){const b=book(m.bookId)||{};return b.title||"—";}
+  const ts=(S.sort==="old"?m.createdAt:(m.updatedAt||m.createdAt));
+  const t0=new Date();t0.setHours(0,0,0,0);
+  if(ts>=t0.getTime())return "오늘";
+  if(ts>=t0.getTime()-6*864e5)return "이번 주";
+  if(ts>=new Date(t0.getFullYear(),t0.getMonth(),1).getTime())return "이번 달";
+  const d=new Date(ts);
+  return d.getFullYear()+"."+String(d.getMonth()+1).padStart(2,"0");
+}
+const GROUP_CHUNK=40;
+function isOpenGroup(k,i){return S.groups[k]!==undefined?S.groups[k]:i===0;}
+function inboxList(){
+  const list=query();
+  if(!list.length)return `<div class="empty"><span class="g">空</span><p>걸리는 게 없습니다.<br>검색어나 조건을 바꿔 보세요.</p></div>`;
+
+  /* 검색 중에는 묶지 않고 한 덩어리로, 끊어서 */
+  if(S.q.trim()){
+    const shown=list.slice(0,S.limit);
+    return listHTML(shown)+(list.length>shown.length
+      ? `<button class="btn ghost full" data-act="moreflat" style="margin:6px 0 10px">더 보기 · 남은 ${list.length-shown.length}장</button>`:"");
+  }
+
+  const map=new Map();
+  list.forEach(m=>{const k=groupKey(m);if(!map.has(k))map.set(k,[]);map.get(k).push(m);});
+  const keys=Array.from(map.keys());
+  let h="";
+  if(keys.length>1){
+    const allOpen=keys.every((k,i)=>isOpenGroup(k,i));
+    h+=`<div style="display:flex;align-items:center;gap:10px;margin:0 0 4px">
+      <p class="eyebrow" style="margin:0;flex:1">${S.sort==="book"?"책별":"채집한 때"} <span class="num">${keys.length}묶음</span></p>
+      <button class="chip" data-act="allgroups" data-open="${allOpen?"0":"1"}">${allOpen?"모두 접기":"모두 펼치기"}</button></div>`;
+  }
+  keys.forEach((k,i)=>{
+    const items=map.get(k), open=isOpenGroup(k,i), lim=S.more[k]||GROUP_CHUNK;
+    const g=encodeURIComponent(k);
+    h+=`<button data-act="togglegroup" data-g="${g}" data-i="${i}"
+      style="display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;padding:13px 0 9px;border-top:1px solid var(--line)">
+      <span class="dim" style="font-size:11px;width:11px">${open?"▾":"▸"}</span>
+      <span class="disp" style="font-size:15.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k)}</span>
+      <span class="dim num" style="font-size:11.5px">${items.length}장</span></button>`;
+    if(!open)return;
+    h+=listHTML(items.slice(0,lim),S.sort==="book");
+    if(items.length>lim)h+=`<button class="btn ghost full sm" data-act="moregroup" data-g="${g}" style="margin:2px 0 14px">더 보기 · 남은 ${items.length-lim}장</button>`;
+  });
+  return h;
+}
+function refreshList(){const n=el("#list");if(n)n.innerHTML=inboxList();}
 function listHTML(list,hideSrc){
   if(!list.length)return `<div class="empty"><span class="g">空</span><p>걸리는 게 없습니다.<br>검색어나 조건을 바꿔 보세요.</p></div>`;
+  if(S.dense)return list.map(m=>{
+    const b=book(m.bookId)||{};
+    const line=(m.thought||m.quote||"").replace(/\s+/g," ").trim();
+    return `<button class="densrow" data-act="openmemo" data-id="${m.id}">
+      <span class="page num" style="flex:0 0 auto">p.${esc(m.page||"—")}</span>
+      ${hideSrc?"":`<span class="src" style="flex:0 0 auto;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0">${esc(b.title||"—")}</span>`}
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;color:var(--ink2)">${hl(line,S.q)}</span>
+      ${m.star?`<span style="color:var(--seal);font-size:10px">★</span>`:""}
+      ${(m.tags||[]).length?`<span class="dim" style="font-size:10px;color:var(--indigo)">#${(m.tags||[]).length}</span>`:""}
+    </button>`;}).join("");
   return list.map(m=>{
     const b=book(m.bookId)||{};
     const tags=(m.tags||[]).map(t=>`<span class="chip tag">#${esc(t)}</span>`).join("");
@@ -1011,6 +1086,23 @@ document.addEventListener("click",e=>{
       if(m&&o){m.links=(m.links||[]).filter(x=>x!==o.id);o.links=(o.links||[]).filter(x=>x!==m.id);
         m.updatedAt=now();save();render();} break;}
 
+    /* 목록 다스리기 */
+    case "dense": S.dense=!S.dense;t.classList.toggle("on");refreshList(); break;
+    case "togglegroup":{
+      const k=decodeURIComponent(t.dataset.g);
+      S.groups[k]=!isOpenGroup(k,Number(t.dataset.i));
+      refreshList(); break;}
+    case "allgroups":{
+      const open=t.dataset.open==="1";
+      query().forEach(m=>{S.groups[groupKey(m)]=open;});
+      refreshList(); break;}
+    case "moregroup":{
+      const k=decodeURIComponent(t.dataset.g);
+      S.more[k]=(S.more[k]||GROUP_CHUNK)+GROUP_CHUNK;
+      refreshList(); break;}
+    case "moreflat": S.limit+=40;refreshList(); break;
+    case "top": window.scrollTo({top:0,behavior:"smooth"}); break;
+
     /* 걸러보기 */
     case "sort": S.sort={new:"old",old:"book",book:"new"}[S.sort];go("inbox"); break;
     case "fstar": S.star=!S.star;go("inbox"); break;
@@ -1047,6 +1139,12 @@ document.addEventListener("click",e=>{
 });
 
 function unlinkAll(id){db.memos.forEach(m=>{if((m.links||[]).includes(id))m.links=m.links.filter(x=>x!==id);});}
+
+/* 맨 위로 버튼 나타내기 */
+window.addEventListener("scroll",()=>{
+  const b=el("#totop");if(!b)return;
+  b.classList.toggle("show",window.scrollY>700);
+},{passive:true});
 
 /* 쓰다 만 메모 임시 저장 */
 document.addEventListener("input",e=>{ if(e.target.closest("#sheet"))stashDraft(); });
