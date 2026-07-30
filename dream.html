@@ -210,6 +210,8 @@
     margin-top:8px; font-size:12px; color: var(--ink-soft);
     display:flex; gap:10px;
   }
+  .card-row{ display:flex; gap:8px; align-items:flex-start; }
+  .card-main{ flex:1; min-width:0; }
 
   .detail-text{
     font-family: var(--font-serif);
@@ -876,6 +878,14 @@ function deleteSession(id){
 function toggleSessions(){ STATE.sessionsOpen = !STATE.sessionsOpen; render(); }
 function togglePrompt(){ STATE.promptOpen = !STATE.promptOpen; render(); }
 
+function deleteWorry(id){
+  if(!window.confirm('이 기록을 지울까요? 되돌릴 수 없어요.')) return;
+  DATA.worries = DATA.worries.filter(w => w.id !== id);
+  save();
+  toast('지웠어요');
+  render();
+}
+
 /* ---------- schedules (upcoming plans) ---------- */
 function startAddPlan(){
   if(STATE.screen !== 'planForm') STATE.navStack.push(STATE.screen);
@@ -1277,27 +1287,23 @@ function render(){
   }
 
   else if(STATE.screen === 'archive'){
+    if(STATE.archiveTab === 'waiting') STATE.archiveTab = 'resolved';
     const resolved = DATA.worries.filter(w => w.resolved).sort((a,b) => (b.resolvedDate||'').localeCompare(a.resolvedDate||''));
-    const waiting = DATA.worries.filter(w => !w.resolved).sort((a,b) => a.reappearDate.localeCompare(b.reappearDate));
     let list = '';
     if(STATE.archiveTab === 'resolved'){
       list = resolved.length ? resolved.map(w => `
         <div class="worry-card" style="cursor:default;">
-          <div class="preview" style="-webkit-line-clamp:3;">${nl2br(w.text)}</div>
-          <div class="history-item" style="margin-top:10px;">
-            <div class="h-date">${esc(formatDateKR(w.resolvedDate))} 실현</div>
-            <div>${nl2br(w.resolvedNote || '')}</div>
+          <div class="card-row">
+            <div class="card-main">
+              <div class="preview" style="-webkit-line-clamp:3;">${nl2br(w.text)}</div>
+              <div class="history-item" style="margin-top:10px;">
+                <div class="h-date">${esc(formatDateKR(w.resolvedDate))} 실현</div>
+                <div>${nl2br(w.resolvedNote || '')}</div>
+              </div>
+            </div>
+            <button class="s-del" onclick="deleteWorry('${w.id}')" title="삭제">×</button>
           </div>
         </div>`).join('') : `<div class="empty">아직 실현으로 기록한 것이 없어요.</div>`;
-    } else if(STATE.archiveTab === 'waiting'){
-      list = waiting.length ? waiting.map(w => `
-        <div class="worry-card" style="cursor:default;">
-          <div class="preview">${nl2br(w.text)}</div>
-          <div class="meta">
-            <span>${esc(formatDateKR(w.reappearDate))} 확인 예정</span>
-            ${w.history.length ? `<span>${w.history.length}번 다시 맡김</span>` : ''}
-          </div>
-        </div>`).join('') : `<div class="empty">맡겨둔 것이 없어요.</div>`;
     } else {
       const sessions = DATA.sessions.slice().sort((a,b) => b.startedAt - a.startedAt);
       if(!sessions.length){
@@ -1376,7 +1382,6 @@ function render(){
       <div class="back-row"><button class="back-link" onclick="closeArchive()">← 돌아가기</button></div>
       <div class="archive-tabs">
         <div class="archive-tab ${STATE.archiveTab==='resolved'?'active':''}" onclick="switchArchiveTab('resolved')">실현 (${resolved.length})</div>
-        <div class="archive-tab ${STATE.archiveTab==='waiting'?'active':''}" onclick="switchArchiveTab('waiting')">맡겨둠 (${waiting.length})</div>
         <div class="archive-tab ${STATE.archiveTab==='internet'?'active':''}" onclick="switchArchiveTab('internet')">인터넷 (${DATA.sessions.length})</div>
       </div>
       ${list}
