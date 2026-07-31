@@ -154,6 +154,8 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .l-url:hover{ text-decoration:underline; }
+  .mini-add{ background:none; border:none; color:var(--ink-faint); font-size:11.5px; cursor:pointer; padding:0 1px; font-family:inherit; }
+  .mini-add:hover{ color:var(--accent); }
   .g-links{ margin-top:8px; display:flex; flex-direction:column; gap:4px; }
   .g-links a{ color:var(--accent); font-size:12.5px; text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .g-links a:hover{ text-decoration:underline; }
@@ -586,6 +588,11 @@ function saveReview(withGain){
   const ta = document.getElementById('gainInput');
   const gain = (withGain && ta) ? ta.value.trim() : '';
   const links = withGain ? (r.links || []).slice() : [];
+  if(withGain){
+    const draft = document.getElementById('linkInput');
+    const u = draft ? normalizeUrl(draft.value) : '';
+    if(u && links.indexOf(u) < 0) links.push(u);
+  }
   if(withGain && !gain && !links.length){ if(ta) ta.focus(); return; }
 
   let planted = null;
@@ -946,6 +953,19 @@ function savePromptTemplate(){
 function resetPromptTemplate(){ const el=document.getElementById('templateArea'); if(el) el.value=DEFAULT_PROMPT; toast('기본값이에요. 저장하면 적용돼요'); }
 
 /* ===================== 렌더 ===================== */
+function addLinkTo(id){
+  const s = DATA.sessions.find(x=>x.id===id);
+  if(!s) return;
+  const v = window.prompt('이 수확에 붙일 주소');
+  if(v === null) return;
+  const u = normalizeUrl(v);
+  if(!u){ toast('주소를 확인해주세요'); return; }
+  if(!s.links) s.links = [];
+  if(s.links.indexOf(u) < 0) s.links.push(u);
+  save();
+  toast('링크를 붙였어요');
+  render();
+}
 function linkBlock(s){
   if(!s.links || !s.links.length) return '';
   return '<div class="g-links">' + s.links.map(u=>
@@ -1105,7 +1125,8 @@ function render(){
         const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
         return '<div class="gain-item"><div class="g-body">'
           + '<div class="g-meta">'+esc(formatDateKR(s.date))+' '+hh+':'+mm+' · <b>'+esc(formatMinutes(s.minutes))+'</b>'
-          + (s.plantedCat ? ' · '+esc(s.plantedCat)+'에 심음' : '')+'</div>'
+          + (s.plantedCat ? ' · '+esc(s.plantedCat)+'에 심음' : '')
+          + ' · <button class="mini-add" onclick="addLinkTo(\''+s.id+'\')">＋링크</button></div>'
           + (s.gain ? '<div class="g-text">'+nl2br(s.gain)+'</div>' : '')
           + linkBlock(s)
           + '</div><button class="g-del" onclick="delSession(\''+s.id+'\')">×</button></div>';
