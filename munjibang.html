@@ -273,7 +273,7 @@ const DEFAULT_PROMPT = `아래는 내가 인터넷을 열고 닫을 때마다 �
 function defaultData(){
   return {
     sentences: [], bags: {}, nextId: 1,
-    todos: [],
+    todos: [], graveyard: {},
     sessions: [], activeSession: null,
     settings: { startUrl:'https://www.google.com', alarmMin:5, promptTemplate:DEFAULT_PROMPT }
   };
@@ -291,7 +291,17 @@ let DATA = load();
   if(!Array.isArray(DATA.sentences)) DATA.sentences = [];
   if(!DATA.bags) DATA.bags = {};
   if(!DATA.nextId) DATA.nextId = Math.max(0, ...DATA.sentences.map(s=>s.id||0)) + 1;
+  if(!DATA.graveyard) DATA.graveyard = {};
   if(!Array.isArray(DATA.todos)) DATA.todos = [];
+  DATA.sentences.forEach(x=>{
+    if(!x.uid) x.uid = legacyUid(x.cat, x.text);
+    if(!x.updatedAt) x.updatedAt = 0;
+  });
+  DATA.todos.forEach(x=>{ if(!x.updatedAt) x.updatedAt = 0; });
+  (function pruneGraveyard(){
+    const cut = Date.now() - 180*86400000;
+    for(const k in DATA.graveyard){ if(DATA.graveyard[k] < cut) delete DATA.graveyard[k]; }
+  })();
   DATA.todos.forEach(t=>{ if(t.done && !t.doneDate) t.doneDate = todayStr(); });
   if(!Array.isArray(DATA.sessions)) DATA.sessions = [];
   if(DATA.activeSession === undefined) DATA.activeSession = null;
@@ -322,6 +332,13 @@ let STATE = {
 
 /* ===================== 도우미 ===================== */
 function uid(){ return 'x_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+/* 예전 데이터(고유 표시가 없던 시절)의 문장을 두 기기가 똑같이 알아보도록, 내용에서 표시를 만든다 */
+function legacyUid(cat, text){
+  const str = cat + '|' + String(text||'').trim();
+  let h = 5381;
+  for(let i=0;i<str.length;i++){ h = ((h*33) ^ str.charCodeAt(i)) >>> 0; }
+  return 'L' + h.toString(36);
+}
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function nl2br(s){ return esc(s).replace(/\n/g,'<br>'); }
 function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -361,7 +378,7 @@ function drawId(cat){
 }
 function insertSentence(cat, text){
   const id = DATA.nextId++;
-  DATA.sentences.push({ id, cat, text });
+  DATA.sentences.push({ id, uid: uid(), cat, text, updatedAt: Date.now() });
   const bag = DATA.bags[cat];
   if(bag && bag.length) bag.splice(Math.floor(Math.random()*(bag.length+1)), 0, id);
   return id;
@@ -396,7 +413,7 @@ function submitGate(){
   const typed = el.value.trim();
   if(typed.length < MIN_TYPE) return;
   const s = DATA.sentences.find(x=>x.id===STATE.gate.id);
-  if(s) s.text = typed;
+  if(s){ s.text = typed; s.updatedAt = Date.now(); }
   STATE.gate.text = typed;
   STATE.gateDraft = '';
   save();
@@ -439,7 +456,7 @@ function addTodo(){
   todoBusy = true;
   const text = el.value.trim();
   stashGate();
-  if(text) DATA.todos.push({ id: uid(), text: text, done: false, doneDate: null });
+  if(text) DATA.todos.push({ id: uid(), text: text, done: false, doneDate: null, updatedAt: Date.now() });
   save();
   STATE.todoAdd = false;
   render();
@@ -452,11 +469,13 @@ function toggleTodo(id){
   stashGate();
   t.done = !t.done;
   t.doneDate = t.done ? todayStr() : null;
+  t.updatedAt = Date.now();
   save();
   render();
 }
 function delTodo(id){
   stashGate();
+  DATA.graveyard['t:'+id] = Date.now();
   DATA.todos = DATA.todos.filter(x=>x.id!==id);
   save();
   render();
@@ -754,12 +773,14 @@ function nextRound(){
   const typed = el ? el.value.trim() : '';
   if(!typed){ if(el) el.focus(); return; }
   const s = DATA.sentences.find(x=>x.id===STATE.sess.currentId);
-  if(s) s.text = typed;
+  if(s){ s.text = typed; s.updatedAt = Date.now(); }
   save();
   if(STATE.sess.round >= ROUNDS) endUpdateSession();
   else showRound();
 }
 function deleteCurrent(){
+  const gone = DATA.sentences.find(s=>s.id===STATE.sess.currentId);
+  if(gone) DATA.graveyard['s:'+gone.uid] = Date.now();
   DATA.sentences = DATA.sentences.filter(s=>s.id!==STATE.sess.currentId);
   save();
   if(!catSentences(STATE.sess.cat).length){ endUpdateSession(); return; }
@@ -869,35 +890,128 @@ function exportData(){
   URL.revokeObjectURL(a.href);
   toast('백업 파일을 저장했어요');
 }
-function triggerImport(){
+function triggerImport(mode){
   const inp = document.createElement('input');
   inp.type='file'; inp.accept='.json,application/json';
   inp.onchange = e=>{
     const f = e.target.files[0]; if(!f) return;
     const rd = new FileReader();
     rd.onload = ()=>{
+      let d;
       try{
-        const d = JSON.parse(rd.result);
+        d = JSON.parse(rd.result);
         if(!Array.isArray(d.sentences)) throw new Error();
-        DATA.sentences = d.sentences;
-        DATA.bags = d.bags || {};
-        DATA.nextId = d.nextId || Math.max(0, ...d.sentences.map(s=>s.id||0))+1;
-        if(Array.isArray(d.sessions)) DATA.sessions = d.sessions;
-        if(Array.isArray(d.todos)) DATA.todos = d.todos;
-        if(d.settings){
-          DATA.settings.startUrl = d.settings.startUrl || DATA.settings.startUrl;
-          DATA.settings.alarmMin = d.settings.alarmMin || DATA.settings.alarmMin;
-          DATA.settings.promptTemplate = d.settings.promptTemplate || DATA.settings.promptTemplate;
-        }
-        save();
-        toast('문장 '+DATA.sentences.length+'개를 불러왔어요');
-        render();
-      }catch(err){ toast('파일을 읽을 수 없어요'); }
+      }catch(err){ toast('파일을 읽을 수 없어요'); return; }
+      if(mode === 'replace'){
+        if(!confirm('이 기기의 내용을 지우고 파일 내용으로 통째로 바꿉니다. 계속할까요?')) return;
+        replaceData(d);
+      } else {
+        mergeData(d);
+      }
     };
     rd.readAsText(f);
   };
   inp.click();
 }
+
+function replaceData(d){
+  DATA.sentences = d.sentences;
+  DATA.bags = d.bags || {};
+  DATA.nextId = d.nextId || Math.max(0, ...d.sentences.map(s=>s.id||0))+1;
+  DATA.sessions = Array.isArray(d.sessions) ? d.sessions : [];
+  DATA.todos = Array.isArray(d.todos) ? d.todos : [];
+  DATA.graveyard = d.graveyard || {};
+  if(d.settings){
+    DATA.settings.startUrl = d.settings.startUrl || DATA.settings.startUrl;
+    DATA.settings.alarmMin = d.settings.alarmMin || DATA.settings.alarmMin;
+    DATA.settings.promptTemplate = d.settings.promptTemplate || DATA.settings.promptTemplate;
+  }
+  DATA.sentences.forEach(x=>{
+    if(!x.uid) x.uid = legacyUid(x.cat, x.text);
+    if(!x.updatedAt) x.updatedAt = 0;
+  });
+  save();
+  toast('파일 내용으로 바꿨어요');
+  render();
+}
+
+/* 두 기기의 기록을 합친다. 같은 것은 나중에 고친 쪽을, 지운 것은 지운 채로 둔다 */
+function mergeData(d){
+  const rep = { sAdd:0, sUpd:0, tAdd:0, tUpd:0, xAdd:0 };
+
+  /* 묘비 합치기 */
+  const grave = DATA.graveyard;
+  const inGrave = d.graveyard || {};
+  for(const k in inGrave){ grave[k] = Math.max(grave[k]||0, inGrave[k]||0); }
+
+  /* --- 문장 --- */
+  const byUid = {};
+  DATA.sentences.forEach(x=>{ byUid[x.uid] = x; });
+  (d.sentences||[]).forEach(r=>{
+    const ru = r.uid || legacyUid(r.cat, r.text);
+    const rt = r.updatedAt || 0;
+    const cur = byUid[ru];
+    if(!cur){
+      const g = grave['s:'+ru];
+      if(g && g >= rt) return;                 /* 여기서 지운 문장은 되살리지 않는다 */
+      const copy = { id: DATA.nextId++, uid: ru, cat: r.cat, text: r.text, updatedAt: rt };
+      DATA.sentences.push(copy); byUid[ru] = copy; rep.sAdd++;
+    } else if(rt > (cur.updatedAt||0) && (cur.text !== r.text || cur.cat !== r.cat)){
+      cur.text = r.text; cur.cat = r.cat; cur.updatedAt = rt; rep.sUpd++;
+    }
+  });
+  /* 저쪽에서 지운 문장은 여기서도 지운다 (그 뒤에 여기서 고친 게 아니라면) */
+  DATA.sentences = DATA.sentences.filter(x=>{
+    const g = grave['s:'+x.uid];
+    return !(g && g >= (x.updatedAt||0));
+  });
+
+  /* --- 할 일 --- */
+  const tById = {};
+  DATA.todos.forEach(x=>{ tById[x.id] = x; });
+  (d.todos||[]).forEach(r=>{
+    if(!r.id) return;
+    const rt = r.updatedAt || 0;
+    const cur = tById[r.id];
+    if(!cur){
+      const g = grave['t:'+r.id];
+      if(g && g >= rt) return;
+      DATA.todos.push({ id:r.id, text:r.text, done:!!r.done, doneDate:r.doneDate||null, updatedAt:rt });
+      rep.tAdd++;
+    } else if(rt > (cur.updatedAt||0) && (cur.done !== !!r.done || cur.text !== r.text)){
+      cur.text = r.text; cur.done = !!r.done; cur.doneDate = r.doneDate||null; cur.updatedAt = rt;
+      rep.tUpd++;                              /* 한쪽에서 체크했으면 체크된 상태로 */
+    }
+  });
+  DATA.todos = DATA.todos.filter(x=>{
+    const g = grave['t:'+x.id];
+    return !(g && g >= (x.updatedAt||0));
+  });
+
+  /* --- 접속 기록: 지운 것 빼고 모두 모은다 --- */
+  const xById = {};
+  DATA.sessions.forEach(x=>{ xById[x.id] = x; });
+  (d.sessions||[]).forEach(r=>{
+    if(!r.id || xById[r.id]) return;
+    if(grave['x:'+r.id]) return;
+    DATA.sessions.push(r); xById[r.id] = r; rep.xAdd++;
+  });
+  DATA.sessions.sort((a,b)=>a.startedAt-b.startedAt);
+
+  DATA.nextId = Math.max(DATA.nextId, ...DATA.sentences.map(x=>x.id||0)) + 1;
+  save();
+  pruneTodos();
+
+  const parts = [];
+  if(rep.sAdd) parts.push('문장 +'+rep.sAdd);
+  if(rep.sUpd) parts.push('문장 고침 '+rep.sUpd);
+  if(rep.tAdd) parts.push('할 일 +'+rep.tAdd);
+  if(rep.tUpd) parts.push('할 일 바뀜 '+rep.tUpd);
+  if(rep.xAdd) parts.push('기록 +'+rep.xAdd);
+  toast(parts.length ? parts.join(' · ') : '새로 합칠 것이 없었어요');
+  render();
+}
+
 function bulkAdd(){
   const cat = document.getElementById('bulkCat').value;
   const el = document.getElementById('bulkInput');
@@ -909,10 +1023,13 @@ function bulkAdd(){
   render();
 }
 function delSentence(id){
+  const t = DATA.sentences.find(s=>s.id===id);
+  if(t) DATA.graveyard['s:'+t.uid] = Date.now();
   DATA.sentences = DATA.sentences.filter(s=>s.id!==id);
   save(); render();
 }
 function delSession(id){
+  DATA.graveyard['x:'+id] = Date.now();
   DATA.sessions = DATA.sessions.filter(s=>s.id!==id);
   save(); render();
 }
@@ -1221,10 +1338,11 @@ function render(){
       + groups
 
       + '<div class="field-label">기기 간 옮기기</div>'
-      + '<p class="sub">맥과 아이폰의 저장공간은 서로 이어지지 않아요. 내보낸 파일을 에어드랍이나 아이클라우드로 옮긴 뒤 가져오기 해주세요. 미래를 기억하기 앱의 백업 파일도 그대로 읽습니다.</p>'
+      + '<p class="sub">맥과 아이폰의 저장공간은 서로 이어지지 않아요. 한쪽에서 내보낸 파일을 에어드랍이나 아이클라우드로 옮긴 뒤, 다른 쪽에서 합치기를 누르세요. 새로 쓴 문장과 할 일, 수확 기록이 양쪽 것을 모아 하나가 되고, 같은 문장은 나중에 고친 쪽이 남습니다. 합친 뒤 다시 내보내 반대쪽에도 넣어주면 두 기기가 같아집니다.</p>'
       + '<div class="settings-actions" style="margin-top:0;">'
-      + '<button class="btn secondary" onclick="exportData()">내보내기</button>'
-      + '<button class="btn secondary" onclick="triggerImport()">가져오기</button></div>'
+      + '<button class="btn secondary" onclick="exportData()">내보내기 (이 기기의 파일 저장)</button>'
+      + '<button class="btn primary" onclick="triggerImport(\'merge\')">합치기 (다른 기기 파일과 병합)</button>'
+      + '<button class="btn secondary" onclick="triggerImport(\'replace\')">덮어쓰기 (통째로 바꾸기)</button></div>'
 
       + '<div class="field-label">전체 지우기</div>'
       + '<p class="sub">문장과 기록을 모두 지웁니다. 먼저 내보내기로 백업해두세요.</p>'
