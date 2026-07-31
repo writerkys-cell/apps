@@ -890,6 +890,41 @@ $('btnPlanSave').addEventListener('click',()=>{
 });
 $('btnPlanClear').addEventListener('click',()=>{ db.plan=null; save(); $('planEdit').classList.add('hidden'); render(); });
 
+/* ── 지금의 상태 ─────────────────────── */
+function situationLines(w){
+  const out=[], now=new Date();
+  const ss = w? byWork(w.id).slice().sort((a,b)=>new Date(a.start)-new Date(b.start)) : [];
+  if(w){
+    const t=targetChars(w), c=currentChars(w);
+    if(!ss.length){
+      out.push('이 원고는 아직 한 번도 앉지 않았습니다. 다음이 첫 세션입니다.');
+    }else if(t){
+      const ph=phaseAt(w,c), pct=Math.round(c/t*100);
+      if(ph==='시작') out.push('이 원고는 시작 구간입니다(목표의 '+pct+'%). 아직 세계가 서 있지 않아서, 앉아도 문장이 나오지 않고 시간만 가기 쉬운 때입니다.');
+      if(ph==='마무리') out.push('이 원고는 마무리 구간입니다(목표의 '+pct+'%).');
+    }
+    const st=stat(ss), last3=ss.slice(-3), st3=stat(last3);
+    if(st&&st3&&last3.length>=2){
+      if(st.rate>0&&st3.rate>0&&st3.rate<st.rate*0.6)
+        out.push('최근 '+last3.length+'회의 산출이 이 원고 평균 '+st.rate.toFixed(1)+'자/분에서 '+st3.rate.toFixed(1)+'자/분으로 떨어져 있습니다.');
+      const dry=last3.filter(s=>s.endCount-s.startCount<=0).length;
+      if(dry>=2) out.push('최근 '+last3.length+'회 중 '+dry+'회는 글자수가 늘지 않았습니다. 퇴고였거나, 앉아만 있었던 시간입니다.');
+      const long=last3.filter(s=>{
+        const m=(new Date(s.end)-new Date(s.start))/60000, d=s.endCount-s.startCount;
+        return m>=60 && d>0 && d/m < st.rate*0.5;
+      }).length;
+      if(long>=2) out.push('오래 앉아 있었는데도 나온 양이 적은 세션이 최근에 '+long+'번 있었습니다.');
+    }
+  }
+  const all=sortedAll();
+  if(all.length){
+    const g=now-new Date(all[0].end);
+    if(g>48*36e5) out.push('마지막으로 앉은 지 '+dur(g)+' 되었습니다.');
+    if(all[0].feel==='spent') out.push('마지막 세션은 소진된 채로 끝났습니다.');
+  }
+  return out;
+}
+
 /* ── 프롬프트 ─────────────────────── */
 function buildPrompt(){
   const now=new Date(), all=sortedAll();
@@ -943,6 +978,9 @@ head,
 '[내 맥락]',
 (db.context.trim()||'(따로 적어둔 것 없음)'),
 '',
+'[지금의 상태]',
+(function(){ const s=situationLines(w); return s.length? s.map(x=>'· '+x).join('\n') : '· 눈에 띄게 걸리는 것은 없습니다.'; })(),
+'',
 '[이 원고의 구간별 리듬]',
 phaseLines,
 '',
@@ -960,6 +998,8 @@ lines,
 '5. 그때까지 하면 좋을 일 세 가지. 쓰던 것을 잊게 두면서도 무의식이 계속 일하게 하는 쪽으로, 내 맥락에 맞게.',
 '6. 다음 세션의 권장 길이와 목표 글자수. 전체 평균이 아니라 이 장르, 이 구간, 지금 상태에서 무리 없이 닿을 수 있는 선으로.',
 '7. 기록에 "조언받은 시각"이 붙은 세션이 있다면, 지난번 조언이 실제로 맞았는지 확인해주세요. 그 시각에 앉았을 때와 어긋났을 때의 결과가 달랐는지. 빗나갔다면 무엇을 잘못 짚었던 것인지.',
+'8. 앉아도 글이 나오지 않을 때 대신 하면 좋을 일. 위 [지금의 상태]를 보고 판단해주세요. 특히 원고의 시작 구간처럼 세계가 아직 서 있지 않은 때, 또는 최근 산출이 떨어져 있을 때는, 빈 화면 앞에 버티는 것보다 나은 일이 따로 있을 것입니다. 원고에서 멀어지지 않으면서 글자수를 목표로 삼지 않는 일로 세 가지. 예컨대 인물의 이력을 연대순으로 적어보기, 배경이 되는 시기의 신문이나 자료 읽기, 이미 쓴 부분을 소리 내어 읽기, 장면을 대사만으로 적어보기, 걸으면서 다음 장면을 말로 해보기 같은 것들 중에서, 내 장르와 구간과 맥락에 맞는 것을 고르거나 더 나은 것을 제안해주세요. 각각 얼마쯤 하면 되는지도 함께.',
+'9. 그리고 하나만 말해주세요. 지금은 앉을 때입니까, 아니면 아직 채울 때입니까.',
 '',
 '[주의] 표본이 적습니다. 항목마다 세션 수를 함께 적어두었으니, 다섯 번 미만인 항목은 경향으로 단정하지 말고 그렇게 말해주세요. 글자수가 줄거나 그대로인 세션은 실패가 아니라 퇴고이거나 구상입니다. 많이 쓴 날을 좋은 날로 전제하지 마세요.',
 '',
@@ -968,6 +1008,8 @@ lines,
 '◆ 그렇게 보는 이유 — 세 문장 이내. 내 기록의 어느 지점과 어떤 연구에 기댔는지 밝혀주세요.',
 '◆ 그때까지 — 세 가지, 각각 한 줄.',
 '◆ 다음 세션 — 권장 시간 / 목표 글자수(매수 병기)',
+'◆ 앉아도 안 나올 때 — 세 가지, 각각 한 줄에 걸리는 시간까지.',
+'◆ 지금은 — 앉을 때인지 채울 때인지 한 문장으로.',
 '◆ 이 장르·이 구간에 대해 — 두 문장 이내.',
 '◆ 차선 —',
 '◆ 참고한 연구 — 제목과 출처만 짧게.'
