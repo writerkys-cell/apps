@@ -156,6 +156,19 @@ main.with-dock{padding-bottom:230px}
   padding:18px 20px 15px; margin-bottom:12px; box-shadow:var(--shadow);
 }
 .card.done{opacity:.55}
+.card.folded{
+  display:flex; align-items:center; gap:10px; padding:9px 14px; margin-bottom:6px;
+  background:transparent; border-style:dashed; box-shadow:none; opacity:.7;
+}
+.card.folded .c-title{
+  font-size:14px; font-weight:400; color:var(--ink-2);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.card.folded .angle{opacity:.7}
+.card.folded .unfold{margin-left:auto; background:none; border:none; font-size:11.5px; color:var(--accent); white-space:nowrap}
+.card.folded .stamp{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--mark); white-space:nowrap}
+.batch-head .foldall{background:none; border:none; font-size:11px; color:var(--ink-3)}
+.batch-head .foldall:hover{color:var(--accent)}
 .c-top{display:flex; align-items:baseline; gap:10px; margin-bottom:7px}
 .angle{
   font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.1em;
@@ -528,7 +541,8 @@ function renderSeeds(){
   const doneN=p.batches.reduce((a,b)=>a+b.items.filter(i=>i.done).length,0);
   bar.innerHTML='<button class="btn primary" id="analyze">AI에게 분석 맡기기</button>'+
     '<button class="btn" id="review"'+(seedsN?'':' disabled')+'>회고 맡기기</button>'+
-    '<span class="note">의도 '+p.intents.length+'층 · 글감 '+seedsN+' 중 '+doneN+' 씀</span>';
+    '<span class="note">의도 '+p.intents.length+'층 · 글감 '+seedsN+' 중 '+doneN+' 씀'+
+      (p.batches.reduce((a,b)=>a+b.items.filter(i=>i.folded).length,0)?' · '+p.batches.reduce((a,b)=>a+b.items.filter(i=>i.folded).length,0)+' 접음':'')+'</span>';
   v.appendChild(bar);
   $('analyze').onclick=openPrompt;
   $('review').onclick=openReview;
@@ -542,19 +556,36 @@ function renderSeeds(){
   }
   p.batches.slice().reverse().forEach(b=>{
     const h=document.createElement('div'); h.className='batch-head';
+    const allFolded=b.items.every(x=>x.folded);
+    const doneIn=b.items.filter(x=>x.done).length;
     h.innerHTML='<span>'+b.round+'회 · '+fmtDate(b.date)+' · 의도 '+b.basis+'층 기준</span><span class="line"></span>'+
-      '<button class="del txt-btn" data-delb="'+b.id+'" style="font-size:11px">회차 삭제</button>';
+      '<button class="foldall" data-fold="'+b.id+'">'+(allFolded?'모두 펼치기':'모두 접기')+'</button>'+
+      '<button class="del txt-btn" data-delb="'+b.id+'" style="font-size:11px">회차 삭제 ('+b.items.length+'개)</button>';
+    h.querySelector('[data-fold]').onclick=()=>{ b.items.forEach(x=>x.folded=!allFolded); save(); render(); };
+    h.dataset.done=doneIn;
     v.appendChild(h);
     b.items.forEach((s,i)=>v.appendChild(cardEl(b,s,i)));
   });
   v.querySelectorAll('[data-delb]').forEach(btn=>{
-    btn.onclick=()=>arm(btn,'한 번 더 누르면 지웁니다',()=>{
+    const dn=btn.closest('.batch-head').dataset.done|0;
+    btn.onclick=()=>arm(btn,(dn?'씀 '+dn+'개 포함, ':'')+'한 번 더 누르면 지웁니다',()=>{
       const p2=proj(); p2.batches=p2.batches.filter(x=>x.id!==btn.dataset.delb); save(); render(); toast('회차를 지웠습니다.');
     });
   });
 }
 
 function cardEl(batch,s,i){
+  if(s.folded){
+    const f=document.createElement('div'); f.className='card folded';
+    const a=document.createElement('span'); a.className='angle'; a.textContent=s.angle||'글감';
+    const t=document.createElement('div'); t.className='c-title'; t.textContent=s.title||('글감 '+(i+1));
+    f.appendChild(a); f.appendChild(t);
+    if(s.done&&s.doneAt){ const st=document.createElement('span'); st.className='stamp'; st.textContent='씀 · '+fmtDate(s.doneAt); f.appendChild(st); }
+    const u=document.createElement('button'); u.className='unfold'; u.textContent='펼치기';
+    u.onclick=()=>{ s.folded=false; save(); render(); };
+    f.appendChild(u);
+    return f;
+  }
   const c=document.createElement('div'); c.className='card'+(s.done?' done':'');
   const top=document.createElement('div'); top.className='c-top';
   const a=document.createElement('span'); a.className='angle'; a.textContent=s.angle||'글감';
@@ -573,7 +604,9 @@ function cardEl(batch,s,i){
   };
   const dn=document.createElement('button'); dn.className='btn small'; dn.textContent=s.done?'다시 열기':'썼음';
   dn.onclick=()=>{ s.done=!s.done; s.doneAt=s.done?new Date().toISOString():null; save(); render(); };
-  acts.appendChild(cp); acts.appendChild(dn);
+  const fd=document.createElement('button'); fd.className='btn small'; fd.textContent='접기';
+  fd.onclick=()=>{ s.folded=true; save(); render(); };
+  acts.appendChild(cp); acts.appendChild(dn); acts.appendChild(fd);
   if(s.done&&s.doneAt){ const st=document.createElement('span'); st.className='stamp'; st.textContent='씀 · '+fmtDate(s.doneAt); acts.appendChild(st); }
   c.appendChild(acts);
   return c;
@@ -834,10 +867,10 @@ function buildReviewPrompt(){
     t+='\n'+b.round+'회 ('+fmtDate(b.date)+', 의도 '+b.basis+'층 기준)\n';
     b.items.forEach(s=>{
       seedsN++; if(s.done) doneN++;
-      t+='· ['+(s.angle||'글감')+'] '+(s.title||'')+' — '+(s.done?'썼음':'쓰지 않음')+'\n';
+      t+='· ['+(s.angle||'글감')+'] '+(s.title||'')+' — '+(s.done?'썼음':'쓰지 않음')+(s.folded?', 접어 둠':'')+'\n';
     });
   });
-  t+='\n요약: 글감 '+seedsN+'개 중 '+doneN+'개를 썼습니다.\n\n';
+  t+='\n요약: 글감 '+seedsN+'개 중 '+doneN+'개를 썼습니다. ("접어 둠"은 작가가 지금은 손대지 않겠다고 치워 둔 것입니다.)\n\n';
   if(p.reviews&&p.reviews.length){
     t+='[지난 회고 — 같은 말을 되풀이하지 말 것]\n'+p.reviews.slice(-2).map(r=>'('+fmtDate(r.date)+') '+r.text.slice(0,300)).join('\n\n')+'\n\n';
   }
