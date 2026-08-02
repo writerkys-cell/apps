@@ -93,11 +93,14 @@ button:focus-visible{outline:2px solid var(--tide);outline-offset:2px}
 .inline{display:flex;gap:8px;align-items:flex-end}
 .inline input{flex:1}
 
+#plan .planwork{font-size:12.5px;color:var(--muted);margin-bottom:2px}
 #plan .when{font-family:'Gowun Batang',serif;font-size:26px;margin:2px 0}
 #plan .count{font-size:12.5px;color:var(--signal)}
 #plan ul{margin:12px 0 0;padding-left:17px}
 #plan li{font-size:13.5px;margin-bottom:3px}
 .now-tide{border-color:var(--signal)}
+.due{font-size:11px;color:var(--signal);letter-spacing:.04em}
+.over{color:var(--signal)}
 
 h2{font-size:11px;letter-spacing:.18em;color:var(--muted);font-weight:400;margin:34px 0 12px}
 .sum{display:flex;gap:26px;flex-wrap:wrap}
@@ -200,8 +203,9 @@ footer .spacer{flex:1}
     <p class="eyebrow">쓰는 중</p>
     <div class="live">
       <div class="clock num" id="elapsed">0분</div>
-      <div class="meta" id="runMeta"></div>
+      <div class="meta" id="goal"></div>
     </div>
+    <div class="meta" id="runMeta" style="font-size:12.5px;color:var(--muted)"></div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="ghost mini" id="btnOpenScriv2">스크리브너에서 열기</button>
       <button class="ghost mini" id="btnFixStart">앉은 시각 고치기</button>
@@ -245,19 +249,39 @@ footer .spacer{flex:1}
 
   <section class="card hidden" id="plan">
     <p class="eyebrow">다음 물때</p>
+    <div class="planwork" id="planWork"></div>
     <div class="when num" id="planWhen"></div>
     <div class="count num" id="planCount"></div>
     <ul id="planTodo"></ul>
-    <div style="margin-top:16px"><button class="link" id="btnPlanEdit">고치기</button></div>
+    <div class="wacts" style="margin-top:18px">
+      <button class="ghost mini key hidden" id="btnPlanStart">지금 시작</button>
+      <button class="ghost mini" id="btnPlanEdit">고치기</button>
+    </div>
   </section>
 
   <section class="card hidden" id="planEdit">
     <p class="eyebrow">다음 물때 적어두기</p>
-    <label for="planAt">언제 다시 앉을지</label>
-    <input type="datetime-local" id="planAt">
+    <div style="margin-bottom:6px"><button class="ghost mini" id="btnParse">답을 붙여넣어 채우기</button></div>
+    <div id="parseBox" class="hidden" style="margin:12px 0 18px">
+      <label for="parseIn">받은 답을 그대로 붙여넣으세요</label>
+      <textarea id="parseIn" style="min-height:90px" placeholder="◆ 다음 물때 — 8월 3일(월) 06:30 · 「운명의 투구」 · 90분"></textarea>
+      <div style="margin-top:8px"><button class="ghost mini key" id="btnParseGo">읽어들이기</button></div>
+    </div>
+    <label>어느 원고</label>
+    <div class="chips" id="planChips"></div>
+    <div class="row">
+      <div>
+        <label for="planAt">언제 다시 앉을지</label>
+        <input type="datetime-local" id="planAt">
+      </div>
+      <div>
+        <label for="planMin">얼마나 오래 · 분</label>
+        <input type="number" id="planMin" class="num" inputmode="numeric" placeholder="90">
+      </div>
+    </div>
     <div style="margin-top:16px">
       <label for="planTodoIn">그때까지 할 일 · 한 줄에 하나씩</label>
-      <textarea id="planTodoIn" placeholder="호수공원 한 바퀴&#10;화분 물주기&#10;읽던 책 30쪽"></textarea>
+      <textarea id="planTodoIn" placeholder="호수공원 한 바퀴&#10;인물 이력을 연대순으로 적어보기&#10;읽던 책 30쪽"></textarea>
     </div>
     <button class="go" id="btnPlanSave">적어두기</button>
     <div style="text-align:center;margin-top:12px"><button class="link" id="btnPlanClear">지우기</button></div>
@@ -322,11 +346,17 @@ footer .spacer{flex:1}
         <input type="number" id="wInit" class="num" inputmode="numeric" placeholder="0">
       </div>
     </div>
-    <div style="margin-top:18px">
-      <label for="wScriv">스크리브너 링크</label>
-      <input type="text" id="wScriv" placeholder="x-scrivener-item://...">
-      <p class="hint" style="margin-top:8px">스크리브너에서 문서나 폴더를 오른쪽 클릭 → <b>Copy Document Link</b>(문서 링크 복사)로 얻은 주소를 붙여넣으세요. 링크가 없으면 비워두어도 됩니다.</p>
+    <div class="row" style="margin-top:18px">
+      <div>
+        <label for="wDue">마감 · 없으면 비워두세요</label>
+        <input type="date" id="wDue">
+      </div>
+      <div>
+        <label for="wScriv">스크리브너 링크</label>
+        <input type="text" id="wScriv" placeholder="x-scrivener-item://...">
+      </div>
     </div>
+    <p class="hint" style="margin-top:8px">링크는 스크리브너에서 문서나 폴더를 오른쪽 클릭 → <b>Copy Document Link</b>(문서 링크 복사)로 얻습니다.</p>
     <div class="acts">
       <button class="ghost left hidden" id="btnDeleteWork">원고 지우기</button>
       <button class="ghost" id="btnWorkClose">닫기</button>
@@ -448,6 +478,20 @@ function gapBefore(s){
   return p? new Date(s.start)-new Date(p.end) : null;
 }
 
+/* 마감까지 남은 날과, 하루에 얼마씩 써야 하는지 */
+function pressure(w){
+  if(!w.due||!w.sheets) return null;
+  const d=new Date(w.due+'T23:59'), days=Math.ceil((d-Date.now())/864e5);
+  const left=Math.max(0,targetChars(w)-currentChars(w));
+  return {days:days, left:left, perDay: days>0? left/days : left};
+}
+/* 마지막으로 만진 지 얼마나 됐는지, 어떻게 끝냈는지 */
+function warmth(w){
+  const ss=byWork(w.id).sort((a,b)=>new Date(b.end)-new Date(a.end));
+  if(!ss.length) return null;
+  return {since: Date.now()-new Date(ss[0].end), feel: ss[0].feel};
+}
+
 /* ── 통계 ─────────────────────── */
 function stat(list){
   const n=list.length;
@@ -529,8 +573,9 @@ function renderToday(){
     const stale=Date.now()-new Date(db.active.start)>6*36e5;
     $('staleWarn').classList.toggle('hidden',!stale);
     if(stale&&$('endBox').classList.contains('hidden')){ $('btnEnd').click(); $('fixEndBox').classList.remove('hidden'); }
-    if(!tick) tick=setInterval(()=>{ $('elapsed').textContent=dur(Date.now()-new Date(db.active.start)); drawTide(); drawPlan(); },1000);
+    if(!tick) tick=setInterval(()=>{ $('elapsed').textContent=dur(Date.now()-new Date(db.active.start)); drawTide(); drawPlan(); tickGoal(); },1000);
     $('elapsed').textContent=dur(Date.now()-new Date(db.active.start));
+    tickGoal();
   }else{
     $('idle').classList.remove('hidden'); $('running').classList.add('hidden');
     if(tick){ clearInterval(tick); tick=null; }
@@ -551,12 +596,14 @@ function renderToday(){
 }
 
 function progressHTML(w){
-  const t=targetChars(w), c=currentChars(w);
+  const t=targetChars(w), c=currentChars(w), pr=pressure(w);
+  const dueTag = pr? ' · <span class="due">'+(pr.days>0? '마감 '+pr.days+'일 · 하루 '+sheets(pr.perDay)
+      : (pr.days===0? '오늘 마감':'마감 '+(-pr.days)+'일 지남'))+'</span>' : '';
   if(!t) return '<div class="pmeta"><span>'+esc(w.genre||'장르 미정')+'</span><span>'+nf(c)+'자 · '+sheets(c)+' · 목표 없음</span></div>';
   const r=Math.min(1,c/t), ph=phaseAt(w,c);
   return '<div class="pbar"><div class="pfill" style="width:'+(r*100).toFixed(1)+'%"></div>'+
     '<div class="pnick" style="left:30%"></div><div class="pnick" style="left:75%"></div></div>'+
-    '<div class="pmeta"><span>'+esc(w.genre||'장르 미정')+' · <span class="phase">'+ph+' 구간</span></span>'+
+    '<div class="pmeta"><span>'+esc(w.genre||'장르 미정')+' · <span class="phase">'+ph+' 구간</span>'+dueTag+'</span>'+
     '<span class="num">'+sheets(c)+' / '+w.sheets+'매 · '+Math.round(r*100)+'%</span></div>';
 }
 
@@ -569,6 +616,15 @@ function drawTodaySum(){
     '<div>매수<b class="num">'+(chars<0?'−':'')+sheets(Math.abs(chars))+'</b></div>'+
     '<div>앉은 시간<b class="num">'+(ms?dur(ms):'0분')+'</b></div>'+
     '<div>세션<b class="num">'+t.length+'</b></div>';
+}
+
+function tickGoal(){
+  const el=$('goal'); if(!db.active){ el.textContent=''; return; }
+  const g=db.active.goalMin;
+  if(!g){ el.textContent=''; return; }
+  const m=(Date.now()-new Date(db.active.start))/60000, r=g-m;
+  if(r>0){ el.className='meta'; el.textContent='권장 '+g+'분 중 '+Math.round(r)+'분 남음'; }
+  else{ el.className='meta over'; el.textContent='권장 '+g+'분을 '+dur(-r*60000)+' 넘겼습니다'; }
 }
 
 function drawTide(){
@@ -622,10 +678,14 @@ function drawPlan(){
   const p=db.plan;
   if(!p||!p.at||view!=='today'){ $('plan').classList.add('hidden'); return; }
   $('plan').classList.remove('hidden');
-  const at=new Date(p.at), now=new Date(), left=at-now;
-  $('planWhen').textContent=(key(at)===key(now)?'오늘':dayLabel(at))+' '+hhmm(at);
+  const at=new Date(p.at), now=new Date(), left=at-now, w=work(p.workId);
+  $('planWork').textContent=[w?'「'+w.title+'」':null, w&&w.genre?w.genre:null,
+    p.minutes? p.minutes+'분':null].filter(Boolean).join(' · ')||'원고 미정';
+  $('planWhen').textContent=(dkey(at)===dkey(now)?'오늘':dayLabel(at))+' '+hhmm(at);
+  const ready = left<=0 && !db.active;
   if(left>0){ $('planCount').textContent=dur(left)+' 남음 · 그때까지는 잊어도 됩니다'; $('plan').classList.remove('now-tide'); }
-  else{ $('planCount').textContent='지금이 물때입니다'; $('plan').classList.add('now-tide'); }
+  else{ $('planCount').textContent= db.active? '쓰는 중입니다' : '지금이 물때입니다'; $('plan').classList.add('now-tide'); }
+  $('btnPlanStart').classList.toggle('hidden',!ready);
   $('planTodo').innerHTML=(p.todo||'').split('\n').map(t=>t.trim()).filter(Boolean).map(t=>'<li>'+esc(t)+'</li>').join('');
 }
 
@@ -744,7 +804,7 @@ function openWorkModal(w){
   editing=w||null; editGenre=w? w.genre : null;
   $('workModalTitle').textContent=w? '원고 고치기':'원고 세우기';
   $('wTitle').value=w?w.title:''; $('wSheets').value=w&&w.sheets?w.sheets:'';
-  $('wInit').value=w?(w.init||''):''; $('wScriv').value=w?(w.scriv||''):'';
+  $('wInit').value=w?(w.init||''):''; $('wScriv').value=w?(w.scriv||''):''; $('wDue').value=w?(w.due||''):'';
   Array.from($('wGenre').children).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.g===editGenre)));
   $('btnDeleteWork').classList.toggle('hidden',!w);
   $('veilWork').classList.remove('hidden'); $('wTitle').focus();
@@ -759,7 +819,8 @@ $('btnWorkSave').addEventListener('click',()=>{
   const title=$('wTitle').value.trim();
   if(!title){ toast('제목을 넣어주세요'); $('wTitle').focus(); return; }
   const sh=parseInt($('wSheets').value,10), ini=parseInt($('wInit').value,10);
-  const data={title:title,genre:editGenre,sheets:isNaN(sh)?null:sh,init:isNaN(ini)?0:ini,scriv:$('wScriv').value.trim()};
+  const data={title:title,genre:editGenre,sheets:isNaN(sh)?null:sh,init:isNaN(ini)?0:ini,
+              scriv:$('wScriv').value.trim(), due:$('wDue').value||null};
   if(editing) Object.assign(editing,data);
   else{ const w=Object.assign({id:uid()},data); db.works.push(w); pick=w.id; }
   save(); $('veilWork').classList.add('hidden'); render(); toast('세워뒀습니다');
@@ -808,9 +869,20 @@ $('btnStart').addEventListener('click',()=>{
   const w=work(pick); if(!w){ toast('원고를 골라주세요'); return; }
   const c=parseInt(String($('startCount').value).replace(/[^0-9]/g,''),10);
   if(isNaN(c)||c<0){ toast('지금까지 쓴 글자수를 넣어주세요'); $('startCount').focus(); return; }
-  db.active={workId:w.id,startCount:c,start:new Date().toISOString(),advised:(db.plan&&db.plan.at)||null};
+  beginSession(w,c);
+});
+function beginSession(w,c){
+  const p=db.plan, same = p && p.workId===w.id;
+  db.active={workId:w.id,startCount:c,start:new Date().toISOString(),
+    advised: p? p.at : null, advisedWork: p? (p.workId||null) : null,
+    goalMin: same? (p.minutes||null) : null};
   db.lastWorkId=w.id; db.plan=null; save(); render();
   if(w.scriv) openScriv(w);   // 클릭 동작 안에서 바로 열어야 브라우저가 막지 않습니다
+}
+$('btnPlanStart').addEventListener('click',()=>{
+  const w=work(db.plan&&db.plan.workId);
+  if(!w){ toast('원고를 고르고 시작해주세요'); return; }
+  beginSession(w,currentChars(w));
 });
 $('btnFixStart').addEventListener('click',()=>{
   const box=$('fixStartBox'), on=box.classList.toggle('hidden')===false;
@@ -861,6 +933,7 @@ $('btnSave').addEventListener('click',()=>{
   db.sessions.push({
     id:uid(), workId:db.active.workId, startCount:db.active.startCount, endCount:c,
     start:db.active.start, end:en.toISOString(), advised:db.active.advised||null,
+    advisedWork:db.active.advisedWork||null, goalMin:db.active.goalMin||null,
     phase: w? phaseAt(w,c) : null, feel:feel, note:$('note').value.trim()
   });
   db.active=null; feel=null; $('note').value='';
@@ -876,19 +949,75 @@ $('btnCancel').addEventListener('click',()=>{
 });
 
 /* ── 다음 물때 ─────────────────────── */
+let planPick=null;
 function openPlanEdit(){
   $('planEdit').classList.remove('hidden'); $('plan').classList.add('hidden');
   const p=db.plan||{};
+  planPick = p.workId||pick||db.lastWorkId||(db.works[0]&&db.works[0].id)||null;
+  drawPlanChips();
   if(p.at){ const d=new Date(p.at); $('planAt').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+hhmm(d); }
-  $('planTodoIn').value=p.todo||'';
+  $('planMin').value=p.minutes||''; $('planTodoIn').value=p.todo||'';
 }
+function drawPlanChips(){
+  $('planChips').innerHTML=db.works.map(w=>{
+    const pr=pressure(w);
+    const tag=pr&&pr.days<=14? ' <span class="due">D'+(pr.days>=0?'-'+pr.days:'+'+(-pr.days))+'</span>':'';
+    return '<button class="chip" data-pw="'+w.id+'" aria-pressed="'+(w.id===planPick)+'">'+esc(w.title)+tag+'</button>';
+  }).join('')||'<span class="empty">원고를 먼저 세워주세요</span>';
+}
+$('planChips').addEventListener('click',e=>{
+  const b=e.target.closest('button[data-pw]'); if(!b) return;
+  planPick=b.dataset.pw; drawPlanChips();
+});
 $('btnPlanEdit').addEventListener('click',openPlanEdit);
 $('btnPlanSave').addEventListener('click',()=>{
   if(!$('planAt').value){ toast('시각을 골라주세요'); return; }
-  db.plan={at:new Date($('planAt').value).toISOString(),todo:$('planTodoIn').value};
-  save(); $('planEdit').classList.add('hidden'); render(); toast('적어뒀습니다');
+  const m=parseInt($('planMin').value,10);
+  db.plan={at:new Date($('planAt').value).toISOString(), workId:planPick,
+           minutes: isNaN(m)?null:m, todo:$('planTodoIn').value};
+  save(); $('planEdit').classList.add('hidden'); $('parseBox').classList.add('hidden'); render(); toast('적어뒀습니다');
 });
 $('btnPlanClear').addEventListener('click',()=>{ db.plan=null; save(); $('planEdit').classList.add('hidden'); render(); });
+
+/* 받은 답에서 시각·원고·길이를 읽어냅니다 */
+$('btnParse').addEventListener('click',()=>{ $('parseBox').classList.toggle('hidden'); $('parseIn').focus(); });
+$('btnParseGo').addEventListener('click',()=>{
+  const t=$('parseIn').value;
+  if(!t.trim()){ toast('답을 붙여넣어 주세요'); return; }
+  let got=[];
+  /* 시각 */
+  const md=t.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/);
+  const hm=t.match(/(\d{1,2})\s*[:시]\s*(\d{2})/);
+  if(hm){
+    const now=new Date();
+    let y=now.getFullYear(), mo=md? +md[1]-1 : now.getMonth(), da=md? +md[2] : now.getDate();
+    let d=new Date(y,mo,da,+hm[1],+hm[2]);
+    if(!md&&d<now) d=new Date(d.getTime()+864e5);
+    if(md&&d<new Date(now.getTime()-30*864e5)) d.setFullYear(y+1);
+    $('planAt').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+hhmm(d);
+    got.push('시각');
+  }
+  /* 길이 */
+  /* 길이 · 시각 표현을 먼저 걷어낸 뒤에 찾습니다 */
+  const t2=t.replace(/\d{1,2}\s*[:시]\s*\d{1,2}\s*분?/g,' ');
+  const mn=t2.match(/(\d{1,3})\s*분/);
+  if(mn&&+mn[1]>=10&&+mn[1]<=400){ $('planMin').value=mn[1]; got.push('길이'); }
+  /* 원고 */
+  let hit=null;
+  const q=t.match(/[「『]([^」』]+)[」』]/);
+  if(q) hit=db.works.find(w=>w.title===q[1].trim())||db.works.find(w=>q[1].indexOf(w.title)>=0);
+  if(!hit) hit=db.works.find(w=>w.title&&t.indexOf(w.title)>=0);
+  if(hit){ planPick=hit.id; drawPlanChips(); got.push('원고'); }
+  /* 할 일 */
+  const sec=t.match(/◆\s*그때까지[^\n]*\n([\s\S]*?)(?=\n◆|$)/);
+  if(sec){
+    const lines=sec[1].split('\n')
+      .map(x=>x.replace(/^[\s\-–—·•*]+/,'').replace(/^\d+[.)]\s*/,'').trim())
+      .filter(Boolean);
+    if(lines.length){ $('planTodoIn').value=lines.join('\n'); got.push('할 일'); }
+  }
+  toast(got.length? got.join(' · ')+'을 읽었습니다. 확인하고 저장하세요' : '읽어낼 것을 찾지 못했습니다');
+});
 
 /* ── 지금의 상태 ─────────────────────── */
 function situationLines(w){
@@ -930,7 +1059,7 @@ function buildPrompt(){
   const now=new Date(), all=sortedAll();
   if(!all.length) return null;
   const lastEnd=new Date(all[0].end);
-  const w=work(pick)||work(all[0].workId);
+  const w=work(db.plan&&db.plan.workId)||work(pick)||work(all[0].workId);
   const lines=all.slice(0,40).reverse().map((s,i)=>{
     const a=new Date(s.start), b=new Date(s.end), d=s.endCount-s.startCount, m=(b-a)/60000;
     const ww=work(s.workId), g=gapBefore(s);
@@ -940,8 +1069,10 @@ function buildPrompt(){
       ' · '+nf(s.startCount)+'→'+nf(s.endCount)+' ('+(d>=0?'+':'−')+nf(Math.abs(d))+'자'+
       ((d>0&&m>0)? ', '+(d/m).toFixed(1)+'자/분':'')+(d<0?', 퇴고':'')+')'+
       (g!=null? ' · 직전 쉼 '+dur(g):'')+(s.feel? ' · 끝낼 때: '+FEEL[s.feel]:'')+
-      (s.advised? ' · 조언받은 시각 '+hhmm(new Date(s.advised))+'에서 '+
+      (s.advised? ' · 조언 '+hhmm(new Date(s.advised))+'에서 '+
         dur(Math.abs(a-new Date(s.advised)))+(a>=new Date(s.advised)?' 늦게':' 일찍')+' 앉음':'')+
+      (s.goalMin? ' · 권장 '+s.goalMin+'분 대비 '+(m>=s.goalMin? '+':'−')+Math.abs(Math.round(m-s.goalMin))+'분':'')+
+      (s.advisedWork&&s.advisedWork!==s.workId? ' · 조언은 「'+((work(s.advisedWork)||{}).title||'다른 원고')+'」였으나 이쪽을 폈음':'')+
       (s.note? ' · 메모: '+s.note:'');
   }).join('\n');
 
@@ -966,10 +1097,24 @@ function buildPrompt(){
     return st? '· '+g+': '+st.n+'회, 평균 '+dur(st.avgMs)+', '+st.rate.toFixed(1)+'자/분' : null;
   }).filter(Boolean).join('\n');
 
+  const deskLines=db.works.map(w=>{
+    const c=currentChars(w), t=targetChars(w), pr=pressure(w), wm=warmth(w), st=stat(byWork(w.id));
+    const bits=[(w.genre||'장르 미정')];
+    if(t) bits.push(sheets(c)+'/'+w.sheets+'매('+Math.round(c/t*100)+'%, '+phaseAt(w,c)+' 구간)');
+    else bits.push(sheets(c));
+    if(pr) bits.push(pr.days>0? '마감까지 '+pr.days+'일, 남은 '+sheets(pr.left)+'을 채우려면 하루 '+sheets(pr.perDay)
+        : (pr.days===0? '오늘 마감, 남은 '+sheets(pr.left) : '마감 '+(-pr.days)+'일 지남, 남은 '+sheets(pr.left)));
+    else bits.push('마감 없음');
+    if(wm) bits.push('마지막 세션 '+dur(wm.since)+' 전'+(wm.feel? ', '+FEEL[wm.feel]:''));
+    else bits.push('아직 앉은 적 없음');
+    if(st) bits.push('평균 '+dur(st.avgMs)+', '+st.rate.toFixed(1)+'자/분');
+    return '· 「'+w.title+'」 — '+bits.join(' / ');
+  }).join('\n');
+
   return [
 '글쓰기 리듬을 봐주세요.',
 '',
-'나는 소설과 산문을 씁니다. 오래 앉아 있는다고 더 나오지는 않는다고 느껴서, 세션마다 앉은 시각과 일어선 시각, 그때까지 쓴 원고의 누적 글자수(공백 포함)를 기록하고 있습니다. 매수는 200자 원고지 기준이고, 글자수가 줄어든 세션은 새로 쓰는 대신 퇴고를 한 세션입니다. 구간은 목표 매수 대비 진행률로 나눈 것입니다(30% 미만 시작, 30~75% 중간, 75% 이상 마무리).',
+'나는 소설과 산문을 씁니다. 여러 원고를 한꺼번에 굴리고 있어서, 다음에 언제 앉을지만이 아니라 그때 무엇을 펼칠지도 정해야 합니다. 오래 앉아 있는다고 더 나오지는 않는다고 느껴서, 세션마다 앉은 시각과 일어선 시각, 그때까지 쓴 원고의 누적 글자수(공백 포함)를 기록하고 있습니다. 매수는 200자 원고지 기준이고, 글자수가 줄어든 세션은 새로 쓰는 대신 퇴고를 한 세션입니다. 구간은 목표 매수 대비 진행률로 나눈 것입니다(30% 미만 시작, 30~75% 중간, 75% 이상 마무리).',
 '',
 '[지금] '+now.getFullYear()+'년 '+dayLabel(now)+' '+hhmm(now),
 '[마지막 세션이 끝난 뒤] '+dur(now-lastEnd)+' 지남',
@@ -980,6 +1125,9 @@ head,
 '',
 '[지금의 상태]',
 (function(){ const s=situationLines(w); return s.length? s.map(x=>'· '+x).join('\n') : '· 눈에 띄게 걸리는 것은 없습니다.'; })(),
+'',
+'[책상 위의 원고들]',
+(deskLines||'(없음)'),
 '',
 '[이 원고의 구간별 리듬]',
 phaseLines,
@@ -995,23 +1143,27 @@ lines,
 '2. 장르와 구간의 차이. 장편과 단편, 에세이와 짧은 글은 요구하는 집중의 종류가 다르고, 한 원고 안에서도 시작·중간·마무리는 다른 일입니다. 내 기록에서 그 차이가 실제로 보이는지, 보인다면 어떻게 보이는지.',
 '3. 창작 생산성에 관한 연구를 웹에서 찾아 확인해주세요. 울트라디안 리듬과 휴식 주기, 크로노타입과 집중의 시간대, 부화 효과(incubation)와 확산적 사고, 자이가르닉 효과, 주의 회복 이론, 인지적 피로의 회복 곡선 같은 것들이 실제로 무엇을 말하는지. 통설로 도는 이야기와 근거가 약한 이야기는 구분해주세요. 지금 내가 있는 구간에서 흔히 겪는 정체에 관한 것이 있다면 그것도.',
 '4. 그 모두를 합쳐서, 다음에 앉기 가장 좋은 시각을 하나 골라주세요. 구체적인 시각으로. 오늘이 아니어도 됩니다. 차선의 시각도 하나.',
-'5. 그때까지 하면 좋을 일 세 가지. 쓰던 것을 잊게 두면서도 무의식이 계속 일하게 하는 쪽으로, 내 맥락에 맞게.',
-'6. 다음 세션의 권장 길이와 목표 글자수. 전체 평균이 아니라 이 장르, 이 구간, 지금 상태에서 무리 없이 닿을 수 있는 선으로.',
-'7. 기록에 "조언받은 시각"이 붙은 세션이 있다면, 지난번 조언이 실제로 맞았는지 확인해주세요. 그 시각에 앉았을 때와 어긋났을 때의 결과가 달랐는지. 빗나갔다면 무엇을 잘못 짚었던 것인지.',
-'8. 앉아도 글이 나오지 않을 때 대신 하면 좋을 일. 위 [지금의 상태]를 보고 판단해주세요. 특히 원고의 시작 구간처럼 세계가 아직 서 있지 않은 때, 또는 최근 산출이 떨어져 있을 때는, 빈 화면 앞에 버티는 것보다 나은 일이 따로 있을 것입니다. 원고에서 멀어지지 않으면서 글자수를 목표로 삼지 않는 일로 세 가지. 예컨대 인물의 이력을 연대순으로 적어보기, 배경이 되는 시기의 신문이나 자료 읽기, 이미 쓴 부분을 소리 내어 읽기, 장면을 대사만으로 적어보기, 걸으면서 다음 장면을 말로 해보기 같은 것들 중에서, 내 장르와 구간과 맥락에 맞는 것을 고르거나 더 나은 것을 제안해주세요. 각각 얼마쯤 하면 되는지도 함께.',
-'9. 그리고 하나만 말해주세요. 지금은 앉을 때입니까, 아니면 아직 채울 때입니까.',
+'5. 그리고 그때 어느 원고를 펼칠지 하나만 골라주세요. [책상 위의 원고들]을 보고 판단하되, 다음 세 가지를 순서대로 따져주세요. (가) 마감이 강제하는 것이 있는가 — 하루에 채워야 할 분량이 내 평균 산출을 넘어서기 시작한 원고가 있다면 그것이 먼저입니다. (나) 강제가 없다면, 지금 살아 있는 것은 무엇인가 — 최근에 만졌고 "더 쓸 수 있었다"로 끝난 원고는 다시 들어가기 쉽고, 오래 손대지 않은 원고는 다시 데우는 데만 한 세션이 듭니다. (다) 그 시각의 내 집중이 그 원고가 요구하는 집중과 맞는가 — 산출이 가장 좋은 시간대는 가장 무거운 원고에 주고, 남는 시간대에 짧은 글을 놓는 편이 낫습니다. 세 가지가 서로 어긋난다면 무엇을 앞세웠는지 밝혀주세요.',
+'6. 한 번에 여러 원고를 오가는 것에 대해서도 한마디 해주세요. 내 기록에서 원고를 바꿔 앉은 날과 한 원고를 이어간 날의 산출이 다른지, 다르다면 어떻게 다른지.',
+'7. 다음 세션의 권장 길이와 목표 글자수. 전체 평균이 아니라 이 장르, 이 구간, 지금 상태에서 무리 없이 닿을 수 있는 선으로. 길이는 분 단위 숫자 하나로 못박아 주세요. 내가 그 숫자를 그대로 앱에 넣습니다.',
+'8. 그때까지 하면 좋을 일 세 가지. 쓰던 것을 잊게 두면서도 무의식이 계속 일하게 하는 쪽으로, 내 맥락에 맞게.',
+'9. 기록에 "조언받은 시각"이 붙은 세션이 있다면, 지난번 조언이 실제로 맞았는지 확인해주세요. 그 시각에 앉았을 때와 어긋났을 때의 결과가 달랐는지, 권장한 길이가 적당했는지. 빗나갔다면 무엇을 잘못 짚었던 것인지.',
+'10. 앉아도 글이 나오지 않을 때 대신 하면 좋을 일. 위 [지금의 상태]를 보고 판단해주세요. 특히 원고의 시작 구간처럼 세계가 아직 서 있지 않은 때, 또는 최근 산출이 떨어져 있을 때는, 빈 화면 앞에 버티는 것보다 나은 일이 따로 있을 것입니다. 원고에서 멀어지지 않으면서 글자수를 목표로 삼지 않는 일로 세 가지. 예컨대 인물의 이력을 연대순으로 적어보기, 배경이 되는 시기의 신문이나 자료 읽기, 이미 쓴 부분을 소리 내어 읽기, 장면을 대사만으로 적어보기, 걸으면서 다음 장면을 말로 해보기 같은 것들 중에서, 내 장르와 구간과 맥락에 맞는 것을 고르거나 더 나은 것을 제안해주세요. 각각 얼마쯤 하면 되는지도 함께.',
+'11. 그리고 하나만 말해주세요. 지금은 앉을 때입니까, 아니면 아직 채울 때입니까.',
 '',
 '[주의] 표본이 적습니다. 항목마다 세션 수를 함께 적어두었으니, 다섯 번 미만인 항목은 경향으로 단정하지 말고 그렇게 말해주세요. 글자수가 줄거나 그대로인 세션은 실패가 아니라 퇴고이거나 구상입니다. 많이 쓴 날을 좋은 날로 전제하지 마세요.',
 '',
-'[답변 형식] 아래 그대로, 군더더기 없이.',
-'◆ 다음 물때 —',
+'[답변 형식] 아래 그대로, 군더더기 없이. 특히 첫 줄은 형식을 정확히 지켜주세요. 내가 그 줄을 앱에 그대로 붙여넣어 읽어들입니다. 날짜, 24시간제 시각, 「원고 제목」, 분 단위 숫자가 모두 들어가야 합니다.',
+'◆ 다음 물때 — 8월 3일(월) 06:30 · 「원고 제목」 · 90분   ← 이 꼴로',
+'◆ 그 원고를 고른 이유 — 두 문장 이내. 마감이 앞세웠는지, 살아 있음이 앞세웠는지 밝혀주세요.',
 '◆ 그렇게 보는 이유 — 세 문장 이내. 내 기록의 어느 지점과 어떤 연구에 기댔는지 밝혀주세요.',
 '◆ 그때까지 — 세 가지, 각각 한 줄.',
-'◆ 다음 세션 — 권장 시간 / 목표 글자수(매수 병기)',
+'◆ 다음 세션 — 목표 글자수(매수 병기)',
 '◆ 앉아도 안 나올 때 — 세 가지, 각각 한 줄에 걸리는 시간까지.',
 '◆ 지금은 — 앉을 때인지 채울 때인지 한 문장으로.',
-'◆ 이 장르·이 구간에 대해 — 두 문장 이내.',
+'◆ 미뤄둔 원고 — 이번에 고르지 않은 원고 중 신경 쓸 것이 있다면 한 줄.',
 '◆ 차선 —',
+'◆ 지난 조언 채점 — 있다면 두 문장 이내.',
 '◆ 참고한 연구 — 제목과 출처만 짧게.'
 ].filter(x=>x!==null).join('\n');
 }
