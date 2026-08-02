@@ -302,10 +302,16 @@ footer .spacer{flex:1}
 
 <!-- ══ 기록 ══ -->
 <div id="v-log" class="hidden">
-  <h2 style="margin-top:0">장르별 리듬</h2>
+  <h2 style="margin-top:0">주 단위 흐름</h2>
+  <div id="weekStats"></div>
+  <h2>쉼의 길이에 따라</h2>
+  <div id="gapStats"></div>
+  <h2>장르별 리듬</h2>
   <div id="genreStats"></div>
   <h2 id="logHead">기록</h2>
-  <div id="log"></div>
+  <p class="hint" style="margin-top:0">읽으라고 쌓는 것이 아닙니다. 분석에 쓰이고, 필요할 때만 펼쳐보면 됩니다.</p>
+  <div style="margin:12px 0"><button class="ghost mini" id="btnShowLog">목록 펼치기</button></div>
+  <div id="log" class="hidden"></div>
   <div style="margin-top:14px"><button class="link hidden" id="btnMore">더 보기</button></div>
 </div>
 
@@ -492,6 +498,54 @@ function warmth(w){
   return {since: Date.now()-new Date(ss[0].end), feel: ss[0].feel};
 }
 
+/* 직전 쉼의 길이별로 묶어 봅니다. 자료가 없는 구간을 드러내는 것이 목적입니다. */
+const GAPS=[[0,3,'3시간 이내'],[3,8,'3–8시간'],[8,20,'8–20시간 · 하룻밤'],[20,48,'20–48시간'],[48,1e6,'48시간 이상']];
+function gapBuckets(){
+  const b=GAPS.map(g=>({label:g[2],n:0,chars:0,mins:0,cut:0,spent:0,dry:0}));
+  db.sessions.forEach(s=>{
+    const g=gapBefore(s); if(g==null) return;
+    const h=g/36e5, i=GAPS.findIndex(x=>h>=x[0]&&h<x[1]); if(i<0) return;
+    const d=s.endCount-s.startCount, m=(new Date(s.end)-new Date(s.start))/60000;
+    b[i].n++; b[i].mins+=m;
+    if(d>0) b[i].chars+=d; else if(d<0) b[i].cut+=-d; else b[i].dry++;
+    if(s.feel==='spent') b[i].spent++;
+  });
+  return b;
+}
+/* 주 단위 순증가. 많이 쓴 뒤에 많이 지웠는지가 여기서 드러납니다. */
+function weeklyNet(n){
+  const map={};
+  db.sessions.forEach(s=>{
+    const d=wday(s.end), mon=new Date(d); mon.setDate(mon.getDate()-((mon.getDay()+6)%7)); mon.setHours(0,0,0,0);
+    const k=key(mon), g=s.endCount-s.startCount;
+    map[k]=map[k]||{k:k,n:0,plus:0,minus:0,mins:0,gaps:[]};
+    map[k].n++; map[k].mins+=(new Date(s.end)-new Date(s.start))/60000;
+    if(g>0) map[k].plus+=g; else map[k].minus+=-g;
+    const gp=gapBefore(s); if(gp!=null) map[k].gaps.push(gp);
+  });
+  return Object.keys(map).sort().slice(-n).map(k=>{
+    const w=map[k], med=w.gaps.length? w.gaps.slice().sort((a,b)=>a-b)[Math.floor(w.gaps.length/2)] : null;
+    return {label:k, n:w.n, plus:w.plus, minus:w.minus, net:w.plus-w.minus, mins:w.mins, gap:med};
+  });
+}
+function medianGap(){
+  const g=db.sessions.map(gapBefore).filter(x=>x!=null&&x<7*864e5).sort((a,b)=>a-b);
+  return g.length? g[Math.floor(g.length/2)] : null;
+}
+function hourBands(){
+  const b={};
+  db.sessions.forEach(s=>{
+    const h=Math.floor(new Date(s.start).getHours()/3)*3;
+    const d=s.endCount-s.startCount, m=(new Date(s.end)-new Date(s.start))/60000;
+    b[h]=b[h]||{n:0,c:0,m:0,cut:0}; b[h].n++; b[h].m+=m;
+    if(d>0) b[h].c+=d; else b[h].cut+=-d;
+  });
+  return Object.keys(b).sort((a,b2)=>a-b2).map(h=>({
+    label:pad(h)+':00–'+pad((+h+3)%24)+':00', n:b[h].n,
+    rate: b[h].m? b[h].c/b[h].m : 0, cut:b[h].cut
+  }));
+}
+
 /* ── 통계 ─────────────────────── */
 function stat(list){
   const n=list.length;
@@ -550,13 +604,15 @@ function updateHint(){
   const base='모든 기록은 이 파일을 연 기기 안에만 남습니다. 기기를 옮길 땐 내보낸 JSON을 들고 가세요.';
   const n=db.sessions.length;
   if(!n){ $('hint').textContent=base; return; }
+  const kb=Math.round(JSON.stringify(db).length/1024);
+  const room=' 지금 기록 '+n+'회, '+kb+'KB. 이 방식으로는 수만 회까지 담깁니다.';
   const last=db.lastExport? new Date(db.lastExport):null;
   const days=last? Math.floor((Date.now()-last)/864e5):null;
   const since=last? db.sessions.filter(s=>new Date(s.end)>last).length : n;
   if((days===null&&n>=8)||(days!==null&&days>=14&&since>=5)){
     $('hint').innerHTML='<b>'+(last? '마지막으로 내보낸 지 '+days+'일, 그 뒤로 '+since+'번의 기록.'
-      : '기록 '+n+'개가 아직 한 번도 내보내지지 않았습니다.')+'</b> 브라우저 기록을 지우거나 파일을 옮기면 사라질 수 있습니다. '+base;
-  }else $('hint').textContent=base;
+      : '기록 '+n+'개가 아직 한 번도 내보내지지 않았습니다.')+'</b> 브라우저 기록을 지우거나 파일을 옮기면 사라질 수 있습니다. '+base+room;
+  }else $('hint').textContent=base+room;
 }
 
 /* ── 오늘 ─────────────────────── */
@@ -719,13 +775,43 @@ document.addEventListener('click',e=>{
 });
 
 /* ── 기록 화면 ─────────────────────── */
+let logOpen=false;
 function renderLog(){
   const all=sortedAll();
   $('logHead').textContent='기록 '+all.length;
-  $('log').innerHTML=all.length? sessionsHTML(all.slice(0,shown),false) : '<p class="empty">아직 기록이 없습니다.</p>';
-  $('btnMore').classList.toggle('hidden',all.length<=shown);
+  $('log').classList.toggle('hidden',!logOpen);
+  $('btnShowLog').textContent=logOpen? '목록 접기':'목록 펼치기';
+  if(logOpen){
+    $('log').innerHTML=all.length? sessionsHTML(all.slice(0,shown),false) : '<p class="empty">아직 기록이 없습니다.</p>';
+    $('btnMore').classList.toggle('hidden',all.length<=shown);
+  }else $('btnMore').classList.add('hidden');
 
-  const rows=GENRES.map(g=>{
+  /* 주 단위 흐름 */
+  const wk=weeklyNet(8);
+  $('weekStats').innerHTML= wk.length?
+    '<table class="tbl"><tr><th>주</th><th>세션</th><th>쓴</th><th>지운</th><th>순증가</th><th>간격 중앙</th></tr>'+
+    wk.reverse().map(x=>{
+      const d=new Date(x.label);
+      return '<tr><td>'+(d.getMonth()+1)+'/'+d.getDate()+'</td><td class="num">'+x.n+'</td>'+
+        '<td class="num">'+sheets(x.plus)+'</td><td class="mut num">'+(x.minus?'−'+sheets(x.minus):'—')+'</td>'+
+        '<td class="num">'+sheets(x.net)+'</td><td class="mut num">'+(x.gap!=null?dur(x.gap):'—')+'</td></tr>';
+    }).join('')+'</table><p class="hint">많이 쓴 주에 많이 지웠다면, 순증가가 실제로 남은 분량입니다.</p>'
+    : '<p class="empty">기록이 쌓이면 주별 흐름이 나타납니다.</p>';
+
+  /* 쉼의 길이에 따라 */
+  const gb=gapBuckets(), mg=medianGap();
+  const rows=gb.map(x=>{
+    if(x.n<3) return '<tr><td>'+x.label+'</td><td class="num">'+x.n+'회</td><td class="mut" colspan="3">자료 없음</td></tr>';
+    return '<tr><td>'+x.label+'</td><td class="num">'+x.n+'회</td>'+
+      '<td class="num">'+(x.mins?(x.chars/x.mins).toFixed(1):'0')+'</td>'+
+      '<td class="num">'+sheets(x.chars/x.n)+'</td>'+
+      '<td class="mut num">'+(x.cut? '−'+sheets(x.cut):'—')+'</td></tr>';
+  }).join('');
+  $('gapStats').innerHTML='<table class="tbl"><tr><th>직전 쉼</th><th>세션</th><th>자/분</th><th>세션당</th><th>덜어낸</th></tr>'+rows+'</table>'+
+    '<p class="hint">'+(mg!=null? '내 간격의 중앙값은 '+dur(mg)+'. ':'')+
+    '자료 없음으로 남은 칸이 있다면, 그 간격에 대해서는 아직 아무것도 알 수 없습니다.</p>';
+
+  const grows=GENRES.map(g=>{
     const ids=db.works.filter(w=>w.genre===g).map(w=>w.id);
     const ss=db.sessions.filter(s=>ids.indexOf(s.workId)>=0);
     const st=stat(ss); if(!st) return null;
@@ -734,10 +820,11 @@ function renderLog(){
       '</td><td class="num">'+dur(st.avgMs)+
       '</td><td class="num">'+st.rate.toFixed(1)+'</td><td class="mut">'+(bl?bl.label:'—')+'</td></tr>';
   }).filter(Boolean).join('');
-  $('genreStats').innerHTML= rows?
-    '<table class="tbl"><tr><th>장르</th><th>세션</th><th>평균 길이</th><th>자/분</th><th>가장 좋았던 길이</th></tr>'+rows+'</table>'
+  $('genreStats').innerHTML= grows?
+    '<table class="tbl"><tr><th>장르</th><th>세션</th><th>평균 길이</th><th>자/분</th><th>가장 좋았던 길이</th></tr>'+grows+'</table>'
     : '<p class="empty">장르를 정한 원고에 기록이 쌓이면 여기에 비교가 나타납니다.</p>';
 }
+$('btnShowLog').addEventListener('click',()=>{ logOpen=!logOpen; shown=15; renderLog(); });
 $('btnMore').addEventListener('click',()=>{ shown+=25; renderLog(); });
 
 /* ── 원고 화면 ─────────────────────── */
@@ -1060,7 +1147,7 @@ function buildPrompt(){
   if(!all.length) return null;
   const lastEnd=new Date(all[0].end);
   const w=work(db.plan&&db.plan.workId)||work(pick)||work(all[0].workId);
-  const lines=all.slice(0,40).reverse().map((s,i)=>{
+  const lines=all.slice(0,25).reverse().map((s,i)=>{
     const a=new Date(s.start), b=new Date(s.end), d=s.endCount-s.startCount, m=(b-a)/60000;
     const ww=work(s.workId), g=gapBefore(s);
     return (i+1)+'. '+(a.getMonth()+1)+'/'+a.getDate()+'('+DAY[a.getDay()]+') '+hhmm(a)+'–'+hhmm(b)+
@@ -1111,6 +1198,29 @@ function buildPrompt(){
     return '· 「'+w.title+'」 — '+bits.join(' / ');
   }).join('\n');
 
+  /* 전체 기록의 집계 — 세션 목록은 줄여 보내고, 경향은 이쪽에서 봅니다 */
+  const gb=gapBuckets(), thin=[];
+  const gapLines=gb.map(x=>{
+    if(x.n<3){ thin.push(x.label); return '· '+x.label+': '+(x.n? x.n+'회뿐 — 판단할 자료 없음':'자료 없음'); }
+    const rate=x.mins? x.chars/x.mins : 0;
+    return '· '+x.label+': '+x.n+'회, '+rate.toFixed(1)+'자/분, 세션당 평균 '+nf(x.chars/x.n)+'자'+
+      (x.cut? ', 이 구간에서 덜어낸 분량 누계 '+sheets(x.cut):'')+
+      (x.dry? ', 늘지 않은 세션 '+x.dry+'회':'')+
+      (x.spent? ', 소진으로 끝낸 세션 '+x.spent+'회':'');
+  }).join('\n');
+
+  const wk=weeklyNet(12);
+  const weekLines=wk.map(x=>{
+    const d=new Date(x.label);
+    return '· '+(d.getMonth()+1)+'/'+d.getDate()+' 주: '+x.n+'회, '+dur(x.mins*60000)+
+      ', 쓴 '+sheets(x.plus)+' / 지운 '+sheets(x.minus)+' / 순증가 '+sheets(x.net)+
+      (x.gap!=null? ', 세션 간격 중앙값 '+dur(x.gap):'');
+  }).join('\n');
+
+  const hb=hourBands().map(x=>'· '+x.label+': '+x.n+'회, '+x.rate.toFixed(1)+'자/분'+
+    (x.n<5?' (표본 적음)':'')).join('\n');
+  const mg=medianGap();
+
   return [
 '글쓰기 리듬을 봐주세요.',
 '',
@@ -1135,7 +1245,20 @@ phaseLines,
 '[장르별 리듬]',
 (genreLines||'(아직 없음)'),
 '',
-'[기록]',
+'[전체 기록 요약] 세션 '+all.length+'회 · '+(all.length? dayLabel(new Date(all[all.length-1].start))+'부터':''),
+'',
+'[직전 쉼의 길이에 따른 결과 — 전체 기록]',
+gapLines,
+(thin.length? '※ 위에서 자료가 없거나 부족한 구간: '+thin.join(', ')+'. 이 구간에 대해서는 아무 말도 할 수 없습니다. 없는 것을 추측으로 메우지 마세요.' : null),
+(mg!=null? '※ 내 세션 간격의 중앙값은 '+dur(mg)+'입니다.' : null),
+'',
+'[시간대별 — 전체 기록]',
+hb,
+'',
+'[주 단위 흐름 — 최근 12주]',
+weekLines,
+'',
+'[최근 기록 '+Math.min(25,all.length)+'회]',
 lines,
 '',
 '[물어보고 싶은 것]',
@@ -1150,8 +1273,14 @@ lines,
 '9. 기록에 "조언받은 시각"이 붙은 세션이 있다면, 지난번 조언이 실제로 맞았는지 확인해주세요. 그 시각에 앉았을 때와 어긋났을 때의 결과가 달랐는지, 권장한 길이가 적당했는지. 빗나갔다면 무엇을 잘못 짚었던 것인지.',
 '10. 앉아도 글이 나오지 않을 때 대신 하면 좋을 일. 위 [지금의 상태]를 보고 판단해주세요. 특히 원고의 시작 구간처럼 세계가 아직 서 있지 않은 때, 또는 최근 산출이 떨어져 있을 때는, 빈 화면 앞에 버티는 것보다 나은 일이 따로 있을 것입니다. 원고에서 멀어지지 않으면서 글자수를 목표로 삼지 않는 일로 세 가지. 예컨대 인물의 이력을 연대순으로 적어보기, 배경이 되는 시기의 신문이나 자료 읽기, 이미 쓴 부분을 소리 내어 읽기, 장면을 대사만으로 적어보기, 걸으면서 다음 장면을 말로 해보기 같은 것들 중에서, 내 장르와 구간과 맥락에 맞는 것을 고르거나 더 나은 것을 제안해주세요. 각각 얼마쯤 하면 되는지도 함께.',
 '11. 그리고 하나만 말해주세요. 지금은 앉을 때입니까, 아니면 아직 채울 때입니까.',
+'12. 내 세션 간격 자체를 판정해주세요. 지금 내 간격이 짧아서 손해를 보고 있다고 볼 근거가 [직전 쉼의 길이에 따른 결과]와 [주 단위 흐름]에 있습니까, 아니면 지금 간격이 나에게 맞습니까. 판단할 자료가 없으면 없다고 말해주세요. 그리고 자료가 없는 쉼 구간이 있다면, 그 구간을 메우기 위해 한 번쯤 일부러 시도해볼 만한 간격을 제안해주세요. 몇 번쯤 해봐야 무언가 보일지도 함께.',
+'13. 마지막으로, 이번 답이 틀렸다면 무엇이 보일지 미리 적어주세요. 다음번에 어떤 숫자가 어떻게 나오면 당신의 판단이 틀린 것으로 쳐야 하는지, 구체적으로.',
 '',
-'[주의] 표본이 적습니다. 항목마다 세션 수를 함께 적어두었으니, 다섯 번 미만인 항목은 경향으로 단정하지 말고 그렇게 말해주세요. 글자수가 줄거나 그대로인 세션은 실패가 아니라 퇴고이거나 구상입니다. 많이 쓴 날을 좋은 날로 전제하지 마세요.',
+'[주의 — 이 부분을 먼저 읽어주세요]',
+'· 표본이 적습니다. 항목마다 세션 수를 적어두었으니, 다섯 번 미만인 항목은 경향으로 단정하지 말고 그렇게 말해주세요.',
+'· 글자수가 줄거나 그대로인 세션은 실패가 아니라 퇴고이거나 구상입니다. 많이 쓴 날을 좋은 날로 전제하지 마세요. 세션당 산출보다 [주 단위 흐름]의 순증가를 우선해서 보세요. 많이 쓴 주에 많이 지웠다면 그 주는 좋은 주가 아니었을 수 있습니다.',
+'· 이 기록에는 구조적인 치우침이 있습니다. 나는 쓰고 싶을 때 앉으므로, 짧게 쉬고 앉은 세션은 애초에 상태가 좋았던 때일 가능성이 높습니다. 또 짧게 쉬면 원고가 아직 데워져 있어 분당 글자수가 높게 나옵니다. 즉 이 앱의 지표는 구조적으로 짧은 간격에 유리합니다. 반대로 긴 쉼이 주는 것은 속도가 아니라 판단(무엇을 들어낼지, 어디가 틀렸는지)이고, 그것은 글자수로 측정되지 않습니다. 이 점을 감안해서 읽어주세요.',
+'· 나는 조언보다 일찍 앉는 편일 수 있습니다. 그러면 자료가 내 습관 쪽으로만 쌓이고, 당신의 조언도 점점 내 습관을 추인하는 쪽으로 끌려갑니다. 그것은 근거가 생겨서가 아니라 마찰이 적어서입니다. 당신의 답이 그렇게 끌려간 것은 아닌지 스스로 점검하고, 만약 내 습관과 다른 답이 옳다고 보면 내가 싫어할 답이라도 그대로 말해주세요.',
 '',
 '[답변 형식] 아래 그대로, 군더더기 없이. 특히 첫 줄은 형식을 정확히 지켜주세요. 내가 그 줄을 앱에 그대로 붙여넣어 읽어들입니다. 날짜, 24시간제 시각, 「원고 제목」, 분 단위 숫자가 모두 들어가야 합니다.',
 '◆ 다음 물때 — 8월 3일(월) 06:30 · 「원고 제목」 · 90분   ← 이 꼴로',
@@ -1162,8 +1291,11 @@ lines,
 '◆ 앉아도 안 나올 때 — 세 가지, 각각 한 줄에 걸리는 시간까지.',
 '◆ 지금은 — 앉을 때인지 채울 때인지 한 문장으로.',
 '◆ 미뤄둔 원고 — 이번에 고르지 않은 원고 중 신경 쓸 것이 있다면 한 줄.',
+'◆ 내 간격에 대하여 — 지금 간격이 맞는지, 판단할 자료가 있는지. 두 문장 이내.',
+'◆ 한 번 해볼 것 — 자료가 없는 쉼 구간을 메울 시도가 있다면 한 줄. 없으면 생략.',
 '◆ 차선 —',
 '◆ 지난 조언 채점 — 있다면 두 문장 이내.',
+'◆ 이 답이 틀렸다면 — 다음번에 무엇이 보이면 틀린 것인지 한 줄.',
 '◆ 참고한 연구 — 제목과 출처만 짧게.'
 ].filter(x=>x!==null).join('\n');
 }
