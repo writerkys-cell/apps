@@ -238,6 +238,14 @@ input:focus, select:focus, .sheet textarea:focus{border-color:var(--accent)}
 .seg button.on{border-color:var(--accent); color:var(--accent); background:var(--accent-2)}
 .small-note{font-size:12px; color:var(--ink-3); line-height:1.85; margin-top:10px}
 .divider{height:1px; background:var(--rule); margin:20px 0}
+.projblock{padding:12px 0; border-bottom:1px dotted var(--rule)}
+.projblock:last-child{border-bottom:none}
+.linkrow{display:flex; align-items:center; gap:10px; margin-top:7px}
+.linkrow label{
+  font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-3);
+  letter-spacing:.08em; white-space:nowrap; margin:0;
+}
+.linkrow input{font-family:'IBM Plex Mono',monospace; font-size:11.5px; padding:6px 9px}
 
 /* toast */
 .toast{
@@ -300,6 +308,8 @@ input:focus, select:focus, .sheet textarea:focus{border-color:var(--accent)}
   <p class="desc">한 프로젝트는 한 편의 글입니다. 의도와 글감은 프로젝트별로 따로 쌓입니다.</p>
   <div class="field"><label>새 프로젝트 이름</label>
     <input type="text" id="newProjName" placeholder="예: 운명의 투구"></div>
+  <div class="field"><label>스크리브너 링크 (선택)</label>
+    <input type="text" id="newProjLink" placeholder="x-scrivener-item://…"></div>
   <div class="row"><button class="btn primary" id="addProj">만들기</button></div>
   <div class="divider"></div>
   <div id="projManage"></div>
@@ -526,7 +536,7 @@ function renderSeeds(){
   if(!p.batches.length){
     const h=document.createElement('div'); h.className='hint';
     h.innerHTML = p.intents.length
-      ? '<b>아직 글감이 없습니다</b>쌓인 의도를 AI에게 건네면,<br>서로 이어지지 않는 여러 각도의 글감이 돌아옵니다.<br>한 편에 오백에서 천 자, 훈련하듯 쓰면 됩니다.'
+      ? '<b>아직 글감이 없습니다</b>쌓인 의도를 AI에게 건네면,<br>서로 이어지지 않는 여러 각도의 글감이 돌아옵니다.<br>「쓰기」를 누르면 글감이 복사되고 스크리브너가 열립니다.'
       : '<b>먼저 의도를 한 층 쌓으세요</b>분석할 것이 있어야 글감이 나옵니다.';
     v.appendChild(h); return;
   }
@@ -555,8 +565,12 @@ function cardEl(batch,s,i){
   if(s.seed) c.appendChild(rowEl('첫 문장', '“'+s.seed+'”', true));
   if(s.why) c.appendChild(rowEl('닿는 곳', s.why, false));
   const acts=document.createElement('div'); acts.className='c-acts';
-  const cp=document.createElement('button'); cp.className='btn small'; cp.textContent='복사';
-  cp.onclick=()=>copy(seedText(s));
+  const cp=document.createElement('button'); cp.className='btn small primary'; cp.textContent='쓰기';
+  cp.onclick=()=>{
+    const p=proj(); const has=(p.scrivener||'').trim();
+    copy(seedText(s), has?'복사했습니다. 스크리브너로 갑니다.':'복사했습니다.')
+      .then(()=>{ if(has) setTimeout(openScrivener, 220); });
+  };
   const dn=document.createElement('button'); dn.className='btn small'; dn.textContent=s.done?'다시 열기':'썼음';
   dn.onclick=()=>{ s.done=!s.done; s.doneAt=s.done?new Date().toISOString():null; save(); render(); };
   acts.appendChild(cp); acts.appendChild(dn);
@@ -626,7 +640,8 @@ $('projBtn').onclick=openProj;
 function openProj(){
   const box=$('projManage'); box.innerHTML='';
   S.projects.forEach(p=>{
-    const w=document.createElement('div'); w.className='row'; w.style.marginTop='8px';
+    const block=document.createElement('div'); block.className='projblock';
+    const w=document.createElement('div'); w.className='row'; w.style.marginTop='0';
     const inp=document.createElement('input'); inp.type='text'; inp.value=p.title; inp.className='grow';
     inp.onchange=()=>{ p.title=inp.value.trim()||'제목 없음'; save(); render(); };
     const info=document.createElement('span'); info.className='count mono';
@@ -638,7 +653,14 @@ function openProj(){
       if(S.activeId===p.id) S.activeId=S.projects[0].id;
       save(); loadDraft(); render(); openProj(); toast('프로젝트를 지웠습니다.');
     });
-    w.appendChild(inp); w.appendChild(info); w.appendChild(del); box.appendChild(w);
+    w.appendChild(inp); w.appendChild(info); w.appendChild(del);
+    const lw=document.createElement('div'); lw.className='linkrow';
+    const lab=document.createElement('label'); lab.textContent='스크리브너';
+    const li=document.createElement('input'); li.type='text'; li.value=p.scrivener||'';
+    li.placeholder='x-scrivener-item://…  (스크리브너에서 문서 우클릭 → 링크 복사)';
+    li.onchange=()=>{ p.scrivener=li.value.trim(); save(); toast(p.scrivener?'링크를 넣었습니다.':'링크를 비웠습니다.'); };
+    lw.appendChild(lab); lw.appendChild(li);
+    block.appendChild(w); block.appendChild(lw); box.appendChild(block);
   });
   open('ovProj');
 }
@@ -646,9 +668,9 @@ $('addProj').onclick=()=>{
   const name=$('newProjName').value.trim();
   if(!name){ toast('이름을 적어 주세요.'); return; }
   stashDraft();
-  const p={ id:uid(), title:name, createdAt:new Date().toISOString(), intents:[], batches:[], reviews:[], draft:'' };
+  const p={ id:uid(), title:name, scrivener:$('newProjLink').value.trim(), createdAt:new Date().toISOString(), intents:[], batches:[], reviews:[], draft:'' };
   S.projects.push(p); S.activeId=p.id; save();
-  $('newProjName').value=''; loadDraft(); close('ovProj'); tab='intent';
+  $('newProjName').value=''; $('newProjLink').value=''; loadDraft(); close('ovProj'); tab='intent';
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on', x.dataset.tab==='intent'));
   render(); input.focus(); toast('「'+name+'」을 시작합니다.');
 };
@@ -941,14 +963,21 @@ $('impFile').onchange=e=>{
 };
 
 // ---------- helpers ----------
-function copy(t){
+function copy(t, msg){
   if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(t).then(()=>toast('복사했습니다.'),()=>fallback(t));
-  } else fallback(t);
+    return navigator.clipboard.writeText(t).then(()=>{ toast(msg||'복사했습니다.'); },()=>{ fallback(t, msg); });
+  }
+  fallback(t, msg); return Promise.resolve();
 }
-function fallback(t){
+function openScrivener(){
+  const p=proj(); const url=(p.scrivener||'').trim();
+  if(!url){ toast('이 프로젝트에 스크리브너 링크가 없습니다.'); return; }
+  try{ window.location.href=url; }
+  catch(e){ toast('링크를 열지 못했습니다.'); }
+}
+function fallback(t, msg){
   const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
-  try{ document.execCommand('copy'); toast('복사했습니다.'); }catch(e){ toast('복사하지 못했습니다.'); }
+  try{ document.execCommand('copy'); toast(msg||'복사했습니다.'); }catch(e){ toast('복사하지 못했습니다.'); }
   ta.remove();
 }
 function arm(btn, label, action){
