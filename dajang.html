@@ -477,7 +477,7 @@ function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ t
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function proj(){ return S.projects.find(p=>p.id===S.activeId) || null; }
 function fmtDate(iso){ const d=new Date(iso); return (d.getMonth()+1)+'월 '+d.getDate()+'일'; }
-function chars(t){ return (t||'').replace(/\s/g,'').length; }
+function chars(t){ return (t||'').replace(/\r?\n/g,'').length; }
 
 // ---------- boot ----------
 if(!S.projects.length){
@@ -489,6 +489,7 @@ if(!proj()) S.activeId = S.projects[0].id;
 S.projects.forEach(p=>{
   if(!p.body) p.body=[]; if(!p.intents) p.intents=[]; if(!p.batches) p.batches=[];
   if(p.plan===undefined) p.plan='';
+  p.body.forEach(b=>{ b.chars=chars(b.text); });
 });
 function blankProj(title){
   return { id:uid(), title:title, scrivener:'', createdAt:new Date().toISOString(),
@@ -730,11 +731,20 @@ function renderSeeds(){
       const p2=proj(); p2.batches=p2.batches.filter(x=>x.id!==b.id); save(); render(); toast('회차를 지웠습니다.');
     });
     v.appendChild(h);
-    b.items.forEach((s,i)=>v.appendChild(cardEl(s,i)));
+    b.items.forEach((s,i)=>v.appendChild(cardEl(b,s,i)));
   });
 }
 
-function cardEl(s,i){
+function dropSeed(batch, s){
+  const p=proj();
+  batch.items=batch.items.filter(x=>x.id!==s.id);
+  if(!batch.items.length){
+    p.batches=p.batches.filter(x=>x.id!==batch.id);
+    p.batches.forEach((b,i)=>b.round=i+1);
+  }
+  save(); render(); toast('장면을 지웠습니다.');
+}
+function cardEl(batch,s,i){
   if(s.folded){
     const f=document.createElement('div'); f.className='card folded';
     const a=document.createElement('span'); a.className='link'; a.textContent=s.link||'장면';
@@ -743,7 +753,9 @@ function cardEl(s,i){
     if(s.done&&s.doneAt){ const st=document.createElement('span'); st.className='stamp'; st.textContent='씀 · '+fmtDate(s.doneAt); f.appendChild(st); }
     const u=document.createElement('button'); u.className='unfold'; u.textContent='펼치기';
     u.onclick=()=>{ s.folded=false; save(); render(); };
-    f.appendChild(u); return f;
+    const fx=document.createElement('button'); fx.className='unfold'; fx.style.marginLeft='0'; fx.style.color='var(--ink-3)'; fx.textContent='삭제';
+    fx.onclick=()=>arm(fx,'한 번 더',()=>dropSeed(batch,s));
+    f.appendChild(u); f.appendChild(fx); return f;
   }
   const c=document.createElement('div'); c.className='card'+(s.done?' done':'');
   const top=document.createElement('div'); top.className='c-top';
@@ -774,7 +786,9 @@ function cardEl(s,i){
   dn.onclick=()=>{ s.done=!s.done; s.doneAt=s.done?new Date().toISOString():null; save(); render(); };
   const fd=document.createElement('button'); fd.className='btn small'; fd.textContent='접기';
   fd.onclick=()=>{ s.folded=true; save(); render(); };
-  acts.appendChild(cp); acts.appendChild(lk); acts.appendChild(dn); acts.appendChild(fd);
+  const dl=document.createElement('button'); dl.className='btn small'; dl.textContent='삭제';
+  dl.onclick=()=>arm(dl, s.done?'씀 표시가 있습니다. 한 번 더':'한 번 더 누르면 지웁니다',()=>dropSeed(batch,s));
+  acts.appendChild(cp); acts.appendChild(lk); acts.appendChild(dn); acts.appendChild(fd); acts.appendChild(dl);
   if(s.done&&s.doneAt){ const st=document.createElement('span'); st.className='stamp'; st.textContent='씀 · '+fmtDate(s.doneAt); acts.appendChild(st); }
   c.appendChild(acts);
   return c;
