@@ -154,6 +154,13 @@
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
   .l-url:hover{ text-decoration:underline; }
+  .gain-plus{
+    display:block; width:100%; background:none; border:1px dashed var(--line); border-radius:10px;
+    color:var(--ink-faint); font-size:13.5px; font-family:inherit; cursor:pointer;
+    padding:12px; margin-bottom:14px;
+  }
+  .gain-plus:hover{ color:var(--accent); border-color:var(--accent-soft); }
+  .gain-form{ border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:18px; background:var(--card); }
   .mini-add{ background:none; border:none; color:var(--ink-faint); font-size:11.5px; cursor:pointer; padding:0 1px; font-family:inherit; }
   .mini-add:hover{ color:var(--accent); }
   .g-links{ margin-top:8px; display:flex; flex-direction:column; gap:4px; }
@@ -285,6 +292,7 @@ let STATE = {
   addOpen:null,
   gateDraft:'',
   todoAdd:false,
+  gainAdd:null,
   focusNext:null,
   navStack:[]
 };
@@ -931,6 +939,7 @@ function resetAll(){
 function goHome(){
   STATE.navStack=[];
   STATE.todoAdd=false;
+  STATE.gainAdd=null;
   pruneTodos();
   if(DATA.activeSession){ STATE.screen='browsing'; }
   else { pickGate(); STATE.screen='gate'; }
@@ -938,10 +947,83 @@ function goHome(){
 }
 function go(screen){ STATE.navStack.push(STATE.screen); STATE.screen=screen; render(); }
 function back(){ STATE.screen = STATE.navStack.length ? STATE.navStack.pop() : 'gate'; render(); }
-function openArchive(){ go('archive'); }
+function openArchive(){ STATE.gainAdd = null; go('archive'); }
 function openSettings(){ go('settings'); }
 
 /* ===================== 렌더 ===================== */
+/* 관문을 거치지 않고 수확만 담기 */
+function openGainAdd(){
+  STATE.gainAdd = { text:'', links:[], linkDraft:'', plantCat:null };
+  STATE.focusNext = 'newGainInput';
+  render();
+}
+function stashGainAdd(){
+  const g = STATE.gainAdd; if(!g) return;
+  const ta = document.getElementById('newGainInput');
+  if(ta) g.text = ta.value;
+  const li = document.getElementById('newLinkInput');
+  if(li) g.linkDraft = li.value;
+}
+function closeGainAdd(){ stashGainAdd(); STATE.gainAdd = null; render(); }
+function addGainLink(){
+  const g = STATE.gainAdd; if(!g) return;
+  const el = document.getElementById('newLinkInput'); if(!el) return;
+  const u = normalizeUrl(el.value);
+  if(!u){ toast('주소를 확인해주세요'); el.focus(); return; }
+  stashGainAdd();
+  if(g.links.indexOf(u) < 0) g.links.push(u);
+  g.linkDraft = '';
+  STATE.focusNext = 'newLinkInput';
+  render();
+}
+function pasteGainLink(){
+  if(!(navigator.clipboard && navigator.clipboard.readText)){
+    toast('주소를 직접 붙여넣어 주세요');
+    const el=document.getElementById('newLinkInput'); if(el) el.focus();
+    return;
+  }
+  navigator.clipboard.readText().then(t=>{
+    const el = document.getElementById('newLinkInput'); if(!el) return;
+    el.value = String(t||'').trim();
+    addGainLink();
+  }).catch(()=>{
+    toast('주소를 직접 붙여넣어 주세요');
+    const el=document.getElementById('newLinkInput'); if(el) el.focus();
+  });
+}
+function delGainLink(i){ stashGainAdd(); STATE.gainAdd.links.splice(i,1); render(); }
+function pickGainPlant(cat){
+  stashGainAdd();
+  STATE.gainAdd.plantCat = (STATE.gainAdd.plantCat === cat) ? null : cat;
+  render();
+}
+function saveGainAdd(){
+  const g = STATE.gainAdd; if(!g) return;
+  stashGainAdd();
+  const text = (g.text||'').trim();
+  const links = g.links.slice();
+  const u = normalizeUrl(g.linkDraft||'');
+  if(u && links.indexOf(u) < 0) links.push(u);
+  if(!text && !links.length){
+    const ta = document.getElementById('newGainInput'); if(ta) ta.focus();
+    return;
+  }
+  const now = Date.now();
+  let planted = null;
+  if(text && g.plantCat) planted = insertSentence(g.plantCat, text);
+  DATA.sessions.push({
+    id: uid(), date: todayStr(), startedAt: now, endedAt: now, minutes: 0,
+    anchorCat: null, anchorText: '',
+    gain: text, links: links,
+    plantedCat: text && g.plantCat ? g.plantCat : null,
+    chimes: 0, direct: true
+  });
+  save();
+  STATE.gainAdd = null;
+  toast(planted ? '「'+g.plantCat+'」에도 심었어요' : '수확을 담았어요');
+  render();
+}
+
 function addLinkTo(id){
   const s = DATA.sessions.find(x=>x.id===id);
   if(!s) return;
@@ -1119,10 +1201,34 @@ function render(){
         + linkBlock(s)
         + '</div><button class="g-del" onclick="delSession(\''+s.id+'\')">×</button></div>';
     }).join('') : '<div class="empty">아직 담아둔 수확이 없어요.<br>인터넷을 끝낼 때 한 줄씩 쌓입니다.</div>';
+
+    let adder;
+    if(STATE.gainAdd){
+      const g = STATE.gainAdd;
+      const chips = ['<button class="chip'+(!g.plantCat?' sel':'')+'" onclick="pickGainPlant(null)">심지 않기</button>']
+        .concat(CATS.map(c=>'<button class="chip'+(g.plantCat===c?' sel':'')+'" onclick="pickGainPlant(\''+c+'\')">'+esc(c)+'</button>')).join('');
+      const links = g.links.map((u,i)=>'<div class="link-item">'
+        + '<a class="l-url" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer" title="'+esc(u)+'">'+esc(hostLabel(u))+'</a>'
+        + '<button class="g-del" onclick="delGainLink('+i+')">×</button></div>').join('');
+      adder = '<div class="gain-form">'
+        + '<textarea id="newGainInput" placeholder="본 것, 알게 된 것, 마음이 움직인 것" spellcheck="false" style="min-height:110px;">'+esc(g.text||'')+'</textarea>'
+        + '<div class="link-row" style="margin-top:10px;">'
+        + '<input class="text-input" id="newLinkInput" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="주소를 붙여넣으세요" value="'+esc(g.linkDraft||'')+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addGainLink();}">'
+        + '<button class="btn secondary l-paste" onclick="pasteGainLink()">붙여넣기</button>'
+        + '<button class="btn primary l-add" onclick="addGainLink()">담기</button></div>'
+        + (links ? '<div class="link-list">'+links+'</div>' : '')
+        + '<div class="chip-row" style="margin-top:14px;">'+chips+'</div>'
+        + '<div class="btn-row" style="margin-top:14px;">'
+        + '<button class="btn secondary" onclick="closeGainAdd()">취소</button>'
+        + '<button class="btn primary" onclick="saveGainAdd()">담기</button></div></div>';
+    } else {
+      adder = '<button class="gain-plus" onclick="openGainAdd()">＋ 직접 담기</button>';
+    }
+
     html = topBar() + '<main>'
       + '<div class="back-row"><button class="back-link" onclick="back()">← 돌아가기</button></div>'
       + '<div class="sec-title" style="margin-top:0;">수확'+(gains.length?' '+gains.length:'')+'</div>'
-      + body + '</main>';
+      + adder + body + '</main>';
   }
 
   /* ---- 설정 ---- */
