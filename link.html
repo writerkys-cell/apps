@@ -88,6 +88,20 @@
   .row.done .link-title { color: var(--text-dim); text-decoration: line-through; }
   .row.done .link-title:hover { color: var(--text-dim); }
 
+  /* 드래그 앤 드롭 */
+  .row { position: relative; }
+  .row.dragging { opacity: .4; }
+  .row.drop-before::before, .row.drop-after::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 2px;
+    background: var(--accent); border-radius: 2px;
+  }
+  .row.drop-before::before { top: -1px; }
+  .row.drop-after::after { bottom: -1px; }
+  .row.drop-inside {
+    background: rgba(74,158,255,.16);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+  }
+
   /* 항상 보이는 이동 화살표 — 자리를 고정 차지하므로 제목을 가리지 않음 */
   .arrows { display: flex; gap: 0; flex-shrink: 0; }
   .arrow-btn {
@@ -167,7 +181,7 @@
     <button class="btn btn-primary" onclick="openModal('add','')">+ 마스터 링크</button>
   </header>
 
-  <div id="list"></div>
+  <div id="list" ondragover="if(dragId)event.preventDefault()" ondrop="onDropRoot(event)"></div>
 
   <div class="toolbar-bottom">
     <button class="btn" onclick="exportData()">내보내기 (백업)</button>
@@ -212,6 +226,7 @@ function normalize(nodes) {
     if (!Array.isArray(n.children)) n.children = [];
     if (typeof n.open !== 'boolean') n.open = true;
     if (typeof n.done !== 'boolean') n.done = false;
+    if (!n.id) n.id = uid();
     normalize(n.children);
   });
   return nodes || [];
@@ -258,7 +273,11 @@ function esc(s) {
 function renderNode(node, path, depth) {
   const hasKids = node.children.length > 0;
   let html = `
-  <div class="row ${node.done ? 'done' : ''}" data-depth="${depth}" style="--d:${depth};margin-left:${depth * 30}px" oncontextmenu="showMenu(event,'${path}');return false">
+  <div class="row ${node.done ? 'done' : ''}" data-depth="${depth}" data-id="${node.id}" draggable="true"
+       style="--d:${depth};margin-left:${depth * 30}px"
+       oncontextmenu="showMenu(event,'${path}');return false"
+       ondragstart="onDragStart(event,'${node.id}')" ondragend="onDragEnd(event)"
+       ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
     <div class="disclosure ${node.open ? 'open' : ''} ${hasKids ? '' : 'empty'}" onclick="toggleOpen('${path}')">▶</div>
     <div class="checkbox ${node.done ? 'checked' : ''}" onclick="toggleDone('${path}')"></div>
     <span class="tag-icon">${TAG_SVG}</span>
@@ -305,6 +324,90 @@ function move(path, dir) {
   const ni = last + dir;
   if (ni < 0 || ni >= arr.length) return;
   [arr[last], arr[ni]] = [arr[ni], arr[last]];
+  save(); render();
+}
+
+/* ===== 드래그 앤 드롭 ===== */
+let dragId = null;
+
+// id로 노드 찾기 → {node, arr, idx}
+function findById(id, arr = data) {
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i].id === id) return { node: arr[i], arr, idx: i };
+    const found = findById(id, arr[i].children);
+    if (found) return found;
+  }
+  return null;
+}
+function isDescendant(ancestor, id) {
+  return ancestor.children.some(c => c.id === id || isDescendant(c, id));
+}
+
+function onDragStart(e, id) {
+  dragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', id);
+  e.currentTarget.classList.add('dragging');
+  hideMenu();
+}
+function onDragEnd(e) {
+  dragId = null;
+  document.querySelectorAll('.row').forEach(r =>
+    r.classList.remove('dragging','drop-before','drop-after','drop-inside'));
+}
+function dropZone(e, row) {
+  const r = row.getBoundingClientRect();
+  const p = (e.clientY - r.top) / r.height;
+  if (p < 0.28) return 'before';
+  if (p > 0.72) return 'after';
+  return 'inside';
+}
+function onDragOver(e) {
+  if (!dragId) return;
+  const row = e.currentTarget;
+  if (row.dataset.id === dragId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const zone = dropZone(e, row);
+  row.classList.remove('drop-before','drop-after','drop-inside');
+  row.classList.add('drop-' + zone);
+}
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drop-before','drop-after','drop-inside');
+}
+function onDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const row = e.currentTarget;
+  const targetId = row.dataset.id;
+  const zone = dropZone(e, row);
+  row.classList.remove('drop-before','drop-after','drop-inside');
+  if (!dragId || targetId === dragId) return;
+
+  const src = findById(dragId);
+  if (!src || isDescendant(src.node, targetId)) return; // 자기 하위로는 이동 불가
+
+  const node = src.arr.splice(src.idx, 1)[0];   // 먼저 떼어내고
+  const tgt = findById(targetId);               // 위치를 다시 계산
+  if (!tgt) { src.arr.splice(src.idx, 0, node); return; }
+
+  if (zone === 'inside') {
+    tgt.node.children.push(node);
+    tgt.node.open = true;
+  } else {
+    tgt.arr.splice(zone === 'before' ? tgt.idx : tgt.idx + 1, 0, node);
+  }
+  save(); render();
+}
+
+// 목록 바깥(빈 공간)에 놓으면 최상위 맨 아래로
+function onDropRoot(e) {
+  if (!dragId) return;
+  e.preventDefault();
+  const src = findById(dragId);
+  if (!src) return;
+  const node = src.arr.splice(src.idx, 1)[0];
+  data.push(node);
   save(); render();
 }
 
