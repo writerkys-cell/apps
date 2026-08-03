@@ -223,6 +223,22 @@ textarea#tplInput{
   color:var(--ink-soft); text-decoration:underline; text-underline-offset:3px;
   cursor:pointer; width:100%;
 }
+textarea#sendOut{
+  width:100%; border:1px solid rgba(43,41,36,.16); border-radius:3px;
+  background:var(--card); color:var(--ink);
+  font-family:ui-monospace,'SFMono-Regular',Menlo,monospace;
+  font-size:13px; line-height:1.6; padding:12px; min-height:200px;
+  outline:none; resize:vertical;
+}
+.opt{
+  display:flex; align-items:center; gap:8px; margin:10px 0 12px;
+  font-size:.84rem; color:var(--ink-soft); letter-spacing:.04em; cursor:pointer;
+}
+.opt input{width:auto; margin:0;}
+.send-note{
+  font-size:.78rem; color:var(--ink-faint); line-height:1.65;
+  margin-top:10px; padding-top:9px; border-top:1px dotted var(--stitch);
+}
 .rand-row{
   display:none; align-items:center; gap:10px; margin-bottom:12px;
 }
@@ -395,11 +411,38 @@ textarea#tplInput{
     <div class="backup-row">
       <button class="sheet-btn" id="copyAllBtn">전체 기록 복사 (텍스트)</button>
     </div>
+    <div class="backup-row">
+      <button class="sheet-btn" id="sendBtn">기록 앱으로 보내기</button>
+    </div>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none">
   </div>
   <div class="sheet-actions">
     <button class="sheet-btn ghost" id="closeBackup">닫기</button>
   </div>
+</div>
+
+<!-- 기록 앱으로 보내기 시트 -->
+<div class="sheet" id="sendSheet">
+  <h2>기록 앱으로 보내기</h2>
+  <div class="s-sub" id="sendSub"></div>
+  <div class="sheet-body">
+    <div class="type-row" id="sendScope">
+      <button class="type-btn on" data-scope="new">아직 안 보낸 것</button>
+      <button class="type-btn" data-scope="all">전체</button>
+    </div>
+    <label class="opt"><input type="checkbox" id="sendTags" checked> 감각 태그 붙이기 (#채집 #본것)</label>
+    <textarea id="sendOut" readonly></textarea>
+    <div class="send-note">기록 앱의 <b>적기 → 여러 개 한꺼번에 붙여넣기</b>에 그대로 붙여넣으세요. 붙여넣고 나서 아래 &lsquo;보낸 것으로 표시&rsquo;를 누르면, 다음번에는 그 뒤에 채집한 것만 나옵니다.</div>
+  </div>
+  <div class="sheet-actions">
+    <button class="sheet-btn" id="sendCopy">복사</button>
+    <button class="sheet-btn ghost" id="sendShare">공유</button>
+  </div>
+  <div class="sheet-actions">
+    <button class="sheet-btn" id="sendMark">보낸 것으로 표시</button>
+    <button class="sheet-btn ghost" id="closeSend">닫기</button>
+  </div>
+  <button class="tpl-link" id="sendUndo">지난 표시 되돌리기</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -418,6 +461,8 @@ var KEY_DATA = "chaejip.entries.v1";
 var KEY_TPL  = "chaejip.template.v1";
 var KEY_RTPL = "chaejip.template.random.v1";
 var KEY_RN   = "chaejip.random.count.v1";
+var KEY_SENT = "chaejip.sent.v1";
+var KEY_SENT_LAST = "chaejip.sent.last.v1";
 
 var DEFAULT_TPL =
 "아래는 {날짜} 하루 동안 길에서, 일상에서 채집한 관찰 기록입니다.\n" +
@@ -679,8 +724,110 @@ function buildRandomPrompt(picked){
     .split("{기록}").join(lines);
 }
 
+/* ── 기록 앱으로 보내기 ── */
+var TYPE_TAG = { seen:"본것", heard:"들은것", smelled:"맡은것", tasted:"맛본것", felt:"느낀것" };
+var ZW = "\u200B";               /* 본문 속 '숫자만 있는 줄'이 날짜로 오독되지 않게 앞에 두는 보이지 않는 글자 */
+var STAMP_ONLY = /^\s*(\d{4}|\d{6}|\d{8}|\d{10}|\d{12}|\?)\s*$/;
+
+function loadSent(){
+  try{ var a = JSON.parse(store.get(KEY_SENT)); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function saveSent(a){ store.set(KEY_SENT, JSON.stringify(a)); }
+function sentMap(){
+  var s = {};
+  loadSent().forEach(function(id){ s[id] = 1; });
+  return s;
+}
+function sortedEntries(){
+  var out = allEntries();
+  out.sort(function(a,b){
+    if(a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1;
+    var ta = /^\d{2}:\d{2}$/.test(a.e.time) ? a.e.time : "99:99";
+    var tb = /^\d{2}:\d{2}$/.test(b.e.time) ? b.e.time : "99:99";
+    return ta < tb ? -1 : (ta > tb ? 1 : 0);
+  });
+  return out;
+}
+function stampOf(dateKey, time){
+  var p = dateKey.split("-");
+  var hm = /^\d{2}:\d{2}$/.test(time) ? time.replace(":","") : "0000";
+  return p[0] + p[1] + p[2] + hm;
+}
+function safeBody(text){
+  return text.split(/\r?\n/).map(function(ln){
+    return STAMP_ONLY.test(ln) ? ZW + ln.trim() : ln;
+  }).join("\n");
+}
+function buildGireok(list, useTags){
+  return list.map(function(p){
+    var tag = "";
+    if(useTags) tag = " #채집 #" + (TYPE_TAG[p.e.type] || "본것");
+    return stampOf(p.dateKey, p.e.time) + tag + "\n" + safeBody(p.e.text);
+  }).join("\n\n");
+}
+
+var sendScope = "new";
+var sendList = [];
+
+function refreshSend(){
+  var sent = sentMap();
+  var all = sortedEntries();
+  var fresh = all.filter(function(p){ return !sent[p.e.id]; });
+  sendList = (sendScope === "new") ? fresh : all;
+
+  var noTime = sendList.filter(function(p){ return !/^\d{2}:\d{2}$/.test(p.e.time); }).length;
+  var doneN = all.length - fresh.length;
+
+  var sub = "";
+  if(!sendList.length){
+    sub = (sendScope === "new")
+      ? (all.length ? "새로 채집한 것이 없습니다. 전체를 보려면 오른쪽을 누르세요." : "아직 기록이 없습니다.")
+      : "아직 기록이 없습니다.";
+  }else{
+    sub = sendList.length + "건. ";
+    sub += (sendScope === "new")
+      ? (doneN ? "이미 보낸 " + doneN + "건은 뺐습니다." : "아직 아무것도 보내지 않았습니다.")
+      : "이미 보낸 " + doneN + "건까지 모두 넣었습니다.";
+    if(noTime) sub += " 시각이 없는 " + noTime + "건은 그날 00:00으로 갑니다.";
+  }
+  $("sendSub").textContent = sub;
+  $("sendOut").value = sendList.length ? buildGireok(sendList, $("sendTags").checked) : "";
+  $("sendMark").disabled = !sendList.length;
+  $("sendMark").textContent = sendList.length ? "보낸 것으로 표시 (" + sendList.length + "건)" : "보낸 것으로 표시";
+  $("sendMark").style.opacity = sendList.length ? "1" : ".45";
+
+  var last = [];
+  try{ last = JSON.parse(store.get(KEY_SENT_LAST)) || []; }catch(e){}
+  $("sendUndo").style.display = last.length ? "block" : "none";
+  $("sendUndo").textContent = "지난 표시 되돌리기 (" + last.length + "건)";
+}
+
+function markSent(){
+  if(!sendList.length) return;
+  var sent = loadSent(), have = sentMap(), added = [];
+  sendList.forEach(function(p){
+    if(!have[p.e.id]){ sent.push(p.e.id); have[p.e.id] = 1; added.push(p.e.id); }
+  });
+  saveSent(sent);
+  store.set(KEY_SENT_LAST, JSON.stringify(added));
+  refreshSend();
+  toast(added.length ? added.length + "건을 보낸 것으로 표시했습니다" : "이미 모두 표시돼 있습니다");
+}
+function undoSent(){
+  var last = [];
+  try{ last = JSON.parse(store.get(KEY_SENT_LAST)) || []; }catch(e){}
+  if(!last.length) return;
+  var drop = {};
+  last.forEach(function(id){ drop[id] = 1; });
+  saveSent(loadSent().filter(function(id){ return !drop[id]; }));
+  store.set(KEY_SENT_LAST, "[]");
+  refreshSend();
+  toast(last.length + "건의 표시를 되돌렸습니다");
+}
+
 /* ── 시트 열고 닫기 ── */
-var sheets = ["promptSheet","tplSheet","archiveSheet","backupSheet","editSheet"];
+var sheets = ["promptSheet","tplSheet","archiveSheet","backupSheet","editSheet","sendSheet"];
 function openSheet(id){
   sheets.forEach(function(s){ $(s).classList.remove("show"); });
   $("veil").classList.add("show");
@@ -929,6 +1076,38 @@ $("copyAllBtn").onclick = function(){
   if(!text){ toast("아직 기록이 없습니다"); return; }
   copyText(text);
 };
+$("sendBtn").onclick = function(){
+  sendScope = "new";
+  Array.prototype.forEach.call(document.querySelectorAll("#sendScope .type-btn"), function(b){
+    b.classList.toggle("on", b.dataset.scope === "new");
+  });
+  refreshSend();
+  openSheet("sendSheet");
+};
+Array.prototype.forEach.call(document.querySelectorAll("#sendScope .type-btn"), function(b){
+  b.onclick = function(){
+    sendScope = b.dataset.scope;
+    Array.prototype.forEach.call(document.querySelectorAll("#sendScope .type-btn"), function(x){
+      x.classList.toggle("on", x === b);
+    });
+    refreshSend();
+  };
+});
+$("sendTags").onchange = refreshSend;
+$("sendCopy").onclick = function(){
+  if(!sendList.length){ toast("보낼 것이 없습니다"); return; }
+  copyText($("sendOut").value);
+};
+$("sendShare").onclick = function(){
+  if(!sendList.length){ toast("보낼 것이 없습니다"); return; }
+  var text = $("sendOut").value;
+  if(navigator.share){ navigator.share({ text:text }).catch(function(){}); }
+  else copyText(text);
+};
+$("sendMark").onclick = markSent;
+$("sendUndo").onclick = undoSent;
+$("closeSend").onclick = closeSheets;
+
 $("importBtn").onclick = function(){ $("importFile").click(); };
 $("importFile").onchange = function(){
   if(this.files && this.files[0]) importJSON(this.files[0]);
