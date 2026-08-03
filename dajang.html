@@ -427,7 +427,7 @@ input:focus, select:focus, .sheet textarea:focus{border-color:var(--accent)}
   <div class="divider"></div>
   <div class="field"><label>불러오기 — 같은 프로젝트는 합쳐집니다</label>
     <input type="file" id="impFile" accept="application/json,.json"></div>
-  <div class="small-note">브라우저 저장소를 비우면 기록도 함께 사라집니다. 본문이 길어지면 주기적으로 내보내 두세요.</div>
+  <div class="small-note">같은 기록은 두 번 들어오지 않습니다. 양쪽에서 고친 대목은 나중에 고친 쪽이 남습니다. 불러온 뒤에는 그 프로젝트의 본문이 곧바로 펼쳐집니다.<br>브라우저 저장소를 비우면 기록도 함께 사라집니다. 본문이 길어지면 주기적으로 내보내 두세요.</div>
 </div></div>
 
 <!-- 설정 -->
@@ -1185,31 +1185,96 @@ $('expTxt').onclick=()=>{
   }
   download('다음장면_'+p.title+'_'+stamp()+'.txt', t, 'text/plain;charset=utf-8');
 };
+function byDate(a,b){ return new Date(a.date)-new Date(b.date); }
+function stampOf(o){ return new Date(o.editedAt||o.date||0).getTime(); }
+function isBlank(p){
+  return !p.body.length && !p.intents.length && !p.batches.length &&
+    !(p.plan||'').trim() && !(p.draftBody||'').trim() && !(p.draftIntent||'').trim();
+}
+function importState(inc){
+  let list = inc.projects || (inc.body ? [inc] : []);
+  if(!Array.isArray(list) || !list.length) throw new Error('프로젝트가 들어 있지 않은 파일입니다');
+  const autoIds = S.projects.filter(p=>isBlank(p) && p.title==='첫 번째 글').map(p=>p.id);
+  const got = { proj:0, body:0, intent:0, seed:0, fixed:0 };
+  let landOn = null;
+
+  list.forEach(np=>{
+    np.body=np.body||[]; np.intents=np.intents||[]; np.batches=np.batches||[];
+    np.body.forEach(b=>{ b.chars=chars(b.text); });
+    const cur = S.projects.find(x=>x.id===np.id);
+    if(!cur){
+      if(np.plan===undefined) np.plan='';
+      S.projects.push(np);
+      got.proj++; got.body+=np.body.length; got.intent+=np.intents.length;
+      got.seed+=np.batches.reduce((a,b)=>a+b.items.length,0);
+      landOn = landOn || np.id;
+      return;
+    }
+    landOn = landOn || cur.id;
+    if(!(cur.plan||'').trim() && (np.plan||'').trim()) cur.plan=np.plan;
+    if(!(cur.scrivener||'').trim() && (np.scrivener||'').trim()) cur.scrivener=np.scrivener;
+
+    const bmap=new Map(cur.body.map(b=>[b.id,b]));
+    np.body.forEach(b=>{
+      const old=bmap.get(b.id);
+      if(!old){ cur.body.push(b); got.body++; }
+      else if(old.text!==b.text && stampOf(b)>stampOf(old)){
+        old.text=b.text; old.chars=chars(b.text); old.editedAt=b.editedAt||old.editedAt; got.fixed++;
+      }
+    });
+    cur.body.sort(byDate);
+
+    const imap=new Map(cur.intents.map(i=>[i.id,i]));
+    np.intents.forEach(i=>{
+      const old=imap.get(i.id);
+      if(!old){ cur.intents.push(i); got.intent++; }
+      else if(stampOf(i)>stampOf(old) && (old.text!==i.text || old.on!==i.on || old.kind!==i.kind)){
+        old.text=i.text; old.kind=i.kind; old.on=i.on; old.editedAt=i.editedAt||old.editedAt; got.fixed++;
+      }
+    });
+    cur.intents.sort(byDate);
+
+    const tmap=new Map(cur.batches.map(b=>[b.id,b]));
+    np.batches.forEach(nb=>{
+      const old=tmap.get(nb.id);
+      if(!old){ cur.batches.push(nb); got.seed+=nb.items.length; return; }
+      const smap=new Map(old.items.map(s=>[s.id,s]));
+      nb.items.forEach(s=>{
+        const os=smap.get(s.id);
+        if(!os){ old.items.push(s); got.seed++; }
+        else if(s.done && !os.done){ os.done=true; os.doneAt=s.doneAt; got.fixed++; }
+      });
+    });
+    cur.batches.sort(byDate);
+    cur.batches.forEach((b,i)=>b.round=i+1);
+  });
+
+  // 앱을 처음 열 때 저절로 생긴, 손대지 않은 빈 프로젝트만 치운다
+  if(got.proj && autoIds.length){
+    const drop=autoIds.filter(id=>id!==landOn);
+    if(drop.length && S.projects.length>drop.length){
+      S.projects=S.projects.filter(p=>drop.indexOf(p.id)<0);
+    }
+  }
+  if(landOn && S.projects.some(p=>p.id===landOn)) S.activeId=landOn;
+  if(!proj()) S.activeId=S.projects[0].id;
+
+  const parts=[];
+  if(got.proj) parts.push('프로젝트 '+got.proj);
+  if(got.body) parts.push('본문 '+got.body+'대목');
+  if(got.intent) parts.push('의도 '+got.intent);
+  if(got.seed) parts.push('장면 '+got.seed);
+  if(got.fixed) parts.push('고쳐진 것 '+got.fixed);
+  return parts.length ? parts.join(' · ')+'을 불러왔습니다.' : '이미 다 들어 있는 기록입니다. 새로 들어온 것은 없습니다.';
+}
 $('impFile').onchange=e=>{
   const f=e.target.files[0]; if(!f) return;
   const r=new FileReader();
   r.onload=()=>{
     try{
-      const inc=JSON.parse(r.result);
-      const list=inc.projects||[];
-      if(!list.length) throw new Error('빈 파일');
-      list.forEach(np=>{
-        const cur=S.projects.find(x=>x.id===np.id);
-        if(!cur){ S.projects.push(np); return; }
-        if(!cur.plan && np.plan) cur.plan=np.plan;
-        const bseen=new Set(cur.body.map(b=>b.id));
-        (np.body||[]).forEach(b=>{ if(!bseen.has(b.id)) cur.body.push(b); });
-        cur.body.sort((a,b)=>new Date(a.date)-new Date(b.date));
-        const iseen=new Set(cur.intents.map(i=>i.id));
-        (np.intents||[]).forEach(i=>{ if(!iseen.has(i.id)) cur.intents.push(i); });
-        cur.intents.sort((a,b)=>new Date(a.date)-new Date(b.date));
-        const tseen=new Set(cur.batches.map(b=>b.id));
-        (np.batches||[]).forEach(b=>{ if(!tseen.has(b.id)) cur.batches.push(b); });
-        cur.batches.sort((a,b)=>new Date(a.date)-new Date(b.date));
-        cur.batches.forEach((b,i)=>b.round=i+1);
-      });
-      save(); loadDraft(); render(); closeOv('ovData');
-      toast('불러왔습니다.');
+      const msg=importState(JSON.parse(r.result));
+      save(); goTab('body'); closeOv('ovData');
+      toast(msg);
     }catch(err){ toast('읽지 못했습니다: '+err.message); }
     e.target.value='';
   };
