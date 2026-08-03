@@ -77,7 +77,7 @@
   .row[data-depth="0"] .tag-icon { color: var(--text); }
 
   .link-title {
-    flex: 1; cursor: pointer; color: var(--text);
+    flex: 1; min-width: 40px; cursor: pointer; color: var(--text);
     text-decoration: none; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
     padding: 2px 0;
@@ -88,13 +88,24 @@
   .row.done .link-title { color: var(--text-dim); text-decoration: line-through; }
   .row.done .link-title:hover { color: var(--text-dim); }
 
-  .more-btn {
-    width: 24px; height: 24px; border: none; background: none;
-    color: var(--text-dim); cursor: pointer; border-radius: 5px;
-    font-size: 16px; flex-shrink: 0;
-    display: none; align-items: center; justify-content: center;
+  /* 항상 보이는 이동 화살표 — 자리를 고정 차지하므로 제목을 가리지 않음 */
+  .arrows { display: flex; gap: 0; flex-shrink: 0; }
+  .arrow-btn {
+    width: 19px; height: 22px; border: none; background: none;
+    color: #5c626b; cursor: pointer; border-radius: 4px;
+    font-size: 12px; line-height: 1; padding: 0;
+    display: flex; align-items: center; justify-content: center;
   }
-  .row:hover .more-btn { display: flex; }
+  .arrow-btn:hover { background: #3a3f47; color: var(--accent); }
+  .arrow-btn:disabled { opacity: .25; cursor: default; }
+  .arrow-btn:disabled:hover { background: none; color: #5c626b; }
+
+  .more-btn {
+    width: 22px; height: 22px; border: none; background: none;
+    color: #5c626b; cursor: pointer; border-radius: 4px;
+    font-size: 15px; flex-shrink: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
   .more-btn:hover { background: #3a3f47; color: var(--text); }
 
   /* 팝업 메뉴 */
@@ -252,6 +263,12 @@ function renderNode(node, path, depth) {
     <div class="checkbox ${node.done ? 'checked' : ''}" onclick="toggleDone('${path}')"></div>
     <span class="tag-icon">${TAG_SVG}</span>
     <span class="link-title ${node.url ? '' : 'no-url'}" onclick="openLink(${esc(JSON.stringify(node.url || ''))})" title="${esc(node.url)}">${esc(node.title)}</span>
+    <div class="arrows">
+      <button class="arrow-btn" title="상위로 나가기" ${canOutdent(path) ? '' : 'disabled'} onclick="outdent('${path}')">◀</button>
+      <button class="arrow-btn" title="위 링크의 하위로 들어가기" ${canIndent(path) ? '' : 'disabled'} onclick="indent('${path}')">▶</button>
+      <button class="arrow-btn" title="위로" ${canMove(path,-1) ? '' : 'disabled'} onclick="move('${path}',-1)">▲</button>
+      <button class="arrow-btn" title="아래로" ${canMove(path,1) ? '' : 'disabled'} onclick="move('${path}',1)">▼</button>
+    </div>
     <button class="more-btn" title="메뉴 (우클릭도 가능)" onclick="showMenu(event,'${path}')">⋯</button>
   </div>`;
   if (node.open && hasKids) {
@@ -291,6 +308,15 @@ function move(path, dir) {
   save(); render();
 }
 
+// 이동 가능 여부
+function canIndent(path) { return getSiblings(path).last > 0; }
+function canOutdent(path) { return path.split('-').length >= 2; }
+function canMove(path, dir) {
+  const { arr, last } = getSiblings(path);
+  const ni = last + dir;
+  return ni >= 0 && ni < arr.length;
+}
+
 // ⋯ 버튼 또는 우클릭으로 여는 팝업 메뉴
 function showMenu(e, path) {
   e.preventDefault();
@@ -299,11 +325,6 @@ function showMenu(e, path) {
   menu.innerHTML = [
     ['＋ 하위 링크 추가', `openModal('add','${path}')`],
     ['✎ 수정', `openModal('edit','${path}')`],
-    'sep',
-    ['← 상위로 나가기', `outdent('${path}')`],
-    ['→ 위 링크의 하위로', `indent('${path}')`],
-    ['↑ 위로 이동', `move('${path}',-1)`],
-    ['↓ 아래로 이동', `move('${path}',1)`],
     'sep',
     ['✕ 삭제', `remove('${path}')`, 'danger'],
   ].map(item => item === 'sep'
