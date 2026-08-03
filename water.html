@@ -119,8 +119,11 @@ h2{font-size:11px;letter-spacing:.18em;color:var(--muted);font-weight:400;margin
 .s .g.minus{color:var(--muted)}
 .s .sub{font-size:12px;color:var(--muted);margin-top:1px}
 .s .note{font-size:12.5px;margin-top:3px;opacity:.8}
-.s .del{opacity:0;background:0;border:0;color:var(--muted);font-size:15px;padding:0 2px;line-height:1}
+.s .del{opacity:0;background:0;border:0;color:var(--muted);font-size:11.5px;padding:0 2px;line-height:1;white-space:nowrap}
 .s:hover .del,.s:focus-within .del{opacity:1}
+.s:hover{background:rgba(0,0,0,.015)}
+@media (prefers-color-scheme: dark){ .s:hover{background:rgba(255,255,255,.02)} }
+@media (hover:none){ .s .del{opacity:.6} }
 
 /* 원고 목록 */
 .work{border-top:1px solid var(--line);padding:15px 0;cursor:pointer}
@@ -350,7 +353,7 @@ footer .spacer{flex:1}
   <h2>장르별 리듬</h2>
   <div id="genreStats"></div>
   <h2 id="logHead">기록</h2>
-  <p class="hint" style="margin-top:0">읽으라고 쌓는 것이 아닙니다. 분석에 쓰이고, 필요할 때만 펼쳐보면 됩니다.</p>
+  <p class="hint" style="margin-top:0">읽으라고 쌓는 것이 아닙니다. 분석에 쓰이고, 필요할 때만 펼쳐보면 됩니다. 어느 줄이든 눌러서 고칠 수 있습니다.</p>
   <div style="margin:12px 0"><button class="ghost mini" id="btnShowLog">목록 펼치기</button></div>
   <div id="log" class="hidden"></div>
   <div style="margin-top:14px"><button class="link hidden" id="btnMore">더 보기</button></div>
@@ -409,6 +412,67 @@ footer .spacer{flex:1}
       <button class="ghost left hidden" id="btnDeleteWork">원고 지우기</button>
       <button class="ghost" id="btnWorkClose">닫기</button>
       <button class="ghost key" id="btnWorkSave">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 기록 고치기 -->
+<div class="veil hidden" id="veilEdit">
+  <div class="modal">
+    <h3>기록 고치기</h3>
+    <p class="sub" id="editWhen"></p>
+    <div class="row">
+      <div>
+        <label for="eStart">앉은 시각</label>
+        <input type="datetime-local" id="eStart">
+      </div>
+      <div>
+        <label for="eEnd">일어선 시각</label>
+        <input type="datetime-local" id="eEnd">
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <div>
+        <label for="eFrom">시작 글자수</label>
+        <input type="number" id="eFrom" class="num" inputmode="numeric">
+      </div>
+      <div>
+        <label for="eTo">끝낼 때 글자수</label>
+        <input type="number" id="eTo" class="num" inputmode="numeric">
+      </div>
+    </div>
+    <div style="margin-top:18px">
+      <label>앉기 전의 몸</label>
+      <div class="feel" id="eSleep">
+        <button data-es="good" aria-pressed="false">잘 잤다</button>
+        <button data-es="ok" aria-pressed="false">보통</button>
+        <button data-es="bad" aria-pressed="false">설쳤다</button>
+      </div>
+      <div class="feel" style="margin-top:7px" id="eRan">
+        <button data-er="yes" aria-pressed="false">달린 뒤</button>
+        <button data-er="no" aria-pressed="false">달리기 전</button>
+      </div>
+    </div>
+    <div style="margin-top:18px">
+      <label>끝낼 때의 몸</label>
+      <div class="feel" id="eFeel">
+        <button data-ef="more" aria-pressed="false">더 쓸 수 있었다</button>
+        <button data-ef="just" aria-pressed="false">알맞게 멈췄다</button>
+        <button data-ef="spent" aria-pressed="false">소진됐다</button>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <label for="eNote">한 줄 메모</label>
+      <input type="text" id="eNote" placeholder="막힌 곳, 풀린 곳, 방해받은 것">
+    </div>
+    <div style="margin-top:16px">
+      <label for="eThread">다음에 이어 쓸 자리</label>
+      <input type="text" id="eThread" placeholder="쓰다 만 문장 그대로, 또는 다음 장면 한 줄">
+    </div>
+    <div class="acts">
+      <button class="ghost left" id="btnEditDel">이 기록 지우기</button>
+      <button class="ghost" id="btnEditClose">닫기</button>
+      <button class="ghost key" id="btnEditSave">저장</button>
     </div>
   </div>
 </div>
@@ -1011,18 +1075,17 @@ function sessionsHTML(list,compact){
     if(s.advised) parts.push('물때 '+hhmm(new Date(s.advised))+' 조언');
     const gline = d===0? '<span style="font-size:15px">구상 · 자료</span>'
       : (d>=0?'+':'−')+nf(Math.abs(d))+'자 <span style="font-size:12px">'+(d<0?'퇴고':sheets(d))+'</span>';
-    html+='<div class="s"><div class="t num">'+hhmm(a)+'–'+hhmm(b)+'</div><div class="d">'+
+    html+='<div class="s" data-edit-s="'+s.id+'" style="cursor:pointer"><div class="t num">'+hhmm(a)+'–'+hhmm(b)+'</div><div class="d">'+
       '<div class="g num'+(d<=0?' minus':'')+'">'+gline+'</div>'+
       '<div class="sub">'+esc(parts.filter(Boolean).join(' · '))+'</div>'+
       (s.note?'<div class="note">'+esc(s.note)+'</div>':'')+
-      '</div><button class="del" data-del="'+s.id+'" aria-label="이 기록 지우기">×</button></div>';
+      '</div><span class="del" aria-hidden="true">고치기</span></div>';
   });
   return html;
 }
 document.addEventListener('click',e=>{
-  const b=e.target.closest('button[data-del]'); if(!b) return;
-  if(!confirm('이 기록을 지울까요?')) return;
-  db.sessions=db.sessions.filter(s=>s.id!==b.dataset.del); save(); render();
+  const b=e.target.closest('[data-edit-s]'); if(!b) return;
+  openEdit(b.dataset.editS);
 });
 
 /* ── 기록 화면 ─────────────────────── */
@@ -1345,7 +1408,12 @@ $('btnSave').addEventListener('click',()=>{
   $('endBox').classList.add('hidden'); $('btnEnd').classList.remove('hidden'); $('cancelWrap').classList.remove('hidden');
   save(); render(); toast('기록했습니다. 이제 다른 일을 하세요');
 });
-$('endCount').addEventListener('keydown',e=>{ if(e.key==='Enter') $('btnSave').click(); });
+$('endCount').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); $('note').focus(); }
+});
+$('note').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); $('thread_in').focus(); }
+});
 $('btnCancel').addEventListener('click',()=>{
   const m=(Date.now()-new Date(db.active.start))/60000;
   if(!confirm('이 세션을 기록하지 않고 버릴까요?\n\n'+
@@ -1756,6 +1824,52 @@ $('btnPromptCopy').addEventListener('click',async()=>{
   if(!db.plan){ document.querySelector('nav button[data-v="today"]').click(); openPlanEdit(); }
 });
 $('btnPromptClose').addEventListener('click',()=>$('veilPrompt').classList.add('hidden'));
+
+/* ── 기록 고치기 ─────────────────────── */
+let editSession=null, eSleep=null, eRan=null, eFeel=null;
+const local=d=>{ const x=new Date(d); return x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate())+'T'+hhmm(x); };
+function paintPicks(){
+  Array.from($('eSleep').children).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.es===eSleep)));
+  Array.from($('eRan').children).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.er===eRan)));
+  Array.from($('eFeel').children).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ef===eFeel)));
+}
+function openEdit(id){
+  const s=db.sessions.find(x=>x.id===id); if(!s) return;
+  editSession=s;
+  const w=work(s.workId);
+  $('editWhen').textContent=[w?'「'+w.title+'」':null, wLabel(new Date(s.start))].filter(Boolean).join(' · ');
+  $('eStart').value=local(s.start); $('eEnd').value=local(s.end);
+  $('eFrom').value=s.startCount; $('eTo').value=s.endCount;
+  eSleep=s.sleep||null; eRan=s.ran||null; eFeel=s.feel||null; paintPicks();
+  $('eNote').value=s.note||''; $('eThread').value=s.thread||'';
+  $('veilEdit').classList.remove('hidden');
+}
+$('eSleep').addEventListener('click',e=>{ const b=e.target.closest('[data-es]'); if(!b) return;
+  eSleep=(eSleep===b.dataset.es)?null:b.dataset.es; paintPicks(); });
+$('eRan').addEventListener('click',e=>{ const b=e.target.closest('[data-er]'); if(!b) return;
+  eRan=(eRan===b.dataset.er)?null:b.dataset.er; paintPicks(); });
+$('eFeel').addEventListener('click',e=>{ const b=e.target.closest('[data-ef]'); if(!b) return;
+  eFeel=(eFeel===b.dataset.ef)?null:b.dataset.ef; paintPicks(); });
+$('btnEditSave').addEventListener('click',()=>{
+  const s=editSession; if(!s) return;
+  const st=new Date($('eStart').value), en=new Date($('eEnd').value);
+  if(isNaN(st)||isNaN(en)){ toast('시각을 확인해주세요'); return; }
+  if(en<=st){ toast('일어선 시각이 앉은 시각보다 빠릅니다'); return; }
+  const f=parseInt($('eFrom').value,10), t=parseInt($('eTo').value,10);
+  if(isNaN(f)||isNaN(t)||f<0||t<0){ toast('글자수를 확인해주세요'); return; }
+  s.start=st.toISOString(); s.end=en.toISOString();
+  s.startCount=f; s.endCount=t;
+  s.sleep=eSleep; s.ran=eRan; s.feel=eFeel;
+  s.note=$('eNote').value.trim(); s.thread=$('eThread').value.trim();
+  save(); $('veilEdit').classList.add('hidden'); render(); toast('고쳤습니다');
+});
+$('btnEditDel').addEventListener('click',()=>{
+  if(!editSession) return;
+  if(!confirm('이 기록을 지울까요? 되돌릴 수 없습니다.')) return;
+  db.sessions=db.sessions.filter(x=>x.id!==editSession.id);
+  save(); $('veilEdit').classList.add('hidden'); render();
+});
+$('btnEditClose').addEventListener('click',()=>$('veilEdit').classList.add('hidden'));
 
 /* ── 휴무일 관리 ─────────────────────── */
 function drawOff(){
