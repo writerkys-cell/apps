@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="day">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="2667">
+<meta name="theme-color" content="#FBF9F3">
+<title>2667 — 읽기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   2667 · 아이폰 읽기판
+   한 손에 들고 읽으며, 다른 손으로 노트에 쓴다.
+   그러므로 이 앱의 전부는 '읽히는 것'이다 — 본문은 명조로 크게,
+   장치(칩·차례표)는 작고 조용하게. 고치는 기능은 없다.
+   ============================================================ */
+:root{
+  --paper:#FBF9F3;
+  --card:#FFFFFF;
+  --ink:#23262C;
+  --ink-soft:#5C6068;
+  --ink-faint:#93969D;
+  --line:#E5E1D4;
+  --line-soft:#EFECE2;
+  --indigo:#33517D;
+  --indigo-soft:#EAEEF5;
+  --seal:#B0402D;
+  --seal-soft:#F7EAE6;
+  --green:#3E7A52;
+  --green-soft:#E8F1EB;
+  --amber:#8A6D2F;
+  --amber-soft:#F5EEDD;
+  --sans:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;
+  --serif:'Gowun Batang','Noto Serif KR',ui-serif,serif;
+  --radius:12px;
+  --bar:rgba(251,249,243,.92);
+}
+/* 밤 — 새벽이나 늦은 밤에 읽을 때. 종이빛을 낮추고 먹빛을 뒤집는다. */
+:root[data-theme="night"]{
+  --paper:#15171A;
+  --card:#1D2024;
+  --ink:#E7E4DC;
+  --ink-soft:#A9ADB4;
+  --ink-faint:#767B83;
+  --line:#2E3238;
+  --line-soft:#24282D;
+  --indigo:#9DB6DC;
+  --indigo-soft:#232C39;
+  --seal:#E08C77;
+  --seal-soft:#33241F;
+  --green:#8CC29C;
+  --green-soft:#1E2A22;
+  --amber:#D6B778;
+  --amber-soft:#2B2519;
+  --bar:rgba(21,23,26,.92);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%;font-size:17px}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:var(--sans);line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  overflow-wrap:break-word;word-break:keep-all;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+/* ---------- 위 띠 ---------- */
+.bar{
+  position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:2px;
+  padding:calc(env(safe-area-inset-top) + 8px) 10px 8px;
+  background:var(--bar);backdrop-filter:saturate(180%) blur(12px);
+  border-bottom:1px solid var(--line);
+}
+.bar .who{flex:1;min-width:0;padding-right:4px}
+.bar .who b{
+  display:block;font-family:var(--serif);font-size:16px;font-weight:700;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.bar .who span{
+  display:block;font-size:11px;line-height:1.4;color:var(--ink-faint);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.icon{
+  min-width:40px;height:40px;border-radius:9px;
+  font-size:13px;color:var(--ink-soft);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.icon:active{background:var(--line-soft)}
+.icon.back{font-size:24px;line-height:1;padding-bottom:3px}
+.icon[disabled]{opacity:.3}
+
+/* ---------- 본문 자리 ---------- */
+main{
+  padding:20px 18px calc(84px + env(safe-area-inset-bottom));
+  max-width:44rem;margin:0 auto;
+}
+
+/* ---------- 아래 차례표 ---------- */
+.tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:20;
+  display:flex;
+  padding-bottom:env(safe-area-inset-bottom);
+  background:var(--bar);backdrop-filter:saturate(180%) blur(12px);
+  border-top:1px solid var(--line);
+}
+.tabs button{
+  flex:1;padding:9px 2px 10px;color:var(--ink-faint);
+  display:flex;align-items:center;justify-content:center;
+  min-height:50px;
+}
+.tabs button .g{font-family:var(--serif);font-size:17px;line-height:1}
+.tabs button.on{color:var(--indigo)}
+.tabs button.on .g{font-weight:700}
+
+/* ---------- 공통 ---------- */
+.eyebrow{
+  font-size:.72rem;letter-spacing:.12em;color:var(--ink-faint);
+  text-transform:none;margin-bottom:.35rem;
+}
+h1.page{font-family:var(--serif);font-size:1.5rem;font-weight:700;margin-bottom:.2rem}
+h2.blk{font-family:var(--serif);font-size:1.1rem;font-weight:700;margin:1.6rem 0 .5rem}
+.note{font-size:.8rem;color:var(--ink-faint);margin-bottom:1.1rem}
+.read{font-family:var(--serif);font-size:1.06rem;line-height:1.95;white-space:pre-wrap}
+.read.dim{color:var(--ink-faint);font-style:italic}
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:.95rem 1rem;margin-bottom:.7rem;
+}
+.chip{
+  display:inline-block;font-size:.7rem;padding:.15rem .5rem;border-radius:99px;
+  background:var(--line-soft);color:var(--ink-soft);white-space:nowrap;
+}
+.chip.neg{background:var(--seal-soft);color:var(--seal)}
+.chip.pos{background:var(--green-soft);color:var(--green)}
+.chip.doing{background:var(--amber-soft);color:var(--amber)}
+.chip.redo{background:var(--seal-soft);color:var(--seal)}
+.chip.done{background:var(--green-soft);color:var(--green)}
+.chips{display:flex;flex-wrap:wrap;gap:.3rem;align-items:center}
+.empty{
+  text-align:center;color:var(--ink-faint);font-size:.85rem;
+  padding:2.5rem 1rem;border:1.5px dashed var(--line);border-radius:var(--radius);
+}
+
+/* ---------- 원고 셈 ---------- */
+.ledger{
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--card);padding:.9rem 1rem;margin-bottom:1.1rem;
+  display:flex;gap:1.2rem;
+}
+.ledger div{flex:1}
+.ledger .k{font-size:.72rem;color:var(--ink-faint)}
+.ledger .v{font-family:var(--serif);font-size:1.5rem;font-weight:700;line-height:1.25}
+.ledger .v.done{color:var(--green)}
+.ledger .s{font-size:.72rem;color:var(--ink-faint)}
+
+/* ---------- 2667 목록 ---------- */
+.ulist{display:flex;flex-direction:column;gap:.55rem}
+.unit{
+  width:100%;text-align:left;display:block;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  border-left:3px solid var(--line);padding:.85rem .95rem;
+}
+.unit:active{background:var(--line-soft)}
+.unit.neg{border-left-color:var(--seal)}
+.unit.pos{border-left-color:var(--green)}
+.unit .top{display:flex;align-items:baseline;gap:.45rem;margin-bottom:.3rem}
+.unit .ord{font-family:var(--serif);font-size:1.15rem;font-weight:700}
+.unit .lab{font-size:.85rem;color:var(--ink-soft);flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.unit .sum{
+  font-family:var(--serif);font-size:.98rem;line-height:1.75;color:var(--ink-soft);
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+.unit .sum.none{color:var(--ink-faint);font-style:italic}
+.unit .foot{margin-top:.45rem;font-size:.72rem;color:var(--ink-faint)}
+
+/* ---------- 2667 한 장 ---------- */
+.uhead{margin-bottom:1.2rem;padding-bottom:1rem;border-bottom:1px solid var(--line)}
+.uhead .ord{font-family:var(--serif);font-size:2rem;font-weight:700;line-height:1.2}
+.uhead .lab{font-family:var(--serif);font-size:1.15rem;color:var(--ink-soft);margin-top:.1rem}
+.uhead .chips{margin-top:.6rem}
+.surprise{
+  font-size:.85rem;color:var(--ink-soft);margin-top:.9rem;
+  padding-left:.7rem;border-left:2px solid var(--line);
+}
+.scene{
+  border-top:1px solid var(--line-soft);padding:1.3rem 0 .3rem;
+}
+.scene:first-of-type{border-top:none}
+.scene .no{
+  font-family:var(--serif);font-size:.8rem;color:var(--ink-faint);
+}
+.scene h3{font-family:var(--serif);font-size:1.25rem;font-weight:700;line-height:1.4;margin:.1rem 0 .4rem}
+.meta{font-size:.78rem;color:var(--ink-faint);margin-bottom:.7rem;line-height:1.7}
+.meta b{color:var(--ink-soft);font-weight:500}
+.lbl{
+  font-size:.7rem;letter-spacing:.1em;color:var(--ink-faint);
+  margin:.9rem 0 .2rem;
+}
+.dir{
+  font-family:var(--serif);font-size:.98rem;line-height:1.9;white-space:pre-wrap;
+  background:var(--indigo-soft);border-radius:var(--radius);
+  padding:.8rem .9rem;margin-top:.25rem;color:var(--ink);
+}
+.pager{
+  display:flex;gap:.5rem;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--line);
+}
+.pager button{
+  flex:1;border:1px solid var(--line);border-radius:var(--radius);
+  padding:.75rem .6rem;font-size:.82rem;color:var(--ink-soft);
+  background:var(--card);text-align:center;
+}
+.pager button:active{background:var(--line-soft)}
+.pager button[disabled]{opacity:.35}
+
+/* ---------- 펼침 ---------- */
+details.fold{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  margin-bottom:.55rem;overflow:hidden;
+}
+details.fold>summary{
+  list-style:none;cursor:pointer;padding:.8rem .95rem;
+  display:flex;align-items:center;gap:.5rem;
+}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary .t{
+  font-family:var(--serif);font-size:1.02rem;font-weight:700;flex:1;min-width:0;
+}
+details.fold>summary .u{font-size:.7rem;color:var(--ink-faint);white-space:nowrap}
+details.fold>summary::after{content:'＋';color:var(--ink-faint);font-size:.85rem}
+details.fold[open]>summary::after{content:'－'}
+details.fold .body{padding:0 .95rem 1rem}
+details.fold[open]>summary{border-bottom:1px solid var(--line-soft);margin-bottom:.8rem}
+
+/* ---------- 찾기 ---------- */
+.search{
+  width:100%;font-family:var(--sans);font-size:.9rem;
+  padding:.7rem .85rem;margin-bottom:.9rem;
+  background:var(--card);color:var(--ink);
+  border:1px solid var(--line);border-radius:var(--radius);
+}
+.search:focus{outline:2px solid var(--indigo);outline-offset:-2px}
+
+/* ---------- 파일 ---------- */
+.filebtn{
+  display:block;width:100%;text-align:center;
+  background:var(--indigo);color:#fff;border-radius:var(--radius);
+  padding:.95rem;font-size:.95rem;font-weight:500;margin-bottom:.6rem;
+}
+.filebtn.ghost{background:var(--card);color:var(--ink-soft);border:1px solid var(--line)}
+.filebtn:active{opacity:.85}
+.steps{counter-reset:s;margin:.4rem 0 1.4rem}
+.steps li{
+  list-style:none;counter-increment:s;position:relative;
+  padding-left:1.9rem;margin-bottom:.6rem;font-size:.86rem;color:var(--ink-soft);line-height:1.7;
+}
+.steps li::before{
+  content:counter(s);position:absolute;left:0;top:.1rem;
+  width:1.35rem;height:1.35rem;border-radius:50%;
+  background:var(--line-soft);color:var(--ink-faint);
+  font-size:.7rem;display:flex;align-items:center;justify-content:center;
+}
+textarea.paste{
+  width:100%;min-height:7rem;font-family:var(--sans);font-size:.8rem;
+  padding:.7rem;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--card);color:var(--ink);margin-bottom:.6rem;
+}
+.kv{display:flex;justify-content:space-between;gap:1rem;font-size:.85rem;
+  padding:.55rem 0;border-bottom:1px solid var(--line-soft)}
+.kv span:first-child{color:var(--ink-faint)}
+select.proj{
+  width:100%;font-family:var(--sans);font-size:.9rem;padding:.7rem .85rem;
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--card);color:var(--ink);margin-bottom:.6rem;
+}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(74px + env(safe-area-inset-bottom));z-index:40;
+  background:var(--ink);color:var(--paper);
+  padding:9px 16px;border-radius:99px;font-size:13px;
+  opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center;
+}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <button class="icon back" id="btnBack" hidden aria-label="뒤로">‹</button>
+  <div class="who">
+    <b id="projName">2667</b>
+    <span id="projMeta">불러온 파일이 없습니다</span>
+  </div>
+  <button class="icon" id="btnSmaller" aria-label="글씨 작게">가−</button>
+  <button class="icon" id="btnBigger" aria-label="글씨 크게">가＋</button>
+  <button class="icon" id="btnTheme" aria-label="밤 모드">밤</button>
+</header>
+
+<main id="app"></main>
+
+<nav class="tabs">
+  <button data-go="units"><span class="g">2667</span></button>
+  <button data-go="story"><span class="g">이야기</span></button>
+  <button data-go="chars"><span class="g">인물</span></button>
+  <button data-go="scenes"><span class="g">씬</span></button>
+  <button data-go="file"><span class="g">파일</span></button>
+</nav>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="filePick" accept=".json,application/json" hidden>
+
+<script>
+/* ============================================================
+   1. 잡동사니
+   ============================================================ */
+const $=s=>document.querySelector(s);
+const $$=s=>Array.from(document.querySelectorAll(s));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nl2=s=>esc(s); /* .read 는 white-space:pre-wrap 이므로 줄바꿈을 그대로 둔다 */
+
+const ORD=['첫','두','세','네','다섯','여섯','일곱','여덟','아홉','열',
+           '열한','열두','열세','열네','열다섯','열여섯','열일곱','열여덟','열아홉','스무'];
+const ordName=i=>(i<ORD.length?ORD[i]+'번째':(i+1)+'번째');
+const spClass=sp=>sp==='부정적 놀라움'?'neg':(sp==='긍정적 놀라움'?'pos':'');
+const stClass=st=>({'진행중':'doing','다시쓰기':'redo','완료':'done'})[st]||'';
+const UNIT_CHARS=2667, PAGE_CHARS=200;
+const pages=n=>(n/PAGE_CHARS).toFixed(1);
+
+let toastTimer=null;
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('on'),2200);
+}
+
+/* 저장은 하지 않는다. 다만 불러온 파일과 읽기 설정은 다음에 열 때를 위해 담아 둔다. */
+const store={
+  get(k){ try{return localStorage.getItem(k)}catch(e){return null} },
+  set(k,v){ try{localStorage.setItem(k,v);return true}catch(e){return false} },
+  del(k){ try{localStorage.removeItem(k)}catch(e){} }
+};
+const K_FILE='2667v.file', K_PREF='2667v.pref';
+
+/* ============================================================
+   2. 자료 — 맥북에서 내보낸 JSON을 읽기만 한다
+   ============================================================ */
+let projects=[];   // 파일 안의 모든 프로젝트
+let cur=null;      // 지금 읽고 있는 프로젝트
+let fileInfo={name:'',exportedAt:0};
+
+/* 내보낸 JSON은 {app:'2667',projects:[…]} 꼴이다.
+   프로젝트 하나만 든 파일이나 옛 「장면첩」 파일도 받아들인다. */
+function readFile(raw){
+  let data;
+  try{ data=JSON.parse(raw); }
+  catch(e){ throw new Error('JSON 파일이 아닙니다'); }
+  let list=[];
+  if(Array.isArray(data)) list=data;
+  else if(data&&Array.isArray(data.projects)) list=data.projects;
+  else if(data&&(data.units||data.plot||data.scenes)) list=[data];
+  list=list.filter(p=>p&&typeof p==='object').map(prep);
+  if(!list.length) throw new Error('프로젝트가 들어 있지 않습니다');
+  projects=list;
+  fileInfo={name:(data&&data.app)||'2667', exportedAt:(data&&data.exportedAt)||0};
+  return list;
+}
+
+/* 화면에 필요한 만큼만 모양을 맞춘다 (고치지 않는다) */
+function prep(p){
+  const q=Object.assign({},p);
+  q.story=Object.assign({logline:'',synopsis:'',conflict:'',extras:[]},q.story||{});
+  if(!Array.isArray(q.story.extras))q.story.extras=[];
+  q.characters=Array.isArray(q.characters)?q.characters:[];
+  q.scenes=Array.isArray(q.scenes)?q.scenes:[];
+  if(!Array.isArray(q.units)){
+    // 옛 「장면첩」의 3막 구조를 순서대로 2667 단위 자리에 놓는다
+    q.units=[];
+    const OLD=['1막','돌아오지 못하는 다리','2막','2-1막','가장 깊은 심연','2-2막','에피파니의 순간','3막'];
+    const NEG=new Set(['돌아오지 못하는 다리','가장 깊은 심연']);
+    OLD.forEach(a=>{
+      const src=(q.plot||{})[a]; if(!src)return;
+      const has=(src.text||'').trim()||q.scenes.some(sc=>sc.act===a);
+      if(!has)return;
+      const id='old-'+q.units.length;
+      q.units.push({id,label:a,text:src.text||'',status:'대기',chars:0,
+        surprise:NEG.has(a)?'부정적 놀라움':(a==='에피파니의 순간'?'긍정적 놀라움':'미정')});
+      q.scenes.forEach(sc=>{if(sc.act===a)sc.unit=id});
+    });
+  }
+  q.units=q.units.map(u=>Object.assign({id:'',label:'',text:'',surprise:'미정',status:'대기',chars:0},u));
+  q.name=q.name||'제목 없는 소설';
+  return q;
+}
+
+const unitPos=id=>cur.units.findIndex(u=>u.id===id);
+const unitById=id=>cur.units.find(u=>u.id===id)||null;
+const unitScenes=id=>cur.scenes.filter(sc=>sc.unit===id);
+const unitTitle=u=>ordName(unitPos(u.id))+' 2667';
+const charName=id=>{const c=cur.characters.find(x=>x.id===id);return c?(c.name||'(이름 없음)'):''};
+
+/* ============================================================
+   3. 읽기 설정 — 글씨 크기와 낮/밤
+   ============================================================ */
+const SCALES=[15,17,19,21,24];
+const darkMQ = window.matchMedia
+  ? window.matchMedia('(prefers-color-scheme: dark)')
+  : {matches:false};
+let pref={scale:2,theme:'auto'};
+function loadPref(){
+  try{ pref=Object.assign(pref,JSON.parse(store.get(K_PREF)||'{}')); }catch(e){}
+  applyPref();
+}
+function savePref(){ store.set(K_PREF,JSON.stringify(pref)); }
+function applyPref(){
+  document.documentElement.style.fontSize=SCALES[pref.scale]+'px';
+  const night = pref.theme==='night' || (pref.theme==='auto'&&darkMQ.matches);
+  document.documentElement.dataset.theme=night?'night':'day';
+  $('#btnTheme').textContent=night?'낮':'밤';
+  const m=document.querySelector('meta[name="theme-color"]');
+  if(m) m.content=night?'#15171A':'#FBF9F3';
+  $('#btnSmaller').disabled=pref.scale<=0;
+  $('#btnBigger').disabled=pref.scale>=SCALES.length-1;
+}
+$('#btnSmaller').addEventListener('click',()=>{pref.scale=Math.max(0,pref.scale-1);applyPref();savePref();toast('글씨 '+SCALES[pref.scale]+'pt')});
+$('#btnBigger').addEventListener('click',()=>{pref.scale=Math.min(SCALES.length-1,pref.scale+1);applyPref();savePref();toast('글씨 '+SCALES[pref.scale]+'pt')});
+$('#btnTheme').addEventListener('click',()=>{
+  const night=document.documentElement.dataset.theme==='night';
+  pref.theme=night?'day':'night'; applyPref(); savePref();
+});
+// 시스템이 낮/밤을 바꾸면 따라간다 (옛 사파리는 addListener)
+const onScheme=()=>{if(pref.theme==='auto')applyPref()};
+if(darkMQ.addEventListener) darkMQ.addEventListener('change',onScheme);
+else if(darkMQ.addListener) darkMQ.addListener(onScheme);
+
+/* ============================================================
+   4. 화면 옮겨 다니기
+   ============================================================ */
+let view={n:'units',id:''};
+const scrollMemo={};
+function go(n,id){
+  scrollMemo[view.n+(view.id||'')]=window.scrollY;
+  view={n,id:id||''};
+  render();
+  const key=n+(id||'');
+  window.scrollTo(0, (n==='unit')?0:(scrollMemo[key]||0));
+}
+$$('.tabs button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+$('#btnBack').addEventListener('click',()=>go('units'));
+
+function render(){
+  const app=$('#app');
+  $('#btnBack').hidden = view.n!=='unit';
+  $$('.tabs button').forEach(b=>b.classList.toggle('on',
+    b.dataset.go===view.n || (view.n==='unit'&&b.dataset.go==='units')));
+  $('#projName').textContent=cur?cur.name:'2667';
+  $('#projMeta').textContent=cur
+    ? `2667 ${cur.units.length} · 씬 ${cur.scenes.length}${fileInfo.exportedAt?' · '+fmtDate(fileInfo.exportedAt):''}`
+    : '불러온 파일이 없습니다';
+
+  if(!cur && view.n!=='file'){ app.innerHTML=viewNoFile(); bindNoFile(); return; }
+  if(view.n==='units')  app.innerHTML=viewUnits();
+  else if(view.n==='unit')  app.innerHTML=viewUnit(view.id);
+  else if(view.n==='story') app.innerHTML=viewStory();
+  else if(view.n==='chars') app.innerHTML=viewChars();
+  else if(view.n==='scenes')app.innerHTML=viewScenes();
+  else if(view.n==='file')  { app.innerHTML=viewFile(); bindFile(); }
+  bindCommon();
+}
+function fmtDate(t){
+  const d=new Date(t);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} 내보냄`;
+}
+function bindCommon(){
+  $$('#app [data-unit]').forEach(b=>b.addEventListener('click',()=>go('unit',b.dataset.unit)));
+  $$('#app [data-tab]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.tab)));
+}
+
+/* ============================================================
+   5. 화면들
+   ============================================================ */
+function viewNoFile(){
+  return `<h1 class="page">읽을 파일이 없습니다</h1>
+  <p class="note">맥북의 2667 앱에서 내보낸 JSON을 불러오면 여기에서 읽을 수 있습니다.</p>
+  <button class="filebtn" data-pick>파일 불러오기</button>
+  <button class="filebtn ghost" data-tab="file">불러오는 방법 보기</button>`;
+}
+function bindNoFile(){
+  $$('#app [data-pick]').forEach(b=>b.addEventListener('click',()=>$('#filePick').click()));
+}
+
+/* --- 2667 목록 : 이 앱의 첫 화면 --- */
+function viewUnits(){
+  const done=cur.units.filter(u=>u.status==='완료');
+  const doneChars=done.reduce((n,u)=>n+(Number(u.chars)||0),0);
+  const working=cur.units.filter(u=>u.status==='진행중'||u.status==='다시쓰기').length;
+  const allChars=doneChars+working*UNIT_CHARS;
+  const ledger=`<div class="ledger">
+    <div><div class="k">원고 (쓰는 중까지)</div><div class="v">${pages(allChars)}<span style="font-size:.9rem">매</span></div>
+      <div class="s">${allChars.toLocaleString()}자</div></div>
+    <div><div class="k">완료</div><div class="v done">${pages(doneChars)}<span style="font-size:.9rem">매</span></div>
+      <div class="s">${done.length}개 · ${doneChars.toLocaleString()}자</div></div>
+  </div>`;
+  if(!cur.units.length) return ledger+`<div class="empty">2667이 없습니다</div>`;
+  const list=cur.units.map((u,i)=>{
+    const n=unitScenes(u.id).length;
+    const t=(u.text||'').trim();
+    return `<button class="unit ${spClass(u.surprise)}" data-unit="${esc(u.id)}">
+      <div class="top">
+        <span class="ord">${ordName(i)}</span>
+        <span class="lab">${u.label?esc(u.label):''}</span>
+        <span class="chip ${stClass(u.status)}">${esc(u.status)}</span>
+      </div>
+      <div class="sum ${t?'':'none'}">${t?esc(t):'요약이 아직 없습니다'}</div>
+      <div class="foot">씬 ${n}개${u.surprise!=='미정'?' · '+esc(u.surprise):''}${
+        u.status==='완료'&&u.chars?` · ${Number(u.chars).toLocaleString()}자 · ${pages(u.chars)}매`:''}</div>
+    </button>`;
+  }).join('');
+  const undec=cur.scenes.filter(sc=>!sc.unit||!unitById(sc.unit)).length;
+  const tail=undec?`<button class="unit" data-tab="scenes" style="margin-top:.55rem">
+      <div class="top"><span class="ord">미정</span>
+        <span class="lab">아직 2667에 놓이지 않은 씬</span>
+        <span class="chip">${undec}</span></div>
+      <div class="foot">씬 목록에서 봅니다</div>
+    </button>`:'';
+  return ledger+`<div class="ulist">${list}</div>`+tail;
+}
+
+/* --- 2667 한 장 : 노트를 펴 놓고 읽는 화면 --- */
+function viewUnit(id){
+  const u=unitById(id); if(!u) return `<div class="empty">2667을 찾을 수 없습니다</div>`;
+  const i=unitPos(id);
+  const scs=unitScenes(id);
+  const sp=u.surprise==='부정적 놀라움'
+    ? '이 2667은 부정적인 놀라움으로 닫힙니다.'
+    : (u.surprise==='긍정적 놀라움' ? '이 2667은 긍정적인 놀라움으로 닫힙니다.'
+      : '어떤 놀라움으로 닫히는지는 아직 정해지지 않았습니다.');
+  const head=`<div class="uhead">
+    <div class="ord">${ordName(i)} 2667</div>
+    ${u.label?`<div class="lab">${esc(u.label)}</div>`:''}
+    <div class="chips">
+      <span class="chip ${stClass(u.status)}">${esc(u.status)}</span>
+      ${u.surprise!=='미정'?`<span class="chip ${spClass(u.surprise)}">${esc(u.surprise)}</span>`:''}
+      ${u.status==='완료'&&u.chars?`<span class="chip">${Number(u.chars).toLocaleString()}자 · ${pages(u.chars)}매</span>`:''}
+      <span class="chip">씬 ${scs.length}</span>
+    </div>
+    <div class="surprise">${sp}</div>
+  </div>`;
+  const summary=(u.text||'').trim()
+    ? `<div class="eyebrow">요약</div><div class="read">${nl2(u.text)}</div>`
+    : `<div class="read dim">요약이 아직 없습니다</div>`;
+  const body=scs.length
+    ? `<h2 class="blk">씬 ${scs.length}개</h2>`+scs.map(sc=>sceneBlock(sc)).join('')
+    : `<h2 class="blk">씬</h2><div class="empty">이 2667에 놓인 씬이 없습니다</div>`;
+  const prev=cur.units[i-1], next=cur.units[i+1];
+  const pager=`<div class="pager">
+    <button ${prev?`data-unit="${esc(prev.id)}"`:'disabled'}>‹ ${prev?ordName(i-1):'처음'}</button>
+    <button ${next?`data-unit="${esc(next.id)}"`:'disabled'}>${next?ordName(i+1):'마지막'} ›</button>
+  </div>`;
+  return head+summary+body+pager;
+}
+
+/* 씬 하나 — 노트에 옮겨 쓰며 보는 곳이므로 접지 않고 모두 펼친다 */
+function sceneBlock(sc){
+  const no=cur.scenes.indexOf(sc)+1;
+  const who=(sc.charIds||[]).map(charName).filter(Boolean).join(', ');
+  const meta=[sc.place?`<b>${esc(sc.place)}</b>`:'',sc.time?esc(sc.time):'',who?esc(who):'']
+    .filter(Boolean).join(' &nbsp;·&nbsp; ');
+  return `<div class="scene">
+    <div class="no">씬 ${no}</div>
+    <h3>${esc(sc.title)||'(제목 없음)'}</h3>
+    ${meta?`<div class="meta">${meta}</div>`:''}
+    ${(sc.summary||'').trim()?`<div class="read">${nl2(sc.summary)}</div>`:'<div class="read dim">요약이 아직 없습니다</div>'}
+    ${(sc.turn||'').trim()?`<div class="lbl">전환</div><div class="read">${nl2(sc.turn)}</div>`:''}
+    ${(sc.direction||'').trim()?`<div class="lbl">연출</div><div class="dir">${nl2(sc.direction)}</div>`:''}
+    ${(sc.note||'').trim()?`<div class="lbl">메모</div><div class="read">${nl2(sc.note)}</div>`:''}
+  </div>`;
+}
+
+/* --- 이야기 --- */
+function viewStory(){
+  const s=cur.story;
+  const blk=(t,v)=>(v||'').trim()?`<h2 class="blk">${esc(t)}</h2><div class="read">${nl2(v)}</div>`:'';
+  const extras=(s.extras||[]).map(e=>blk(e.label||'덧붙임',e.text)).join('');
+  const body=blk('로그라인',s.logline)+blk('시놉시스',s.synopsis)+blk('중심 갈등',s.conflict)+extras;
+  return `<h1 class="page">${esc(cur.name)}</h1>
+  <p class="note">이야기의 뼈대</p>
+  ${body||'<div class="empty">아직 적어 둔 것이 없습니다</div>'}`;
+}
+
+/* --- 인물 --- */
+function viewChars(){
+  if(!cur.characters.length) return `<h1 class="page">인물</h1><div class="empty">인물이 없습니다</div>`;
+  const F=[['나이','age'],['성별','gender'],['하는 일','job'],['성격','personality'],
+           ['이야기 속 역할','role'],['원하는 것','want'],['두려워하는 것','fear'],
+           ['갈등','conflict'],['생김새','desc'],['메모','note']];
+  const list=cur.characters.map(c=>{
+    const rows=F.map(([k,f])=>(c[f]||'').trim()
+      ?`<div class="lbl">${k}</div><div class="read">${nl2(c[f])}</div>`:'').join('');
+    const n=cur.scenes.filter(sc=>(sc.charIds||[]).includes(c.id)).length;
+    return `<details class="fold">
+      <summary><span class="t">${esc(c.name)||'(이름 없음)'}</span><span class="u">씬 ${n}</span></summary>
+      <div class="body">${rows||'<div class="read dim">적어 둔 것이 없습니다</div>'}</div>
+    </details>`;
+  }).join('');
+  return `<h1 class="page">인물</h1><p class="note">${cur.characters.length}명 · 눌러서 펼칩니다</p>${list}`;
+}
+
+/* --- 씬 전체 --- */
+let sceneQuery='';
+function viewScenes(){
+  const q=sceneQuery.trim().toLowerCase();
+  const hit=sc=>{
+    if(!q) return true;
+    const who=(sc.charIds||[]).map(charName).join(' ');
+    return [sc.title,sc.summary,sc.turn,sc.direction,sc.place,sc.time,sc.note,who]
+      .some(v=>(v||'').toLowerCase().includes(q));
+  };
+  const list=cur.scenes.filter(hit);
+  const rows=list.map(sc=>{
+    const i=cur.scenes.indexOf(sc)+1;
+    const u=unitById(sc.unit);
+    return `<details class="fold">
+      <summary><span class="t">${i}. ${esc(sc.title)||'(제목 없음)'}</span>
+        <span class="u">${u?esc(ordName(unitPos(u.id))):'미정'}</span></summary>
+      <div class="body">${sceneBlock(sc).replace('<div class="scene">','<div>')}</div>
+    </details>`;
+  }).join('');
+  return `<h1 class="page">씬</h1>
+  <p class="note">모두 ${cur.scenes.length}개${q?` · 찾은 것 ${list.length}개`:''} · 눌러서 펼칩니다</p>
+  <input class="search" id="sceneSearch" type="search" placeholder="제목·요약·장소·인물로 찾기" value="${esc(sceneQuery)}">
+  ${rows||'<div class="empty">찾는 씬이 없습니다</div>'}`;
+}
+
+/* --- 파일 --- */
+function viewFile(){
+  const picker=projects.length>1
+    ? `<h2 class="blk">읽을 소설</h2>
+       <select class="proj" id="projPick">${projects.map((p,i)=>
+         `<option value="${i}" ${cur&&p.id===cur.id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>`
+    : '';
+  const info=cur?`<h2 class="blk">지금 읽는 파일</h2>
+    <div class="kv"><span>소설</span><span>${esc(cur.name)}</span></div>
+    <div class="kv"><span>2667</span><span>${cur.units.length}개</span></div>
+    <div class="kv"><span>씬</span><span>${cur.scenes.length}개</span></div>
+    <div class="kv"><span>인물</span><span>${cur.characters.length}명</span></div>
+    ${fileInfo.exportedAt?`<div class="kv"><span>내보낸 때</span><span>${fmtDate(fileInfo.exportedAt)}</span></div>`:''}
+    ${projects.length>1?`<div class="kv"><span>파일 안의 소설</span><span>${projects.length}편</span></div>`:''}`:'';
+  return `<h1 class="page">파일</h1>
+  <p class="note">이 앱은 읽기만 합니다. 여기서 무엇을 고쳐도 맥북의 2667에는 아무 일도 일어나지 않습니다.</p>
+  <button class="filebtn" data-pick>파일 불러오기</button>
+  ${picker}
+  ${info}
+  <h2 class="blk">맥북에서 아이폰으로</h2>
+  <ol class="steps">
+    <li>맥북 2667 앱의 백업 탭에서 「전체 내보내기」를 누릅니다.</li>
+    <li>받은 JSON 파일을 아이폰으로 에어드롭합니다.</li>
+    <li>아이폰이 저장할 곳을 물으면 파일 앱에 둡니다.</li>
+    <li>여기서 「파일 불러오기」를 누르고 그 파일을 고릅니다.</li>
+  </ol>
+  <h2 class="blk">붙여넣기로 불러오기</h2>
+  <p class="note">에어드롭이 여의치 않으면 JSON 내용을 그대로 붙여넣어도 됩니다.</p>
+  <textarea class="paste" id="pasteBox" placeholder="{&quot;app&quot;:&quot;2667&quot;, …"></textarea>
+  <button class="filebtn ghost" id="btnPaste">붙여넣은 내용 읽기</button>
+  <h2 class="blk">읽기</h2>
+  <div class="kv"><span>글씨 크기</span><span>${SCALES[pref.scale]}pt</span></div>
+  <div class="kv"><span>화면</span><span>${document.documentElement.dataset.theme==='night'?'밤':'낮'}</span></div>
+  <p class="note" style="margin-top:1rem">불러온 파일은 이 아이폰 브라우저 안에만 담아 두어, 다음에 열 때 바로 이어서 읽습니다.</p>
+  <button class="filebtn ghost" id="btnForget">담아 둔 파일 지우기</button>`;
+}
+function bindFile(){
+  $$('#app [data-pick]').forEach(b=>b.addEventListener('click',()=>$('#filePick').click()));
+  const pp=$('#projPick');
+  if(pp) pp.addEventListener('change',()=>{
+    cur=projects[Number(pp.value)]||projects[0];
+    store.set('2667v.proj',cur.id||'');
+    toast(`${cur.name} 읽는 중`); go('units');
+  });
+  const bp=$('#btnPaste');
+  if(bp) bp.addEventListener('click',()=>{
+    const raw=$('#pasteBox').value.trim();
+    if(!raw){toast('붙여넣은 내용이 없습니다');return}
+    load(raw,'붙여넣기');
+  });
+  const bf=$('#btnForget');
+  if(bf) bf.addEventListener('click',()=>{
+    store.del(K_FILE); store.del('2667v.proj');
+    projects=[]; cur=null; toast('담아 둔 파일을 지웠습니다'); render();
+  });
+}
+
+/* 씬 찾기 — 다시 그려도 글자를 넣던 자리를 지킨다 */
+document.addEventListener('input',e=>{
+  if(e.target.id!=='sceneSearch') return;
+  sceneQuery=e.target.value;
+  const box=e.target, pos=box.selectionStart;
+  $('#app').innerHTML=viewScenes(); bindCommon();
+  const nb=$('#sceneSearch');
+  if(nb){nb.focus();try{nb.setSelectionRange(pos,pos)}catch(err){}}
+});
+
+/* ============================================================
+   6. 파일 읽어들이기
+   ============================================================ */
+function load(raw,how){
+  try{
+    readFile(raw);
+    const want=store.get('2667v.proj');
+    cur=projects.find(p=>p.id===want)||projects[0];
+    if(!store.set(K_FILE,raw)) toast('읽었습니다 (이 창에서만 — 저장 공간이 부족합니다)');
+    else toast(`${cur.name} — ${how}로 읽었습니다`);
+    go('units');
+  }catch(err){
+    toast(err.message||'파일을 읽지 못했습니다');
+  }
+}
+$('#filePick').addEventListener('change',e=>{
+  const f=e.target.files&&e.target.files[0];
+  if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>load(String(r.result),'파일');
+  r.onerror=()=>toast('파일을 열지 못했습니다');
+  r.readAsText(f);
+  e.target.value='';
+});
+
+/* ============================================================
+   7. 시작
+   ============================================================ */
+loadPref();
+const saved=store.get(K_FILE);
+if(saved){
+  try{
+    readFile(saved);
+    const want=store.get('2667v.proj');
+    cur=projects.find(p=>p.id===want)||projects[0];
+  }catch(e){ store.del(K_FILE); }
+}
+render();
+</script>
+</body>
+</html>
