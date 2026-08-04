@@ -75,6 +75,12 @@ mark{background:none;color:var(--seal);font-weight:700}
 .lineage:hover{color:var(--seal)}
 .parents{margin-top:8px;padding-left:14px;border-left:2px solid var(--rule)}
 .parents .item{padding:10px 0;border-bottom:0}
+.item.quote,.card.quote{border-left:3px solid var(--seal);padding-left:14px}
+.card.quote{padding-left:19px}
+.item.quote .body,.card.quote .body{font-style:normal;color:var(--ink)}
+.src{font-family:var(--sans);font-size:11.5px;color:var(--seal);margin-top:6px;letter-spacing:.02em}
+.src::before{content:"인용 — ";color:var(--faint)}
+.src.nosrc::before{content:""}
 .editbox{background:var(--card);border:1px solid var(--ink);padding:18px 20px;margin:14px 0}
 .editbox .stampin{font-size:18px}
 
@@ -144,6 +150,13 @@ mark{background:none;color:var(--seal);font-weight:700}
     <label for="tagin">태그 — 없어도 됩니다</label>
     <input id="tagin" autocomplete="off" placeholder="투구  유년  바다">
   </div>
+  <div class="field">
+    <label class="chk" style="margin-bottom:0"><input type="checkbox" id="isquote"> 다른 사람의 글에서 옮긴 것</label>
+    <div id="srcwrap" style="display:none;margin-top:10px">
+      <input id="srcin" autocomplete="off" placeholder="김연수, 『청춘의 문장들』 45쪽">
+      <div class="note" style="margin-top:6px">출처를 모르면 비워두어도 됩니다. 인용이라는 사실만은 남습니다.</div>
+    </div>
+  </div>
   <div class="row">
     <button class="btn" id="save">저장</button>
     <label class="chk"><input type="checkbox" id="inherit"> 직전 기록의 날짜 이어쓰기</label>
@@ -157,13 +170,13 @@ mark{background:none;color:var(--seal);font-weight:700}
   </div>
 
   <div id="bulkbox" style="display:none;margin:16px 0">
-    <div class="note" style="margin-bottom:10px">숫자만 있는 줄이 새 기록의 시작이 됩니다. 숫자 뒤에 <b style="font-family:var(--mono)">#태그</b>를 붙여도 됩니다. 다음 숫자 줄까지가 본문입니다. 맨 위에 12자리를 한 번 쓰면 그 아래 4자리들은 같은 날로 이어집니다.</div>
+    <div class="note" style="margin-bottom:10px">숫자만 있는 줄이 새 기록의 시작이 됩니다. 숫자 뒤에 <b style="font-family:var(--mono)">#태그</b>를 붙여도 됩니다. 다음 숫자 줄까지가 본문입니다. 맨 위에 12자리를 한 번 쓰면 그 아래 4자리들은 같은 날로 이어집니다. 남의 글에서 옮긴 것은 숫자 줄 끝에 <b style="font-family:var(--mono)">" 출처</b>를 붙이세요.</div>
     <textarea id="bulk" style="min-height:200px;font-family:var(--mono);font-size:13.5px" placeholder="201602131512 #유년
 갯벌에서 조개를 캤다.
 손이 시렸다.
 
-1547
-어머니는 소리를 하지 않았다."></textarea>
+1547 " 김연수, 청춘의 문장들 45쪽
+옮겨 적은 문장은 이렇게."></textarea>
     <div class="row" style="margin-top:12px">
       <button class="btn" id="bulkread">읽어보기</button>
       <button class="btn q" id="bulkcancel">닫기</button>
@@ -177,8 +190,13 @@ mark{background:none;color:var(--seal);font-weight:700}
 <!-- ══ 찾기 ══ -->
 <section id="find">
   <div class="row" style="margin-bottom:14px">
-    <input id="q" class="grow" autocomplete="off" placeholder="낱말, 또는 #태그, 또는 숫자">
+    <input id="q" class="grow" autocomplete="off" placeholder="낱말, 출처, #태그, 또는 숫자">
     <select id="yearsel" style="width:auto;min-width:110px"></select>
+    <select id="qsel" style="width:auto;min-width:110px">
+      <option value="">인용도 함께</option>
+      <option value="mine">내가 쓴 것만</option>
+      <option value="quote">인용만</option>
+    </select>
   </div>
   <div class="row" style="margin-bottom:12px" id="tagcloud"></div>
   <div class="note" id="findcount"></div>
@@ -218,6 +236,14 @@ mark{background:none;color:var(--seal);font-weight:700}
     <select id="lenspick"></select>
   </div>
   <div class="row" style="margin-bottom:18px">
+    <div style="min-width:150px">
+      <label for="qpool">인용</label>
+      <select id="qpool">
+        <option value="">인용도 함께</option>
+        <option value="mine">내가 쓴 것만</option>
+        <option value="quote">인용만</option>
+      </select>
+    </div>
     <label class="chk"><input type="checkbox" id="nolong" checked> 짧은 기록 빼기</label>
     <label class="chk"><input type="checkbox" id="cool" checked> 최근에 나온 것 피하기</label>
   </div>
@@ -491,12 +517,19 @@ function hi(s,q){
   const k=esc(q).replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
   return e.replace(new RegExp(k,"gi"),m=>`<mark>${m}</mark>`);
 }
+function srcHTML(m){
+  if(!m.quote) return "";
+  return m.src
+    ? `<div class="src">${esc(m.src)}</div>`
+    : `<div class="src">출처를 적어두지 않음</div>`;
+}
 function itemHTML(m,tools,q){
   const tags=m.tags.map(t=>`<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("");
   const lin=m.seeds.length?`<div class="lineage" data-parents="${m.id}">↳ ${m.seeds.length}개의 기록이 부딪혀 나온 것 — 펼치기</div>`:"";
-  return `<div class="item" data-id="${m.id}">
+  return `<div class="item${m.quote?" quote":""}" data-id="${m.id}">
     <div class="stamp">${fmt(m.ts)}</div>
     <div class="body">${hi(m.text,q)}</div>
+    ${srcHTML(m)}
     ${tags?`<div class="tags">${tags}</div>`:""}
     ${lin}
     ${tools?`<div class="tools"><button data-act="edit">고치기</button><button data-act="del">지우기</button></div>`:""}
@@ -511,6 +544,10 @@ function editHTML(m){
     <textarea class="e-text">${esc(m.text)}</textarea>
     <label style="margin-top:16px">태그</label>
     <input class="e-tags" autocomplete="off" value="${esc(m.tags.join("  "))}">
+    <label class="chk" style="margin:16px 0 0"><input type="checkbox" class="e-quote"${m.quote?" checked":""}> 다른 사람의 글에서 옮긴 것</label>
+    <div class="e-srcwrap" style="display:${m.quote?"block":"none"};margin-top:10px">
+      <input class="e-src" autocomplete="off" value="${esc(m.src||"")}" placeholder="김연수, 『청춘의 문장들』 45쪽">
+    </div>
     <div class="row" style="margin-top:16px">
       <button class="btn e-ok">고친 대로 저장</button>
       <button class="btn q e-no">그만두기</button>
@@ -547,7 +584,9 @@ async function saveMemo(){
   const d=dupCheck(r.ts,text);
   if(d&&!confirm(d)){ $("#stamp").focus(); return }
   const now=Date.now();
-  const m={id:uid(),raw:raw||"?",ts:r.ts,text,tags:parseTags($("#tagin").value),seeds:[],created:now,edited:now};
+  const isQ=$("#isquote").checked;
+  const m={id:uid(),raw:raw||"?",ts:r.ts,text,tags:parseTags($("#tagin").value),
+           quote:isQ,src:isQ?$("#srcin").value.trim():"",seeds:[],created:now,edited:now};
   try{ await putMemo(m) }catch(e){ alert("저장하지 못했습니다: "+e); return }
   memos.push(m);
   $("#stamp").value=""; $("#text").value=""; $("#tagin").value="";
@@ -559,7 +598,7 @@ async function saveMemo(){
 /* ══════ 대량 붙여넣기 ══════ */
 function parseBulk(raw){
   const lines=raw.split(/\r?\n/), out=[]; let cur=null, base=lastDated();
-  const head=/^(\d{4}|\d{6}|\d{8}|\d{10}|\d{12}|\?)\s*((?:#\S+\s*)*)$/;
+  const head=/^(\d{4}|\d{6}|\d{8}|\d{10}|\d{12}|\?)\s*((?:#\S+\s*)*)(?:["'"'>]\s*(.*?))?\s*$/;
   const inh=settings.inherit; settings.inherit=true;
   for(const ln of lines){
     const t=ln.trim(), mt=t.match(head);
@@ -567,7 +606,8 @@ function parseBulk(raw){
       if(cur) out.push(cur);
       const r=parseStamp(mt[1],base);
       if(r.ok&&r.ts!=null) base=new Date(r.ts);
-      cur={raw:mt[1],ts:r.ok?r.ts:null,ok:r.ok,why:r.why||"",tags:parseTags(mt[2]),lines:[]};
+      cur={raw:mt[1],ts:r.ok?r.ts:null,ok:r.ok,why:r.why||"",tags:parseTags(mt[2]),
+           quote:mt[3]!==undefined,src:(mt[3]||"").trim(),lines:[]};
     }else if(cur) cur.lines.push(ln);
   }
   settings.inherit=inh;
@@ -578,11 +618,12 @@ function showBulkPreview(){
   const list=parseBulk($("#bulk").value); bulkParsed=list;
   if(!list.length){ $("#bulkpreview").innerHTML='<div class="empty">읽어낸 것이 없습니다. 숫자만 있는 줄로 각 기록이 시작하는지 보세요.</div>'; return }
   const bad=list.filter(o=>!o.ok).length;
+  const qn=list.filter(o=>o.quote).length;
   const dups=list.filter(o=>o.ts!=null&&memos.some(m=>m.ts===o.ts)).length;
   $("#bulkpreview").innerHTML=`
     <hr class="hr">
-    <div class="note" style="margin-bottom:12px">${list.length}개를 읽었습니다.${bad?` 그중 ${bad}개는 숫자를 읽지 못해 '때를 모름'으로 들어갑니다.`:""}${dups?` ${dups}개는 이미 있는 시각과 겹칩니다.`:""}</div>
-    ${list.slice(0,8).map(o=>`<div class="item"><div class="stamp">${o.ok?fmt(o.ts):"읽지 못함 — "+esc(o.raw)}</div><div class="body">${esc(o.text.slice(0,160))}${o.text.length>160?"…":""}</div>${o.tags.length?`<div class="tags">${o.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join("")}</div>`:""}</div>`).join("")}
+    <div class="note" style="margin-bottom:12px">${list.length}개를 읽었습니다.${qn?` 그중 ${qn}개는 인용입니다.`:""}${bad?` ${bad}개는 숫자를 읽지 못해 '때를 모름'으로 들어갑니다.`:""}${dups?` ${dups}개는 이미 있는 시각과 겹칩니다.`:""}</div>
+    ${list.slice(0,8).map(o=>`<div class="item${o.quote?" quote":""}"><div class="stamp">${o.ok?fmt(o.ts):"읽지 못함 — "+esc(o.raw)}</div><div class="body">${esc(o.text.slice(0,160))}${o.text.length>160?"…":""}</div>${o.quote?`<div class="src">${esc(o.src||"출처를 적어두지 않음")}</div>`:""}${o.tags.length?`<div class="tags">${o.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join("")}</div>`:""}</div>`).join("")}
     ${list.length>8?`<div class="note" style="margin-top:10px">… 그리고 ${list.length-8}개 더</div>`:""}
     <div class="row" style="margin-top:18px"><button class="btn seal" id="bulkgo">${list.length}개 모두 넣기</button></div>`;
   $("#bulkgo").onclick=commitBulk;
@@ -590,7 +631,8 @@ function showBulkPreview(){
 async function commitBulk(){
   if(!bulkParsed||!bulkParsed.length) return;
   const now=Date.now();
-  const add=bulkParsed.map((o,i)=>({id:uid()+i,raw:o.raw,ts:o.ok?o.ts:null,text:o.text,tags:o.tags,seeds:[],created:now+i,edited:now+i}));
+  const add=bulkParsed.map((o,i)=>({id:uid()+i,raw:o.raw,ts:o.ok?o.ts:null,text:o.text,tags:o.tags,
+    quote:!!o.quote,src:o.src||"",seeds:[],created:now+i,edited:now+i}));
   try{ await putMemos(add) }catch(e){ alert("저장하지 못했습니다: "+e); return }
   memos=memos.concat(add);
   toast(add.length+"개를 넣었습니다");
@@ -600,15 +642,18 @@ async function commitBulk(){
 
 /* ══════ 찾기 ══════ */
 function filtered(){
-  const q=$("#q").value.trim(), y=$("#yearsel").value;
+  const q=$("#q").value.trim(), y=$("#yearsel").value, qf=$("#qsel").value;
   let out=[...memos];
+  if(qf==="quote") out=out.filter(m=>m.quote);
+  else if(qf==="mine") out=out.filter(m=>!m.quote);
   if(y==="none") out=out.filter(m=>m.ts==null);
   else if(y) out=out.filter(m=>m.ts!=null&&new Date(m.ts).getFullYear()===+y);
   if(q){
     const tagQ=q.startsWith("#")?q.slice(1):null, k=q.toLowerCase();
     out=out.filter(m=> tagQ
       ? m.tags.some(t=>t.includes(tagQ))
-      : (m.text.toLowerCase().includes(k)||m.tags.some(t=>t.toLowerCase().includes(k))||m.raw.includes(q)));
+      : (m.text.toLowerCase().includes(k)||m.tags.some(t=>t.toLowerCase().includes(k))
+         ||(m.src||"").toLowerCase().includes(k)||m.raw.includes(q)));
   }
   out.sort((a,b)=>(b.ts??-Infinity)-(a.ts??-Infinity));
   return out;
@@ -639,9 +684,11 @@ function renderYears(){
 
 /* ══════ 소환 ══════ */
 function pickPool(){
-  const p=$("#pool").value;
+  const p=$("#pool").value, qf=$("#qpool").value;
   let pool = p==="untagged"?memos.filter(m=>!m.tags.length)
            : p==="tagged"?memos.filter(m=>m.tags.length) : [...memos];
+  if(qf==="quote") pool=pool.filter(m=>m.quote);
+  else if(qf==="mine") pool=pool.filter(m=>!m.quote);
   if($("#nolong").checked) pool=pool.filter(m=>m.text.length>=SHORT);
   if($("#cool").checked){
     const avoid=new Set(recentDrawn), t=pool.filter(m=>!avoid.has(m.id));
@@ -670,16 +717,21 @@ function pull(){
   $("#pulled").innerHTML=drawn.map((m,i)=>{
     const gap=i>0?`<div class="gap">${gapText(drawn[i-1].ts,m.ts)}</div>`:"";
     const tags=m.tags.map(t=>`<span class="tag" style="cursor:default">${esc(t)}</span>`).join("");
-    return gap+`<div class="card"><div class="bigstamp">${fmt(m.ts)}</div><div class="body">${esc(m.text)}</div>${tags?`<div class="tags">${tags}</div>`:""}</div>`;
+    return gap+`<div class="card${m.quote?" quote":""}"><div class="bigstamp">${fmt(m.ts)}</div><div class="body">${esc(m.text)}</div>${srcHTML(m)}${tags?`<div class="tags">${tags}</div>`:""}</div>`;
   }).join("");
   $("#afterpull").style.display="block";
   $("#found").value="";
   $("#plen").textContent=`약 ${buildPrompt().length.toLocaleString()}자`;
 }
 function memoBlock(){
-  return drawn.map(m=>{
+  const anyQ=drawn.some(m=>m.quote);
+  const head=anyQ
+    ? "※ 아래에서 '인용'이라 표시된 것은 내가 쓴 문장이 아니라 다른 사람의 책에서 옮겨 적어둔 것이다. 재료로 삼아 생각하는 것은 좋으나, 그 문장 자체를 내 글에 쓸 수 있는 것처럼 다루지 말라. 인용문을 되풀이해 보여주지도 말라.\n\n"
+    : "";
+  return head+drawn.map(m=>{
+    const q=m.quote?` (인용${m.src?" — "+m.src:", 출처 미상"})`:"";
     const t=m.tags.length?` (태그: ${m.tags.join(", ")})`:"";
-    return `[${fmt(m.ts)}]${t}\n${m.text}`;
+    return `[${fmt(m.ts)}]${q}${t}\n${m.text}`;
   }).join("\n\n---\n\n");
 }
 function buildPrompt(){
@@ -734,8 +786,9 @@ async function renderStats(){
   const y1=dated.length?new Date(Math.min(...dated)).getFullYear():"–";
   const y2=dated.length?new Date(Math.max(...dated)).getFullYear():"–";
   const un=memos.filter(m=>!m.tags.length).length;
+  const qn=memos.filter(m=>m.quote).length;
   const fo=memos.filter(m=>m.tags.includes("발견")).length;
-  $("#stats").innerHTML=`<div><b>${memos.length}</b>기록</div><div><b>${y1}–${y2}</b>걸친 해</div><div><b>${un}</b>태그 없는 것</div><div><b>${fo}</b>발견</div>`;
+  $("#stats").innerHTML=`<div><b>${memos.length}</b>기록</div><div><b>${y1}–${y2}</b>걸친 해</div><div><b>${qn}</b>인용</div><div><b>${un}</b>태그 없는 것</div><div><b>${fo}</b>발견</div>`;
   renderTagManage();
   renderStorage();
 }
@@ -794,7 +847,7 @@ async function mergeIn(d){
   const map=new Map(memos.map(m=>[m.id,m]));
   const put=[]; let add=0,upd=0;
   d.memos.forEach(m=>{
-    if(!m.tags) m.tags=[]; if(!m.seeds) m.seeds=[]; if(!m.edited) m.edited=m.created||0;
+    if(!m.tags) m.tags=[]; if(!m.seeds) m.seeds=[]; if(!m.edited) m.edited=m.created||0; if(m.quote===undefined) m.quote=false; if(m.src===undefined) m.src="";
     const cur=map.get(m.id);
     if(!cur){ memos.push(m); map.set(m.id,m); put.push(m); add++ }
     else if((m.edited||0)>(cur.edited||0)){ Object.assign(cur,m); put.push(cur); upd++ }
@@ -869,6 +922,7 @@ $("#bulkread").onclick=showBulkPreview;
 let sq;
 $("#q").addEventListener("input",()=>{ clearTimeout(sq); sq=setTimeout(()=>search(true),180) });
 $("#yearsel").onchange=()=>search(true);
+$("#qsel").onchange=()=>search(true);
 $("#more").onclick=()=>{ shown+=PAGE; search(false) };
 
 document.addEventListener("click",async e=>{
@@ -914,7 +968,10 @@ document.addEventListener("click",async e=>{
       if(!r.ok){ toast(r.why||"숫자를 읽을 수 없습니다"); return }
       m.ts=r.ts; m.raw=raw;
     }
-    m.text=text; m.tags=parseTags(box.querySelector(".e-tags").value); m.edited=Date.now();
+    m.text=text; m.tags=parseTags(box.querySelector(".e-tags").value);
+    m.quote=box.querySelector(".e-quote").checked;
+    m.src=m.quote?box.querySelector(".e-src").value.trim():"";
+    m.edited=Date.now();
     await putMemo(m); editing=null; renderAll(); toast("고쳤습니다"); return;
   }
   const ren=e.target.closest("[data-ren]");
@@ -948,6 +1005,16 @@ document.addEventListener("click",async e=>{
     }
   }
 });
+document.addEventListener("change",e=>{
+  if(e.target.id==="isquote"){
+    $("#srcwrap").style.display=e.target.checked?"block":"none";
+    if(e.target.checked) $("#srcin").focus();
+  }
+  if(e.target.classList.contains("e-quote")){
+    const w=e.target.closest(".editbox").querySelector(".e-srcwrap");
+    w.style.display=e.target.checked?"block":"none";
+  }
+});
 document.addEventListener("input",e=>{
   if(e.target.classList.contains("e-stamp")){
     const ec=e.target.closest(".editbox").querySelector(".e-echo"), v=e.target.value.trim();
@@ -965,7 +1032,7 @@ $("#savefound").onclick=async()=>{
   const t=$("#found").value.trim();
   if(!t){ toast("적은 것이 없습니다"); return }
   const now=Date.now();
-  const m={id:uid(),raw:"",ts:now,text:t,tags:["발견"],seeds:drawn.map(x=>x.id),created:now,edited:now};
+  const m={id:uid(),raw:"",ts:now,text:t,tags:["발견"],quote:false,src:"",seeds:drawn.map(x=>x.id),created:now,edited:now};
   memos.push(m); await putMemo(m);
   $("#found").value=""; renderAll(); toast("발견으로 저장했습니다");
 };
@@ -1001,7 +1068,7 @@ window.addEventListener("beforeunload",e=>{
       let old=null;
       try{ old=JSON.parse(localStorage.getItem("gireok.memos")||"null") }catch(e){}
       if(old&&old.length){
-        old.forEach(m=>{ if(!m.tags) m.tags=[]; if(!m.seeds) m.seeds=[]; if(!m.edited) m.edited=m.created||Date.now() });
+        old.forEach(m=>{ if(!m.tags) m.tags=[]; if(!m.seeds) m.seeds=[]; if(!m.edited) m.edited=m.created||Date.now(); if(m.quote===undefined) m.quote=false; if(m.src===undefined) m.src="" });
         await dbBulk("memos",old); memos=old;
         try{
           const ol=JSON.parse(localStorage.getItem("gireok.lenses")||"null");
@@ -1010,7 +1077,7 @@ window.addEventListener("beforeunload",e=>{
         setTimeout(()=>toast(`예전 기록 ${old.length}개를 옮겨왔습니다`),600);
       }
     }
-    memos.forEach(m=>{ if(!m.tags) m.tags=[]; if(!m.seeds) m.seeds=[] });
+    memos.forEach(m=>{ if(!m.tags) m.tags=[]; if(!m.seeds) m.seeds=[]; if(m.quote===undefined) m.quote=false; if(m.src===undefined) m.src="" });
     if(!lenses.length){ lenses=[defaultLens()]; await dbPut("meta",{k:"lenses",v:lenses}) }
 
     if(fileHandle){
