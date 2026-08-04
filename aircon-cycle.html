@@ -102,6 +102,8 @@ details[open] summary::after{content:'－'}
 .hist th{font-weight:400;color:var(--muted);font-size:10px;letter-spacing:.1em;text-align:left}
 .hist td:nth-child(n+2),.hist th:nth-child(n+2){text-align:right}
 .hist tr:last-child td{border-bottom:none}
+.hist td .del{color:var(--hair);cursor:pointer;padding:0 2px;font-size:12px;transition:color .15s}
+.hist td .del:hover,.hist td .del:focus-visible{color:var(--g5);outline:none}
 .sub{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);
   margin:18px 0 6px;text-transform:uppercase}
 .care{margin:0;padding-left:1.35em;font-size:13px;line-height:1.85}
@@ -193,7 +195,8 @@ footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--mu
   <details>
     <summary>어느 비율이 맞나</summary>
     <div class="panel">
-      <table class="hist"><thead><tr><th>냉방/쉼</th><th>시도</th><th>견딜 만함</th></tr></thead><tbody id="rateBody"></tbody></table>
+      <table class="hist"><thead><tr><th>냉방/쉼</th><th>시도</th><th>견딜 만함</th><th></th></tr></thead><tbody id="rateBody"></tbody></table>
+      <div class="mini" id="rateMore" style="display:none"><button class="ghost" id="rateMoreBtn">더 보기</button></div>
       <p class="note">
         쉼이 끝날 때마다 물어보고 쌓이는 표입니다. 며칠 굴려보시면 이 방에 맞는 비율이 드러납니다.<br><br>
         <b>읽는 법</b> — 견딜 만함이 8할을 넘으면 쉼을 5분 늘려보세요. 절반 아래면 쉼을 줄이거나 냉방을 늘려야 합니다.<br><br>
@@ -238,6 +241,7 @@ footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--mu
       <div class="f"><label>재기동 손실 (분)</label><input type="number" id="fPen" min="0" max="10" step="0.5"></div>
       <div class="f"><label>필터 청소 주기 (일)</label><input type="number" id="fDays" min="1" max="120"></div>
       <div class="f"><label>필터 청소 주기 (가동 시간)</label><input type="number" id="fRunHrs" min="1" max="500"></div>
+      <div class="f"><label>기록 보관 기간 (일)</label><input type="number" id="fKeep" min="7" max="3650"></div>
       <div class="f"><label>전기요금 구간</label>
         <select id="fTier">
           <option value="152">1단계 152원</option>
@@ -259,6 +263,8 @@ footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--mu
     <summary>기록</summary>
     <div class="panel">
       <table class="hist"><tbody id="histBody"></tbody></table>
+      <div class="mini" id="histMore" style="display:none"><button class="ghost" id="histMoreBtn">더 보기</button></div>
+      <p class="note" id="histInfo"></p>
       <div class="mini">
         <button class="ghost" id="expBtn">내보내기</button>
         <button class="ghost" id="impBtn">불러오기</button>
@@ -278,14 +284,37 @@ footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--mu
 (function(){
 'use strict';
 const KEY='aircon_cycle_v1';
+const VER=2;
 const DEF={cool:30,rest:20,temp:24,power:650,duty:95,fanW:45,pen:2,
-           rate:260,tier:'260',days:14,runHrs:40};
+           rate:260,tier:'260',days:14,runHrs:40,keep:90};
 let S=Object.assign({},DEF), LOG={}, FILT={last:0,sec:0}, RATE=[], lastStop=0;
+let histShown=7, rateShown=5;
+
+// 보관 기간이 지난 기록을 지운다. 이번 달 합계는 최근 자료만 쓰므로 영향이 없다.
+function prune(){
+  const cut=Date.now()-S.keep*86400000;
+  let n=0;
+  for(const k in LOG){
+    const t=new Date(k+'T23:59:59').getTime();
+    if(!isNaN(t) && t<cut){ delete LOG[k]; n++; }
+  }
+  const before=RATE.length;
+  RATE=RATE.filter(r=>r.t>=cut);
+  return n+(before-RATE.length);
+}
 
 function load(){
   try{
     const r=JSON.parse(localStorage.getItem(KEY)||'{}');
-    if(r.settings) S=Object.assign({},DEF,r.settings);
+    if(r.settings){
+      S=Object.assign({},DEF,r.settings);
+      // 구조가 바뀐 판본에서 넘어온 설정은 새 기본값으로 되돌린다.
+      // 기록·필터·비율 이력은 그대로 유지된다.
+      if((r.ver||1)<VER){
+        S.duty=DEF.duty; S.cool=DEF.cool; S.rest=DEF.rest;
+        S.temp=DEF.temp; S.fanW=DEF.fanW; S.pen=DEF.pen;
+      }
+    }
     if(r.log) LOG=r.log;
     if(r.filter) FILT=Object.assign({last:0,sec:0},r.filter);
     if(Array.isArray(r.rate)) RATE=r.rate;
@@ -294,7 +323,7 @@ function load(){
 }
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(
-    {settings:S,log:LOG,filter:FILT,rate:RATE,lastStop:lastStop,saved:new Date().toISOString()}));}catch(e){}
+    {ver:VER,settings:S,log:LOG,filter:FILT,rate:RATE,lastStop:lastStop,saved:new Date().toISOString()}));}catch(e){}
 }
 
 let phase=-1, running=false, phaseStart=0, lastTick=0, runKwh=0;
@@ -472,21 +501,39 @@ function renderRate(){
     g[k]=g[k]||{n:0,ok:0};
     g[k].n++; if(r.ok) g[k].ok++;
   });
-  const keys=Object.keys(g).sort((a,b)=>g[b].n-g[a].n);
+  const all=Object.keys(g).sort((a,b)=>g[b].n-g[a].n);
+  const keys=all.slice(0,rateShown);
   el('rateBody').innerHTML = keys.length
     ? keys.map(k=>{
         const p=Math.round(g[k].ok/g[k].n*100);
         const c=p>=80?'var(--g1)':p>=50?'var(--g4)':'var(--g5)';
-        return '<tr><td>'+k+'분</td><td>'+g[k].n+'회</td><td style="color:'+c+'">'+g[k].ok+'회 · '+p+'%</td></tr>';
+        return '<tr><td>'+k+'분</td><td>'+g[k].n+'회</td><td style="color:'+c+'">'+g[k].ok+'회 · '+p+'%</td>'
+             +'<td><span class="del" data-k="'+k+'" role="button" tabindex="0" title="이 조합 기록 지우기">✕</span></td></tr>';
       }).join('')
-    : '<tr><td colspan="3" style="color:var(--muted)">쉼이 끝날 때 물어봅니다.</td></tr>';
+    : '<tr><td colspan="4" style="color:var(--muted)">쉼이 끝날 때 물어봅니다.</td></tr>';
+
+  const more=el('rateMore');
+  more.style.display = all.length>rateShown ? 'flex' : 'none';
+  el('rateMoreBtn').textContent='더 보기 ('+(all.length-rateShown)+'개 조합)';
 }
 function renderHist(){
-  const keys=Object.keys(LOG).sort().reverse().slice(0,14);
+  const all=Object.keys(LOG).sort().reverse();
+  const keys=all.slice(0,histShown);
   el('histBody').innerHTML = keys.length
     ? keys.map(k=>'<tr><td>'+k.slice(5)+'</td><td>'+(LOG[k].re||LOG[k].cycles||0)+'회</td><td>'
         +LOG[k].kwh.toFixed(2)+'kWh · '+won(LOG[k].kwh*S.rate)+'원</td></tr>').join('')
     : '<tr><td colspan="3" style="color:var(--muted)">아직 기록이 없습니다.</td></tr>';
+
+  const more=el('histMore');
+  more.style.display = all.length>histShown ? 'flex' : 'none';
+  el('histMoreBtn').textContent='더 보기 ('+(all.length-histShown)+'일)';
+
+  let bytes=0;
+  try{ bytes=(localStorage.getItem(KEY)||'').length; }catch(e){}
+  el('histInfo').innerHTML = all.length
+    ? '총 '+all.length+'일 · 평가 '+RATE.length+'건 · 약 '+(bytes/1024).toFixed(1)+'KB<br>'
+      +S.keep+'일이 지난 기록은 자동으로 지워집니다. 보관 기간은 설정에서 바꿀 수 있고, 남겨두시려면 내보내기로 파일을 받아두세요.'
+    : '';
 }
 
 el('mainBtn').onclick=()=>{
@@ -499,7 +546,7 @@ el('skipBtn').onclick=()=>{ if(phase>=0) enter(phase===0?1:0,false); };
 el('stopBtn').onclick=()=>{
   running=false; phase=-1; lastStop=Date.now();
   stopAlarm(); el('ask').classList.remove('on'); keepAwake(false);
-  save(); render(); renderHist();
+  prune(); save(); render(); renderHist(); renderRate();
 };
 el('ackBtn').onclick=stopAlarm;
 el('okBtn').onclick=()=>rate(true);
@@ -509,8 +556,19 @@ el('noticeBtn').onclick=()=>{
 };
 el('cleanBtn').onclick=()=>{ FILT.last=Date.now(); FILT.sec=0; save(); render(); };
 
+el('histMoreBtn').onclick=()=>{ histShown+=14; renderHist(); };
+el('rateMoreBtn').onclick=()=>{ rateShown+=10; renderRate(); };
+el('rateBody').addEventListener('click',e=>{
+  const t=e.target.closest('.del'); if(!t) return;
+  const k=t.dataset.k;
+  if(confirm(k+'분 조합의 평가 기록을 지웁니다.')){
+    RATE=RATE.filter(r=>r.cool+'/'+r.rest!==k);
+    save(); renderRate(); renderHist();
+  }
+});
+
 const FIELDS={fCool:'cool',fRest:'rest',fTemp:'temp',fPower:'power',fDuty:'duty',
-              fFanW:'fanW',fPen:'pen',fDays:'days',fRunHrs:'runHrs',fRate:'rate'};
+              fFanW:'fanW',fPen:'pen',fDays:'days',fRunHrs:'runHrs',fKeep:'keep',fRate:'rate'};
 function fillForm(){ for(const id in FIELDS) el(id).value=S[FIELDS[id]]; el('fTier').value=S.tier; }
 for(const id in FIELDS){
   el(id).oninput=e=>{
@@ -518,6 +576,7 @@ for(const id in FIELDS){
     if(!isNaN(v)){
       S[FIELDS[id]]=v;
       if(id==='fRate'){ S.tier='custom'; el('fTier').value='custom'; }
+      if(id==='fKeep'){ prune(); }
       save(); render(); renderHist(); renderRate();
     }
   };
@@ -529,7 +588,7 @@ el('fTier').onchange=e=>{
 };
 
 el('expBtn').onclick=()=>{
-  const blob=new Blob([JSON.stringify({settings:S,log:LOG,filter:FILT,rate:RATE,lastStop:lastStop},null,2)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify({ver:VER,settings:S,log:LOG,filter:FILT,rate:RATE,lastStop:lastStop},null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='aircon-'+today()+'.json'; a.click();
   URL.revokeObjectURL(a.href);
@@ -541,7 +600,13 @@ el('impFile').onchange=e=>{
   r.onload=()=>{
     try{
       const d=JSON.parse(r.result);
-      if(d.settings) S=Object.assign({},DEF,d.settings);
+      if(d.settings){
+        S=Object.assign({},DEF,d.settings);
+        if((d.ver||1)<VER){
+          S.duty=DEF.duty; S.cool=DEF.cool; S.rest=DEF.rest;
+          S.temp=DEF.temp; S.fanW=DEF.fanW; S.pen=DEF.pen;
+        }
+      }
       if(d.filter) FILT=Object.assign({last:0,sec:0},d.filter);
       if(Array.isArray(d.rate)) RATE=RATE.concat(d.rate);
       if(d.log) for(const k in d.log){
@@ -560,7 +625,7 @@ el('clrBtn').onclick=()=>{
   }
 };
 
-load(); fillForm(); render(); renderHist(); renderRate();
+load(); prune(); fillForm(); render(); renderHist(); renderRate();
 setInterval(tick,250);
 window.addEventListener('beforeunload',save);
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden && running) keepAwake(true); });
