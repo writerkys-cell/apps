@@ -397,6 +397,17 @@ details.hist summary{cursor:pointer;color:var(--ink-soft);user-select:none}
     <button class="btn" id="btnUpdatePrompt">뼈대 갱신 프롬프트 복사</button>
     <button class="btn" id="btnImportScenes">제안 붙여넣어 가져오기</button>
   </div>
+  <div class="scene-filters" style="margin-bottom:10px">
+    <span class="hint" style="align-self:center">프롬프트에 담을 범위</span>
+    <select id="promptScope">
+      <option value="all">전체 씬</option>
+      <option value="recent20">최근 20개</option>
+      <option value="recent40">최근 40개</option>
+      <option value="act">지금 고른 막만</option>
+    </select>
+    <select id="promptScopeAct"></select>
+    <span class="hint" id="scopeInfo" style="align-self:center"></span>
+  </div>
   <div class="scene-filters">
     <select id="fltStatus"><option value="">모든 상태</option><option>대기</option><option>진행중</option><option>다시쓰기</option><option>완료</option></select>
     <select id="fltAct"><option value="">모든 막</option></select>
@@ -1147,8 +1158,7 @@ function renderScenes(){
   $('#sceneStats').innerHTML=cur.scenes.length?
     `전체 <b>${cur.scenes.length}</b> · 대기 ${cnt('대기')} · 진행중 ${cnt('진행중')} · 다시쓰기 <b style="color:var(--seal)">${cnt('다시쓰기')}</b> · 완료 <b style="color:var(--green)">${cnt('완료')}</b>${filtering?` · 표시 중 ${visible.length}`:''}`:'';
 
-  list.innerHTML=visible.map(sc=>{
-    const idx=cur.scenes.indexOf(sc);
+  list.innerHTML=visible.map(sc=>{    const idx=cur.scenes.indexOf(sc);
     const th=THRESHOLDS.has(sc.act);
     const names=sc.charIds.map(charName).filter(Boolean).join(', ');
     // 연출을 받은 뒤 뼈대가 바뀌었으면 표시한다 — 순환의 나침반 역할
@@ -1221,6 +1231,7 @@ function renderScenes(){
       </div></div>`;
   }).join('');
   bindSceneEvents();
+  if($('#promptScope')) updateScopeInfo();
 }
 function bindSceneEvents(){
   $$('#sceneList .scene-item').forEach(item=>{
@@ -1328,8 +1339,38 @@ $('#fltSearch').addEventListener('input',renderScenes);
 </script>
 <script>
 /* ============================================================
-   프롬프트 생성
+   프롬프트에 담을 씬의 범위
+   장편이 되어 씬이 쌓여도 프롬프트가 무거워지지 않도록,
+   전체 / 최근 N개 / 특정 막만 중에서 고른다.
    ============================================================ */
+function scopedScenes(){
+  const mode=$('#promptScope')?$('#promptScope').value:'all';
+  if(mode==='act'){
+    const a=$('#promptScopeAct').value;
+    return cur.scenes.filter(sc=>sc.act===a);
+  }
+  if(mode==='recent20') return cur.scenes.slice(-20);
+  if(mode==='recent40') return cur.scenes.slice(-40);
+  return cur.scenes;
+}
+function renderScopeControls(){
+  const sel=$('#promptScopeAct');
+  const keep=sel.value;
+  sel.innerHTML='<option>미정</option>'+ACTS.map(a=>`<option>${a}</option>`).join('');
+  if(keep) sel.value=keep;
+  sel.style.display=$('#promptScope').value==='act'?'':'none';
+  updateScopeInfo();
+}
+function updateScopeInfo(){
+  const list=scopedScenes();
+  // 프롬프트 길이를 대략 가늠해 알려준다 (씬 제안 기준)
+  const approx=Math.round((1200+cur.characters.length*220+list.length*175+900)/1000);
+  $('#scopeInfo').textContent=cur.scenes.length
+    ? `씬 ${list.length}개 / 전체 ${cur.scenes.length}개 · 약 ${approx}천 자`
+    : '';
+}
+$('#promptScope').addEventListener('change',renderScopeControls);
+$('#promptScopeAct').addEventListener('change',updateScopeInfo);
 function storyContextBlock(){
   const s=cur.story;
   const lines=[];
@@ -1355,8 +1396,12 @@ function allCharsBlock(){
   return cur.characters.map(c=>`· ${c.name||'(이름 없음)'}\n${charBlock(c)}`).join('\n');
 }
 function sceneListBlock(){
-  if(!cur.scenes.length) return '(아직 없음)';
-  return cur.scenes.map((sc,i)=>{
+  const list=scopedScenes();
+  if(!list.length) return '(아직 없음)';
+  const head=(list.length<cur.scenes.length)
+    ? `(전체 ${cur.scenes.length}개 중 ${list.length}개만 실었습니다)\n` : '';
+  return head+list.map(sc=>{
+    const i=cur.scenes.indexOf(sc);
     // 본문 요약이 있으면 그것을, 계획 정보(요약)가 없고 본문이 있으면 발췌를,
     // 그 외에는 계획의 요약을 쓴다 — 완료였다가 다시쓰기로 돌아온 씬도 빈손이 되지 않는다
     let gist;
@@ -1404,8 +1449,10 @@ $('#btnScenePrompt').addEventListener('click',()=>copyText(buildSuggestPrompt(),
    쓴 씬들에서 알게 된 것을 뼈대에 되먹이기 위한 프롬프트.
    제안만 받고, 뼈대의 최종 문장은 사용자가 직접 고쳐 쓴다. */
 function buildUpdatePrompt(){
-  const written=cur.scenes.filter(sc=>sc.status!=='대기');
-  const blocks=written.map(sc=>{
+  const written=scopedScenes().filter(sc=>sc.status!=='대기');
+  const head=(written.length<cur.scenes.filter(sc=>sc.status!=='대기').length)
+    ? `(고른 범위의 씬만 실었습니다)\n` : '';
+  const blocks=head+written.map(sc=>{
     const i=cur.scenes.indexOf(sc)+1;
     let body;
     if(sc.textSummary&&sc.textSummary.trim())
@@ -1433,8 +1480,8 @@ ${blocks||'(없음)'}
 3. 새로 열린 길 — 씬이 쌓이면서 처음 설계에는 없던 가능성(새 갈등, 새 인물 면모, 새 씬의 방향)이 보이면 짧게 덧붙여 주세요.`;
 }
 $('#btnUpdatePrompt').addEventListener('click',()=>{
-  if(!cur.scenes.some(sc=>sc.status!=='대기')){
-    toast('진행중·완료 씬이 아직 없습니다 — 씬을 쓴 뒤에 사용하세요'); return;
+  if(!scopedScenes().some(sc=>sc.status!=='대기')){
+    toast('고른 범위에 진행중·다시쓰기·완료 씬이 없습니다'); return;
   }
   copyText(buildUpdatePrompt(),'뼈대 갱신 프롬프트를 복사했습니다');
 });
@@ -1636,6 +1683,7 @@ function renderAll(){
   $('#projName').value=cur.name;
   $('#projScriv').value=cur.scriv||'';
   renderStory(); renderPlot(); renderChars(); renderSceneFilters(); renderScenes();
+  renderScopeControls();
 }
 openDB().then(loadAll).catch(e=>{
   document.body.innerHTML='<p style="padding:40px;text-align:center">저장소를 열 수 없습니다. 크롬의 일반 창(시크릿 모드 아님)에서 파일을 열어 주세요.<br>'+esc(String(e))+'</p>';
