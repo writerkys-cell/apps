@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>정속형 냉방 · AR-CM63B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Mono:wght@300;400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#e6ecee;--card:#ffffff;--ink:#0f1517;--muted:#6d787c;--hair:#d2dbde;
+  --g1:#1a9e5c;--g2:#8cc63f;--g3:#f2d600;--g4:#f2a01e;--g5:#d93a2b;
+  --serif:'Gowun Batang','Nanum Myeongjo',Batang,serif;
+  --sans:'Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --mono:'IBM Plex Mono','SFMono-Regular',Menlo,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.6;
+  display:flex;justify-content:center;padding:22px 14px 60px;min-height:100vh}
+.wrap{width:100%;max-width:440px}
+.eyebrow{display:flex;justify-content:space-between;align-items:baseline;
+  font-family:var(--mono);font-size:11px;letter-spacing:.09em;color:var(--muted);
+  text-transform:uppercase;padding:0 4px 12px}
+.eyebrow b{font-weight:500;color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:2px;padding:26px 22px 22px}
+.gauge{display:block;margin:0 auto;width:100%;max-width:300px;height:auto}
+.needle{transform-origin:150px 150px;transition:transform .9s cubic-bezier(.34,1.2,.5,1)}
+.gnum{font-family:var(--mono);font-size:13px;fill:var(--muted)}
+.gwatt{font-family:var(--mono);font-size:34px;fill:var(--ink)}
+.gunit{font-family:var(--mono);font-size:12px;fill:var(--muted);letter-spacing:.08em}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--hair);
+  border:1px solid var(--hair);margin:20px 0 24px}
+.step{background:var(--card);padding:9px 6px;text-align:center}
+.step .n{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.1em}
+.step .t{font-family:var(--serif);font-size:13px;margin-top:1px;color:var(--muted)}
+.step.on{background:var(--ink)}
+.step.on .n,.step.on .t{color:#fff}
+.now{text-align:center}
+.now .label{font-family:var(--serif);font-size:26px;font-weight:700;letter-spacing:-.01em}
+.now .cmd{font-family:var(--mono);font-size:13.5px;letter-spacing:.02em;color:var(--muted);margin-top:4px}
+.clock{font-family:var(--mono);font-size:66px;font-weight:300;letter-spacing:-.03em;
+  line-height:1;margin:16px 0 12px;font-variant-numeric:tabular-nums}
+.clock.idle{color:var(--muted);font-size:44px;margin:24px 0 20px}
+.bar{height:2px;background:var(--hair);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--ink);transition:width .3s linear}
+.bar.hide{visibility:hidden}
+.alarm{display:none;margin-top:20px;border:1px solid var(--ink);padding:16px 16px 14px;text-align:left}
+.alarm.on{display:block;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{background:#fff}50%{background:#f0f4f5}}
+.alarm .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted)}
+.alarm .v{font-family:var(--serif);font-size:19px;font-weight:700;margin:3px 0 12px;line-height:1.4}
+.btns{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:22px}
+button{font-family:var(--sans);font-size:14px;font-weight:500;padding:13px 6px;
+  border:1px solid var(--ink);background:var(--card);color:var(--ink);border-radius:2px;
+  cursor:pointer;transition:background .15s,color .15s}
+button:hover{background:var(--ink);color:#fff}
+button.solid{background:var(--ink);color:#fff}
+button.solid:hover{background:#000}
+button.ghost{border-color:var(--hair);color:var(--muted)}
+button.ghost:hover{background:var(--hair);color:var(--ink)}
+button:focus-visible{outline:2px solid var(--g1);outline-offset:2px}
+button:disabled{opacity:.3;cursor:default}
+button:disabled:hover{background:var(--card);color:var(--ink)}
+.notice{display:none;margin-bottom:14px;padding:12px 16px;border:1px solid var(--g4);
+  background:#fffaf0;border-radius:2px;align-items:baseline;gap:10px;justify-content:space-between}
+.notice.on{display:flex}
+.notice.due{border-color:var(--g5);background:#fff4f2}
+.notice .msg{font-family:var(--serif);font-size:14.5px;font-weight:700;line-height:1.5}
+.notice .sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.06em;
+  display:block;font-weight:400;margin-top:2px}
+.notice button{border-color:var(--g4);font-size:12px;padding:7px 10px;white-space:nowrap}
+.notice.due button{border-color:var(--g5)}
+.care{margin:0;padding-left:1.35em;font-size:13px;line-height:1.85}
+.care li{margin-bottom:9px}
+.care li b{font-weight:700}
+.warnlist{margin:14px 0 0;padding:12px 14px;border-left:2px solid var(--g5);background:#fdf6f5}
+.warnlist p{margin:0 0 6px;font-size:12.5px;line-height:1.7}
+.warnlist p:last-child{margin-bottom:0}
+.meter{margin-top:14px;background:var(--card);border:1px solid var(--hair);padding:6px 20px}
+.row{display:flex;justify-content:space-between;align-items:baseline;padding:11px 0;border-bottom:1px solid var(--hair)}
+.row:last-child{border-bottom:none}
+.row .k{font-size:13px;color:var(--muted)}
+.row .v{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums}
+.row .v em{font-style:normal;font-size:11px;color:var(--muted);margin-left:3px}
+.row .v .won{font-weight:500}
+details{margin-top:14px;background:var(--card);border:1px solid var(--hair)}
+summary{padding:13px 20px;cursor:pointer;list-style:none;font-family:var(--mono);
+  font-size:11px;letter-spacing:.12em;color:var(--muted)}
+summary::-webkit-details-marker{display:none}
+summary::after{content:'＋';float:right}
+details[open] summary::after{content:'－'}
+.panel{padding:4px 20px 20px}
+.f{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--hair)}
+.f:last-of-type{border-bottom:none}
+.f label{font-size:13px;color:var(--muted)}
+.f input,.f select{font-family:var(--mono);font-size:14px;text-align:right;width:110px;
+  padding:5px 7px;border:1px solid var(--hair);background:#fbfcfc;color:var(--ink);border-radius:2px}
+.f input:focus,.f select:focus{outline:none;border-color:var(--ink)}
+.note{font-size:11.5px;color:var(--muted);line-height:1.75;margin-top:14px}
+.hist{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12.5px}
+.hist td{padding:6px 0;border-bottom:1px solid var(--hair)}
+.hist td:nth-child(2),.hist td:nth-child(3){text-align:right}
+.hist tr:last-child td{border-bottom:none}
+.mini{display:flex;gap:8px;margin-top:16px}
+.mini button{flex:1;font-size:12px;padding:9px 4px}
+footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--muted);
+  letter-spacing:.06em;margin-top:22px;line-height:1.9}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">
+    <span><b>AR-CM63B</b> 정속형 냉방전용</span>
+    <span>2,300W · R-22</span>
+  </div>
+
+  <div class="notice" id="notice">
+    <span class="msg" id="noticeMsg">필터 청소할 때가 됐습니다<span class="sub" id="noticeSub"></span></span>
+    <button id="noticeBtn">청소법 보기</button>
+  </div>
+
+  <div class="card">
+    <svg class="gauge" viewBox="0 0 300 200" role="img" aria-label="현재 소비전력">
+      <g fill="none" stroke-width="19" stroke-linecap="butt">
+        <path d="M40 150 A110 110 0 0 1 61.5 85.2" stroke="var(--g1)"/>
+        <path d="M64.8 80.3 A110 110 0 0 1 117.3 43.8" stroke="var(--g2)"/>
+        <path d="M123.1 42.3 A110 110 0 0 1 176.9 42.3" stroke="var(--g3)"/>
+        <path d="M182.7 43.8 A110 110 0 0 1 235.2 80.3" stroke="var(--g4)"/>
+        <path d="M238.5 85.2 A110 110 0 0 1 260 150" stroke="var(--g5)"/>
+      </g>
+      <text class="gnum" x="26" y="168" text-anchor="middle">0</text>
+      <text class="gnum" x="274" y="168" text-anchor="middle" id="gmax">650</text>
+      <g class="needle" id="needle">
+        <line x1="150" y1="150" x2="150" y2="58" stroke="var(--ink)" stroke-width="2.5"/>
+        <circle cx="150" cy="150" r="6" fill="var(--ink)"/>
+      </g>
+      <text class="gwatt" x="150" y="128" text-anchor="middle" id="watt">0</text>
+      <text class="gunit" x="150" y="145" text-anchor="middle">W 소비 중</text>
+    </svg>
+
+    <div class="steps">
+      <div class="step" id="s0"><div class="n">15분</div><div class="t">급속</div></div>
+      <div class="step" id="s1"><div class="n">머무는 동안</div><div class="t">절전</div></div>
+    </div>
+
+    <div class="now">
+      <div class="label" id="phaseName">대기 중</div>
+      <div class="cmd" id="phaseCmd">시작을 누르면 24℃ 강풍부터</div>
+      <div class="clock idle" id="clock">00:00</div>
+      <div class="bar hide" id="barWrap"><i id="bar"></i></div>
+    </div>
+
+    <div class="alarm" id="alarm">
+      <div class="k">리모컨 조작</div>
+      <div class="v" id="alarmText"></div>
+      <button class="solid" style="width:100%" id="ackBtn">올렸습니다</button>
+    </div>
+
+    <div class="btns">
+      <button class="solid" id="mainBtn">시작</button>
+      <button id="skipBtn" disabled>온도 올림</button>
+      <button class="ghost" id="stopBtn" disabled>끄기</button>
+    </div>
+  </div>
+
+  <div class="meter">
+    <div class="row"><span class="k">이번 가동</span><span class="v"><span id="cKwh">0.000</span><em>kWh</em> · <span class="won" id="cWon">0</span><em>원</em></span></div>
+    <div class="row"><span class="k">오늘</span><span class="v"><span id="dKwh">0.000</span><em>kWh</em> · <span class="won" id="dWon">0</span><em>원</em></span></div>
+    <div class="row"><span class="k">이번 달</span><span class="v"><span id="mKwh">0.000</span><em>kWh</em> · <span class="won" id="mWon">0</span><em>원</em></span></div>
+    <div class="row"><span class="k">라벨 기준 월 사용량</span><span class="v" style="color:var(--muted)">139.4<em>kWh</em></span></div>
+  </div>
+
+  <details id="careBox">
+    <summary>필터 청소</summary>
+    <div class="panel">
+      <div class="row" style="border-bottom:1px solid var(--hair);padding-top:0">
+        <span class="k">마지막 청소</span><span class="v" id="fLast">기록 없음</span>
+      </div>
+      <div class="row"><span class="k">그 뒤 가동 시간</span><span class="v"><span id="fHours">0.0</span><em>시간</em></span></div>
+
+      <ol class="care">
+        <li><b>전원을 뽑습니다.</b> 리모컨 OFF만으로는 부족합니다. 콘센트를 뽑거나 차단기를 내리세요.</li>
+        <li><b>전면 패널을 위로 젖힙니다.</b> 패널 아래쪽 좌우 홈에 손가락을 넣어 위로 들어 올리면 딸깍 걸리며 고정됩니다.</li>
+        <li><b>필터를 빼냅니다.</b> 좌우 두 장입니다. 위쪽 걸림쇠를 살짝 눌러 앞으로 당긴 뒤 아래로 내리면 빠집니다. 15년 된 기기라 플라스틱 틀이 삭았을 수 있으니 천천히.</li>
+        <li><b>마른 상태로 먼저 진공청소기를 댑니다.</b> 젖은 먼지는 그물에 엉겨 붙어 안 빠집니다.</li>
+        <li><b>미지근한 물에 헹굽니다.</b> 30~40℃, 중성세제 조금. 부드러운 솔로 <b>바람이 들어오던 뒷면에서 앞면 방향</b>으로 밀어내야 먼지가 그물을 통과해 빠져나갑니다.</li>
+        <li><b>그늘에서 완전히 말립니다.</b> 반나절쯤. 조금이라도 축축하면 곰팡이와 냄새의 원인이 됩니다.</li>
+        <li><b>끼우고 패널을 닫습니다.</b> 필터가 홈에 제대로 들어갔는지 확인하세요. 뜬 채로 닫으면 먼지가 열교환기로 직행합니다.</li>
+      </ol>
+
+      <div class="warnlist">
+        <p><b>뜨거운 물·세탁기·락스는 쓰지 마세요.</b> 필터 그물이 수축하거나 틀이 휘어 다시 안 맞습니다.</p>
+        <p><b>필터 뒤 알루미늄 냉각핀은 건드리지 마세요.</b> 날카롭고, 한 번 눕히면 펴지지 않아 냉방 효율이 영구히 떨어집니다.</p>
+        <p><b>여름이 끝나면 송풍 모드로 2~3시간 돌려 내부를 말리고</b> 보관하세요. 냉방 직후 바로 끄면 물기가 남아 곰팡이가 핍니다.</p>
+        <p><b>실외기 앞은 비워두세요.</b> 화분이나 짐으로 막히면 열을 못 버려 실외기 가동 시간이 길어집니다.</p>
+      </div>
+
+      <div class="mini"><button class="ghost" id="cleanBtn" style="border-color:var(--ink);color:var(--ink)">오늘 청소했습니다</button></div>
+      <p class="note">2주에 한 번 또는 누적 가동 40시간마다 알려드립니다. 주기는 아래 설정에서 바꿀 수 있습니다.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>설정</summary>
+    <div class="panel">
+      <div class="f"><label>급속 냉방 시간 (분)</label><input type="number" id="fFast" min="1" max="60"></div>
+      <div class="f"><label>급속 설정 온도 (℃)</label><input type="number" id="fTLow" min="16" max="26"></div>
+      <div class="f"><label>절전 설정 온도 (℃)</label><input type="number" id="fTHigh" min="22" max="30"></div>
+      <div class="f"><label>정격 소비전력 (W)</label><input type="number" id="fPower" min="100" max="5000"></div>
+      <div class="f"><label>송풍 소비전력 (W)</label><input type="number" id="fFan" min="0" max="300"></div>
+      <div class="f"><label>절전 중 실외기 가동률 (%)</label><input type="number" id="fDuty" min="0" max="100"></div>
+      <div class="f"><label>필터 청소 주기 (일)</label><input type="number" id="fDays" min="1" max="120"></div>
+      <div class="f"><label>필터 청소 주기 (가동 시간)</label><input type="number" id="fRunHrs" min="1" max="500"></div>
+      <div class="f"><label>전기요금 구간</label>
+        <select id="fTier">
+          <option value="152">1단계 152원</option>
+          <option value="260">2단계 260원</option>
+          <option value="365">3단계 365원</option>
+          <option value="custom">직접 입력</option>
+        </select>
+      </div>
+      <div class="f"><label>단가 (원/kWh)</label><input type="number" id="fRate" min="0" max="1000" step="0.1"></div>
+      <p class="note">
+        급속 구간은 실외기가 계속 도는 것으로, 절전 구간은 설정한 가동률만큼 도는 것으로 계산합니다. 가동률 45%는 여름 한낮 방 하나를 기준으로 잡은 어림값이라, 한전 앱의 실제 사용량과 대조해 조정하시면 정확해집니다.<br><br>
+        단가는 주택용 저압 여름철 누진 구간의 한계단가를 어림한 값입니다. 요금이 바뀌면 직접 고쳐 쓰세요.
+      </p>
+    </div>
+  </details>
+
+  <details>
+    <summary>기록</summary>
+    <div class="panel">
+      <table class="hist"><tbody id="histBody"></tbody></table>
+      <div class="mini">
+        <button class="ghost" id="expBtn">내보내기</button>
+        <button class="ghost" id="impBtn">불러오기</button>
+        <button class="ghost" id="clrBtn">전체 삭제</button>
+      </div>
+      <input type="file" id="impFile" accept="application/json" hidden>
+    </div>
+  </details>
+
+  <footer>
+    커튼으로 직사광선 차단 · 2주에 한 번 필터 청소<br>
+    삼성 AR-CM63B · A/S 1588-3366
+  </footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+const KEY='aircon_cycle_v1';
+const DEF={fast:15,tLow:24,tHigh:26,power:650,fan:45,duty:45,rate:260,tier:'260',days:14,runHrs:40};
+let S=Object.assign({},DEF), LOG={}, lastStop=0;
+let FILT={last:0, sec:0};
+
+function load(){
+  try{
+    const r=JSON.parse(localStorage.getItem(KEY)||'{}');
+    if(r.settings) S=Object.assign({},DEF,r.settings);
+    if(r.log) LOG=r.log;
+    if(r.lastStop) lastStop=r.lastStop;
+    if(r.filter) FILT=Object.assign({last:0,sec:0},r.filter);
+  }catch(e){}
+}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify({settings:S,log:LOG,lastStop:lastStop,filter:FILT,saved:new Date().toISOString()}));}catch(e){}
+}
+
+let phase=-1, running=false, phaseStart=0, lastTick=0, runKwh=0;
+let beepTimer=null, beepLeft=0, wake=null;
+
+const PH=[
+  {name:'급속 냉방', cmd:()=>S.tLow+'℃ · 강풍', dur:()=>S.fast*60, watt:()=>S.power},
+  {name:'절전 냉방', cmd:()=>S.tHigh+'℃ · 자동 풍량', dur:()=>null,
+   watt:()=>S.power*S.duty/100 + S.fan*(1-S.duty/100)}
+];
+
+let ac=null;
+function beep(times){
+  try{
+    ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+    if(ac.state==='suspended') ac.resume();
+    for(let i=0;i<times;i++){
+      const o=ac.createOscillator(), g=ac.createGain(), t=ac.currentTime+i*0.28;
+      o.type='sine'; o.frequency.setValueAtTime(880,t);
+      g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(.22,t+0.02);
+      g.gain.exponentialRampToValueAtTime(.0001,t+0.22);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t+0.25);
+    }
+  }catch(e){}
+}
+function startAlarm(text){
+  el('alarmText').textContent=text;
+  el('alarm').classList.add('on');
+  beepLeft=8; beep(3);
+  clearInterval(beepTimer);
+  beepTimer=setInterval(()=>{ if(--beepLeft<=0){clearInterval(beepTimer);return;} beep(3); },5000);
+}
+function stopAlarm(){ clearInterval(beepTimer); el('alarm').classList.remove('on'); }
+
+async function keepAwake(on){
+  try{
+    if(on && 'wakeLock' in navigator){ wake=await navigator.wakeLock.request('screen'); }
+    else if(wake){ await wake.release(); wake=null; }
+  }catch(e){}
+}
+
+function enter(p){
+  phase=p; phaseStart=Date.now(); lastTick=Date.now();
+  if(p===0){ runKwh=0; stopAlarm(); bumpRun(); }
+  if(p===1) startAlarm('희망 온도를 '+S.tHigh+'℃로 올리고 풍량을 자동으로 바꾸세요.');
+  render();
+}
+function tick(){
+  const now=Date.now();
+  if(running && phase>=0){
+    const dt=(now-lastTick)/1000; lastTick=now;
+    const kwh=PH[phase].watt()*dt/3600000;
+    if(kwh>0){ runKwh+=kwh; addToday(kwh); }
+    FILT.sec+=dt;
+    const dur=PH[phase].dur();
+    if(dur!==null && (now-phaseStart)/1000>=dur && phase+1<PH.length){ enter(phase+1); return; }
+  }
+  render();
+}
+function addToday(k){
+  const d=today();
+  LOG[d]=LOG[d]||{kwh:0,cycles:0};
+  LOG[d].kwh+=k;
+  if(Math.random()<0.05) save();
+}
+function bumpRun(){
+  const d=today();
+  LOG[d]=LOG[d]||{kwh:0,cycles:0};
+  LOG[d].cycles++;
+  save();
+}
+function today(){
+  const n=new Date();
+  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+}
+
+function el(id){return document.getElementById(id);}
+function fmt(s){
+  s=Math.max(0,Math.floor(s));
+  const h=Math.floor(s/3600), m=Math.floor(s%3600/60), q=s%60;
+  return (h?h+':'+String(m).padStart(2,'0'):String(m).padStart(2,'0'))+':'+String(q).padStart(2,'0');
+}
+function won(n){return Math.round(n).toLocaleString('ko-KR');}
+
+function render(){
+  const w=(running&&phase>=0)?PH[phase].watt():0;
+  el('gmax').textContent=S.power;
+  el('watt').textContent=Math.round(w);
+  el('needle').style.transform='rotate('+(-90+Math.min(1,w/S.power)*180)+'deg)';
+
+  for(let i=0;i<2;i++) el('s'+i).classList.toggle('on', phase===i);
+  el('s0').querySelector('.n').textContent=S.fast+'분';
+
+  const clk=el('clock'), bw=el('barWrap');
+  if(phase<0){
+    clk.classList.add('idle'); bw.classList.add('hide');
+    if(lastStop){
+      el('phaseName').textContent='꺼둠';
+      el('phaseCmd').textContent='더워지면 다시 켜세요';
+      clk.textContent=fmt((Date.now()-lastStop)/1000);
+    }else{
+      el('phaseName').textContent='대기 중';
+      el('phaseCmd').textContent='시작을 누르면 '+S.tLow+'℃ 강풍부터';
+      clk.textContent='00:00';
+    }
+  }else{
+    clk.classList.remove('idle');
+    const p=PH[phase], gone=(Date.now()-phaseStart)/1000, dur=p.dur();
+    el('phaseName').textContent=p.name;
+    el('phaseCmd').textContent=p.cmd();
+    if(dur===null){ clk.textContent=fmt(gone); bw.classList.add('hide'); }
+    else{ clk.textContent=fmt(dur-gone); bw.classList.remove('hide');
+          el('bar').style.width=Math.min(100,gone/dur*100)+'%'; }
+  }
+
+  const d=today(), mo=d.slice(0,7);
+  let dk=LOG[d]?LOG[d].kwh:0, mk=0;
+  for(const k in LOG) if(k.slice(0,7)===mo) mk+=LOG[k].kwh;
+  el('cKwh').textContent=runKwh.toFixed(3); el('cWon').textContent=won(runKwh*S.rate);
+  el('dKwh').textContent=dk.toFixed(3);     el('dWon').textContent=won(dk*S.rate);
+  el('mKwh').textContent=mk.toFixed(3);     el('mWon').textContent=won(mk*S.rate);
+
+  el('mainBtn').textContent = phase<0 ? '시작' : (running?'일시정지':'이어서');
+  el('skipBtn').disabled = phase!==0;
+  el('stopBtn').disabled = phase<0;
+
+  renderFilter();
+}
+
+function renderFilter(){
+  const hrs=FILT.sec/3600;
+  const days=FILT.last?Math.floor((Date.now()-FILT.last)/86400000):null;
+  el('fHours').textContent=hrs.toFixed(1);
+  el('fLast').textContent=FILT.last
+    ? new Date(FILT.last).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'})+' · '+days+'일 전'
+    : '기록 없음';
+
+  const overDays = days!==null && days>=S.days;
+  const overHrs  = hrs>=S.runHrs;
+  const n=el('notice');
+
+  if(FILT.last===0 && hrs<S.runHrs*0.6){ n.classList.remove('on'); return; }
+
+  if(overDays||overHrs){
+    n.classList.add('on','due');
+    el('noticeMsg').firstChild.textContent='필터 청소할 때가 됐습니다';
+    el('noticeSub').textContent = overHrs
+      ? '가동 '+hrs.toFixed(0)+'시간 경과 · 기준 '+S.runHrs+'시간'
+      : '마지막 청소 '+days+'일 전 · 기준 '+S.days+'일';
+  }else if(hrs>=S.runHrs*0.75 || (days!==null && days>=S.days*0.75)){
+    n.classList.add('on'); n.classList.remove('due');
+    el('noticeMsg').firstChild.textContent='필터 청소가 곧 필요합니다';
+    el('noticeSub').textContent='가동 '+hrs.toFixed(0)+'시간 · 기준 '+S.runHrs+'시간';
+  }else{
+    n.classList.remove('on','due');
+  }
+}
+function renderHist(){
+  const keys=Object.keys(LOG).sort().reverse().slice(0,14);
+  el('histBody').innerHTML = keys.length
+    ? keys.map(k=>'<tr><td>'+k.slice(5)+'</td><td>'+LOG[k].cycles+'회</td><td>'+LOG[k].kwh.toFixed(2)+'kWh · '+won(LOG[k].kwh*S.rate)+'원</td></tr>').join('')
+    : '<tr><td colspan="3" style="color:var(--muted)">아직 기록이 없습니다.</td></tr>';
+}
+
+el('mainBtn').onclick=()=>{
+  if(phase<0){ running=true; keepAwake(true); beep(1); enter(0); }
+  else if(running){ running=false; keepAwake(false); }
+  else { running=true; lastTick=Date.now(); keepAwake(true); }
+  render();
+};
+el('skipBtn').onclick=()=>{ if(phase===0) enter(1); };
+el('stopBtn').onclick=()=>{
+  running=false; phase=-1; lastStop=Date.now();
+  stopAlarm(); keepAwake(false); save(); render(); renderHist();
+};
+el('ackBtn').onclick=stopAlarm;
+
+el('noticeBtn').onclick=()=>{
+  const b=el('careBox'); b.open=true;
+  b.scrollIntoView({behavior:'smooth',block:'start'});
+};
+el('cleanBtn').onclick=()=>{
+  FILT.last=Date.now(); FILT.sec=0; save(); render();
+};
+
+const FIELDS={fFast:'fast',fTLow:'tLow',fTHigh:'tHigh',fPower:'power',fFan:'fan',fDuty:'duty',fRate:'rate',fDays:'days',fRunHrs:'runHrs'};
+function fillForm(){ for(const id in FIELDS) el(id).value=S[FIELDS[id]]; el('fTier').value=S.tier; }
+for(const id in FIELDS){
+  el(id).oninput=e=>{
+    const v=parseFloat(e.target.value);
+    if(!isNaN(v)){
+      S[FIELDS[id]]=v;
+      if(id==='fRate'){ S.tier='custom'; el('fTier').value='custom'; }
+      save(); render(); renderHist();
+    }
+  };
+}
+el('fTier').onchange=e=>{
+  S.tier=e.target.value;
+  if(e.target.value!=='custom'){ S.rate=parseFloat(e.target.value); el('fRate').value=S.rate; }
+  save(); render(); renderHist();
+};
+
+el('expBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify({settings:S,log:LOG,lastStop:lastStop,filter:FILT},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='aircon-'+today()+'.json'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+el('impBtn').onclick=()=>el('impFile').click();
+el('impFile').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(d.settings) S=Object.assign({},DEF,d.settings);
+      if(d.filter) FILT=Object.assign({last:0,sec:0},d.filter);
+      if(d.log) for(const k in d.log){
+        LOG[k]=LOG[k]||{kwh:0,cycles:0};
+        LOG[k].kwh=Math.max(LOG[k].kwh,d.log[k].kwh);
+        LOG[k].cycles=Math.max(LOG[k].cycles,d.log[k].cycles);
+      }
+      save(); fillForm(); render(); renderHist();
+    }catch(err){ alert('파일을 읽지 못했습니다. JSON 형식인지 확인해 주세요.'); }
+  };
+  r.readAsText(f); e.target.value='';
+};
+el('clrBtn').onclick=()=>{
+  if(confirm('모든 기록을 지웁니다. 되돌릴 수 없습니다.')){ LOG={}; lastStop=0; save(); render(); renderHist(); }
+};
+
+load(); fillForm(); render(); renderHist();
+setInterval(tick,250);
+window.addEventListener('beforeunload',save);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden && running) keepAwake(true); });
+})();
+</script>
+</body>
+</html>
