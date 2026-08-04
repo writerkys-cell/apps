@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>장면첩 — 씬을 쌓아 소설을 쓴다</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   장면첩 디자인 토큰
+   paper: 한지빛 바탕 / ink: 먹빛 / indigo: 쪽빛(주 강조)
+   seal: 낙관빛 — 오직 '돌아오지 못하는 다리'와 '에피파니의 순간',
+   즉 되돌릴 수 없는 두 문턱에만 쓴다.
+   ============================================================ */
+:root{
+  --paper:#FBF9F3;
+  --card:#FFFFFF;
+  --ink:#23262C;
+  --ink-soft:#62666E;
+  --ink-faint:#9A9DA4;
+  --line:#E5E1D4;
+  --line-soft:#EFECE2;
+  --indigo:#33517D;
+  --indigo-soft:#EAEEF5;
+  --seal:#B0402D;
+  --seal-soft:#F7EAE6;
+  --green:#3E7A52;
+  --green-soft:#E8F1EB;
+  --amber:#8A6D2F;
+  --amber-soft:#F5EEDD;
+  --radius:10px;
+  --sans:'Noto Sans KR',-apple-system,sans-serif;
+  --serif:'Gowun Batang','Noto Serif KR',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:15px;line-height:1.65;
+  min-height:100vh;
+}
+::selection{background:var(--indigo-soft)}
+
+/* ---------- 상단 ---------- */
+header{
+  border-bottom:1px solid var(--line);
+  background:var(--paper);
+  position:sticky;top:0;z-index:50;
+}
+.topbar{
+  max-width:960px;margin:0 auto;padding:14px 20px 10px;
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+}
+.app-title{font-family:var(--serif);font-size:22px;font-weight:700;letter-spacing:.02em}
+.app-title .dot{color:var(--seal)}
+.app-sub{font-size:12.5px;color:var(--ink-faint)}
+.top-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+select.project-select{
+  font-family:var(--sans);font-size:14px;padding:6px 10px;
+  border:1px solid var(--line);border-radius:8px;background:var(--card);
+  color:var(--ink);max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+@media(max-width:520px){select.project-select{max-width:150px}}
+.tabs{
+  max-width:960px;margin:0 auto;padding:0 20px;
+  display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  font-size:14px;padding:9px 14px;border:none;background:none;cursor:pointer;
+  color:var(--ink-soft);border-bottom:2px solid transparent;white-space:nowrap;
+  font-family:var(--sans);font-weight:500;
+}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--indigo);border-bottom-color:var(--indigo);font-weight:700}
+
+/* ---------- 본문 ---------- */
+main{max-width:960px;margin:0 auto;padding:26px 20px 90px}
+.pane{display:none}
+.pane.active{display:block}
+h2.section{
+  font-family:var(--serif);font-size:19px;font-weight:700;margin:0 0 4px;
+}
+p.section-note{font-size:13px;color:var(--ink-soft);margin-bottom:20px}
+
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;margin-bottom:16px;
+}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+label.f-label{
+  display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);
+  letter-spacing:.04em;margin-bottom:5px;
+}
+input[type=text],textarea,select{
+  width:100%;font-family:var(--sans);font-size:14.5px;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;background:#FDFCF9;
+  padding:9px 11px;line-height:1.6;
+}
+textarea{resize:vertical;min-height:72px;font-family:var(--serif);font-size:15px}
+textarea.short{min-height:56px}
+input:focus,textarea:focus,select:focus{
+  outline:none;border-color:var(--indigo);background:#fff;
+}
+.scriv-row{display:flex;gap:8px;align-items:center}
+.scriv-row input{flex:1;font-size:12.5px;color:var(--ink-soft)}
+.hint{font-size:12px;color:var(--ink-faint);margin-top:4px}
+
+/* ---------- 버튼 ---------- */
+button{font-family:var(--sans);cursor:pointer}
+.btn{
+  font-size:13.5px;font-weight:500;padding:7px 14px;border-radius:8px;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink-faint)}
+.btn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.btn.primary:hover{background:#2A4368}
+.btn.ghost{border:none;background:none;color:var(--ink-soft);padding:7px 8px}
+.btn.ghost:hover{color:var(--ink)}
+.btn.danger{color:var(--seal)}
+.btn.danger:hover{border-color:var(--seal)}
+.btn.small{font-size:12.5px;padding:4px 10px}
+.btn:disabled{opacity:.4;cursor:default}
+
+/* ---------- 플롯 레일 ---------- */
+.plot-rail{position:relative;padding-left:26px}
+.plot-rail::before{
+  content:"";position:absolute;left:8px;top:10px;bottom:10px;
+  width:1.5px;background:var(--line);
+}
+.plot-node{position:relative;margin-bottom:18px}
+.plot-node::before{
+  content:"";position:absolute;left:-24px;top:14px;width:11px;height:11px;
+  border-radius:50%;background:var(--paper);border:2px solid var(--indigo);
+}
+.plot-node.threshold::before{
+  border-radius:2px;background:var(--seal);border-color:var(--seal);
+  transform:rotate(45deg);
+}
+.plot-node .card{margin-bottom:0}
+.plot-node.threshold .card{border-left:3px solid var(--seal)}
+.plot-title{font-family:var(--serif);font-size:16px;font-weight:700;margin-bottom:2px}
+.plot-node.threshold .plot-title{color:var(--seal)}
+.plot-desc{font-size:12.5px;color:var(--ink-soft);margin-bottom:10px}
+
+/* ---------- 캐릭터 ---------- */
+.char-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;align-items:start}
+.char-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.char-head{cursor:pointer}
+.char-name{font-family:var(--serif);font-size:16.5px;font-weight:700;display:block}
+.char-meta{font-size:12.5px;color:var(--ink-soft);display:block;margin-top:3px;line-height:1.5}
+.char-body{margin-top:12px;display:none}
+.char-card.open .char-body{display:block}
+.char-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ---------- 씬 ---------- */
+.scene-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.scene-toolbar .grow{flex:1}
+.scene-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.scene-filters select,.scene-filters input{width:auto;font-size:13px;padding:5px 9px}
+.scene-filters input{min-width:140px}
+.stats{font-size:12.5px;color:var(--ink-soft);margin-bottom:16px}
+.stats b{color:var(--ink)}
+
+.scene-item{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  margin-bottom:10px;overflow:hidden;
+}
+.scene-row{display:flex;align-items:center;gap:10px;padding:11px 14px}
+.scene-order{display:flex;flex-direction:column;gap:1px}
+.scene-order button{
+  border:none;background:none;color:var(--ink-faint);font-size:11px;
+  padding:0 4px;line-height:1.2;
+}
+.scene-order button:hover{color:var(--indigo)}
+.scene-no{font-size:12px;color:var(--ink-faint);min-width:22px;text-align:right}
+.scene-title{font-family:var(--serif);font-size:15.5px;font-weight:700;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  border:none;background:none;text-align:left;cursor:pointer;padding:0;color:var(--ink)}
+.scene-title:hover{color:var(--indigo)}
+.scene-title .untitled{color:var(--ink-faint);font-weight:400}
+.scene-chars{
+  display:flex;gap:8px;white-space:nowrap;
+  overflow:hidden;max-width:32%;flex-shrink:1;
+}
+.scene-chars .sc-char{
+  border:none;background:none;font-size:12px;color:var(--ink-faint);
+  cursor:pointer;padding:0;font-family:var(--sans);
+}
+.scene-chars .sc-char:hover{color:var(--indigo);text-decoration:underline}
+@media(max-width:640px){.scene-chars{display:none}}
+select.chip-act{
+  appearance:none;-webkit-appearance:none;border:none;cursor:pointer;width:auto;
+  font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:99px;
+  background:var(--indigo-soft);color:var(--indigo);font-family:var(--sans);
+  text-align:center;
+}
+select.chip-act.threshold{background:var(--seal-soft);color:var(--seal)}
+select.chip-act.undecided{background:#EFEDE6;color:var(--ink-soft)}
+.chip{
+  display:inline-block;font-size:11.5px;font-weight:500;padding:2px 9px;border-radius:99px;
+  white-space:nowrap;
+}
+.chip.act{background:var(--indigo-soft);color:var(--indigo)}
+.chip.act.threshold{background:var(--seal-soft);color:var(--seal)}
+.chip.st-대기{background:#EFEDE6;color:var(--ink-soft)}
+.chip.st-진행중{background:var(--amber-soft);color:var(--amber)}
+.chip.st-다시쓰기{background:var(--seal-soft);color:var(--seal)}
+.chip.st-완료{background:var(--green-soft);color:var(--green)}
+select.chip-status{
+  appearance:none;-webkit-appearance:none;border:none;cursor:pointer;width:auto;
+  font-family:var(--sans);text-align:center;
+}
+.scene-body{display:none;border-top:1px solid var(--line-soft);padding:16px 16px 14px;background:#FDFCF9}
+.scene-item.open .scene-body{display:block}
+.scene-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.char-check{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;align-items:center}
+.char-chip{
+  display:inline-flex;align-items:center;gap:2px;font-size:12.5px;
+  border:1px solid var(--indigo);background:var(--indigo-soft);color:var(--indigo);
+  border-radius:99px;padding:3px 5px 3px 11px;
+}
+.char-chip button{
+  border:none;background:none;color:var(--indigo);font-size:14px;line-height:1;
+  padding:0 5px;cursor:pointer;
+}
+.char-chip button:hover{color:var(--seal)}
+.char-chip .chip-name{
+  font-size:12.5px;padding:0;color:inherit;font-family:var(--sans);
+}
+.char-chip .chip-name:hover{color:var(--indigo);text-decoration:underline}
+select.char-add{
+  width:auto;font-size:12.5px;padding:3px 8px;border-radius:99px;
+  color:var(--ink-soft);background:var(--card);
+}
+.scene-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+.scene-actions .spacer{flex:1}
+
+/* ---------- 프롬프트/가져오기 모달 ---------- */
+.modal-bg{
+  display:none;position:fixed;inset:0;background:rgba(30,32,38,.45);z-index:100;
+  align-items:center;justify-content:center;padding:20px;
+}
+.modal-bg.show{display:flex}
+.modal{
+  background:var(--card);border-radius:12px;max-width:640px;width:100%;
+  max-height:84vh;display:flex;flex-direction:column;
+}
+.modal-head{padding:16px 20px 10px;display:flex;align-items:baseline;gap:10px}
+.modal-head h3{font-family:var(--serif);font-size:17px}
+.modal-head .btn{margin-left:auto}
+.modal-body{padding:0 20px 16px;overflow-y:auto}
+.modal-body textarea{min-height:220px;font-family:var(--sans);font-size:13px}
+.modal-foot{padding:12px 20px 16px;display:flex;gap:8px;border-top:1px solid var(--line-soft)}
+.modal-foot .spacer{flex:1}
+
+/* ---------- 토스트 ---------- */
+#toast{
+  position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:#fff;font-size:13.5px;padding:9px 18px;border-radius:99px;
+  opacity:0;pointer-events:none;transition:all .25s;z-index:200;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- 백업 ---------- */
+.backup-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){
+  .backup-grid,.char-two,.scene-two{grid-template-columns:1fr}
+  .topbar{padding:12px 14px 8px}
+  main{padding:20px 14px 90px}
+}
+/* ---------- 이야기의 뼈대 (보기/수정) ---------- */
+.story-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.story-head .f-label{margin:0}
+.story-head .spacer{flex:1}
+.story-view{font-family:var(--serif);font-size:15.5px;line-height:1.85;white-space:pre-wrap}
+.story-view.empty-text{font-family:var(--sans);font-size:13px;color:var(--ink-faint)}
+.scriv-mini{font-size:12px;color:var(--indigo);background:none;border:none;padding:0;cursor:pointer}
+.scriv-mini:hover{text-decoration:underline}
+
+/* ---------- 순환 지원: 신선도, 이전 판, 백업 알림 ---------- */
+.chip.stale{background:var(--amber-soft);color:var(--amber);cursor:help}
+#toast button{
+  margin-left:10px;border:none;background:none;color:#F5C169;
+  font-weight:700;cursor:pointer;font-size:13.5px;font-family:var(--sans);
+}
+.tab .dot-alert{
+  display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--seal);margin-left:5px;vertical-align:middle;
+}
+details.hist{margin-top:10px;font-size:12.5px}
+details.hist summary{cursor:pointer;color:var(--ink-soft);user-select:none}
+.hist-item{border-top:1px solid var(--line-soft);padding:8px 0}
+.hist-meta{display:flex;gap:8px;align-items:center;color:var(--ink-faint);font-size:12px;margin-bottom:4px}
+.hist-text{white-space:pre-wrap;font-family:var(--serif);font-size:13.5px;color:var(--ink-soft);max-height:130px;overflow:auto}
+
+/* ---------- 플롯 탭의 씬 목록 ---------- */
+.plot-scenes{margin-top:10px;border-top:1px solid var(--line-soft);padding-top:8px}
+.plot-scene{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+.ps-order{display:flex;flex-direction:column;gap:0}
+.ps-order button{border:none;background:none;color:var(--ink-faint);font-size:10px;line-height:1.15;padding:0 3px;cursor:pointer}
+.ps-order button:hover{color:var(--indigo)}
+.ps-no{font-size:11.5px;color:var(--ink-faint);min-width:18px;text-align:right}
+.ps-title{
+  border:none;background:none;font-family:var(--serif);font-size:13.5px;color:var(--ink);
+  cursor:pointer;text-align:left;flex:1;min-width:0;padding:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.ps-title:hover{color:var(--indigo);text-decoration:underline}
+.plot-scene .scriv-mini{flex-shrink:0}
+.plot-text{
+  font-family:var(--serif);font-size:13.5px;line-height:1.8;white-space:pre-wrap;
+  color:var(--ink-soft);border-left:2px solid var(--line);
+  margin:2px 0 8px 30px;padding:4px 0 4px 12px;
+  max-height:280px;overflow-y:auto;
+}
+.plot-text .pt-sum{color:var(--ink);margin-bottom:6px;font-family:var(--sans);font-size:12.5px}
+
+.empty{
+  text-align:center;color:var(--ink-faint);font-size:13.5px;
+  padding:40px 20px;border:1.5px dashed var(--line);border-radius:var(--radius);
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <span class="app-title">장면첩<span class="dot">.</span></span>
+    <span class="app-sub">씬을 쌓아 소설을 쓴다</span>
+    <div class="top-right">
+      <select id="projectSelect" class="project-select" title="프로젝트 선택"></select>
+      <button class="btn small" id="btnNewProject">새 프로젝트</button>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-pane="story">이야기</button>
+    <button class="tab" data-pane="plot">플롯</button>
+    <button class="tab" data-pane="chars">캐릭터</button>
+    <button class="tab" data-pane="scenes">씬</button>
+    <button class="tab" data-pane="backup">백업</button>
+  </nav>
+</header>
+
+<main>
+<!-- ================= 이야기 ================= -->
+<section class="pane active" id="pane-story">
+  <h2 class="section">이야기의 뼈대</h2>
+  <p class="section-note">지금 확정하지 않아도 좋습니다. 씬을 쓰면서 알게 된 것들로 계속 고쳐 씁니다. 「수정」을 눌러 고치고, 저장하면 읽기 화면으로 돌아옵니다.</p>
+
+  <div id="storyList"><!-- JS 렌더 --></div>
+
+  <div class="card">
+    <label class="f-label">뼈대 요소 추가</label>
+    <p class="hint" style="margin-bottom:10px">예: 테마, 독자층, 시대 배경, 문체의 방향 — 여기에 넣은 요소는 씬 제안 프롬프트에도 함께 담깁니다.</p>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="newElemName" placeholder="요소 이름 (예: 테마)">
+      <button class="btn" id="btnAddElem">추가</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 플롯 ================= -->
+<section class="pane" id="pane-plot">
+  <h2 class="section">플롯 — 3막 구조</h2>
+  <p class="section-note">마름모 표시는 이야기의 세 문턱입니다. 각 단계 아래에 그 막의 씬들이 순서대로 놓입니다 — 제목을 누르면 씬으로 이동하고, ▲▼로 막 안에서 순서를 바꿀 수 있습니다.</p>
+  <div class="plot-rail" id="plotRail"><!-- JS 렌더 --></div>
+  <div class="hint" id="plotUndecided" style="margin-top:4px"></div>
+</section>
+
+<!-- ================= 캐릭터 ================= -->
+<section class="pane" id="pane-chars">
+  <h2 class="section">캐릭터</h2>
+  <p class="section-note">역할은 이야기에서의 기능입니다 — 주인공, 적대자(주인공의 욕망을 막아서는 사람), 섭동자(주인공의 결정에 영향을 끼치는 사람), 조력자(주인공을 돕는 사람), 또는 직접 정한 역할. 설명은 인물을 구별해 주는 한 줄로, 닫힌 카드에는 보이지 않고 프롬프트에만 담깁니다.</p>
+  <datalist id="roleList">
+    <option value="주인공"></option>
+    <option value="적대자"></option>
+    <option value="섭동자"></option>
+    <option value="조력자"></option>
+  </datalist>
+  <div style="margin-bottom:14px"><button class="btn primary" id="btnAddChar">캐릭터 추가</button></div>
+  <div class="char-grid" id="charGrid"></div>
+  <div class="empty" id="charEmpty" style="display:none">아직 캐릭터가 없습니다. 위에서 추가하세요.</div>
+</section>
+
+<!-- ================= 씬 ================= -->
+<section class="pane" id="pane-scenes">
+  <h2 class="section">씬</h2>
+  <p class="section-note">씬을 만들어 쌓고, 쓰고, 알게 된 것으로 뼈대를 고치고, 다시 씬을 만듭니다.</p>
+
+  <div class="scene-toolbar">
+    <button class="btn primary" id="btnAddScene">씬 추가</button>
+    <button class="btn" id="btnScenePrompt">씬 제안 프롬프트 복사</button>
+    <button class="btn" id="btnUpdatePrompt">뼈대 갱신 프롬프트 복사</button>
+    <button class="btn" id="btnImportScenes">제안 붙여넣어 가져오기</button>
+  </div>
+  <div class="scene-filters">
+    <select id="fltStatus"><option value="">모든 상태</option><option>대기</option><option>진행중</option><option>다시쓰기</option><option>완료</option></select>
+    <select id="fltAct"><option value="">모든 막</option></select>
+    <select id="fltChar"><option value="">모든 인물</option></select>
+    <input type="text" id="fltSearch" placeholder="제목·요약 검색">
+  </div>
+  <div class="stats" id="sceneStats"></div>
+  <div id="sceneList"></div>
+  <div class="empty" id="sceneEmpty" style="display:none">
+    아직 씬이 없습니다.<br>직접 추가하거나, 뼈대를 채운 뒤 「씬 제안 프롬프트」를 클로드에게 건네보세요.
+  </div>
+</section>
+
+<!-- ================= 백업 ================= -->
+<section class="pane" id="pane-backup">
+  <h2 class="section">백업과 프로젝트 관리</h2>
+  <p class="section-note">데이터는 이 브라우저의 IndexedDB에 저장됩니다. 다른 기기로 옮기거나 안전하게 보관하려면 JSON으로 내보내세요. (AirDrop·iCloud로 옮긴 뒤 가져오기)</p>
+  <div class="backup-grid">
+    <div class="card">
+      <label class="f-label">내보내기</label>
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px">마지막 백업: <span id="lastBackup">기록 없음</span></p>
+      <p class="hint" id="storageInfo" style="margin-bottom:12px"></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn primary" id="btnExportAll">전체 백업 (JSON)</button>
+        <button class="btn" id="btnExportOne">현재 프로젝트만</button>
+      </div>
+    </div>
+    <div class="card">
+      <label class="f-label">가져오기</label>
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:12px">같은 이름(ID)의 프로젝트는 파일 내용으로 덮어씁니다.</p>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+      <button class="btn" id="btnImportFile">JSON 파일 선택</button>
+    </div>
+    <div class="card">
+      <label class="f-label">현재 프로젝트</label>
+      <div class="field" style="margin-top:8px">
+        <input type="text" id="projName" placeholder="프로젝트 이름">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn small" id="btnRenameProj">이름 바꾸기</button>
+        <button class="btn small danger" id="btnDeleteProj">프로젝트 삭제</button>
+      </div>
+      <div class="field" style="margin-top:16px">
+        <label class="f-label">기본 스크리브너 링크</label>
+        <input type="text" id="projScriv" placeholder="x-scrivener-item://… (프로젝트나 자주 여는 폴더)">
+        <p class="hint" style="margin-top:6px">링크를 따로 넣지 않은 자리는 이 링크로 열립니다. 각 항목에서 상세한 링크로 바꿔 쓸 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- 가져오기 모달 -->
+<div class="modal-bg" id="importModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>클로드의 씬 제안 가져오기</h3>
+      <button class="btn ghost" data-close="importModal">닫기</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--ink-soft);margin-bottom:10px">
+        클로드의 답변을 통째로 붙여넣으세요. <b>[씬]</b>으로 시작하는 블록만 골라 읽습니다.
+        읽은 뒤 목록에서 원하는 것만 추가하면 됩니다.
+      </p>
+      <textarea id="importText" placeholder="[씬]&#10;제목: …&#10;막: 1막&#10;…"></textarea>
+      <div id="importPreview" style="margin-top:12px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="btnParseImport">읽어들이기</button>
+      <div class="spacer"></div>
+      <button class="btn primary" id="btnConfirmImport" disabled>선택한 씬 추가</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script>
+/* ============================================================
+   장면첩 — 데이터 계층 (IndexedDB)
+   구조: DB "scenebook" / 저장소 "projects"(keyPath:id), "meta"
+   프로젝트 하나가 문서 하나. 어떤 크기든 통째로 저장한다.
+   ============================================================ */
+const DB_NAME='scenebook', DB_VER=1;
+let db=null;
+
+function openDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(DB_NAME,DB_VER);
+    req.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains('projects')) d.createObjectStore('projects',{keyPath:'id'});
+      if(!d.objectStoreNames.contains('meta')) d.createObjectStore('meta',{keyPath:'key'});
+    };
+    req.onsuccess=e=>{db=e.target.result;res()};
+    req.onerror=e=>rej(e.target.error);
+  });
+}
+function tx(store,mode,fn){
+  return new Promise((res,rej)=>{
+    const t=db.transaction(store,mode), s=t.objectStore(store);
+    const out=fn(s);
+    t.oncomplete=()=>res(out&&out.result!==undefined?out.result:undefined);
+    t.onerror=e=>rej(e.target.error);
+  });
+}
+const dbPutProject=p=>tx('projects','readwrite',s=>s.put(p));
+const dbDeleteProject=id=>tx('projects','readwrite',s=>s.delete(id));
+const dbGetAllProjects=()=>new Promise((res,rej)=>{
+  const t=db.transaction('projects','readonly');
+  const req=t.objectStore('projects').getAll();
+  req.onsuccess=()=>res(req.result||[]); req.onerror=e=>rej(e.target.error);
+});
+const dbSetMeta=(key,value)=>tx('meta','readwrite',s=>s.put({key,value}));
+const dbGetMeta=key=>new Promise((res,rej)=>{
+  const t=db.transaction('meta','readonly');
+  const req=t.objectStore('meta').get(key);
+  req.onsuccess=()=>res(req.result?req.result.value:null); req.onerror=e=>rej(e.target.error);
+});
+
+/* ============================================================
+   상태와 기본 구조
+   ============================================================ */
+const uid=()=> 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const ACTS=['1막','돌아오지 못하는 다리','2-1막','가장 깊은 심연','2-2막','에피파니의 순간','3막'];
+const THRESHOLDS=new Set(['돌아오지 못하는 다리','가장 깊은 심연','에피파니의 순간']);
+const STATUSES=['대기','진행중','다시쓰기','완료'];
+/* '완료'와 '다시쓰기'는 모두 이미 글을 쓴 상태다.
+   다시쓰기는 스크리브너 안에서만 하는 일이므로, 이 앱에서는 계획 정보를 되살리지 않는다. */
+const isWritten=sc=>sc.status==='완료'||sc.status==='다시쓰기';
+
+function newProject(name){
+  return {
+    id:uid(), name:name||'새 소설', createdAt:Date.now(), updatedAt:Date.now(),
+    scriv:'', // 기본 스크리브너 링크 — 개별 링크가 없는 자리에서 쓰인다
+    story:{logline:'',synopsis:'',conflict:'',
+           scriv:{logline:'',synopsis:'',conflict:''},
+           extras:[]}, // {id,name,text,scriv} — 테마, 독자층 등 자유 요소
+    plot:Object.fromEntries(ACTS.map(a=>[a,{text:'',scriv:''}])),
+    characters:[],  // {id,name,age,gender,job,personality,role,want,fear,conflict,note,scriv}
+    scenes:[]       // {id,title,act,place,time,charIds,summary,turn,status,scriv,note}
+  };
+}
+function newChar(){return {id:uid(),name:'',age:'',gender:'',job:'',role:'',desc:'',personality:'',want:'',fear:'',conflict:'',note:'',scriv:''}}
+function newScene(o={}){return Object.assign({id:uid(),title:'',act:'미정',place:'',time:'',charIds:[],summary:'',turn:'',direction:'',text:'',textSummary:'',status:'대기',scriv:'',note:''},o)}
+
+/* 구버전 프로젝트를 현재 구조로 이관한다.
+   - 옛 '2막'은 '2-1막'으로 옮기고, '가장 깊은 심연'과 '2-2막'을 새로 만든다.
+   - story.extras가 없으면 만들어 둔다. */
+function migrate(p){
+  if(p.plot['2막']&&!p.plot['2-1막']){
+    p.plot['2-1막']=p.plot['2막'];
+    delete p.plot['2막'];
+    p.scenes.forEach(sc=>{if(sc.act==='2막')sc.act='2-1막'});
+  }
+  ACTS.forEach(a=>{if(!p.plot[a])p.plot[a]={text:'',scriv:''}});
+  p.scenes.forEach(sc=>{
+    if(sc.direction===undefined)sc.direction='';
+    if(sc.directionAt===undefined)sc.directionAt=0;
+    if(sc.text===undefined)sc.text='';
+    if(sc.textSummary===undefined)sc.textSummary='';
+  });
+  p.characters.forEach(c=>{if(c.desc===undefined)c.desc=''});
+  if(p.storyRev===undefined)p.storyRev=0; // 뼈대(이야기·플롯·캐릭터)의 마지막 변경 시각
+  if(p.scriv===undefined)p.scriv='';      // 기본 스크리브너 링크
+  if(!p.story.extras)p.story.extras=[];
+  return p;
+}
+/* 개별 링크가 비어 있으면 프로젝트의 기본 스크리브너 링크를 쓴다 */
+const scrivOf=link=>(link&&link.trim())?link.trim():((cur&&cur.scriv)?cur.scriv.trim():'');
+
+let projects=[];      // 목록 (요약이 아니라 전체를 들고 있음)
+let cur=null;         // 현재 프로젝트 객체
+let importCandidates=[]; // 가져오기 미리보기
+
+/* ---------- 저장 (디바운스 자동 저장) ---------- */
+let saveTimer=null;
+function save(immediate=false){
+  if(!cur) return;
+  cur.updatedAt=Date.now();
+  clearTimeout(saveTimer);
+  const doSave=()=>dbPutProject(cur).catch(e=>toast('저장 실패: '+e));
+  if(immediate) doSave(); else saveTimer=setTimeout(doSave,500);
+}
+window.addEventListener('beforeunload',()=>{ if(cur) save(true); });
+
+/* ---------- 유틸 ---------- */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200);
+}
+/* 실행 취소 버튼이 붙는 토스트 (씬 삭제 되돌리기 등) */
+function toastAction(msg,label,fn){
+  const t=$('#toast');
+  t.innerHTML=esc(msg)+` <button id="toastBtn">${esc(label)}</button>`;
+  t.classList.add('show');
+  $('#toastBtn').onclick=()=>{fn();t.classList.remove('show')};
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),6000);
+}
+/* 뼈대(이야기·플롯·캐릭터)가 바뀔 때마다 기록한다.
+   씬의 연출이 이 시각보다 오래되면 '연출 오래됨'으로 표시된다. */
+function touchSkeleton(){ cur.storyRev=Date.now(); }
+/* 수정창이 저장된 텍스트를 모두 보여주도록 내용 길이에 맞춰 늘어난다.
+   타이핑 중에도 계속 따라 늘어난다. */
+function autoGrow(ta,min=80){
+  ta.style.overflowY='hidden';
+  ta.style.height='auto';
+  ta.style.height=Math.max(ta.scrollHeight+2,min)+'px';
+}
+function bindAutoGrow(ta,min){
+  autoGrow(ta,min);
+  ta.addEventListener('input',()=>autoGrow(ta,min));
+}
+async function writeClipboard(text){
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){ // 클립보드 권한이 없을 때의 대비책
+    const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+}
+function copyText(text,msg){ writeClipboard(text).then(()=>toast(msg||'복사했습니다')); }
+
+/* 스크리브너 열기 = 해당 상자의 내용을 플레인텍스트로 복사한 뒤 링크를 연다.
+   사용자는 열린 스크리브너 문서에 바로 붙여넣어 업데이트한다. */
+async function openScrivCopy(link,text){
+  const hasText=!!(text&&text.trim());
+  const target=scrivOf(link);          // 개별 링크가 없으면 기본 링크로
+  const hasLink=!!target;
+  if(hasText) await writeClipboard(text.trim());
+  if(hasLink){
+    toast(hasText?'내용을 복사했습니다 — 스크리브너에 붙여넣으세요':'스크리브너를 엽니다 (복사할 내용 없음)');
+    location.href=target;
+  }else{
+    toast(hasText?'내용은 복사했습니다 (스크리브너 링크가 비어 있음)':'링크와 내용이 모두 비어 있습니다');
+  }
+}
+function fmtDate(ts){
+  if(!ts) return '기록 없음';
+  const d=new Date(ts);
+  return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function charName(id){const c=cur.characters.find(c=>c.id===id);return c?c.name||'(이름 없음)':''}
+
+/* ============================================================
+   프로젝트 선택/생성/삭제
+   ============================================================ */
+async function loadAll(){
+  // 브라우저가 저장소를 임의로 비우지 않도록 영속화를 요청한다
+  if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  projects=await dbGetAllProjects();
+  projects.forEach(migrate);
+  projects.sort((a,b)=>b.updatedAt-a.updatedAt);
+  if(projects.length===0){
+    const p=newProject('새 소설'); projects=[p]; await dbPutProject(p);
+  }
+  const lastId=await dbGetMeta('lastProjectId');
+  cur=projects.find(p=>p.id===lastId)||projects[0];
+  renderProjectSelect(); renderAll();
+  const lb=await dbGetMeta('lastBackup'); $('#lastBackup').textContent=fmtDate(lb);
+  if(updateBackupNudge(lb)) toast('백업한 지 7일이 넘었습니다 — 백업 탭에서 내보내 두세요');
+  if(navigator.storage&&navigator.storage.estimate){
+    navigator.storage.estimate().then(e=>{
+      if(e&&e.usage!==undefined)
+        $('#storageInfo').textContent=`이 브라우저의 저장 공간 사용: ${(e.usage/1048576).toFixed(1)}MB`;
+    }).catch(()=>{});
+  }
+}
+/* 데이터가 쌓였는데 백업이 7일 넘게 없으면 백업 탭에 붉은 점을 켠다 */
+function updateBackupNudge(lb){
+  const tab=$('.tab[data-pane="backup"]');
+  tab.querySelectorAll('.dot-alert').forEach(d=>d.remove());
+  const hasData=projects.some(p=>p.scenes.length>0||(p.story.synopsis&&p.story.synopsis.trim()));
+  const stale=hasData&&(!lb||Date.now()-lb>7*24*3600*1000);
+  if(stale) tab.insertAdjacentHTML('beforeend','<span class="dot-alert"></span>');
+  return stale;
+}
+function renderProjectSelect(){
+  const sel=$('#projectSelect');
+  sel.innerHTML=projects.map(p=>`<option value="${p.id}" ${p.id===cur.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  sel.title=cur.name; // 이름이 잘려 보일 때 전체 이름을 확인할 수 있게
+}
+$('#projectSelect').addEventListener('change',e=>{
+  save(true);
+  cur=projects.find(p=>p.id===e.target.value);
+  e.target.title=cur.name;
+  dbSetMeta('lastProjectId',cur.id);
+  renderAll();
+});
+$('#btnNewProject').addEventListener('click',async()=>{
+  const name=prompt('새 프로젝트 이름을 입력하세요','새 소설');
+  if(name===null) return;
+  save(true);
+  const p=newProject(name.trim()||'새 소설');
+  projects.unshift(p); cur=p;
+  await dbPutProject(p); dbSetMeta('lastProjectId',p.id);
+  renderProjectSelect(); renderAll(); toast('프로젝트를 만들었습니다');
+});
+$('#btnRenameProj').addEventListener('click',()=>{
+  const name=$('#projName').value.trim();
+  if(!name){toast('이름을 입력하세요');return}
+  cur.name=name; save(true); renderProjectSelect(); toast('이름을 바꿨습니다');
+});
+/* 기본 스크리브너 링크: 개별 링크가 비어 있는 모든 자리에서 쓰인다 */
+$('#projScriv').addEventListener('input',e=>{
+  cur.scriv=e.target.value.trim(); save();
+});
+$('#projScriv').addEventListener('change',()=>{
+  // 열기 버튼과 안내 문구가 곧바로 반영되도록 다시 그린다
+  renderStory(); renderPlot(); renderChars(); renderScenes();
+});
+$('#btnDeleteProj').addEventListener('click',async()=>{
+  if(!confirm(`「${cur.name}」 프로젝트를 삭제할까요?\n삭제 전 JSON 백업을 권합니다. 되돌릴 수 없습니다.`)) return;
+  await dbDeleteProject(cur.id);
+  projects=projects.filter(p=>p.id!==cur.id);
+  if(projects.length===0){const p=newProject('새 소설');projects=[p];await dbPutProject(p)}
+  cur=projects[0]; dbSetMeta('lastProjectId',cur.id);
+  renderProjectSelect(); renderAll(); toast('삭제했습니다');
+});
+
+/* ============================================================
+   탭
+   ============================================================ */
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  $$('.pane').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  $('#pane-'+t.dataset.pane).classList.add('active');
+  // 씬 탭에서 막·제목·상태를 고친 것이 플롯 탭에 반영되게 한다.
+  // 단, 플롯을 수정하던 중이면 입력 내용을 지키기 위해 다시 그리지 않는다.
+  if(t.dataset.pane==='plot'&&editingPlot.size===0) renderPlot();
+  // 캐릭터 탭에서 고친 이름이 씬의 인물 칩에 반영되게 한다.
+  if(t.dataset.pane==='scenes'){renderSceneFilters();renderScenes();}
+}));
+
+
+</script>
+<script>
+/* ============================================================
+   렌더링 — 이야기
+   ============================================================ */
+/* 핵심 3요소는 고정, 나머지는 자유롭게 추가·삭제한다.
+   평소에는 읽기 화면으로 두고 「수정」→「저장」으로 고친다. */
+const CORE_STORY=[
+  ['logline','로그라인','이 이야기를 한두 문장으로.'],
+  ['synopsis','시놉시스','줄거리의 현재 모습. 스크리브너에서 다듬은 뒤 붙여넣어도 좋습니다.'],
+  ['conflict','이야기의 갈등','누가 무엇을 원하고, 무엇이 그것을 가로막는가.']
+];
+let editingStory=new Set();
+
+function storyItems(){
+  const items=CORE_STORY.map(([key,label,ph])=>({
+    key,label,ph,removable:false,text:cur.story[key],scriv:cur.story.scriv[key]
+  }));
+  cur.story.extras.forEach(e=>items.push({
+    key:'x:'+e.id,label:e.name,ph:'',removable:true,text:e.text,scriv:e.scriv
+  }));
+  return items;
+}
+function setStoryValue(key,text,scriv){
+  if(key.startsWith('x:')){
+    const e=cur.story.extras.find(x=>'x:'+x.id===key);
+    if(e){e.text=text;e.scriv=scriv}
+  }else{cur.story[key]=text;cur.story.scriv[key]=scriv}
+}
+/* 이전 판 보관: 저장할 때 내용이 바뀌었으면 옛 판을 최대 15개까지 남긴다 */
+function storyHist(key){
+  if(key.startsWith('x:')){const e=cur.story.extras.find(x=>'x:'+x.id===key);return (e&&e.hist)||[]}
+  return (cur.story.hist&&cur.story.hist[key])||[];
+}
+function pushStoryHist(key,text){
+  let arr;
+  if(key.startsWith('x:')){
+    const e=cur.story.extras.find(x=>'x:'+x.id===key); if(!e)return;
+    if(!e.hist)e.hist=[]; arr=e.hist;
+  }else{
+    if(!cur.story.hist)cur.story.hist={};
+    if(!cur.story.hist[key])cur.story.hist[key]=[]; arr=cur.story.hist[key];
+  }
+  arr.push({t:Date.now(),text}); if(arr.length>15)arr.shift();
+}
+function histDetailsHTML(hist){
+  if(!hist.length) return '';
+  return `<details class="hist"><summary>이전 판 ${hist.length}개</summary>
+    ${hist.slice().reverse().map((h,ri)=>`<div class="hist-item">
+      <div class="hist-meta">${fmtDate(h.t)}
+        <button class="btn small" data-hrestore="${hist.length-1-ri}">이 판을 편집칸에 넣기</button></div>
+      <div class="hist-text">${esc(h.text)}</div></div>`).join('')}
+  </details>`;
+}
+function renderStory(){
+  $('#storyList').innerHTML=storyItems().map(it=>{
+    if(editingStory.has(it.key)){
+      return `<div class="card" data-skey="${esc(it.key)}">
+        <div class="story-head"><label class="f-label">${esc(it.label)}</label></div>
+        <textarea data-sv placeholder="${esc(it.ph)}" style="min-height:${it.key==='synopsis'?'140':'80'}px">${esc(it.text)}</textarea>
+        <div class="scriv-row" style="margin-top:8px">
+          <input type="text" data-sl placeholder="${cur.scriv?'비워 두면 기본 링크로 열립니다':'스크리브너 링크 (x-scrivener-item://…)'}" value="${esc(it.scriv)}">
+        </div>
+        <div class="scene-actions" style="margin-top:10px">
+          ${it.removable?'<button class="btn small danger" data-sdel>요소 삭제</button>':''}
+          <div class="spacer"></div>
+          <button class="btn small" data-scancel>취소</button>
+          <button class="btn small primary" data-ssave>저장</button>
+        </div>
+        ${histDetailsHTML(storyHist(it.key))}</div>`;
+    }
+    return `<div class="card" data-skey="${esc(it.key)}">
+      <div class="story-head">
+        <label class="f-label">${esc(it.label)}</label>
+        <div class="spacer"></div>
+        ${scrivOf(it.scriv)?'<button class="scriv-mini" data-sopen>스크리브너 열기</button>':''}
+        <button class="btn small" data-sedit>수정</button>
+      </div>
+      <div class="story-view ${it.text?'':'empty-text'}">${it.text?esc(it.text):'아직 없음 — 「수정」을 눌러 입력하세요.'}</div>
+    </div>`;
+  }).join('');
+
+  $$('#storyList .card').forEach(card=>{
+    const key=card.dataset.skey;
+    const it=storyItems().find(x=>x.key===key);
+    const ed=card.querySelector('[data-sv]');
+    if(ed) bindAutoGrow(ed, key==='synopsis'?140:80);
+    const on=(sel,fn)=>{const b=card.querySelector(sel);if(b)b.addEventListener('click',fn)};
+    on('[data-sedit]',()=>{
+      editingStory.add(key);renderStory();
+      const t=$(`#storyList .card[data-skey="${CSS.escape(key)}"] textarea`);if(t)t.focus();
+    });
+    on('[data-sopen]',()=>openScrivCopy(it.scriv,it.text));
+    on('[data-ssave]',()=>{
+      const newText=card.querySelector('[data-sv]').value;
+      if(it.text&&it.text.trim()&&it.text!==newText) pushStoryHist(key,it.text);
+      if(it.text!==newText) touchSkeleton();
+      setStoryValue(key,newText,card.querySelector('[data-sl]').value.trim());
+      editingStory.delete(key);save(true);renderStory();toast('저장했습니다');
+    });
+    on('[data-scancel]',()=>{editingStory.delete(key);renderStory()});
+    card.querySelectorAll('[data-hrestore]').forEach(b=>b.addEventListener('click',()=>{
+      const h=storyHist(key)[Number(b.dataset.hrestore)];
+      if(h){card.querySelector('[data-sv]').value=h.text;toast('편집칸에 넣었습니다 — 저장해야 반영됩니다')}
+    }));
+    on('[data-sdel]',()=>{
+      if(!confirm(`「${it.label}」 요소를 삭제할까요?`))return;
+      cur.story.extras=cur.story.extras.filter(x=>'x:'+x.id!==key);
+      editingStory.delete(key);touchSkeleton();save(true);renderStory();
+    });
+  });
+}
+$('#btnAddElem').addEventListener('click',()=>{
+  const name=$('#newElemName').value.trim();
+  if(!name){toast('요소 이름을 입력하세요');return}
+  const e={id:uid(),name,text:'',scriv:''};
+  cur.story.extras.push(e);
+  editingStory.add('x:'+e.id);
+  $('#newElemName').value=''; save(true); renderStory();
+});
+
+/* ============================================================
+   렌더링 — 플롯
+   ============================================================ */
+const PLOT_DESC={
+  '1막':'세계와 인물을 소개하고 갈등의 씨앗을 심는다.',
+  '돌아오지 못하는 다리':'이 다리를 건너면 예전으로 돌아갈 수 없다. 2막이 시작된다.',
+  '2-1막':'갈등이 깊어지고 대가가 커진다. 시도하고, 실패하고, 배운다.',
+  '가장 깊은 심연':'주인공의 욕구가 완전히 좌절되는 순간. 여기서부터는 다른 길밖에 없다.',
+  '2-2막':'심연에서 기어오른다. 잃은 것을 딛고 마지막 문턱을 향해 간다.',
+  '에피파니의 순간':'인물을 영원히 바꾸는 사건과 깨달음. 3막이 시작된다.',
+  '3막':'깨달음을 안고 마지막 대결로. 이야기가 값을 치르고 끝난다.'
+};
+let editingPlot=new Set();
+let plotTextOpen=new Set(); // 플롯에서 본문을 펼쳐 둔 씬들
+function renderPlot(){
+  $('#plotRail').innerHTML=ACTS.map(act=>{
+    const th=THRESHOLDS.has(act);
+    const p=cur.plot[act];
+    const editing=editingPlot.has(act);
+    let inner;
+    if(editing){
+      inner=`
+        <div class="plot-title">${esc(act)}</div>
+        <div class="plot-desc">${PLOT_DESC[act]}</div>
+        <textarea data-plot="${esc(act)}" placeholder="이 단계에서 일어나는 일">${esc(p.text)}</textarea>
+        <div class="scriv-row" style="margin-top:8px">
+          <input type="text" data-plotscriv="${esc(act)}" placeholder="${cur.scriv?'비워 두면 기본 링크로 열립니다':'스크리브너 링크 (x-scrivener-item://…)'}" value="${esc(p.scriv)}">
+        </div>
+        <div class="scene-actions" style="margin-top:10px">
+          <div class="spacer"></div>
+          <button class="btn small" data-pcancel="${esc(act)}">취소</button>
+          <button class="btn small primary" data-psave="${esc(act)}">저장</button>
+        </div>
+        ${histDetailsHTML(p.hist||[])}`;
+    }else{
+      const actScenes=cur.scenes.filter(sc=>sc.act===act);
+      const sceneRows=actScenes.map(sc=>{
+        const gi=cur.scenes.indexOf(sc)+1;
+        const hasText=!!(sc.text&&sc.text.trim());
+        return `<div class="plot-scene">
+          <span class="ps-order">
+            <button data-pmv="-1" data-psid="${sc.id}" title="막 안에서 위로">▲</button>
+            <button data-pmv="1" data-psid="${sc.id}" title="막 안에서 아래로">▼</button>
+          </span>
+          <span class="ps-no">${gi}</span>
+          <button class="ps-title" data-pgoto="${sc.id}">${esc(sc.title)||'(제목 없음)'}</button>
+          ${hasText?`<button class="scriv-mini" data-ptext="${sc.id}">${plotTextOpen.has(sc.id)?'본문 닫기':'본문'}</button>`:''}
+          ${scrivOf(sc.scriv)?`<button class="scriv-mini" data-pscriv="${sc.id}">스크리브너 열기</button>`:''}
+          <select class="chip st-${sc.status} chip-status" data-plstatus="${sc.id}" title="상태 바꾸기">
+            ${STATUSES.map(s=>`<option ${sc.status===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+        ${hasText&&plotTextOpen.has(sc.id)?`<div class="plot-text">${
+          sc.textSummary&&sc.textSummary.trim()?`<div class="pt-sum">요약 · ${esc(sc.textSummary)}</div>`:''
+        }${esc(sc.text)}</div>`:''}`;
+      }).join('');
+      inner=`
+        <div class="story-head" style="margin-bottom:2px">
+          <span class="plot-title">${esc(act)}</span>
+          <div class="spacer"></div>
+          ${scrivOf(p.scriv)?`<button class="scriv-mini" data-plotopen="${esc(act)}">스크리브너 열기</button>`:''}
+          <button class="btn small" data-pedit="${esc(act)}">수정</button>
+        </div>
+        <div class="plot-desc">${PLOT_DESC[act]}</div>
+        <div class="story-view ${p.text?'':'empty-text'}">${p.text?esc(p.text):'아직 없음 — 「수정」을 눌러 입력하세요.'}</div>
+        ${actScenes.length?`<div class="plot-scenes">${sceneRows}</div>`
+          :'<div class="hint" style="margin-top:8px">이 단계에 놓인 씬이 아직 없습니다</div>'}`;
+    }
+    return `<div class="plot-node ${th?'threshold':''}"><div class="card">${inner}</div></div>`;
+  }).join('');
+
+  $$('#plotRail textarea[data-plot]').forEach(ta=>bindAutoGrow(ta,80));
+  $$('#plotRail [data-pedit]').forEach(b=>b.addEventListener('click',()=>{
+    editingPlot.add(b.dataset.pedit); renderPlot();
+    const t=$(`#plotRail textarea[data-plot="${CSS.escape(b.dataset.pedit)}"]`); if(t)t.focus();
+  }));
+  $$('#plotRail [data-pcancel]').forEach(b=>b.addEventListener('click',()=>{
+    editingPlot.delete(b.dataset.pcancel); renderPlot();
+  }));
+  $$('#plotRail [data-psave]').forEach(b=>b.addEventListener('click',()=>{
+    const act=b.dataset.psave;
+    const newText=$(`#plotRail textarea[data-plot="${CSS.escape(act)}"]`).value;
+    const old=cur.plot[act].text;
+    if(old&&old.trim()&&old!==newText){
+      if(!cur.plot[act].hist)cur.plot[act].hist=[];
+      cur.plot[act].hist.push({t:Date.now(),text:old});
+      if(cur.plot[act].hist.length>15)cur.plot[act].hist.shift();
+    }
+    if(old!==newText) touchSkeleton();
+    cur.plot[act].text=newText;
+    cur.plot[act].scriv=$(`#plotRail input[data-plotscriv="${CSS.escape(act)}"]`).value.trim();
+    editingPlot.delete(act); save(true); renderPlot(); toast('저장했습니다');
+  }));
+  $$('#plotRail [data-hrestore]').forEach(b=>b.addEventListener('click',()=>{
+    const card=b.closest('.card');
+    const ta=card.querySelector('textarea[data-plot]');
+    const act=ta.dataset.plot;
+    const h=(cur.plot[act].hist||[])[Number(b.dataset.hrestore)];
+    if(h){ta.value=h.text;toast('편집칸에 넣었습니다 — 저장해야 반영됩니다')}
+  }));
+  $$('#plotRail [data-plotopen]').forEach(b=>b.addEventListener('click',()=>{
+    const p=cur.plot[b.dataset.plotopen];
+    openScrivCopy(p.scriv,p.text);
+  }));
+  // 씬 제목 → 씬 탭으로 이동
+  $$('#plotRail [data-pgoto]').forEach(b=>b.addEventListener('click',()=>gotoScene(b.dataset.pgoto)));
+  // 본문 보기/닫기: 플롯에서 실제 본문을 바로 읽는다
+  $$('#plotRail [data-ptext]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.ptext;
+    if(plotTextOpen.has(id)) plotTextOpen.delete(id); else plotTextOpen.add(id);
+    renderPlot();
+  }));
+  // 스크리브너 열기: 완료 씬은 본문을, 아니면 연출을 복사한 뒤 연다
+  $$('#plotRail [data-pscriv]').forEach(b=>b.addEventListener('click',()=>{
+    const sc=cur.scenes.find(x=>x.id===b.dataset.pscriv); if(!sc)return;
+    openScrivCopy(sc.scriv,isWritten(sc)?sc.text:sc.direction);
+  }));
+  // 상태 바꾸기: 씬 탭과 같은 관문을 거친다
+  $$('#plotRail [data-plstatus]').forEach(sel=>sel.addEventListener('change',()=>{
+    const sc=cur.scenes.find(x=>x.id===sel.dataset.plstatus); if(!sc)return;
+    if(!changeSceneStatus(sc,sel.value)){sel.value=sc.status;return}
+    renderPlot(); renderScenes();
+  }));
+  // 막 안에서 순서 바꾸기: 같은 막의 이웃 씬과 자리만 바꾼다 (다른 막의 씬 위치는 그대로)
+  $$('#plotRail [data-pmv]').forEach(b=>b.addEventListener('click',()=>{
+    const sc=cur.scenes.find(x=>x.id===b.dataset.psid); if(!sc)return;
+    moveWithinAct(sc,Number(b.dataset.pmv));
+  }));
+  // 막이 미정인 씬 안내
+  const und=cur.scenes.filter(sc=>sc.act==='미정').length;
+  $('#plotUndecided').textContent=und?`막이 미정인 씬 ${und}개 — 씬 탭에서 막을 지정하면 여기에 나타납니다.`:'';
+}
+
+/* 같은 막 안에서 이웃 씬과 자리를 바꾼다 */
+function moveWithinAct(sc,dir){
+  const idxs=cur.scenes.map((s,i)=>s.act===sc.act?i:-1).filter(i=>i>=0);
+  const pos=idxs.indexOf(cur.scenes.indexOf(sc));
+  const j=pos+dir;
+  if(j<0||j>=idxs.length) return;
+  const a=idxs[pos], b=idxs[j];
+  [cur.scenes[a],cur.scenes[b]]=[cur.scenes[b],cur.scenes[a]];
+  save(); renderPlot(); renderScenes();
+}
+
+/* 플롯 탭에서 씬 제목을 눌렀을 때: 씬 탭으로 건너가 해당 씬을 펼쳐 보여준다 */
+function gotoScene(id){
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  $$('.pane').forEach(x=>x.classList.remove('active'));
+  $('.tab[data-pane="scenes"]').classList.add('active');
+  $('#pane-scenes').classList.add('active');
+  // 필터에 가려 안 보일 수 있으므로 필터를 비운다
+  $('#fltStatus').value='';$('#fltAct').value='';$('#fltChar').value='';$('#fltSearch').value='';
+  openSceneIds.add(id);
+  renderScenes();
+  const el=$(`.scene-item[data-sid="${id}"]`);
+  if(el){
+    el.scrollIntoView({block:'center',behavior:'smooth'});
+    el.style.boxShadow='0 0 0 2px var(--indigo)';
+    setTimeout(()=>el.style.boxShadow='',1600);
+  }
+}
+
+/* 씬에서 인물 칩을 눌렀을 때: 캐릭터 탭으로 건너가 해당 인물을 펼쳐 보여준다 */
+function gotoChar(id){
+  $$('.tab').forEach(x=>x.classList.remove('active'));
+  $$('.pane').forEach(x=>x.classList.remove('active'));
+  $('.tab[data-pane="chars"]').classList.add('active');
+  $('#pane-chars').classList.add('active');
+  renderChars(id);
+  const el=$(`.char-card[data-cid="${id}"]`);
+  if(el){
+    el.scrollIntoView({block:'center',behavior:'smooth'});
+    el.style.boxShadow='0 0 0 2px var(--indigo)';
+    setTimeout(()=>el.style.boxShadow='',1600);
+    const inp=el.querySelector('input[data-cf="name"]'); if(inp) inp.focus();
+  }
+}
+
+/* ============================================================
+   렌더링 — 캐릭터
+   ============================================================ */
+const CHAR_FIELDS=[
+  ['name','이름','text'],['age','나이','text'],['gender','성별','text'],['job','직업','text'],
+  ['role','역할','text'],
+  ['desc','설명','area'],['personality','성격','area'],['want','원하는 것','area'],
+  ['fear','두려워하는 실패','area'],['conflict','캐릭터의 갈등','area'],['note','메모','area']
+];
+/* 역할 = 이야기에서의 기능 / 설명 = 이야기 안에서 인물을 구별해 주는 한 줄.
+   설명은 닫힌 카드에 노출되지 않고 프롬프트에서 인물을 구분하는 데 쓰인다. */
+const CHAR_PH={
+  role:'주인공 / 적대자 / 섭동자 / 조력자 — 직접 입력도 가능',
+  desc:'이야기에서 이 인물을 구별해 주는 한 줄 (예: 피해자 부부의 아내)'
+};
+function renderChars(openId){
+  const g=$('#charGrid');
+  $('#charEmpty').style.display=cur.characters.length?'none':'block';
+  g.innerHTML=cur.characters.map(c=>{
+    const meta=[c.age,c.gender,c.job,c.role].filter(Boolean).join(' · ');
+    return `<div class="char-card ${c.id===openId?'open':''}" data-cid="${c.id}">
+      <div class="char-head">
+        <span class="char-name">${esc(c.name)||'<span style="color:var(--ink-faint);font-weight:400">(이름 없음)</span>'}</span>
+        <span class="char-meta">${esc(meta)}</span>
+      </div>
+      <div class="char-body">
+        <div class="char-two">
+          ${CHAR_FIELDS.slice(0,5).map(([k,l])=>`
+            <div class="field"><label class="f-label">${l}</label>
+            <input type="text" data-cf="${k}" value="${esc(c[k])}"
+              ${k==='role'?'list="roleList"':''} placeholder="${esc(CHAR_PH[k]||'')}"></div>`).join('')}
+        </div>
+        ${CHAR_FIELDS.slice(5).map(([k,l])=>`
+          <div class="field"><label class="f-label">${l}</label>
+          <textarea class="short" data-cf="${k}" placeholder="${esc(CHAR_PH[k]||'')}">${esc(c[k])}</textarea></div>`).join('')}
+        <div class="field"><label class="f-label">스크리브너 링크</label>
+          <div class="scriv-row"><input type="text" data-cf="scriv" placeholder="${cur.scriv?'비워 두면 기본 링크로 열립니다':'스크리브너 링크'}" value="${esc(c.scriv)}">
+          <button class="btn small" data-copen>열기</button></div></div>
+        <div style="text-align:right"><button class="btn small danger" data-cdel>삭제</button></div>
+      </div></div>`;
+  }).join('');
+
+  $$('#charGrid .char-card').forEach(card=>{
+    const c=cur.characters.find(x=>x.id===card.dataset.cid);
+    card.querySelector('.char-head').addEventListener('click',()=>card.classList.toggle('open'));
+    card.querySelectorAll('[data-cf]').forEach(inp=>inp.addEventListener('input',e=>{
+      c[inp.dataset.cf]=e.target.value; touchSkeleton(); save();
+      if(inp.dataset.cf==='name') card.querySelector('.char-name').textContent=e.target.value||'(이름 없음)';
+    }));
+    const op=card.querySelector('[data-copen]');
+    if(op) op.addEventListener('click',()=>{
+      // 입력된 항목만 이름표와 함께 플레인텍스트로 복사한다
+      const sheet=CHAR_FIELDS.map(([k,l])=>c[k]&&c[k].trim()?`${l}: ${c[k].trim()}`:null)
+        .filter(Boolean).join('\n');
+      openScrivCopy(c.scriv,sheet);
+    });
+    card.querySelector('[data-cdel]').addEventListener('click',()=>{
+      if(!confirm(`「${c.name||'이름 없음'}」 캐릭터를 삭제할까요? 씬에 붙인 표시도 함께 사라집니다.`)) return;
+      cur.characters=cur.characters.filter(x=>x.id!==c.id);
+      cur.scenes.forEach(sc=>sc.charIds=sc.charIds.filter(id=>id!==c.id));
+      touchSkeleton(); save(true); renderChars(); renderScenes();
+    });
+  });
+}
+$('#btnAddChar').addEventListener('click',()=>{
+  const c=newChar(); cur.characters.push(c); save(true); renderChars(c.id);
+  const el=$(`.char-card[data-cid="${c.id}"] input[data-cf="name"]`); if(el) el.focus();
+});
+
+/* ============================================================
+   렌더링 — 씬
+   ============================================================ */
+/* 씬 상태 변경의 단일 관문.
+   '완료'나 '다시쓰기'로 바뀔 때는 본문이 있어야 하고, 계획 정보(요약·전환·연출) 삭제를 확인받는다.
+   성공하면 true, 취소·거부되면 false를 돌려준다. */
+function changeSceneStatus(sc,next){
+  if(next===sc.status) return true;
+  const toWritten=(next==='완료'||next==='다시쓰기');
+  if(toWritten&&(sc.summary.trim()||sc.turn.trim()||sc.direction.trim())){
+    if(!(sc.text||'').trim()){toast(`본문을 먼저 붙여넣은 뒤 ${next}(으)로 바꿔 주세요`);return false}
+    if(!confirm(`${next}(으)로 바꾸면 요약·전환·연출이 삭제되고 본문만 남습니다.\n(제목·막·장소·시간·등장인물·메모·스크리브너 링크는 유지됩니다) 진행할까요?`))return false;
+    sc.summary='';sc.turn='';sc.direction='';sc.directionAt=0;
+  }
+  sc.status=next; save(true); return true;
+}
+
+let openSceneIds=new Set();
+
+function sceneFilterState(){
+  return {st:$('#fltStatus').value, act:$('#fltAct').value, ch:$('#fltChar').value,
+          q:$('#fltSearch').value.trim().toLowerCase()};
+}
+function renderSceneFilters(){
+  const a=$('#fltAct').value, c=$('#fltChar').value; // 선택값 보존
+  $('#fltAct').innerHTML='<option value="">모든 막</option><option>미정</option>'+ACTS.map(a=>`<option>${a}</option>`).join('');
+  $('#fltChar').innerHTML='<option value="">모든 인물</option>'+cur.characters.map(c=>`<option value="${c.id}">${esc(c.name)||'(이름 없음)'}</option>`).join('');
+  $('#fltAct').value=a; $('#fltChar').value=c;
+}
+function renderScenes(){
+  const f=sceneFilterState();
+  const filtering=!!(f.st||f.act||f.ch||f.q);
+  const list=$('#sceneList');
+  const visible=cur.scenes.filter(sc=>{
+    if(f.st&&sc.status!==f.st) return false;
+    if(f.act&&sc.act!==f.act) return false;
+    if(f.ch&&!sc.charIds.includes(f.ch)) return false;
+    if(f.q&&!((sc.title+' '+sc.summary+' '+sc.place).toLowerCase().includes(f.q))) return false;
+    return true;
+  });
+  $('#sceneEmpty').style.display=cur.scenes.length?'none':'block';
+  const cnt=s=>cur.scenes.filter(x=>x.status===s).length;
+  $('#sceneStats').innerHTML=cur.scenes.length?
+    `전체 <b>${cur.scenes.length}</b> · 대기 ${cnt('대기')} · 진행중 ${cnt('진행중')} · 다시쓰기 <b style="color:var(--seal)">${cnt('다시쓰기')}</b> · 완료 <b style="color:var(--green)">${cnt('완료')}</b>${filtering?` · 표시 중 ${visible.length}`:''}`:'';
+
+  list.innerHTML=visible.map(sc=>{
+    const idx=cur.scenes.indexOf(sc);
+    const th=THRESHOLDS.has(sc.act);
+    const names=sc.charIds.map(charName).filter(Boolean).join(', ');
+    // 연출을 받은 뒤 뼈대가 바뀌었으면 표시한다 — 순환의 나침반 역할
+    const stale=sc.direction&&sc.direction.trim()&&(sc.directionAt||0)<(cur.storyRev||0);
+    return `<div class="scene-item ${openSceneIds.has(sc.id)?'open':''}" data-sid="${sc.id}">
+      <div class="scene-row">
+        <div class="scene-order" ${filtering?'style="visibility:hidden"':''}>
+          <button data-mv="-1" title="위로">▲</button><button data-mv="1" title="아래로">▼</button>
+        </div>
+        <span class="scene-no">${idx+1}</span>
+        <button class="scene-title" data-stoggle title="상세 열기/닫기">${esc(sc.title)||'<span class="untitled">(제목 없음)</span>'}</button>
+        ${sc.charIds.length?`<span class="scene-chars">${sc.charIds.map(id=>`<button class="sc-char" data-hcgoto="${id}" title="캐릭터 편집으로 이동">${esc(charName(id))}</button>`).join('')}</span>`:''}
+        ${stale?'<span class="chip stale" title="이 씬의 연출은 뼈대(이야기·플롯·캐릭터)가 바뀌기 전에 받은 것입니다. 연출 프롬프트를 다시 돌려보세요.">연출 오래됨</span>':''}
+        <select class="chip-act ${th?'threshold':''}${sc.act==='미정'?' undecided':''}" data-hact title="막 바꾸기">
+          <option ${sc.act==='미정'?'selected':''}>미정</option>
+          ${ACTS.map(a=>`<option ${sc.act===a?'selected':''}>${a}</option>`).join('')}
+        </select>
+        <select class="chip st-${sc.status} chip-status" data-hstatus title="상태 바꾸기">
+          ${STATUSES.map(s=>`<option ${sc.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="scene-body">
+        <div class="field"><label class="f-label">제목</label><input type="text" data-sf="title" value="${esc(sc.title)}"></div>
+        <div class="scene-two">
+          <div class="field"><label class="f-label">막 — 이야기를 다 쓸 때까지 언제든 바꿀 수 있습니다</label>
+            <select data-sf="act"><option ${sc.act==='미정'?'selected':''}>미정</option>
+            ${ACTS.map(a=>`<option ${sc.act===a?'selected':''}>${a}</option>`).join('')}</select></div>
+          <div class="field"><label class="f-label">상태</label>
+            <select data-sf="status">${STATUSES.map(s=>`<option ${sc.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+          <div class="field"><label class="f-label">장소</label><input type="text" data-sf="place" value="${esc(sc.place)}"></div>
+          <div class="field"><label class="f-label">시간</label><input type="text" data-sf="time" value="${esc(sc.time)}"></div>
+        </div>
+        <div class="field"><label class="f-label">등장인물 — 여기서 넣고 빼면 연출 프롬프트에 그대로 반영됩니다</label>
+          <div class="char-check">
+            ${sc.charIds.map(id=>`<span class="char-chip"><button class="chip-name" data-scgoto="${id}" title="캐릭터 편집으로 이동">${esc(charName(id))}</button><button data-scdel="${id}" title="이 씬에서 빼기">×</button></span>`).join('')}
+            ${(()=>{ // 아직 이 씬에 없는 인물 + 새 인물 만들기
+              const rest=cur.characters.filter(c=>!sc.charIds.includes(c.id));
+              return `<select class="char-add" data-scadd>
+                <option value="">＋ 인물 추가</option>
+                <option value="__new__">새 인물 만들기…</option>
+                ${rest.map(c=>`<option value="${c.id}">${esc(c.name)||'(이름 없음)'}</option>`).join('')}</select>`;
+            })()}
+          </div></div>
+        ${isWritten(sc)?'':`
+        <div class="field"><label class="f-label">요약 — 무슨 일이 일어나는가</label>
+          <textarea data-sf="summary">${esc(sc.summary)}</textarea></div>
+        <div class="field"><label class="f-label">전환 — 씬이 끝날 때 무엇이 달라지는가</label>
+          <textarea class="short" data-sf="turn">${esc(sc.turn)}</textarea></div>
+        <div class="field"><label class="f-label">연출 — 연출 프롬프트로 얻은 내용을 붙여넣어 보관</label>
+          <textarea data-sf="direction" style="min-height:120px" placeholder="클로드의 연출(비트·설명·대사·단어 채집)을 붙여넣으세요. 스크리브너 열기를 누르면 이 내용이 복사됩니다.">${esc(sc.direction)}</textarea></div>`}
+        ${isWritten(sc)?`
+        <div class="field"><label class="f-label">본문 요약 — 프롬프트에서 이 씬은 이 요약으로 설명됩니다</label>
+          <textarea class="short" data-sf="textSummary" placeholder="본문을 두세 문장으로 직접 요약해 주세요. 비워 두면 본문 첫머리 발췌가 대신 쓰입니다.">${esc(sc.textSummary)}</textarea></div>`:''}
+        <div class="field"><label class="f-label">본문 — 실제로 쓴 텍스트${isWritten(sc)?(sc.status==='다시쓰기'?' — 스크리브너에서 고친 뒤 이 칸도 갱신하세요':''):' (스크리브너에서 쓴 글을 붙여넣고 완료 처리)'}</label>
+          <textarea data-sf="text" style="min-height:${isWritten(sc)?'180':'120'}px" placeholder="스크리브너에서 실제로 쓴 본문을 붙여넣으세요.">${esc(sc.text)}</textarea>
+          ${isWritten(sc)?'':`<div style="margin-top:8px;text-align:right">
+            <button class="btn small primary" data-sdone>본문 저장하고 완료 처리</button></div>`}
+        </div>
+        <div class="field"><label class="f-label">메모</label>
+          <textarea class="short" data-sf="note">${esc(sc.note)}</textarea></div>
+        <div class="field"><label class="f-label">스크리브너 링크${isWritten(sc)?' — 글쓰기 수정은 여기서':''}</label>
+          <div class="scriv-row"><input type="text" data-sf="scriv" placeholder="${cur.scriv?'비워 두면 기본 링크로 열립니다':'스크리브너 링크'}" value="${esc(sc.scriv)}">
+          <button class="btn small" data-sopen>열기</button></div></div>
+        <div class="scene-actions">
+          ${isWritten(sc)?'':'<button class="btn small primary" data-sprompt>연출 프롬프트 복사</button>'}
+          ${names?`<span class="hint">${esc(names)}</span>`:''}
+          <div class="spacer"></div>
+          <button class="btn small danger" data-sdel>삭제</button>
+        </div>
+      </div></div>`;
+  }).join('');
+  bindSceneEvents();
+}
+function bindSceneEvents(){
+  $$('#sceneList .scene-item').forEach(item=>{
+    const sc=cur.scenes.find(x=>x.id===item.dataset.sid);
+    // 상세 열고 닫기는 제목을 눌렀을 때만
+    item.querySelector('[data-stoggle]').addEventListener('click',()=>{
+      item.classList.toggle('open');
+      if(item.classList.contains('open')) openSceneIds.add(sc.id); else openSceneIds.delete(sc.id);
+    });
+    // 헤더의 인물 이름 → 캐릭터 편집으로 이동
+    item.querySelectorAll('[data-hcgoto]').forEach(b=>b.addEventListener('click',()=>gotoChar(b.dataset.hcgoto)));
+    // 헤더의 막 칩 → 바로 다른 막으로 옮기기
+    const hact=item.querySelector('[data-hact]');
+    if(hact) hact.addEventListener('change',()=>{
+      sc.act=hact.value; save(true); renderScenes();
+    });
+    // 헤더의 상태 칩 → 바로 상태 바꾸기
+    const hst=item.querySelector('[data-hstatus]');
+    if(hst) hst.addEventListener('change',()=>{
+      if(!changeSceneStatus(sc,hst.value)){hst.value=sc.status;return}
+      renderScenes();
+    });
+    item.querySelectorAll('.scene-order button').forEach(b=>b.addEventListener('click',()=>{
+      const i=cur.scenes.indexOf(sc), j=i+Number(b.dataset.mv);
+      if(j<0||j>=cur.scenes.length) return;
+      [cur.scenes[i],cur.scenes[j]]=[cur.scenes[j],cur.scenes[i]];
+      save(); renderScenes();
+    }));
+    item.querySelectorAll('[data-sf]').forEach(inp=>{
+      const f=inp.dataset.sf;
+      if(f==='status'){
+        inp.addEventListener('change',()=>{
+          if(!changeSceneStatus(sc,inp.value)){inp.value=sc.status;return}
+          renderScenes();
+        });
+        return;
+      }
+      inp.addEventListener('input',e=>{
+        sc[f]=e.target.value; save();
+        if(f==='direction') sc.directionAt=Date.now(); // 연출 신선도 기록
+        if(f==='title') item.querySelector('.scene-title').textContent=e.target.value||'(제목 없음)';
+      });
+      if(inp.tagName==='SELECT') inp.addEventListener('change',()=>{save();renderScenes()}); // 막 선택
+    });
+    // 완료 처리 버튼: 본문을 저장하고 계획 정보를 삭제한다
+    const doneBtn=item.querySelector('[data-sdone]');
+    if(doneBtn) doneBtn.addEventListener('click',()=>{
+      const txt=item.querySelector('textarea[data-sf="text"]').value.trim();
+      if(!txt){toast('본문을 먼저 붙여넣어 주세요');return}
+      if(!confirm('완료 처리하면 요약·전환·연출이 삭제되고 본문만 남습니다.\n(제목·막·장소·시간·등장인물·메모·스크리브너 링크는 유지됩니다) 진행할까요?'))return;
+      sc.text=txt; sc.status='완료';
+      sc.summary=''; sc.turn=''; sc.direction=''; sc.directionAt=0;
+      save(true); renderScenes(); renderPlot();
+      toast('씬을 완료했습니다 — 본문 요약을 적어 두면 프롬프트가 더 정확해집니다');
+    });
+    item.querySelectorAll('[data-scdel]').forEach(b=>b.addEventListener('click',()=>{
+      sc.charIds=sc.charIds.filter(x=>x!==b.dataset.scdel);
+      save(); renderScenes();
+    }));
+    // 칩의 이름을 누르면 캐릭터 탭의 해당 인물 편집으로 이동
+    item.querySelectorAll('[data-scgoto]').forEach(b=>b.addEventListener('click',()=>gotoChar(b.dataset.scgoto)));
+    const addSel=item.querySelector('[data-scadd]');
+    if(addSel) addSel.addEventListener('change',()=>{
+      if(!addSel.value) return;
+      if(addSel.value==='__new__'){
+        // 새 인물을 만들어 이 씬에 붙이고, 캐릭터 편집으로 건너간다.
+        // 편집을 마치고 돌아오면 씬의 칩에 이름이 반영되어 있다.
+        const c=newChar();
+        cur.characters.push(c);
+        sc.charIds.push(c.id);
+        touchSkeleton(); save(true);
+        renderSceneFilters(); renderScenes();
+        gotoChar(c.id);
+        toast('새 인물을 만들어 씬에 붙였습니다 — 정보를 채우고 씬 탭으로 돌아오세요');
+        return;
+      }
+      sc.charIds.push(addSel.value);
+      save(); renderScenes();
+      toast(`${charName(sc.charIds[sc.charIds.length-1])}을(를) 씬에 넣었습니다`);
+    });
+    const op=item.querySelector('[data-sopen]');
+    if(op) op.addEventListener('click',()=>openScrivCopy(sc.scriv,isWritten(sc)?sc.text:sc.direction));
+    const pb=item.querySelector('[data-sprompt]');
+    if(pb) pb.addEventListener('click',()=>copyText(buildScenePrompt(sc),'연출 프롬프트를 복사했습니다'));
+    item.querySelector('[data-sdel]').addEventListener('click',()=>{
+      // 확인창 대신 되돌리기: 긴 연출을 담은 씬의 실수 삭제에 대비한다
+      const i=cur.scenes.indexOf(sc);
+      cur.scenes.splice(i,1); openSceneIds.delete(sc.id);
+      save(true); renderScenes();
+      toastAction(`「${sc.title||'제목 없음'}」 씬을 삭제했습니다`,'되돌리기',()=>{
+        cur.scenes.splice(Math.min(i,cur.scenes.length),0,sc);
+        save(true); renderScenes();
+      });
+    });
+  });
+}
+$('#btnAddScene').addEventListener('click',()=>{
+  const sc=newScene(); cur.scenes.push(sc); openSceneIds.add(sc.id);
+  save(true); renderScenes();
+  const el=$(`.scene-item[data-sid="${sc.id}"] input[data-sf="title"]`);
+  if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.focus()}
+});
+['fltStatus','fltAct','fltChar'].forEach(id=>$('#'+id).addEventListener('change',renderScenes));
+$('#fltSearch').addEventListener('input',renderScenes);
+</script>
+<script>
+/* ============================================================
+   프롬프트 생성
+   ============================================================ */
+function storyContextBlock(){
+  const s=cur.story;
+  const lines=[];
+  lines.push('[로그라인]\n'+(s.logline||'(아직 없음)'));
+  lines.push('[시놉시스]\n'+(s.synopsis||'(아직 없음)'));
+  lines.push('[이야기의 갈등]\n'+(s.conflict||'(아직 없음)'));
+  // 사용자가 추가한 뼈대 요소(테마, 독자층 등) — 내용이 있는 것만 담는다
+  (s.extras||[]).filter(e=>e.text&&e.text.trim())
+    .forEach(e=>lines.push(`[${e.name}]\n${e.text}`));
+  lines.push('[플롯 — 3막 구조]\n'+ACTS.map(a=>{
+    const t=cur.plot[a].text||'(아직 없음)';
+    return `· ${a}: ${t}`;
+  }).join('\n'));
+  return lines.join('\n\n');
+}
+function charBlock(c){
+  const rows=[['이름',c.name],['나이',c.age],['성별',c.gender],['직업',c.job],['역할',c.role],['설명',c.desc],
+    ['성격',c.personality],['원하는 것',c.want],['두려워하는 실패',c.fear],['갈등',c.conflict],['메모',c.note]];
+  return rows.filter(([,v])=>v&&v.trim()).map(([k,v])=>`  - ${k}: ${v}`).join('\n');
+}
+function allCharsBlock(){
+  if(!cur.characters.length) return '(아직 없음)';
+  return cur.characters.map(c=>`· ${c.name||'(이름 없음)'}\n${charBlock(c)}`).join('\n');
+}
+function sceneListBlock(){
+  if(!cur.scenes.length) return '(아직 없음)';
+  return cur.scenes.map((sc,i)=>{
+    // 본문 요약이 있으면 그것을, 계획 정보(요약)가 없고 본문이 있으면 발췌를,
+    // 그 외에는 계획의 요약을 쓴다 — 완료였다가 다시쓰기로 돌아온 씬도 빈손이 되지 않는다
+    let gist;
+    if(sc.textSummary&&sc.textSummary.trim())
+      gist='본문 요약: '+sc.textSummary.replace(/\s+/g,' ').slice(0,160);
+    else if(!(sc.summary||'').trim()&&sc.text&&sc.text.trim())
+      gist='본문 발췌: '+sc.text.replace(/\s+/g,' ').slice(0,120);
+    else gist=(sc.summary||'').replace(/\s+/g,' ').slice(0,120);
+    return `${i+1}. [${sc.act}] ${sc.title||'(제목 없음)'} (${sc.status}) — ${gist}`;
+  }).join('\n');
+}
+
+/* ---------- 1) 씬 제안 프롬프트 ---------- */
+function buildSuggestPrompt(){
+  return `저는 소설가입니다. 문장은 제가 직접 씁니다. 당신의 역할은 아래 설계 자료를 토대로 "가능한 씬"을 제안하는 것입니다.
+
+플롯은 3막 구조입니다. 1막의 끝에는 '돌아오지 못하는 다리'가 있어 이 다리를 건너면 2막으로 들어갑니다. 2막은 2-1막과 2-2막으로 나뉘며, 그 사이 '가장 깊은 심연'에서 주인공의 욕구가 완전히 좌절됩니다. 2막의 끝에는 '에피파니의 순간'이 있어 인물을 영원히 바꾸는 사건과 깨달음이 찾아오고, 이후 3막이 시작됩니다.
+
+${storyContextBlock()}
+
+[캐릭터]
+${allCharsBlock()}
+
+[이미 확보한 씬 목록 — 현재 순서대로]
+${sceneListBlock()}
+
+요청:
+1. 위 목록에 아직 없는 새로운 씬을 6~10개 제안해 주세요. 갈등을 밀고 나가는 씬, 인물을 드러내는 씬, 세 문턱('돌아오지 못하는 다리', '가장 깊은 심연', '에피파니의 순간')으로 가는 길을 놓는 씬을 고르게 섞어 주세요.
+2. 각 씬은 반드시 아래 형식을 그대로 지켜 주세요. 이 형식은 제 앱이 자동으로 읽어들입니다. 형식 밖의 설명은 최소화해 주세요.
+
+[씬]
+제목: (씬 제목)
+막: (1막 / 돌아오지 못하는 다리 / 2-1막 / 가장 깊은 심연 / 2-2막 / 에피파니의 순간 / 3막 중 하나)
+장소: (구체적인 장소)
+시간: (하루 중 시각, 계절, 이야기 안의 시점)
+등장인물: (쉼표로 구분, 위 캐릭터 이름과 일치하게)
+요약: (두세 문장. 이 씬에서 무슨 일이 일어나는가)
+전환: (이 씬이 끝날 때 무엇이 달라지는가)
+
+3. 마지막에 한두 문장으로, 제안한 씬들이 전체 플롯에서 어떤 자리를 채우는지만 짧게 덧붙여 주세요.`;
+}
+$('#btnScenePrompt').addEventListener('click',()=>copyText(buildSuggestPrompt(),'씬 제안 프롬프트를 복사했습니다'));
+
+/* ---------- 3) 뼈대 갱신 프롬프트 — 순환의 반환점 ----------
+   쓴 씬들에서 알게 된 것을 뼈대에 되먹이기 위한 프롬프트.
+   제안만 받고, 뼈대의 최종 문장은 사용자가 직접 고쳐 쓴다. */
+function buildUpdatePrompt(){
+  const written=cur.scenes.filter(sc=>sc.status!=='대기');
+  const blocks=written.map(sc=>{
+    const i=cur.scenes.indexOf(sc)+1;
+    let body;
+    if(sc.textSummary&&sc.textSummary.trim())
+      body=`   본문 요약: ${sc.textSummary.trim()}`;
+    else if(!(sc.summary||'').trim()&&sc.text&&sc.text.trim())
+      body=`   본문 발췌: ${sc.text.replace(/\s+/g,' ').slice(0,300)}`;
+    else
+      body=`   요약: ${sc.summary||'-'}\n   전환: ${sc.turn||'-'}`;
+    return `${i}. [${sc.act}] ${sc.title||'(제목 없음)'} (${sc.status})\n${body}${sc.note?'\n   메모: '+sc.note:''}`;
+  }).join('\n');
+  return `저는 소설가입니다. 씬을 쓰면서 알게 된 것들로 이야기의 뼈대(시놉시스·플롯·캐릭터)를 갱신하려고 합니다. 뼈대의 최종 문장은 제가 직접 고쳐 씁니다. 당신의 역할은 어디를 어떻게 고치면 좋을지 짚어주는 것입니다.
+
+[현재 뼈대]
+${storyContextBlock()}
+
+[캐릭터]
+${allCharsBlock()}
+
+[지금까지 쓴 씬들 — 진행중·완료만, 현재 순서대로. 완료 씬은 실제 본문의 요약 또는 발췌입니다]
+${blocks||'(없음)'}
+
+요청:
+1. 어긋남 찾기 — 쓴 씬들의 실제 내용(요약·전환·메모)이 현재의 시놉시스, 플롯 각 단계, 캐릭터 설정과 어긋나는 지점을 짚어 주세요. 씬 번호를 들어 구체적으로.
+2. 갱신 제안 — 시놉시스, 플롯의 각 단계, 캐릭터별로 나누어 "무엇을 어떻게 고치면 좋을지"를 항목으로 제안해 주세요. 고친 전문을 대신 써 주지 말고, 바꿀 부분과 그 이유만 밝혀 주세요.
+3. 새로 열린 길 — 씬이 쌓이면서 처음 설계에는 없던 가능성(새 갈등, 새 인물 면모, 새 씬의 방향)이 보이면 짧게 덧붙여 주세요.`;
+}
+$('#btnUpdatePrompt').addEventListener('click',()=>{
+  if(!cur.scenes.some(sc=>sc.status!=='대기')){
+    toast('진행중·완료 씬이 아직 없습니다 — 씬을 쓴 뒤에 사용하세요'); return;
+  }
+  copyText(buildUpdatePrompt(),'뼈대 갱신 프롬프트를 복사했습니다');
+});
+
+/* ---------- 2) 씬 연출 프롬프트 ---------- */
+function buildScenePrompt(sc){
+  const chars=cur.characters.filter(c=>sc.charIds.includes(c.id));
+  const charsTxt=chars.length?chars.map(c=>`· ${c.name||'(이름 없음)'}\n${charBlock(c)}`).join('\n'):'(지정된 인물 없음)';
+  // 앞뒤 씬 한 줄 요약 — 씬 사이의 연결이 끊기지 않게 한다
+  const idx=cur.scenes.indexOf(sc);
+  const nb=s=>{
+    if(!s) return '(없음)';
+    if(s.textSummary&&s.textSummary.trim())
+      return `[${s.act}] ${s.title||'(제목 없음)'} (${s.status}) — 본문 요약: ${s.textSummary.replace(/\s+/g,' ').slice(0,160)}`;
+    if(!(s.summary||'').trim()&&s.text&&s.text.trim())
+      return `[${s.act}] ${s.title||'(제목 없음)'} (${s.status}) — 본문 발췌: ${s.text.replace(/\s+/g,' ').slice(0,120)}`;
+    return `[${s.act}] ${s.title||'(제목 없음)'} — ${(s.summary||'').replace(/\s+/g,' ').slice(0,90)}${s.turn?' / 전환: '+s.turn.replace(/\s+/g,' ').slice(0,70):''}`;
+  };
+  return `저는 소설가입니다. 아래 씬을 제가 직접 문장으로 쓰려고 합니다. 문장을 써 달라는 요청이 아닙니다. 당신의 역할은 이 씬을 한 편의 영화 장면처럼 '연출'하되, 그 장면이 왜 그렇게 구성되는지를 함께 '설명'하는 것입니다. 저는 왜 이 장면을 보여주는지, 인물이 왜 그렇게 말하고 움직이는지, 사건이 왜 일어나며 인물에게 무엇을 남기는지를 깊이 이해한 뒤에 씁니다.
+
+[작품 맥락]
+로그라인: ${cur.story.logline||'(아직 없음)'}
+이야기의 갈등: ${cur.story.conflict||'(아직 없음)'}
+이 씬이 속한 단계(${sc.act}): ${sc.act!=='미정'&&cur.plot[sc.act]?(cur.plot[sc.act].text||'(아직 없음)'):'(미정)'}
+
+[씬 정보]
+제목: ${sc.title||'(제목 없음)'}
+막: ${sc.act}
+장소: ${sc.place||'(미정)'}
+시간: ${sc.time||'(미정)'}
+요약: ${sc.summary||'(아직 없음)'}
+전환: ${sc.turn||'(아직 없음)'}
+${sc.note?'메모: '+sc.note:''}
+
+[앞뒤 씬 — 이 씬은 이렇게 이어집니다]
+앞 씬: ${nb(cur.scenes[idx-1])}
+뒤 씬: ${nb(cur.scenes[idx+1])}
+연출은 앞 씬에서 자연스럽게 이어받고, 뒤 씬으로 힘이 넘어가도록 구성해 주세요.
+
+[등장인물]
+${charsTxt}
+
+요청:
+이 씬을 비트(beat) 단위로 나누어 구성해 주세요. 비트는 씬 안에서 감정이나 힘의 균형이 한 번 움직이는 단위입니다. 각 비트는 반드시 아래 두 층을 함께 갖습니다.
+
+[비트 N] (비트의 제목)
+
+■ 보여주기 — 화면에 보이는 것
+- 세팅: 공간, 빛, 소리, 소품. 카메라가 무엇을 어떤 순서로 비추는가
+- 행동: 인물의 동선, 몸짓, 시선
+- 대사: 인물별 대사. 성격, 원하는 것, 두려움이 말투에 배어 있게
+
+■ 설명하기 — 그 장면이 그렇게 되는 이유
+- 이 비트의 기능: 왜 이 순간을 보여주는가. 이야기 전체와 이 씬의 '전환'에서 이 비트가 하는 일
+- 인물의 현재 심리: 등장인물 각각이 지금 무엇을 느끼고 무엇을 감추는가. '원하는 것'과 '두려워하는 실패'가 이 순간 어떻게 부딪히는가
+- 말과 행동의 근거: 왜 이렇게 말하고 이렇게 움직이는가. 겉으로 하는 말과 속에서 벌어지는 일의 거리
+- 사건의 영향: 이 비트에서 일어난 일이 인물들에게 남기는 것, 그리고 이후 씬으로 이어지는 힘
+
+비트를 모두 보여준 뒤:
+1. 씬 전체 정리 — '전환'이 완성되는 지점은 어디이며, 씬이 끝났을 때 각 인물은 처음과 어떻게 다른 자리에 서 있는가
+2. 단어 채집 — 웹 검색을 활용해, 이 장면을 정밀하게 묘사하는 데 필요한 단어들을 찾아 목록으로 주세요.
+   - 명사: 공간·사물·도구·복식의 정확한 명칭
+   - 형용사·형용 표현: 질감, 빛, 소리, 냄새를 잡는 말
+   - 전문 용어: 직업·기술·관습에 관한 정확한 용어
+   씬에 시대 배경이 드러난다면, 그 시대에 실제로 쓰이던 명칭인지 검색으로 확인해 주세요.
+3. 문장은 쓰지 마세요. 소설의 지문(서술)을 대신 써 주는 것은 제 일을 빼앗는 것입니다. 연출과 설명, 대사, 단어까지만 부탁합니다.`;
+}
+
+/* ============================================================
+   씬 제안 가져오기 — [씬] 블록 파싱
+   ============================================================ */
+const openModal=id=>$('#'+id).classList.add('show');
+const closeModal=id=>$('#'+id).classList.remove('show');
+$$('[data-close]').forEach(b=>b.addEventListener('click',()=>closeModal(b.dataset.close)));
+$('#importModal').addEventListener('click',e=>{if(e.target.id==='importModal')closeModal('importModal')});
+
+$('#btnImportScenes').addEventListener('click',()=>{
+  $('#importText').value=''; $('#importPreview').innerHTML='';
+  importCandidates=[]; $('#btnConfirmImport').disabled=true;
+  openModal('importModal');
+});
+
+function parseSceneBlocks(text){
+  const out=[];
+  // "[씬]" 기준으로 자른다. 각 블록에서 "키: 값" 줄을 읽는다.
+  const blocks=text.split(/\[\s*씬\s*\]/).slice(1);
+  const KEYMAP={'제목':'title','막':'act','장소':'place','시간':'time','등장인물':'chars','요약':'summary','전환':'turn'};
+  for(const b of blocks){
+    const sc={title:'',act:'미정',place:'',time:'',chars:'',summary:'',turn:''};
+    let lastKey=null;
+    for(const raw of b.split('\n')){
+      const line=raw.replace(/^[\s\-*>]+/,'').trimEnd();
+      const m=line.match(/^([가-힣]+)\s*[:：]\s*(.*)$/);
+      if(m&&KEYMAP[m[1]]){ lastKey=KEYMAP[m[1]]; sc[lastKey]=m[2].trim(); }
+      else if(lastKey&&line.trim()&&!line.startsWith('[')){ sc[lastKey]+=(sc[lastKey]?' ':'')+line.trim(); }
+      else if(line.startsWith('[')) lastKey=null;
+    }
+    // 옛 표기나 흔한 변형은 현재 구조로 맞춘다
+    const ALIAS={'2막':'2-1막','2막 전반':'2-1막','2막 후반':'2-2막','심연':'가장 깊은 심연'};
+    if(ALIAS[sc.act]) sc.act=ALIAS[sc.act];
+    if(!ACTS.includes(sc.act)) sc.act='미정';
+    if(sc.title||sc.summary) out.push(sc);
+  }
+  return out;
+}
+$('#btnParseImport').addEventListener('click',()=>{
+  importCandidates=parseSceneBlocks($('#importText').value);
+  const pv=$('#importPreview');
+  if(!importCandidates.length){
+    pv.innerHTML='<p class="hint">[씬] 블록을 찾지 못했습니다. 형식을 확인해 주세요.</p>';
+    $('#btnConfirmImport').disabled=true; return;
+  }
+  pv.innerHTML=importCandidates.map((sc,i)=>`
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line-soft);cursor:pointer">
+      <input type="checkbox" data-imp="${i}" checked style="width:auto;margin-top:4px">
+      <span style="flex:1;font-size:13px">
+        <b style="font-family:var(--serif)">${esc(sc.title)||'(제목 없음)'}</b>
+        <span class="chip act" style="margin-left:6px">${esc(sc.act)}</span><br>
+        <span style="color:var(--ink-soft)">${esc(sc.summary)}</span>
+      </span>
+    </label>`).join('');
+  $('#btnConfirmImport').disabled=false;
+});
+$('#btnConfirmImport').addEventListener('click',()=>{
+  let added=0;
+  $$('#importPreview [data-imp]').forEach(chk=>{
+    if(!chk.checked) return;
+    const c=importCandidates[Number(chk.dataset.imp)];
+    // 등장인물 이름을 기존 캐릭터와 대조해 연결한다
+    const charIds=c.chars.split(/[,，]/).map(s=>s.trim()).filter(Boolean)
+      .map(name=>{const f=cur.characters.find(x=>x.name===name);return f?f.id:null})
+      .filter(Boolean);
+    cur.scenes.push(newScene({title:c.title,act:c.act,place:c.place,time:c.time,
+      summary:c.summary,turn:c.turn,charIds}));
+    added++;
+  });
+  save(true); renderScenes(); closeModal('importModal');
+  toast(added?`씬 ${added}개를 추가했습니다`:'선택된 씬이 없습니다');
+});
+
+/* ============================================================
+   백업 — JSON 내보내기/가져오기
+   ============================================================ */
+function download(name,text){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));
+  a.download=name; a.click(); URL.revokeObjectURL(a.href);
+}
+const stamp=()=>{const d=new Date();return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`};
+async function markBackup(){
+  const now=Date.now(); await dbSetMeta('lastBackup',now);
+  $('#lastBackup').textContent=fmtDate(now);
+  updateBackupNudge(now);
+}
+$('#btnExportAll').addEventListener('click',async()=>{
+  save(true);
+  download(`장면첩_전체_${stamp()}.json`,JSON.stringify({app:'장면첩',version:1,exportedAt:Date.now(),projects},null,2));
+  await markBackup(); toast('전체 백업을 내보냈습니다');
+});
+$('#btnExportOne').addEventListener('click',async()=>{
+  save(true);
+  download(`장면첩_${cur.name}_${stamp()}.json`,JSON.stringify({app:'장면첩',version:1,exportedAt:Date.now(),projects:[cur]},null,2));
+  await markBackup(); toast('현재 프로젝트를 내보냈습니다');
+});
+$('#btnImportFile').addEventListener('click',()=>$('#importFile').click());
+$('#importFile').addEventListener('change',async e=>{
+  const file=e.target.files[0]; if(!file) return;
+  try{
+    const data=JSON.parse(await file.text());
+    const list=Array.isArray(data)?data:(data.projects||[]);
+    if(!list.length) throw new Error('프로젝트가 없습니다');
+    let n=0;
+    for(const p of list){
+      if(!p.id||!p.story||!p.scenes) continue; // 최소한의 형태 검증
+      migrate(p);
+      const i=projects.findIndex(x=>x.id===p.id);
+      // 두 기기 작업의 충돌 대비: 이 기기 쪽이 더 최신이면 묻고 덮어쓴다
+      if(i>=0&&projects[i].updatedAt>(p.updatedAt||0)){
+        if(!confirm(`「${p.name}」: 이 기기의 내용이 파일보다 최신입니다.\n파일 내용으로 덮어쓸까요? (건너뛰려면 취소)`)) continue;
+      }
+      if(i>=0) projects[i]=p; else projects.push(p);
+      await dbPutProject(p); n++;
+    }
+    cur=projects.find(x=>x.id===cur.id)||projects[0];
+    renderProjectSelect(); renderAll();
+    toast(`프로젝트 ${n}개를 가져왔습니다`);
+  }catch(err){ toast('가져오기 실패: 파일 형식을 확인해 주세요'); }
+  e.target.value='';
+});
+
+/* ============================================================
+   전체 렌더 · 시작
+   ============================================================ */
+function renderAll(){
+  openSceneIds=new Set();
+  editingStory=new Set();
+  editingPlot=new Set();
+  plotTextOpen=new Set();
+  $('#projName').value=cur.name;
+  $('#projScriv').value=cur.scriv||'';
+  renderStory(); renderPlot(); renderChars(); renderSceneFilters(); renderScenes();
+}
+openDB().then(loadAll).catch(e=>{
+  document.body.innerHTML='<p style="padding:40px;text-align:center">저장소를 열 수 없습니다. 크롬의 일반 창(시크릿 모드 아님)에서 파일을 열어 주세요.<br>'+esc(String(e))+'</p>';
+});
+</script>
+</body>
+</html>
