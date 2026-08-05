@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>가나 연습장</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Serif+JP:wght@300;400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9EBE6;
+  --card:#F4F5F1;
+  --ink:#16181A;
+  --ink-2:#6C716E;
+  --rule:#CBCFC8;
+  --seal:#C43D2E;
+  --indigo:#2E4E6B;
+  --kana:"Noto Serif JP","Hiragino Mincho ProN","Yu Mincho",serif;
+  --han:"Gowun Batang","Apple SD Gothic Neo","Noto Serif KR",serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--paper:#15171A;--card:#1D2023;--ink:#E6E8E3;--ink-2:#888E8A;--rule:#33383B;--seal:#E0614F;--indigo:#7FA8C9;}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:var(--han);font-size:15px;line-height:1.6;
+  display:flex;justify-content:center;
+  padding:0 20px;
+}
+main{width:100%;max-width:420px;display:flex;flex-direction:column;min-height:100dvh}
+
+/* ── 머리 ── */
+header{display:flex;align-items:baseline;gap:10px;padding:22px 2px 0}
+h1{margin:0;font-size:15px;font-weight:400;letter-spacing:.22em}
+header .scope{font-family:var(--mono);font-size:11px;color:var(--ink-2);letter-spacing:.04em;flex:1}
+.linkbtn{background:none;border:0;padding:4px 2px;font-family:var(--mono);font-size:11px;
+  color:var(--ink-2);cursor:pointer;letter-spacing:.06em}
+.linkbtn:hover,.linkbtn:focus-visible{color:var(--ink)}
+.linkbtn[aria-pressed="true"]{color:var(--seal)}
+
+/* ── 원고지 칸 ── */
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;padding:24px 0 8px}
+.cell{position:relative;width:min(58vw,208px);aspect-ratio:1;background:var(--card);
+  border:1px solid var(--rule)}
+.cell svg.guide{position:absolute;inset:0;width:100%;height:100%}
+.cell .glyph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:var(--kana);font-weight:300;font-size:min(30vw,108px);line-height:1;
+  padding-bottom:.04em;user-select:none}
+.cell .glyph.small{font-size:min(21vw,74px)}
+.mark{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.mark path,.mark circle{fill:none;stroke:var(--seal);stroke-width:3.4;stroke-linecap:round;opacity:.9}
+.draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw .42s ease-out forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.fade{animation:fade .3s ease-out}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}}
+@media (prefers-reduced-motion:reduce){.draw,.fade{animation:none;stroke-dashoffset:0}}
+
+/* ── 답 ── */
+.answer{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px}
+input.type{width:100%;max-width:230px;background:none;border:0;border-bottom:1px solid var(--rule);
+  text-align:center;font-family:var(--han);font-size:23px;color:var(--ink);padding:6px 0;outline:none}
+input.type:focus{border-bottom-color:var(--ink)}
+input.type::placeholder{color:var(--ink-2);font-size:15px}
+.status{font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.05em;
+  min-height:18px;text-align:center}
+.status b{font-family:var(--han);font-size:15px;font-weight:400;color:var(--seal);letter-spacing:0}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:250px}
+.choices button{background:var(--card);border:1px solid var(--rule);color:var(--ink);
+  font-family:var(--kana);font-size:26px;padding:12px 0;cursor:pointer;position:relative}
+.choices button:hover{border-color:var(--ink-2)}
+.choices button .num{position:absolute;left:7px;top:5px;font-family:var(--mono);font-size:9px;color:var(--ink-2)}
+.choices button.ok{border-color:var(--indigo);color:var(--indigo)}
+.choices button.no{border-color:var(--seal);color:var(--seal)}
+.prompt-han{font-family:var(--han);font-size:38px;text-align:center}
+
+/* ── 발치 ── */
+footer{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  border-top:1px solid var(--rule);padding:12px 2px 24px;
+  font-family:var(--mono);font-size:11px;color:var(--ink-2);letter-spacing:.04em}
+footer .bar{flex:1;height:1px;background:var(--rule);position:relative;margin:0 4px}
+footer .bar i{position:absolute;left:0;top:-1px;height:3px;background:var(--indigo);display:block}
+
+/* ── 서랍 ── */
+.sheet{position:fixed;inset:0;background:var(--paper);overflow-y:auto;padding:22px 20px 40px;
+  display:none;justify-content:center}
+.sheet.open{display:flex}
+.sheet .inner{width:100%;max-width:420px}
+.sheet h2{font-size:13px;font-weight:400;letter-spacing:.2em;margin:0 0 18px}
+.group{margin-bottom:22px}
+.group .label{font-family:var(--mono);font-size:10px;color:var(--ink-2);letter-spacing:.14em;
+  text-transform:uppercase;margin-bottom:8px}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{background:none;border:1px solid var(--rule);color:var(--ink-2);font-family:var(--han);
+  font-size:13px;padding:6px 13px;cursor:pointer}
+.chip[aria-pressed="true"]{border-color:var(--ink);color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:4px}
+.grid div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font-family:var(--kana);font-size:19px;border:1px solid var(--rule);color:var(--ink);opacity:.22}
+.grid div.seen{opacity:.62}
+.grid div.learned{opacity:1;border-color:var(--indigo)}
+.grid div.weak{opacity:1;border-color:var(--seal);color:var(--seal)}
+.weaklist{display:flex;flex-wrap:wrap;gap:10px;font-family:var(--kana);font-size:22px}
+.weaklist span small{font-family:var(--mono);font-size:10px;color:var(--ink-2);margin-left:2px}
+.rows{font-size:13px;color:var(--ink-2)}
+.rows div{display:flex;justify-content:space-between;border-bottom:1px dotted var(--rule);padding:5px 0}
+.rows div b{font-weight:400;color:var(--ink);font-family:var(--mono);font-size:12px}
+.tools{display:flex;flex-wrap:wrap;gap:14px;margin-top:26px}
+.empty{font-size:13px;color:var(--ink-2)}
+:focus-visible{outline:1px solid var(--indigo);outline-offset:3px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>가나</h1>
+    <span class="scope" id="scope"></span>
+    <button class="linkbtn" id="openStats">진도</button>
+    <button class="linkbtn" id="openSet">설정</button>
+  </header>
+
+  <section class="stage">
+    <div class="cell" id="cell">
+      <svg class="guide" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M50 6V94M6 50H94" stroke="var(--rule)" stroke-width=".6" stroke-dasharray="3 3"/>
+      </svg>
+      <div class="glyph" id="glyph"></div>
+      <div class="prompt-han" id="promptHan" style="display:none;position:absolute;inset:0;align-items:center;justify-content:center;display:none"></div>
+      <svg class="mark" id="mark" viewBox="0 0 100 100" aria-hidden="true"></svg>
+    </div>
+
+    <div class="answer">
+      <input class="type" id="input" placeholder="한글로 읽기" autocomplete="off" autocapitalize="off"
+             autocorrect="off" spellcheck="false" enterkeyhint="done">
+      <div class="choices" id="choices" style="display:none"></div>
+      <div class="status" id="status"></div>
+      <button class="linkbtn" id="hint">힌트</button>
+    </div>
+  </section>
+
+  <footer>
+    <span id="score">0 · 0</span>
+    <span class="bar"><i id="bar" style="width:0"></i></span>
+    <span id="prog">0/0</span>
+  </footer>
+</main>
+
+<!-- 설정 -->
+<div class="sheet" id="setSheet"><div class="inner">
+  <h2>설정</h2>
+  <div class="group"><div class="label">문자</div><div class="chips" id="scriptChips"></div></div>
+  <div class="group"><div class="label">범위</div><div class="chips" id="groupChips"></div></div>
+  <div class="group"><div class="label">방식</div><div class="chips" id="modeChips"></div></div>
+  <div class="group"><div class="label">묶음</div><div class="chips" id="poolChips"></div></div>
+  <div class="group"><div class="label">하루 새 글자</div><div class="chips" id="dailyChips"></div></div>
+  <div class="tools">
+    <button class="linkbtn" id="closeSet">닫기</button>
+    <button class="linkbtn" id="exportBtn">내보내기</button>
+    <button class="linkbtn" id="importBtn">가져오기</button>
+    <button class="linkbtn" id="resetBtn">기록 지우기</button>
+    <input type="file" id="importFile" accept="application/json" hidden>
+  </div>
+</div></div>
+
+<!-- 진도 -->
+<div class="sheet" id="statSheet"><div class="inner">
+  <h2>진도</h2>
+  <div class="group"><div class="label">이번 자리</div><div class="rows" id="sessionRows"></div></div>
+  <div class="group"><div class="label">자주 틀리는 글자</div><div class="weaklist" id="weakList"></div></div>
+  <div class="group"><div class="label">전체</div><div class="grid" id="mapGrid"></div></div>
+  <div class="tools"><button class="linkbtn" id="closeStats">닫기</button></div>
+</div></div>
+
+<script>
+/* ───────────── 자료 ───────────── */
+const TABLE = `#basic
+あ ア a 아
+い イ i 이
+う ウ u 우
+え エ e 에
+お オ o 오
+か カ ka 카|가
+き キ ki 키|기
+く ク ku 쿠|구
+け ケ ke 케|게
+こ コ ko 코|고
+さ サ sa 사
+し シ shi 시
+す ス su 스
+せ セ se 세
+そ ソ so 소
+た タ ta 타|다
+ち チ chi 치|지
+つ ツ tsu 츠|쓰
+て テ te 테|데
+と ト to 토|도
+な ナ na 나
+に ニ ni 니
+ぬ ヌ nu 누
+ね ネ ne 네
+の ノ no 노
+は ハ ha 하
+ひ ヒ hi 히
+ふ フ fu 후
+へ ヘ he 헤
+ほ ホ ho 호
+ま マ ma 마
+み ミ mi 미
+む ム mu 무
+め メ me 메
+も モ mo 모
+や ヤ ya 야
+ゆ ユ yu 유
+よ ヨ yo 요
+ら ラ ra 라
+り リ ri 리
+る ル ru 루
+れ レ re 레
+ろ ロ ro 로
+わ ワ wa 와
+を ヲ wo 오|워|우
+ん ン n 응|ㄴ|은|ㅇ
+#dakuten
+が ガ ga 가
+ぎ ギ gi 기
+ぐ グ gu 구
+げ ゲ ge 게
+ご ゴ go 고
+ざ ザ za 자
+じ ジ ji 지
+ず ズ zu 즈
+ぜ ゼ ze 제
+ぞ ゾ zo 조
+だ ダ da 다
+ぢ ヂ ji 지
+づ ヅ zu 즈
+で デ de 데
+ど ド do 도
+ば バ ba 바
+び ビ bi 비
+ぶ ブ bu 부
+べ ベ be 베
+ぼ ボ bo 보
+ぱ パ pa 파
+ぴ ピ pi 피
+ぷ プ pu 푸
+ぺ ペ pe 페
+ぽ ポ po 포
+#yoon
+きゃ キャ kya 캬|갸
+きゅ キュ kyu 큐|규
+きょ キョ kyo 쿄|교
+しゃ シャ sha 샤
+しゅ シュ shu 슈
+しょ ショ sho 쇼
+ちゃ チャ cha 챠|차
+ちゅ チュ chu 츄|추
+ちょ チョ cho 쵸|초
+にゃ ニャ nya 냐
+にゅ ニュ nyu 뉴
+にょ ニョ nyo 뇨
+ひゃ ヒャ hya 햐
+ひゅ ヒュ hyu 휴
+ひょ ヒョ hyo 효
+みゃ ミャ mya 먀
+みゅ ミュ myu 뮤
+みょ ミョ myo 묘
+りゃ リャ rya 랴
+りゅ リュ ryu 류
+りょ リョ ryo 료
+ぎゃ ギャ gya 갸
+ぎゅ ギュ gyu 규
+ぎょ ギョ gyo 교
+じゃ ジャ ja 자|쟈
+じゅ ジュ ju 주|쥬
+じょ ジョ jo 조|죠
+びゃ ビャ bya 뱌
+びゅ ビュ byu 뷰
+びょ ビョ byo 뵤
+ぴゃ ピャ pya 퍄
+ぴゅ ピュ pyu 퓨
+ぴょ ピョ pyo 표`;
+
+const ITEMS=[], GBASE={basic:0};
+{
+  let g='basic', order=0;
+  for(const line of TABLE.split('\n')){
+    const t=line.trim(); if(!t) continue;
+    if(t[0]==='#'){g=t.slice(1);GBASE[g]=order;continue;}
+    const [h,k,r,a]=t.split(' ');
+    const ans=a.split('|');
+    ITEMS.push({id:'h:'+h,ch:h,script:'h',romaji:r,ans,group:g,ord:order});
+    ITEMS.push({id:'k:'+k,ch:k,script:'k',romaji:r,ans,group:g,ord:order});
+    order++;
+  }
+}
+/* 장음·촉음은 낱글자가 아니라 규칙이므로 짧은 단어로 익힙니다.
+   형식: 단어 문자 로마자 답|답 규칙설명 */
+const WORDS = `#word
+きって h kitte 킷테|깃테 っ은 소리가 없습니다. 뒤 자음의 받침 노릇을 합니다
+ざっし h zasshi 잣시|잣씨
+いっぱい h ippai 입파이|잇파이
+きっぷ h kippu 킵푸|깁푸
+ちょっと h chotto 촛토|쵸토|춋토
+けっこん h kekkon 겍콘|겟콘
+がっこう h gakkou 각코|갓코|각코우 촉음과 장음이 함께 있는 말입니다
+おかあさん h okaasan 오카상|오카아상 같은 모음이 겹치면 늘여 읽고 따로 적지 않습니다
+おにいさん h oniisan 오니상|오니이상
+せんせい h sensei 센세|센세이 えい는 [에-]로 늘여 읽습니다
+とうきょう h toukyou 도쿄|토쿄|토우쿄우 おう는 [오-]로 늘여 읽습니다
+ゆうき h yuuki 유키|유우키 うう는 [우-]
+コーヒー k koohii 코히|커피|코-히 ー는 앞 모음을 그대로 늘입니다
+ラーメン k raamen 라멘|라-멘
+ケーキ k keeki 케키|케이크
+ノート k nooto 노토|노트
+スポーツ k supootsu 스포츠|스포-츠
+パーティー k paatii 파티|파-티
+サッカー k sakkaa 삭카|삿카|사카 촉음과 장음이 한 낱말에 함께 옵니다
+コップ k koppu 콥푸|컵|곱푸
+ビール k biiru 비루|맥주|비-루
+テレビ k terebi 테레비|텔레비전`;
+
+for(const line of WORDS.split('\n')){
+  const t=line.trim(); if(!t||t[0]==='#') continue;
+  const p=t.split(' ');
+  ITEMS.push({id:p[1]+':'+p[0],ch:p[0],script:p[1],romaji:p[2],ans:p[3].split('|'),
+              group:'word',ord:200+ITEMS.length,note:p.slice(4).join(' ')});
+}
+
+/* 오십음도의 행 */
+function rowKey(i){
+  if(i.group==='word') return 'word:'+i.script;
+  if(i.group==='dakuten') return 'dakuten:'+Math.floor((i.ord-GBASE.dakuten)/5); // ぢ·づ는 だ행
+  if(i.romaji==='n') return i.group+':w';
+  let c=i.romaji.replace(/[aiueo]+$/,'');
+  const map={sh:'s',ch:'t',ts:'t',f:'h',j:(i.group==='yoon'?'j':'z')};
+  if(c in map) c=map[c];
+  return i.group+':'+c;
+}
+function rowsOf(list){
+  const rows={};
+  list.forEach(i=>{const k=rowKey(i);(rows[k]=rows[k]||[]).push(i);});
+  const keys=Object.keys(rows).sort((a,b)=>
+    Math.min(...rows[a].map(x=>x.ord))-Math.min(...rows[b].map(x=>x.ord)));
+  return {rows,keys};
+}
+/* 앞선 행을 다 익히면 다음 행이 열립니다 */
+function openRows(list){
+  const {rows,keys}=rowsOf(list);
+  if(!keys.length) return list;
+  let n=1;
+  for(const k of keys){
+    if(rows[k].every(i=>(S.progress[i.id]||{}).streak>=2)) n++; else break;
+  }
+  n=Math.min(n,keys.length);
+  const open=keys.slice(0,n);
+  const lastRow=rows[open[open.length-1]];
+  rowLabel=lastRow[0].group==='word'?'단어':lastRow[0].ch+'행';
+  return open.flatMap(k=>rows[k]);
+}
+
+const byId=Object.fromEntries(ITEMS.map(i=>[i.id,i]));
+
+/* ───────────── 저장 ───────────── */
+const KEY='kana-yeonseup-v1';
+let memory=null;
+const store={
+  read(){ try{const r=localStorage.getItem(KEY);return r?JSON.parse(r):memory;}catch(e){return memory;} },
+  write(v){ memory=v; try{localStorage.setItem(KEY,JSON.stringify(v));}catch(e){} }
+};
+const DEFAULTS={
+  settings:{scripts:['h'],groups:['basic'],mode:'type',pool:'all',daily:5},
+  progress:{}, total:{right:0,wrong:0}, days:{}
+};
+let S=Object.assign({},DEFAULTS,store.read()||{});
+S.settings=Object.assign({},DEFAULTS.settings,S.settings||{});
+S.progress=S.progress||{}; S.total=S.total||{right:0,wrong:0}; S.days=S.days||{};
+const persist=()=>store.write(S);
+
+function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function dayRec(k){k=k||fmt(new Date());return S.days[k]||(S.days[k]={new:0,right:0,wrong:0});}
+function dayActive(k){const d=S.days[k];return !!d&&(d.right+d.wrong)>0;}
+function dayStreak(){
+  const d=new Date(); let n=0;
+  if(!dayActive(fmt(d))) d.setDate(d.getDate()-1);
+  while(dayActive(fmt(d))){n++;d.setDate(d.getDate()-1);}
+  return n;
+}
+
+const rec=id=>S.progress[id]||(S.progress[id]={w:1,seen:0,right:0,wrong:0,streak:0});
+
+/* ───────────── 상태 ───────────── */
+let pool=[], current=null, last=null, phase='ask', hinted=false, thisMode='type';
+const session={right:0,wrong:0,seen:0,start:Date.now()};
+
+const $=s=>document.querySelector(s);
+const glyph=$('#glyph'), promptHan=$('#promptHan'), input=$('#input'),
+      statusEl=$('#status'), mark=$('#mark'), choicesEl=$('#choices'), hintBtn=$('#hint');
+
+let rowLabel='';
+function buildPool(){
+  const st=S.settings;
+  let list=ITEMS.filter(i=>st.scripts.includes(i.script)&&st.groups.includes(i.group));
+  if(st.pool==='weak'){
+    const weak=list.filter(i=>{const p=S.progress[i.id];return p&&p.streak<3&&(p.wrong>0||p.seen>0);});
+    if(weak.length>=4) list=weak;
+  }else if(st.pool==='row'){
+    list=openRows(list);
+  }
+  const goal=+st.daily||0;
+  if(goal>0&&dayRec().new>=goal){
+    const seen=list.filter(i=>(S.progress[i.id]||{}).seen);
+    if(seen.length>=3) list=seen;          // 오늘 몫을 채우면 익힌 글자만 되풉니다
+  }
+  pool=list;
+  $('#scope').textContent=scopeText();
+  render();
+}
+function scopeText(){
+  const st=S.settings;
+  const s=[st.scripts.includes('h')&&'히라가나',st.scripts.includes('k')&&'가타카나'].filter(Boolean).join('·');
+  const g={basic:'청음',dakuten:'탁음',yoon:'요음',word:'단어'};
+  const gg=st.groups.map(x=>g[x]).join('·');
+  const tail=st.pool==='weak'?' · 복습':(st.pool==='row'?' · '+rowLabel+'까지':'');
+  return `${s} · ${gg}${tail}`;
+}
+let noticeT;
+function notice(txt){
+  const el=$('#scope');
+  el.textContent=txt; el.style.color='var(--seal)';
+  clearTimeout(noticeT);
+  noticeT=setTimeout(()=>{el.textContent=scopeText();el.style.color='';},2800);
+}
+
+/* 가중 추첨: 틀린 글자일수록 자주 */
+function pick(){
+  if(!pool.length) return null;
+  const cand=pool.length>1?pool.filter(i=>i!==last):pool;
+  let sum=0; const ws=cand.map(i=>{
+    const p=S.progress[i.id];
+    const w=p?p.w:1.5;               // 아직 본 적 없는 글자는 살짝 우대
+    sum+=w; return sum;
+  });
+  const r=Math.random()*sum;
+  for(let i=0;i<cand.length;i++) if(r<=ws[i]) return cand[i];
+  return cand[cand.length-1];
+}
+
+const norm=s=>s.replace(/\s/g,'').toLowerCase();
+
+function next(){
+  current=pick(); phase='ask'; hinted=false;
+  mark.innerHTML=''; statusEl.textContent=''; input.value=''; input.style.color='';
+  if(!current){ glyph.textContent='—'; statusEl.textContent='범위를 하나 이상 골라 주세요'; return; }
+  const st=S.settings;
+  thisMode = st.mode==='mix' ? (Math.random()<.65?'type':'choice') : st.mode;
+  if(thisMode==='type'){
+    choicesEl.style.display='none'; input.style.display=''; hintBtn.style.display='';
+    promptHan.style.display='none'; glyph.style.display='flex';
+    glyph.textContent=current.ch;
+    glyph.className='glyph fade';
+    glyph.style.fontSize=sizeFor(current.ch.length);
+    input.focus();
+  }else{
+    input.style.display='none'; hintBtn.style.display='none';
+    glyph.style.display='none'; promptHan.style.display='flex';
+    promptHan.textContent=current.ans[0];
+    promptHan.className='prompt-han fade';
+    promptHan.style.fontSize=current.ans[0].length>2?'26px':'38px';
+    buildChoices();
+    choicesEl.style.display='grid';
+  }
+}
+
+function sizeFor(n){
+  return ['min(30vw,108px)','min(21vw,74px)','min(15vw,54px)','min(12vw,42px)','min(10vw,34px)'][Math.min(n,5)-1];
+}
+
+function buildChoices(){
+  const same=pool.filter(i=>i.script===current.script&&i.id!==current.id);
+  const others=[]; const used=new Set([current.ans[0]]);
+  while(others.length<3&&same.length){
+    const c=same.splice(Math.floor(Math.random()*same.length),1)[0];
+    if(used.has(c.ans[0])) continue;
+    used.add(c.ans[0]); others.push(c);
+  }
+  const opts=[current,...others].sort(()=>Math.random()-.5);
+  const longest=Math.max(...opts.map(o=>o.ch.length));
+  const fs=longest>3?'17px':(longest>1?'21px':'26px');
+  choicesEl.innerHTML='';
+  opts.forEach((o,idx)=>{
+    const b=document.createElement('button');
+    b.style.fontSize=fs;
+    b.innerHTML=`<span class="num">${idx+1}</span>${o.ch}`;
+    b.onclick=()=>{ if(phase==='ask') judge(o.id===current.id,b); };
+    choicesEl.appendChild(b);
+  });
+}
+
+const CIRCLE='<circle cx="50" cy="50" r="34" class="draw" style="--len:214"/>';
+const CROSS='<path d="M26 26 74 74" class="draw" style="--len:68"/><path d="M74 26 26 74" class="draw" style="--len:68;animation-delay:.12s"/>';
+
+function judge(ok,btn){
+  phase='shown';
+  const p=rec(current.id), fresh=p.seen===0; p.seen++;
+  const d=dayRec();
+  if(ok&&!hinted){
+    p.right++; p.streak++; p.w=Math.max(.28,p.w*.5);
+    session.right++; S.total.right++; d.right++;
+  }else{
+    p.wrong++; p.streak=0; p.w=Math.min(14,p.w*2.3+.6);
+    session.wrong++; S.total.wrong++; d.wrong++;
+  }
+  if(fresh) d.new++;
+  session.seen++; last=current; persist();
+
+  const before=pool.length; buildPool();
+  const goal=+S.settings.daily||0;
+  if(S.settings.pool==='row'&&pool.length>before) notice('새 행 · '+rowLabel);
+  else if(fresh&&goal>0&&d.new===goal) notice('오늘 새 글자를 다 폈습니다 · 이제 복습');
+
+  const note=current.note?`<br><span style="opacity:.72">${current.note}</span>`:'';
+  const wait=current.note?2600:0;
+
+  if(thisMode==='choice'){
+    [...choicesEl.children].forEach(b=>{
+      if(b.textContent.replace(/^\d/,'')===current.ch) b.classList.add('ok');
+    });
+    if(btn&&!ok) btn.classList.add('no');
+    statusEl.innerHTML=(ok?`<span style="color:var(--indigo)">${current.ch} · ${current.romaji}</span>`
+                          :`정답 <b>${current.ch}</b> ${current.romaji}`)+note;
+    setTimeout(next, Math.max(ok?600:1400, wait));
+    return;
+  }
+
+  mark.innerHTML = ok ? CIRCLE : CROSS;
+  if(ok){
+    statusEl.innerHTML=`<span style="color:var(--indigo)">${current.romaji}</span>`+note;
+    setTimeout(()=>{ if(phase==='shown') next(); }, Math.max(560,wait));
+  }else{
+    input.style.color='var(--seal)';
+    statusEl.innerHTML=`<b>${current.ans[0]}</b> &nbsp;${current.romaji} &nbsp;· 엔터`+note;
+  }
+}
+
+input.addEventListener('keydown',e=>{
+  if(e.key!=='Enter') return;
+  if(phase==='shown'){ next(); return; }
+  const v=norm(input.value); if(!v) return;
+  const ok=current.ans.some(a=>norm(a)===v)||norm(current.romaji)===v;
+  judge(ok);
+});
+document.addEventListener('keydown',e=>{
+  if(document.querySelector('.sheet.open')&&e.key==='Escape'){ closeSheets(); return; }
+  if(thisMode==='choice'&&phase==='ask'&&/^[1-4]$/.test(e.key)){
+    const b=choicesEl.children[+e.key-1]; if(b) b.click();
+  }
+  if(phase==='shown'&&e.key==='Enter'&&thisMode==='type') next();
+});
+hintBtn.onclick=()=>{
+  if(phase!=='ask'||!current) return;
+  hinted=true;
+  statusEl.innerHTML=`<span style="opacity:.75">${current.romaji}</span>`;
+  input.focus();
+};
+
+/* ───────────── 지표 ───────────── */
+function render(){
+  const seen=session.right+session.wrong;
+  const rate=seen?Math.round(session.right/seen*100):0;
+  $('#score').textContent=`${session.right} · ${session.wrong}${seen?'  '+rate+'%':''}`;
+  const learned=pool.filter(i=>(S.progress[i.id]||{}).streak>=3).length;
+  $('#prog').textContent=`${learned}/${pool.length}`;
+  $('#bar').style.width=pool.length?(learned/pool.length*100)+'%':'0';
+}
+
+/* ───────────── 설정 ───────────── */
+function chips(el,opts,get,set,multi){
+  el.innerHTML='';
+  opts.forEach(([val,label])=>{
+    const b=document.createElement('button');
+    b.className='chip'; b.textContent=label;
+    b.setAttribute('aria-pressed',get().includes(val));
+    b.onclick=()=>{
+      let cur=get().slice();
+      if(multi){
+        cur.includes(val)?cur=cur.filter(x=>x!==val):cur.push(val);
+        if(!cur.length) return;
+      }else cur=[val];
+      set(cur); persist();
+      chips(el,opts,get,set,multi); buildPool(); next();
+    };
+    el.appendChild(b);
+  });
+}
+const st=()=>S.settings;
+chips($('#scriptChips'),[['h','히라가나'],['k','가타카나']],()=>st().scripts,v=>st().scripts=v,true);
+chips($('#groupChips'),[['basic','청음 46'],['dakuten','탁음 25'],['yoon','요음 33'],['word','단어 22']],()=>st().groups,v=>st().groups=v,true);
+chips($('#modeChips'),[['type','한글로 쓰기'],['choice','가나 고르기'],['mix','섞기']],()=>[st().mode],v=>st().mode=v[0],false);
+chips($('#poolChips'),[['all','전체'],['row','오십음도 순서'],['weak','틀린 것만']],()=>[st().pool],v=>st().pool=v[0],false);
+chips($('#dailyChips'),[[5,'하루 5자'],[10,'하루 10자'],[0,'제한 없음']],()=>[+st().daily||0],v=>st().daily=v[0],false);
+
+function openSheet(el){ closeSheets(); el.classList.add('open'); }
+function closeSheets(){ document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('open'));
+  if(thisMode==='type') input.focus(); }
+$('#openSet').onclick=()=>openSheet($('#setSheet'));
+$('#closeSet').onclick=closeSheets;
+$('#openStats').onclick=()=>{ drawStats(); openSheet($('#statSheet')); };
+$('#closeStats').onclick=closeSheets;
+
+function drawStats(){
+  const mins=Math.max(1,Math.round((Date.now()-session.start)/60000));
+  const seen=session.right+session.wrong;
+  const t=S.total.right+S.total.wrong;
+  const goal=+S.settings.daily||0, d=dayRec();
+  $('#sessionRows').innerHTML=
+    `<div><span>푼 글자</span><b>${seen}</b></div>
+     <div><span>정답률</span><b>${seen?Math.round(session.right/seen*100):0}%</b></div>
+     <div><span>지난 시간</span><b>${mins}분</b></div>
+     <div><span>오늘 새 글자</span><b>${d.new}${goal?' / '+goal:''}</b></div>
+     <div><span>이어 온 날</span><b>${dayStreak()}일</b></div>
+     <div><span>누적</span><b>${t}문항 · ${t?Math.round(S.total.right/t*100):0}%</b></div>`;
+
+  const weak=pool.map(i=>({i,p:S.progress[i.id]})).filter(x=>x.p&&x.p.wrong>0)
+    .sort((a,b)=>b.p.w-a.p.w).slice(0,12);
+  $('#weakList').innerHTML=weak.length
+    ? weak.map(x=>`<span>${x.i.ch}<small>${x.p.wrong}</small></span>`).join('')
+    : `<span class="empty">아직 없습니다.</span>`;
+
+  const sorted=pool.slice().sort((a,b)=>a.script===b.script?a.ord-b.ord:(a.script<b.script?-1:1));
+  $('#mapGrid').innerHTML=sorted.map(i=>{
+    const p=S.progress[i.id];
+    let c='';
+    if(p&&p.seen){ c=p.streak>=3?'learned':(p.w>2.5?'weak':'seen'); }
+    const fs=i.ch.length>3?'10px':(i.ch.length>1?'13px':'19px');
+    return `<div class="${c}" style="font-size:${fs}" title="${i.romaji}">${i.ch}</div>`;
+  }).join('');
+}
+
+/* ───────────── 내보내기·가져오기 ───────────── */
+$('#exportBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`kana-${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+$('#importBtn').onclick=()=>$('#importFile').click();
+$('#importFile').onchange=e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{
+      const d=JSON.parse(r.result);
+      if(d.progress) S.progress=d.progress;
+      if(d.total) S.total=d.total;
+      if(d.days) S.days=Object.assign(S.days,d.days);
+      if(d.settings) S.settings=Object.assign(S.settings,d.settings);
+      persist(); location.reload();
+    }catch(err){ alert('불러오지 못했습니다. 이 앱에서 내보낸 파일인지 확인해 주세요.'); } };
+  r.readAsText(f);
+};
+$('#resetBtn').onclick=()=>{
+  if(!confirm('기록을 모두 지웁니다. 계속할까요?')) return;
+  S.progress={}; S.total={right:0,wrong:0}; persist(); location.reload();
+};
+
+document.getElementById('cell').addEventListener('click',()=>{ if(phase==='shown') next(); });
+
+buildPool(); next();
+</script>
+</body>
+</html>
