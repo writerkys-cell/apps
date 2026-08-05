@@ -66,7 +66,7 @@ input.type{width:100%;max-width:230px;background:none;border:0;border-bottom:1px
 input.type:focus{border-bottom-color:var(--ink)}
 input.type::placeholder{color:var(--ink-2);font-size:15px}
 .status{font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.05em;
-  min-height:18px;text-align:center}
+  min-height:60px;line-height:1.9;text-align:center}
 .status b{font-family:var(--han);font-size:15px;font-weight:400;color:var(--seal);letter-spacing:0}
 .choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:250px}
 .choices button{background:var(--card);border:1px solid var(--rule);color:var(--ink);
@@ -530,28 +530,39 @@ function judge(ok,btn){
       if(b.textContent.replace(/^\d/,'')===current.ch) b.classList.add('ok');
     });
     if(btn&&!ok) btn.classList.add('no');
-    statusEl.innerHTML=(ok?`<span style="color:var(--indigo)">${current.ch} · ${current.romaji}</span>`
-                          :`정답 <b>${current.ch}</b> ${current.romaji}`)+note;
-    setTimeout(next, Math.max(ok?600:1400, wait));
+    statusEl.innerHTML=(ok?`<span style="color:var(--indigo)">맞았습니다 · ${current.ch} ${current.ans[0]} (${current.romaji})</span>`
+                          :`틀렸습니다 · 정답 <b>${current.ch}</b> ${current.ans[0]} (${current.romaji})`)+note;
+    setTimeout(next, Math.max(ok?900:1900, wait));
     return;
   }
 
   mark.innerHTML = ok ? CIRCLE : CROSS;
   if(ok){
-    statusEl.innerHTML=`<span style="color:var(--indigo)">${current.romaji}</span>`+note;
-    setTimeout(()=>{ if(phase==='shown') next(); }, Math.max(560,wait));
+    statusEl.innerHTML=`<span style="color:var(--indigo)">맞았습니다 · ${current.ch} ${current.ans[0]} (${current.romaji})</span>`+note;
+    setTimeout(()=>{ if(phase==='shown') next(); }, Math.max(900,wait));
   }else{
+    const mine=input.value.trim();
     input.style.color='var(--seal)';
-    statusEl.innerHTML=`<b>${current.ans[0]}</b> &nbsp;${current.romaji} &nbsp;· 엔터`+note;
+    statusEl.innerHTML=`틀렸습니다<br>정답 <b>${current.ans[0]}</b> ${current.ch} (${current.romaji})`
+      +note+`<br><span style="opacity:.6">엔터로 다음</span>`;
   }
 }
 
-input.addEventListener('keydown',e=>{
-  if(e.key!=='Enter') return;
-  if(phase==='shown'){ next(); return; }
+let pendingEnter=false;
+function submitTyped(){
+  if(phase!=='ask'||!current) return;
   const v=norm(input.value); if(!v) return;
   const ok=current.ans.some(a=>norm(a)===v)||norm(current.romaji)===v;
   judge(ok);
+}
+input.addEventListener('compositionend',()=>{
+  if(pendingEnter){ pendingEnter=false; setTimeout(submitTyped,0); }
+});
+input.addEventListener('keydown',e=>{
+  if(e.key!=='Enter') return;
+  if(e.isComposing||e.keyCode===229){ pendingEnter=true; return; }  // 한글 조합 확정 중
+  if(phase==='shown'){ next(); return; }
+  submitTyped();
 });
 document.addEventListener('keydown',e=>{
   if(document.querySelector('.sheet.open')&&e.key==='Escape'){ closeSheets(); return; }
