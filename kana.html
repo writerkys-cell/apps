@@ -67,6 +67,10 @@ input.type:focus{border-bottom-color:var(--ink)}
 input.type::placeholder{color:var(--ink-2);font-size:15px}
 .status{font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.05em;
   min-height:60px;line-height:1.9;text-align:center}
+.ctl{display:flex;justify-content:center;min-height:34px}
+.nextbtn{display:none;background:none;border:1px solid var(--ink);color:var(--ink);
+  font-family:var(--han);font-size:14px;padding:6px 26px;cursor:pointer;letter-spacing:.1em}
+.nextbtn:hover{background:var(--ink);color:var(--paper)}
 .status b{font-family:var(--han);font-size:15px;font-weight:400;color:var(--seal);letter-spacing:0}
 .choices{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:250px}
 .choices button{background:var(--card);border:1px solid var(--rule);color:var(--ink);
@@ -137,7 +141,10 @@ footer .bar i{position:absolute;left:0;top:-1px;height:3px;background:var(--indi
              autocorrect="off" spellcheck="false" enterkeyhint="done">
       <div class="choices" id="choices" style="display:none"></div>
       <div class="status" id="status"></div>
-      <button class="linkbtn" id="hint">힌트</button>
+      <div class="ctl">
+        <button class="linkbtn" id="hint">힌트</button>
+        <button class="nextbtn" id="nextBtn">다음</button>
+      </div>
     </div>
   </section>
 
@@ -398,7 +405,8 @@ const session={right:0,wrong:0,seen:0,start:Date.now()};
 
 const $=s=>document.querySelector(s);
 const glyph=$('#glyph'), promptHan=$('#promptHan'), input=$('#input'),
-      statusEl=$('#status'), mark=$('#mark'), choicesEl=$('#choices'), hintBtn=$('#hint');
+      statusEl=$('#status'), mark=$('#mark'), choicesEl=$('#choices'), hintBtn=$('#hint'),
+      nextBtn=$('#nextBtn');
 
 let rowLabel='';
 function buildPool(){
@@ -452,8 +460,9 @@ function pick(){
 const norm=s=>s.replace(/\s/g,'').toLowerCase();
 
 function next(){
-  current=pick(); phase='ask'; hinted=false;
+  current=pick(); phase='ask'; hinted=false; pendingEnter=false;
   mark.innerHTML=''; statusEl.textContent=''; input.value=''; input.style.color='';
+  nextBtn.style.display='none';
   if(!current){ glyph.textContent='—'; statusEl.textContent='범위를 하나 이상 골라 주세요'; return; }
   const st=S.settings;
   thisMode = st.mode==='mix' ? (Math.random()<.65?'type':'choice') : st.mode;
@@ -524,7 +533,8 @@ function judge(ok,btn){
   else if(fresh&&goal>0&&d.new===goal) notice('오늘 새 글자를 다 폈습니다 · 이제 복습');
 
   const note=current.note?`<br><span style="opacity:.72">${current.note}</span>`:'';
-  const wait=current.note?2600:0;
+  hintBtn.style.display='none';
+  nextBtn.style.display='';
 
   if(thisMode==='choice'){
     [...choicesEl.children].forEach(b=>{
@@ -533,19 +543,16 @@ function judge(ok,btn){
     if(btn&&!ok) btn.classList.add('no');
     statusEl.innerHTML=(ok?`<span style="color:var(--indigo)">맞았습니다 · ${current.ch} ${current.ans[0]} (${current.romaji})</span>`
                           :`틀렸습니다 · 정답 <b>${current.ch}</b> ${current.ans[0]} (${current.romaji})`)+note;
-    setTimeout(next, Math.max(ok?900:1900, wait));
     return;
   }
 
   mark.innerHTML = ok ? CIRCLE : CROSS;
   if(ok){
     statusEl.innerHTML=`<span style="color:var(--indigo)">맞았습니다 · ${current.ch} ${current.ans[0]} (${current.romaji})</span>`+note;
-    setTimeout(()=>{ if(phase==='shown') next(); }, Math.max(900,wait));
   }else{
-    const mine=input.value.trim();
     input.style.color='var(--seal)';
-    statusEl.innerHTML=`틀렸습니다<br>정답 <b>${current.ans[0]}</b> ${current.ch} (${current.romaji})`
-      +note+`<br><span style="opacity:.6">엔터로 다음</span>`;
+    statusEl.innerHTML=`<span style="color:var(--seal)">틀렸습니다</span><br>`
+      +`정답 <b>${current.ans[0]}</b> ${current.ch} (${current.romaji})`+note;
   }
 }
 
@@ -579,6 +586,7 @@ document.addEventListener('keydown',e=>{
   }
   if(phase==='shown'&&e.key==='Enter') advance();
 });
+nextBtn.onclick=()=>{ if(phase==='shown') next(); };
 hintBtn.onclick=()=>{
   if(phase!=='ask'||!current) return;
   hinted=true;
