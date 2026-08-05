@@ -516,6 +516,7 @@ function judge(ok,btn){
   }
   if(fresh) d.new++;
   session.seen++; last=current; persist();
+  shownAt=Date.now(); pendingEnter=false;
 
   const before=pool.length; buildPool();
   const goal=+S.settings.daily||0;
@@ -548,7 +549,12 @@ function judge(ok,btn){
   }
 }
 
-let pendingEnter=false;
+let pendingEnter=false, shownAt=0;
+function advance(){                    // 판정을 볼 시간을 준 뒤에만 넘어갑니다
+  if(phase!=='shown') return;
+  if(Date.now()-shownAt<400) return;
+  next();
+}
 function submitTyped(){
   if(phase!=='ask'||!current) return;
   const v=norm(input.value); if(!v) return;
@@ -560,16 +566,18 @@ input.addEventListener('compositionend',()=>{
 });
 input.addEventListener('keydown',e=>{
   if(e.key!=='Enter') return;
+  e.preventDefault();
   if(e.isComposing||e.keyCode===229){ pendingEnter=true; return; }  // 한글 조합 확정 중
-  if(phase==='shown'){ next(); return; }
+  if(phase==='shown'){ advance(); return; }
   submitTyped();
 });
 document.addEventListener('keydown',e=>{
   if(document.querySelector('.sheet.open')&&e.key==='Escape'){ closeSheets(); return; }
+  if(e.target===input) return;                 // 입력칸의 엔터는 이미 처리했습니다
   if(thisMode==='choice'&&phase==='ask'&&/^[1-4]$/.test(e.key)){
     const b=choicesEl.children[+e.key-1]; if(b) b.click();
   }
-  if(phase==='shown'&&e.key==='Enter'&&thisMode==='type') next();
+  if(phase==='shown'&&e.key==='Enter') advance();
 });
 hintBtn.onclick=()=>{
   if(phase!=='ask'||!current) return;
@@ -678,7 +686,7 @@ $('#resetBtn').onclick=()=>{
   S.progress={}; S.total={right:0,wrong:0}; persist(); location.reload();
 };
 
-document.getElementById('cell').addEventListener('click',()=>{ if(phase==='shown') next(); });
+document.getElementById('cell').addEventListener('click',advance);
 
 buildPool(); next();
 </script>
