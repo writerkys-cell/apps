@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="말모이">
@@ -172,10 +172,11 @@ mark{background:none;color:var(--mark);font-weight:700}
   margin-left:-2px;border-radius:50%;background:var(--mark)}
 
 /* ── 아래 시트 ── */
-.scrim{position:fixed;inset:0;background:rgba(10,11,12,.38);z-index:40;display:none}
+.scrim{position:fixed;top:0;left:0;right:0;height:100dvh;
+  background:rgba(10,11,12,.38);z-index:40;display:none}
 .scrim.on{display:block}
 .sheet{position:absolute;left:0;right:0;bottom:0;background:var(--paper-2);
-  border-radius:16px 16px 0 0;max-height:90dvh;overflow-y:auto;
+  border-radius:16px 16px 0 0;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding:10px 20px calc(env(safe-area-inset-bottom) + 22px);
   animation:up .24s cubic-bezier(.2,.8,.3,1) both}
 @keyframes up{from{transform:translateY(24px);opacity:.4}to{transform:none;opacity:1}}
@@ -641,6 +642,7 @@ function openCard(w){
   $('#cback').hidden=!stack.length;
   cardOut();cardLinks();
   $('#cardScrim').classList.add('on');
+  fit();$('#cardSheet').scrollTop=0;
 }
 function cardOut(){$('#cout').innerHTML=lkChips($('#cn').value);}
 function cardLinks(){
@@ -713,7 +715,7 @@ function stats(){
     +`<span class="${old?'warn':''}">${bk}</span>`
     +(pct>=55?`<span class="${pct>=80?'warn':''}">저장소 ${pct}%</span>`:'');
 }
-$('#more').onclick=()=>{stats();$('#menuScrim').classList.add('on');};
+$('#more').onclick=()=>{stats();$('#menuScrim').classList.add('on');fit();};
 $('#menuClose').onclick=()=>$('#menuScrim').classList.remove('on');
 $('#menuScrim').addEventListener('click',e=>{
   if(e.target===$('#menuScrim'))$('#menuScrim').classList.remove('on');});
@@ -772,14 +774,28 @@ function renderAll(){
   if(editing)cardLinks();
 }
 
-/* 자판이 올라와도 입력줄이 가려지지 않게 한다 */
+/* 자판이 올라와도 입력줄과 표본 카드가 가려지지 않게 한다.
+   fixed 요소는 레이아웃 뷰포트를 따르므로, 눈에 보이는 뷰포트에 직접 묶어준다. */
 const vv=window.visualViewport;
-if(vv){const fit=()=>{document.body.style.height=vv.height+'px';window.scrollTo(0,0);};
-  vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);}
+function fit(){
+  if(!vv)return;
+  const h=Math.round(vv.height),t=Math.round(vv.offsetTop);
+  document.body.style.height=h+'px';
+  $$('.scrim').forEach(el=>{el.style.height=h+'px';el.style.top=t+'px';});
+  if(t===0)window.scrollTo(0,0);
+}
+if(vv){vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);}
+/* 자판이 뜬 뒤 고쳐 쓰는 칸을 보이는 자리로 끌어온다 */
+function keepInView(el){
+  el.addEventListener('focus',()=>{
+    setTimeout(()=>{fit();el.scrollIntoView({block:'center',behavior:'smooth'});},260);
+  });
+}
+keepInView($('#cw'));keepInView($('#cn'));
 window.addEventListener('pagehide',flush);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)flush();});
 
-load();renderAll();go('collect');
+load();renderAll();go('collect');fit();
 </script>
 </body>
 </html>
