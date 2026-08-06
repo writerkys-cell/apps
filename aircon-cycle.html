@@ -223,16 +223,23 @@ footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--mu
       <div class="f"><label>단축어 실행</label>
         <select id="fSc"><option value="1">사용</option><option value="0">사용 안 함</option></select></div>
       <div class="f"><label>단축어 이름</label><input type="text" id="fScName" placeholder="냉방타이머"></div>
+      <div class="f"><label>보낼 내용</label>
+        <select id="fScLabel">
+          <option value="1">단계와 분</option>
+          <option value="0">분만</option>
+        </select></div>
+      <div class="f"><label>실제로 보내는 값</label><span class="v" id="scPrev" style="font-family:var(--mono);font-size:12.5px;color:var(--muted)"></span></div>
       <div class="mini">
         <button class="ghost" id="testCool">냉방 시험 (<span id="tcMin">15</span>분)</button>
         <button class="ghost" id="testRest">쉼 시험 (<span id="trMin">60</span>분)</button>
       </div>
       <p class="note">
         이름은 <b>Shortcuts 앱에 저장된 것과 글자까지 똑같아야</b> 합니다. 시험 버튼으로 확인하세요.<br><br>
-        <b>단축어 내용은 두 동작이면 됩니다.</b><br>
+        <b>단축어 구성</b><br>
         ① 숫자 가져오기 — 입력에서 <b>단축어 입력</b><br>
-        ② 타이머 시작 — 위 숫자, 단위 <b>분</b><br><br>
-        분 수는 앱이 보냅니다. 아래 타이머 기준 값을 고치면 단축어는 손대지 않아도 됩니다.
+        ② 타이머 시작 — 위 <b>숫자</b>, 단위 분<br>
+        ③ 알림 보기 — 내용에 <b>단축어 입력</b> 변수를 넣으세요<br><br>
+        입력은 하나뿐이라 단계와 분을 한 문자열로 보냅니다. <b>숫자 가져오기</b>가 거기서 분만 뽑아내니 타이머는 그대로 동작하고, 알림에는 문자열 전체가 그대로 나옵니다.
       </p>
 
       <p class="sub">타이머 기준</p>
@@ -294,7 +301,7 @@ footer{text-align:center;font-family:var(--mono);font-size:10.5px;color:var(--mu
 const KEY='aircon_cycle_v1', VER=4;
 const DEF={cool:15,rest:60,temp:24,power:650,duty:95,fanW:45,pen:2,
            rate:260,tier:'260',days:14,runHrs:40,keep:90,
-           sc:1,scName:'냉방타이머'};
+           sc:1,scName:'냉방타이머',scLabel:1};
 let S=Object.assign({},DEF), LOG={}, FILT={last:0,sec:0}, RATE=[], lastStop=0;
 let histShown=7, rateShown=5;
 
@@ -342,12 +349,16 @@ const PH=[
   {name:'쉼',   cmd:()=>'에어컨 OFF · 선풍기',     dur:()=>S.rest, watt:()=>S.fanW}
 ];
 
-// 애플 단축어 호출. 분 수를 단축어 입력(텍스트)으로 실어 보낸다.
-// 단축어 쪽은 '숫자 가져오기' → '타이머 시작(분)' 두 동작이면 된다.
-function runShortcut(min){
+// 애플 단축어 호출. 입력은 하나뿐이라 단계와 분을 한 문자열로 실어 보낸다.
+// 단축어의 '숫자 가져오기'가 문자열에서 분만 뽑아 타이머에 넘기고,
+// '알림 보기'에는 '단축어 입력'을 그대로 쓰면 문구가 완성된다.
+function scText(min,label){
+  return S.scLabel ? label+' '+min+'분' : String(min);
+}
+function runShortcut(min,label){
   if(!S.sc || !S.scName) return false;
   const u='shortcuts://run-shortcut?name='+encodeURIComponent(S.scName)
-        +'&input=text&text='+encodeURIComponent(String(min));
+        +'&input=text&text='+encodeURIComponent(scText(min,label));
   try{ location.href=u; return true; }catch(e){ return false; }
 }
 
@@ -401,7 +412,7 @@ function go(p){
   }
   phase=p; phaseStart=now; lastTick=now;
   save(); render();
-  runShortcut(p===0?S.cool:S.rest);
+  runShortcut(p===0?S.cool:S.rest, p===0?'냉방':'쉼');
 }
 function rate(ok){
   const a=el('ask');
@@ -421,6 +432,7 @@ function render(){
   el('restSub').textContent=S.rest+'분'+(S.sc&&S.scName?' · 타이머':'');
   el('tcMin').textContent=S.cool;
   el('trMin').textContent=S.rest;
+  el('scPrev').textContent=scText(S.cool,'냉방')+'  /  '+scText(S.rest,'쉼');
   el('coolBtn').classList.toggle('solid',phase===0);
   el('restBtn').classList.toggle('solid',phase===1);
 
@@ -544,6 +556,7 @@ function fillForm(){
   el('fTier').value=S.tier;
   el('fSc').value=String(S.sc);
   el('fScName').value=S.scName;
+  el('fScLabel').value=String(S.scLabel);
 }
 for(const id in FIELDS){
   el(id).oninput=e=>{
@@ -563,8 +576,9 @@ el('fTier').onchange=e=>{
 };
 el('fSc').onchange=e=>{ S.sc=+e.target.value; save(); render(); };
 el('fScName').oninput=e=>{ S.scName=e.target.value.trim(); save(); render(); };
-el('testCool').onclick=()=>{ if(!runShortcut(S.cool)) alert('단축어 실행이 꺼져 있거나 이름이 비어 있습니다.'); };
-el('testRest').onclick=()=>{ if(!runShortcut(S.rest)) alert('단축어 실행이 꺼져 있거나 이름이 비어 있습니다.'); };
+el('fScLabel').onchange=e=>{ S.scLabel=+e.target.value; save(); render(); };
+el('testCool').onclick=()=>{ if(!runShortcut(S.cool,'냉방')) alert('단축어 실행이 꺼져 있거나 이름이 비어 있습니다.'); };
+el('testRest').onclick=()=>{ if(!runShortcut(S.rest,'쉼')) alert('단축어 실행이 꺼져 있거나 이름이 비어 있습니다.'); };
 
 el('expBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify({ver:VER,settings:S,log:LOG,filter:FILT,rate:RATE,lastStop:lastStop},null,2)],{type:'application/json'});
