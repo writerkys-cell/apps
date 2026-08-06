@@ -169,7 +169,6 @@ footer{border-top:1px solid var(--rule);padding:18px 0 30px;font-family:var(--mo
 .vrow.pick{background:var(--pine-soft);margin:0 -10px;padding:9px 10px;border-bottom-color:transparent}
 .vrow .use{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;border:1px solid var(--rule);padding:6px 10px;background:var(--card);white-space:nowrap}
 .vrow.pick .use{border-color:var(--pine);color:var(--pine);background:transparent}
-.vgroup{font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--faint);margin:18px 0 4px}
 label.field{display:block;margin-bottom:14px}
 label.field span{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);display:block;margin-bottom:5px}
 </style>
@@ -453,7 +452,7 @@ function sim(a,b){
 let voices=[];
 const SAMPLE="Long time no see. What have you been up to?";
 /* 장난용·구형 압축 음성은 따로 내린다 */
-const NOVELTY=/^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|kathy|organ|pipe organ|princess|ralph|superstar|trinoids|whisper|wobble|zarvox|bruce|agnes|grandma|grandpa|rocko|sandy|shelley|eddy|flo|reed|bahh)\b/i;
+const NOVELTY=/^(albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|kathy|organ|pipe organ|princess|ralph|superstar|trinoids|whisper|wobble|zarvox|bruce|agnes|fred|victoria|vicki|grandma|grandpa|rocko|sandy|shelley|eddy|flo|reed)\b/i;
 const FINE=/(premium|enhanced|neural|natural|siri|ava|allison|samantha|susan|nicky|tom|aaron|alex|daniel|serena|kate|oliver|karen|moira|fiona|aria|jenny|guy|zira|david|google)/i;
 function vscore(v){
   let s=0;
@@ -487,15 +486,17 @@ function vrow(v){
 function paintVoices(){
   const box=$('#voiceList');if(!box)return;
   if(!voices.length){box.innerHTML='<p class="hint" style="margin:0">아직 목소리를 찾지 못했습니다. 화면을 한 번 새로 고쳐보세요.</p>';return}
-  const good=voices.filter(v=>!NOVELTY.test(v.name)).sort((a,b)=>vscore(b)-vscore(a)||a.name.localeCompare(b.name));
-  const odd=voices.filter(v=>NOVELTY.test(v.name)).sort((a,b)=>a.name.localeCompare(b.name));
+  let good=voices.filter(v=>!NOVELTY.test(v.name));
+  if(!good.length)good=voices.slice();
+  good.sort((a,b)=>vscore(b)-vscore(a)||a.name.localeCompare(b.name));
+  const p=pickedVoice();
+  if(p&&!good.includes(p)){S.cfg.voiceURI='';S.cfg.voice='';save()}
   box.innerHTML=`<div class="vrow ${!pickedVoice()?'pick':''}" data-uri="">
       <button class="speak" data-hear="" title="들어보기">🔊</button>
       <div class="vn"><b>브라우저 기본</b><span>고르지 않았을 때 쓰는 목소리</span></div>
       <button class="use" data-use="">${!pickedVoice()?'사용 중':'이걸로'}</button>
     </div>`
-    + good.map(vrow).join('')
-    + (odd.length?`<div class="vgroup">장난스러운 목소리</div>`+odd.map(vrow).join(''):'');
+    + good.map(vrow).join('');
   $$('#voiceList [data-hear]').forEach(b=>b.onclick=()=>{
     const v=voices.find(x=>x.voiceURI===b.dataset.hear);
     say(SAMPLE,null,v||null);
