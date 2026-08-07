@@ -186,7 +186,7 @@
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <span id="statLabel"></span>
-    <div class="ver">FV 2.0 · 2026-08-06</div>
+    <div class="ver">FV 2.1 · 2026-08-07</div>
   </div>
 </div>
 
@@ -246,6 +246,7 @@
       <li><b>계속</b> — 끝내지 못했을 때. 줄을 긋고 리스트 맨 끝에 다시 적습니다. 이름을 바꿔 넣어도 됩니다.</li>
       <li><b>미결</b> — 다음에 다시 생각해볼 일. 노란 형광펜이 칠해지고 나중에 '비활성 할 일'로 옮겨집니다.</li>
       <li>체인을 다 처리하면 <b>처음부터 다시</b> 고릅니다.</li>
+      <li>날짜가 바뀌면 어제 찍은 점이 <b>모두 지워지고</b> 새로 고르기 시작합니다. 할 일과 줄·형광펜은 그대로 남습니다.</li>
     </ul>
     <h4>페이지</h4>
     <ul>
@@ -392,6 +393,33 @@ function startRun(){
   render();
   toast('실행 — 마지막에 찍은 것부터');
 }
+/* ---------- 날짜가 바뀌면 선택 해제 ---------- */
+function todayStr(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+// 어제 찍은 점은 모두 지우고 처음부터 다시 고른다
+function checkNewDay(){
+  const t=todayStr();
+  if(state.day===t)return false;
+  const first=!state.day;
+  const had=dotted().length>1||state.phase==='run';
+  state.day=t;
+  flat().forEach(f=>{delete f.it.dot;});
+  state.phase='select';
+  ensureFirstDot();
+  cur=0;
+  save();
+  setDateLabel();
+  if(!first&&had){render();toast('새로운 날 — 어제의 선택을 지웠습니다');}
+  return true;
+}
+function setDateLabel(){
+  const d=new Date();
+  const days=['일','월','화','수','목','금','토'];
+  document.getElementById('dateLabel').textContent=(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+days[d.getDay()]+')';
+}
+
 function backToSelect(quiet){
   state.phase='select';
   flat().forEach(f=>{delete f.it.dot;});
@@ -1027,18 +1055,25 @@ main.addEventListener('touchend',e=>{
 
 /* ---------- 시작 ---------- */
 (function(){
-  const d=new Date();
-  const days=['일','월','화','수','목','금','토'];
-  document.getElementById('dateLabel').textContent=(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+days[d.getDay()]+')';
+  setDateLabel();
   if(state.phase==='run'&&!dotted().length)state.phase='select';
   cur=0;
-  if(state.phase==='run'){
+  const rolled=checkNewDay();          // 어제 것이면 선택 해제
+  if(!rolled&&state.phase==='run'){
     const t=currentTask();
     const p=t?pageOf(t.id):-1;
     if(p>=0)cur=p;
   }
   render();
   save();   // 자동 점·마이그레이션 결과 저장
+  if(rolled&&state.pages.length)toast('새로운 날 — 처음부터 다시 고르세요');
+
+  // 앱을 켜 둔 채 자정을 넘겨도 반영
+  setInterval(()=>{if(checkNewDay())render();},30000);
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden&&checkNewDay())render();
+  });
+  window.addEventListener('focus',()=>{if(checkNewDay())render();});
 })();
 </script>
 </body>
