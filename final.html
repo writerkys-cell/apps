@@ -226,8 +226,8 @@
     <button id="exportBtn">내보내기</button> ·
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
-    <button id="recordsBtn">완료 0</button>
-    <div class="ver">FV 3.2 · 15분 · 기록 · 2026-08-11</div>
+    <button id="recordsBtn">기록</button>
+    <div class="ver">FV 3.3 · 15분 · 기록 · 2026-08-11</div>
   </div>
 </div>
 
@@ -316,7 +316,8 @@
     </ul>
     <h4>완료 기록</h4>
     <ul>
-      <li>아래 <b>완료 N</b>을 누르면 끝낸 할 일의 기록을 볼 수 있습니다. 하나씩 삭제할 수 있어요.</li>
+      <li>아래 <b>기록</b>을 누르면 끝낸 할 일을 볼 수 있습니다. 맨 위에 <b>오늘</b>의 완료 개수·집중 시간·방해 횟수가 뜹니다.</li>
+      <li>기록은 하나씩 삭제할 수 있습니다. 확인하고 지워 나가는 용도로 쓰세요.</li>
       <li><b>투여 시간</b>은 시작을 누른 뒤 실제로 붙들고 있던 시간의 합입니다. 방해로 리셋된 시간도 버리지 않고 포함합니다.</li>
       <li><b>기간</b>은 처음 시작한 날부터 끝낸 날까지입니다. '계속'으로 여러 번 나눠서 해도 하나로 이어지며, <b>몇 번에 나눠서</b> 했는지도 남습니다.</li>
       <li>이어서 하는 중인 할 일은 상단에 <b>"지금까지 3시간 12분 · 8번째"</b>처럼 누적이 표시됩니다.</li>
@@ -822,11 +823,13 @@ function fmtWhen(ms){
 }
 function renderRecords(){
   const rs=state.records.slice().sort((a,b)=>b.endedAt-a.endedAt);
-  const totalWork=rs.reduce((s,r)=>s+(r.workedMs||0),0);
+  // 요약은 오늘 끝낸 것만
+  const t0=new Date();t0.setHours(0,0,0,0);
+  const today=rs.filter(r=>r.endedAt>=t0.getTime());
   document.getElementById('recSummary').innerHTML=
-     '<div><div class="k">완료</div><div class="v">'+rs.length+'건</div></div>'
-    +'<div><div class="k">총 투여 시간</div><div class="v">'+fmtDur(totalWork)+'</div></div>'
-    +'<div><div class="k">방해</div><div class="v">'+rs.reduce((s,r)=>s+(r.interrupts||0),0)+'회</div></div>';
+     '<div><div class="k">오늘 완료</div><div class="v">'+today.length+'개</div></div>'
+    +'<div><div class="k">오늘 집중</div><div class="v">'+fmtDur(today.reduce((s,r)=>s+(r.workedMs||0),0))+'</div></div>'
+    +'<div><div class="k">오늘 방해</div><div class="v">'+today.reduce((s,r)=>s+(r.interrupts||0),0)+'회</div></div>';
   const list=document.getElementById('recList');
   if(!rs.length){
     list.innerHTML='<div class="recempty">아직 완료한 할 일이 없습니다.<br>15분을 채우고 \'끝\'을 누르면 여기에 쌓입니다.</div>';
@@ -1198,7 +1201,6 @@ function render(){
   const ib=document.getElementById('inactiveBtn');
   ib.classList.toggle('on',isInactive);
   ib.textContent='비활성'+(state.inactive.length?' '+state.inactive.length:'');
-  document.getElementById('recordsBtn').textContent='완료 '+state.records.length;
 
   requestAnimationFrame(decorate);
 }
