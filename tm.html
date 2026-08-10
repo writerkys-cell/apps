@@ -282,7 +282,7 @@ const DB = (() => {
 })();
 
 /* ── 상태 ─────────────────────────────────────── */
-const state = { items:[], hours:24, kind:'할 일', openId:null, pastOpen:false, armed:null };
+const state = { items:[], hours:24, kind:'할 일', openId:null, pastOpen:false, armed:null, drafts:{} };
 const HOUR = 3600000;
 const $ = s => document.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -369,7 +369,7 @@ function itemHTML(it, now, past){
     detail = `<div class="detail">
         ${notes ? `<div class="notes">${notes}</div>` : ''}
         ${past ? '' : `<div class="note-add">
-          <textarea data-note="${it.id}" rows="1" placeholder="지금 드는 생각"></textarea>
+          <textarea data-note="${it.id}" rows="1" placeholder="지금 드는 생각">${esc(state.drafts[it.id]||'')}</textarea>
           <button data-do="note" data-id="${it.id}">적기</button>
         </div>`}
         <div class="acts">${acts}</div>
@@ -433,7 +433,23 @@ function render(){
     }
   }
 
+  // 메모를 쓰던 중이면 커서와 스크롤을 잃지 않게 되살린다
+  const focused = document.activeElement;
+  const keepId = focused && focused.dataset && focused.dataset.note ? focused.dataset.note : null;
+  const keepPos = keepId ? focused.selectionStart : 0;
+  const keepScroll = window.scrollY;
+
   $('#board').innerHTML = html;
+
+  if (keepId){
+    const back = document.querySelector(`[data-note="${keepId}"]`);
+    if (back){
+      back.focus({preventScroll:true});
+      try { back.setSelectionRange(keepPos, keepPos); } catch(e){}
+      grow(back);
+      window.scrollTo(0, keepScroll);
+    }
+  }
   document.title = ready.length ? `뜸 · ${ready.length}` : '뜸';
 }
 
@@ -473,7 +489,8 @@ async function act(kind, id){
   if (kind === 'note'){
     const ta = document.querySelector(`[data-note="${id}"]`);
     const t = ta && ta.value.trim(); if (!t) return;
-    it.notes.push({t:now, text:t}); ta.value = '';
+    it.notes.push({t:now, text:t});
+    ta.value = ''; delete state.drafts[id];
     await persist(it); return;
   }
   if (kind === 'defer'){
@@ -508,6 +525,19 @@ document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =
   c.classList.add('on'); state.kind = c.dataset.kind;
 }));
 
+function grow(el){ el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 190) + 'px'; }
+
+$('#board').addEventListener('input', e => {
+  const ta = e.target.closest('[data-note]');
+  if (!ta) return;
+  state.drafts[ta.dataset.note] = ta.value;
+  grow(ta);
+});
+$('#board').addEventListener('keydown', e => {
+  const ta = e.target.closest('[data-note]');
+  if (ta && e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); act('note', ta.dataset.note); }
+});
+
 $('#board').addEventListener('click', e => {
   const doBtn = e.target.closest('[data-do]');
   if (doBtn){
@@ -527,6 +557,7 @@ $('#board').addEventListener('click', e => {
     }
     act('done', it.id); return;
   }
+  if (e.target.closest('.detail')) return;   // 펼친 영역 안에서는 접지 않는다
   const body = e.target.closest('[data-body]');
   if (body){
     const id = body.dataset.body;
