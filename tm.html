@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="뜸">
+<meta name="theme-color" content="#eae4d7">
+<title>뜸</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eae4d7;
+  --card:#f3efe6;
+  --ink:#23211d;
+  --ink-soft:#6d6659;
+  --faint:#a79e8e;
+  --line:#d8d0bf;
+  --deep:#2f4858;      /* 쪽빛 — 열린 것 */
+  --seal:#9a3b31;      /* 인주 — 놓아준 것 */
+  --shadow:rgba(60,50,35,.10);
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#1a1917; --card:#232120; --ink:#e9e3d6; --ink-soft:#a49b8b;
+    --faint:#6f675b; --line:#332f2b; --deep:#8fb4c4; --seal:#c96e62;
+    --shadow:rgba(0,0,0,.35);
+  }
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:'Gowun Batang', 'Apple SD Gothic Neo', serif;
+  font-size:17px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior-y:contain;
+  user-select:none; -webkit-user-select:none;
+}
+input,textarea{user-select:text; -webkit-user-select:text;}
+.wrap{max-width:560px; margin:0 auto; padding:0 20px 140px;}
+
+/* 머리 */
+header{padding:34px 0 18px; display:flex; align-items:baseline; gap:12px;}
+h1{font-size:30px; font-weight:700; margin:0; letter-spacing:.08em;}
+.tagline{font-family:'Gowun Dodum',sans-serif; font-size:12.5px; color:var(--faint); letter-spacing:.02em;}
+.menu-btn{margin-left:auto; background:none; border:0; color:var(--faint); font-size:22px; padding:6px 4px; cursor:pointer; font-family:inherit;}
+
+/* 담기 */
+.compose{background:var(--card); border:1px solid var(--line); border-radius:var(--r); padding:14px 15px 12px; box-shadow:0 1px 2px var(--shadow); margin-bottom:30px;}
+.compose textarea{
+  width:100%; border:0; background:transparent; resize:none; color:var(--ink);
+  font-family:inherit; font-size:17px; line-height:1.6; padding:0; min-height:26px; outline:none;
+}
+.compose textarea::placeholder{color:var(--faint);}
+.compose-foot{display:flex; align-items:center; gap:7px; margin-top:12px;}
+.chip{
+  font-family:'Gowun Dodum',sans-serif; font-size:12.5px; padding:5px 11px; border-radius:100px;
+  border:1px solid var(--line); background:transparent; color:var(--ink-soft); cursor:pointer;
+}
+.chip.on{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+.put{
+  margin-left:auto; font-family:'Gowun Batang',serif; font-size:15px; font-weight:700;
+  padding:7px 17px; border-radius:100px; border:0; background:var(--ink); color:var(--paper);
+  cursor:pointer; letter-spacing:.06em; transition:opacity .2s;
+}
+.put:disabled{opacity:.28;}
+
+/* 구획 */
+section{margin-bottom:34px;}
+.sec-head{display:flex; align-items:center; gap:9px; margin:0 2px 13px;}
+.sec-title{font-family:'Gowun Dodum',sans-serif; font-size:12.5px; letter-spacing:.13em; color:var(--ink-soft);}
+.sec-rule{flex:1; height:1px; background:var(--line);}
+.sec-count{font-family:'Gowun Dodum',sans-serif; font-size:12px; color:var(--faint);}
+
+/* 항목 */
+.item{
+  display:flex; gap:13px; padding:15px 15px 14px; background:var(--card);
+  border:1px solid var(--line); border-radius:var(--r); margin-bottom:9px;
+  box-shadow:0 1px 2px var(--shadow); animation:rise .35s ease both;
+}
+@keyframes rise{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;}}
+.item.ready{border-color:var(--deep);}
+.item.past{background:transparent; border-color:transparent; box-shadow:none; padding:9px 15px 8px;}
+
+.mark{flex:0 0 26px; height:26px; position:relative; margin-top:1px; background:none; border:0; padding:0; cursor:pointer;}
+.mark svg{display:block; width:26px; height:26px;}
+.ring-bg{fill:none; stroke:var(--line); stroke-width:1.6;}
+.ring-fg{fill:none; stroke:var(--faint); stroke-width:1.6; stroke-linecap:round; transition:stroke-dashoffset .6s ease;}
+.circle-open{fill:none; stroke:var(--deep); stroke-width:1.8;}
+.circle-done{fill:var(--ink-soft); stroke:none;}
+.circle-drop{fill:none; stroke:var(--seal); stroke-width:1.6;}
+.tick{fill:none; stroke:var(--card); stroke-width:2.1; stroke-linecap:round; stroke-linejoin:round;}
+.slash{stroke:var(--seal); stroke-width:1.6; stroke-linecap:round;}
+@keyframes nudge{0%,100%{transform:translateX(0);} 20%{transform:translateX(-4px);} 40%{transform:translateX(4px);} 60%{transform:translateX(-2px);} 80%{transform:translateX(2px);}}
+.mark.nudge{animation:nudge .34s ease;}
+
+.body{flex:1; min-width:0; cursor:pointer;}
+.text{white-space:pre-wrap; word-break:break-word;}
+.item.steep .text{color:var(--ink-soft);}
+.item.past .text{color:var(--faint); font-size:15.5px;}
+.item.past.done .text{text-decoration:line-through; text-decoration-color:var(--line);}
+.meta{font-family:'Gowun Dodum',sans-serif; font-size:12px; color:var(--faint); margin-top:5px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+.kind{color:var(--ink-soft);}
+.dot{color:var(--line);}
+.left{color:var(--faint);}
+.item.ready .left{color:var(--deep);}
+
+/* 펼침 */
+.detail{margin-top:13px; padding-top:12px; border-top:1px dashed var(--line);}
+.notes{margin:0 0 10px;}
+.note{font-size:15.5px; color:var(--ink-soft); padding:7px 0 7px 12px; border-left:2px solid var(--line); margin-bottom:7px; white-space:pre-wrap;}
+.note .when{display:block; font-family:'Gowun Dodum',sans-serif; font-size:11.5px; color:var(--faint); margin-bottom:2px;}
+.note-add{display:flex; gap:8px; align-items:flex-end;}
+.note-add textarea{
+  flex:1; border:1px solid var(--line); background:transparent; border-radius:10px; padding:9px 11px;
+  font-family:inherit; font-size:16px; color:var(--ink); resize:none; min-height:40px; outline:none; line-height:1.5;
+}
+.note-add textarea::placeholder{color:var(--faint);}
+.note-add button{
+  border:0; background:var(--line); color:var(--ink); border-radius:10px; padding:10px 13px;
+  font-family:'Gowun Dodum',sans-serif; font-size:13px; cursor:pointer;
+}
+.acts{display:flex; gap:8px; flex-wrap:wrap; margin-top:12px;}
+.act{
+  font-family:'Gowun Dodum',sans-serif; font-size:13px; padding:7px 13px; border-radius:100px;
+  border:1px solid var(--line); background:transparent; color:var(--ink-soft); cursor:pointer;
+}
+.act.deep{border-color:var(--deep); color:var(--deep);}
+.act.seal{border-color:var(--seal); color:var(--seal);}
+.act.warn{color:var(--seal); border-color:transparent; margin-left:auto;}
+
+/* 빈 화면 */
+.empty{text-align:center; padding:52px 20px; color:var(--faint);}
+.empty .glyph{font-size:26px; letter-spacing:.3em; margin-bottom:14px; color:var(--line);}
+.empty p{margin:0; font-size:15.5px; line-height:1.9;}
+
+/* 지난 것 */
+.past-toggle{
+  width:100%; background:none; border:0; padding:0; text-align:left; cursor:pointer;
+  display:flex; align-items:center; gap:9px;
+}
+.tally{font-family:'Gowun Dodum',sans-serif; font-size:12px; color:var(--faint); margin:14px 2px 0; line-height:1.8;}
+
+/* 시트 */
+.veil{position:fixed; inset:0; background:rgba(20,16,10,.34); opacity:0; pointer-events:none; transition:opacity .25s; z-index:50;}
+.veil.on{opacity:1; pointer-events:auto;}
+.sheet{
+  position:fixed; left:0; right:0; bottom:0; z-index:60; background:var(--card);
+  border-radius:20px 20px 0 0; padding:22px 22px calc(28px + env(safe-area-inset-bottom));
+  transform:translateY(101%); transition:transform .3s cubic-bezier(.32,.72,0,1);
+  max-width:560px; margin:0 auto; box-shadow:0 -6px 24px var(--shadow);
+}
+.sheet.on{transform:none;}
+.sheet h2{font-size:18px; margin:0 0 4px; font-weight:700; letter-spacing:.06em;}
+.sheet .sub{font-family:'Gowun Dodum',sans-serif; font-size:12.5px; color:var(--faint); margin-bottom:18px;}
+.row{display:flex; align-items:center; justify-content:space-between; padding:13px 0; border-top:1px solid var(--line); font-size:16px;}
+.row:last-of-type{border-bottom:1px solid var(--line);}
+.row .label{color:var(--ink);}
+.seg{display:flex; gap:6px;}
+.seg button{
+  font-family:'Gowun Dodum',sans-serif; font-size:13px; padding:6px 12px; border-radius:100px;
+  border:1px solid var(--line); background:transparent; color:var(--ink-soft); cursor:pointer;
+}
+.seg button.on{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+.linkrow{display:flex; gap:10px; margin-top:18px;}
+.linkrow button{
+  flex:1; font-family:'Gowun Dodum',sans-serif; font-size:14px; padding:12px; border-radius:12px;
+  border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer;
+}
+.hint{font-family:'Gowun Dodum',sans-serif; font-size:12px; color:var(--faint); margin-top:16px; line-height:1.8;}
+
+/* 알림 */
+.toast{
+  position:fixed; left:50%; bottom:calc(30px + env(safe-area-inset-bottom)); transform:translate(-50%,14px);
+  background:var(--ink); color:var(--paper); font-family:'Gowun Dodum',sans-serif; font-size:13.5px;
+  padding:11px 18px; border-radius:100px; opacity:0; pointer-events:none; transition:.25s; z-index:80; white-space:nowrap;
+}
+.toast.on{opacity:.96; transform:translate(-50%,0);}
+@media (prefers-reduced-motion: reduce){*{animation:none !important; transition:none !important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>뜸</h1>
+    <span class="tagline">하루가 지난 뒤에 결정합니다</span>
+    <button class="menu-btn" id="menuBtn" aria-label="설정">⋯</button>
+  </header>
+
+  <div class="compose">
+    <textarea id="input" rows="1" placeholder="무엇이 떠올랐나요" enterkeyhint="done"></textarea>
+    <div class="compose-foot">
+      <button class="chip on" data-kind="할 일">할 일</button>
+      <button class="chip" data-kind="결정">결정</button>
+      <button class="chip" data-kind="답장">답장</button>
+      <button class="put" id="put" disabled>담기</button>
+    </div>
+  </div>
+
+  <div id="board"></div>
+</div>
+
+<div class="veil" id="veil"></div>
+<div class="sheet" id="sheet">
+  <h2>뜸</h2>
+  <div class="sub">담은 것은 이 기기 안에만 있습니다</div>
+  <div class="row">
+    <span class="label">뜸 들이는 시간</span>
+    <div class="seg" id="hoursSeg">
+      <button data-h="12">12시간</button>
+      <button data-h="24">24시간</button>
+      <button data-h="48">48시간</button>
+    </div>
+  </div>
+  <div class="linkrow">
+    <button id="exportBtn">내보내기</button>
+    <button id="importBtn">가져오기</button>
+  </div>
+  <input type="file" id="file" accept="application/json,.json" hidden>
+  <div class="hint">사파리에서 공유 → 홈 화면에 추가를 하면 앱처럼 열립니다.<br>내보낸 파일은 다른 기기로 옮기거나 백업으로 둘 수 있습니다.</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ── 저장소 (IndexedDB) ───────────────────────── */
+const DB = (() => {
+  let db = null, mem = {items:[], meta:{hours:24}};
+  const open = () => new Promise((res) => {
+    if (db) return res(db);
+    let req;
+    try { req = indexedDB.open('tteum', 1); } catch(e){ return res(null); }
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('items')) d.createObjectStore('items', {keyPath:'id'});
+      if (!d.objectStoreNames.contains('meta'))  d.createObjectStore('meta',  {keyPath:'k'});
+    };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror = () => res(null);
+  });
+  const tx = async (store, mode) => {
+    const d = await open(); if (!d) return null;
+    return d.transaction(store, mode).objectStore(store);
+  };
+  return {
+    async allItems(){
+      const s = await tx('items','readonly'); if (!s) return mem.items.slice();
+      return new Promise(r => { const q = s.getAll(); q.onsuccess = () => r(q.result||[]); q.onerror = () => r([]); });
+    },
+    async save(item){
+      const s = await tx('items','readwrite');
+      if (!s){ const i = mem.items.findIndex(x=>x.id===item.id); i<0 ? mem.items.push(item) : mem.items[i]=item; return; }
+      s.put(item);
+    },
+    async remove(id){
+      const s = await tx('items','readwrite');
+      if (!s){ mem.items = mem.items.filter(x=>x.id!==id); return; }
+      s.delete(id);
+    },
+    async clear(){
+      const s = await tx('items','readwrite');
+      if (!s){ mem.items = []; return; }
+      s.clear();
+    },
+    async getMeta(k, dflt){
+      const s = await tx('meta','readonly'); if (!s) return mem.meta[k] ?? dflt;
+      return new Promise(r => { const q = s.get(k); q.onsuccess = () => r(q.result ? q.result.v : dflt); q.onerror = () => r(dflt); });
+    },
+    async setMeta(k, v){
+      const s = await tx('meta','readwrite');
+      if (!s){ mem.meta[k] = v; return; }
+      s.put({k, v});
+    }
+  };
+})();
+
+/* ── 상태 ─────────────────────────────────────── */
+const state = { items:[], hours:24, kind:'할 일', openId:null, pastOpen:false, armed:null };
+const HOUR = 3600000;
+const $ = s => document.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* ── 시간 표현 ────────────────────────────────── */
+function remain(ms){
+  if (ms <= 0) return '';
+  const m = Math.ceil(ms / 60000);
+  if (m < 1) return '곧 열립니다';
+  if (m < 60) return m + '분 남음';
+  const h = Math.floor(m/60), mm = m%60;
+  return mm ? `${h}시간 ${mm}분 남음` : `${h}시간 남음`;
+}
+function span(ms){
+  const h = Math.round(ms/HOUR);
+  if (h < 1) return '한 시간이 못 되어';
+  if (h < 48) return `${h}시간 뒤에`;
+  return `${Math.round(h/24)}일 뒤에`;
+}
+function dayLabel(t){
+  const d = new Date(t), n = new Date();
+  const same = d.toDateString() === n.toDateString();
+  const yest = new Date(n.getTime()-86400000).toDateString() === d.toDateString();
+  const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  if (same) return `오늘 ${hm}`;
+  if (yest) return `어제 ${hm}`;
+  return `${d.getMonth()+1}월 ${d.getDate()}일 ${hm}`;
+}
+
+/* ── 그리기 ───────────────────────────────────── */
+const C = 2 * Math.PI * 11.2;
+
+function markSVG(it, now){
+  if (it.status === 'done')
+    return `<svg viewBox="0 0 26 26"><circle class="circle-done" cx="13" cy="13" r="12"/><path class="tick" d="M8 13.4l3.4 3.3L18 9.8"/></svg>`;
+  if (it.status === 'dropped')
+    return `<svg viewBox="0 0 26 26"><circle class="circle-drop" cx="13" cy="13" r="12"/><path class="slash" d="M8.5 17.5L17.5 8.5"/></svg>`;
+  if (now >= it.readyAt)
+    return `<svg viewBox="0 0 26 26"><circle class="circle-open" cx="13" cy="13" r="12"/></svg>`;
+  const p = Math.max(0, Math.min(1, (now - it.createdAt) / (it.readyAt - it.createdAt)));
+  return `<svg viewBox="0 0 26 26">
+    <circle class="ring-bg" cx="13" cy="13" r="11.2"/>
+    <circle class="ring-fg" cx="13" cy="13" r="11.2" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C*(1-p)).toFixed(1)}" transform="rotate(-90 13 13)"/>
+  </svg>`;
+}
+
+function esc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function itemHTML(it, now, past){
+  const ready = now >= it.readyAt;
+  const open = state.openId === it.id;
+  const cls = ['item', past ? 'past ' + it.status : (ready ? 'ready' : 'steep')].join(' ');
+
+  let meta;
+  if (past){
+    meta = `<span>${it.status === 'done' ? '실행' : '놓아줌'} · ${dayLabel(it.resolvedAt)}</span>
+            <span class="dot">·</span><span>${span(it.resolvedAt - it.createdAt)} 결정</span>`;
+  } else {
+    meta = `<span class="kind">${it.kind}</span><span class="dot">·</span>
+            <span>${dayLabel(it.createdAt)}에 담음</span>
+            <span class="dot">·</span>
+            <span class="left">${ready ? '열렸습니다' : remain(it.readyAt - now)}</span>`
+            + (it.notes.length ? `<span class="dot">·</span><span>생각 ${it.notes.length}</span>` : '')
+            + (it.defers ? `<span class="dot">·</span><span>하루 더 ${it.defers}번</span>` : '');
+  }
+
+  let detail = '';
+  if (open){
+    const notes = it.notes.map(n =>
+      `<div class="note"><span class="when">${dayLabel(n.t)}</span>${esc(n.text)}</div>`).join('');
+    const armed = state.armed === it.id;
+    let acts = '';
+    if (!past){
+      acts = ready
+        ? `<button class="act deep" data-do="done" data-id="${it.id}">실행했습니다</button>
+           <button class="act seal" data-do="drop" data-id="${it.id}">하지 않기로 합니다</button>
+           <button class="act" data-do="defer" data-id="${it.id}">하루 더 묵히기</button>
+           <button class="act warn" data-do="del" data-id="${it.id}">${armed ? '정말 지웁니다' : '지우기'}</button>`
+        : `<button class="act warn" data-do="del" data-id="${it.id}">${armed ? '정말 지웁니다' : '지우기'}</button>`;
+    } else {
+      acts = `<button class="act" data-do="reopen" data-id="${it.id}">되돌리기</button>
+              <button class="act warn" data-do="del" data-id="${it.id}">${armed ? '정말 지웁니다' : '지우기'}</button>`;
+    }
+    detail = `<div class="detail">
+        ${notes ? `<div class="notes">${notes}</div>` : ''}
+        ${past ? '' : `<div class="note-add">
+          <textarea data-note="${it.id}" rows="1" placeholder="지금 드는 생각"></textarea>
+          <button data-do="note" data-id="${it.id}">적기</button>
+        </div>`}
+        <div class="acts">${acts}</div>
+      </div>`;
+  }
+
+  return `<div class="${cls}" data-item="${it.id}">
+      <button class="mark" data-mark="${it.id}" aria-label="표시">${markSVG(it, now)}</button>
+      <div class="body" data-body="${it.id}">
+        <div class="text">${esc(it.text)}</div>
+        <div class="meta">${meta}</div>
+        ${detail}
+      </div>
+    </div>`;
+}
+
+function sec(title, count, inner){
+  return `<section><div class="sec-head">
+      <span class="sec-title">${title}</span>
+      <span class="sec-count">${count}</span>
+      <span class="sec-rule"></span>
+    </div>${inner}</section>`;
+}
+
+function render(){
+  const now = Date.now();
+  const open = state.items.filter(i => i.status === 'open');
+  const ready = open.filter(i => now >= i.readyAt).sort((a,b) => a.readyAt - b.readyAt);
+  const steep = open.filter(i => now <  i.readyAt).sort((a,b) => a.readyAt - b.readyAt);
+  const past  = state.items.filter(i => i.status !== 'open').sort((a,b) => b.resolvedAt - a.resolvedAt);
+
+  let html = '';
+
+  if (!state.items.length){
+    html = `<div class="empty">
+        <div class="glyph">○ ○ ○</div>
+        <p>떠오른 것을 여기에 담아 두세요.<br>${state.hours}시간 동안은 생각만 합니다.</p>
+      </div>`;
+  } else {
+    if (ready.length)
+      html += sec('열린 것', ready.length, ready.map(i => itemHTML(i, now, false)).join(''));
+    if (steep.length)
+      html += sec('뜸 들이는 중', steep.length, steep.map(i => itemHTML(i, now, false)).join(''));
+    if (!ready.length && !steep.length)
+      html += `<div class="empty"><div class="glyph">○ ○ ○</div><p>지금 들고 있는 것이 없습니다.</p></div>`;
+
+    if (past.length){
+      const shown = state.pastOpen ? past.slice(0, 120) : [];
+      const month = past.filter(i => i.resolvedAt > now - 30*86400000);
+      const dropped = month.filter(i => i.status === 'dropped').length;
+      html += `<section>
+        <button class="past-toggle sec-head" data-do="togglePast">
+          <span class="sec-title">지난 것</span>
+          <span class="sec-count">${past.length}</span>
+          <span class="sec-rule"></span>
+          <span class="sec-count">${state.pastOpen ? '접기' : '보기'}</span>
+        </button>
+        ${shown.map(i => itemHTML(i, now, true)).join('')}
+        ${state.pastOpen && month.length ? `<div class="tally">최근 30일에 ${month.length}가지를 결정했고, 그중 ${dropped}가지는 하지 않기로 했습니다.</div>` : ''}
+      </section>`;
+    }
+  }
+
+  $('#board').innerHTML = html;
+  document.title = ready.length ? `뜸 · ${ready.length}` : '뜸';
+}
+
+/* ── 동작 ─────────────────────────────────────── */
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900);
+}
+const find = id => state.items.find(i => i.id === id);
+async function persist(it){ await DB.save(it); render(); }
+
+async function add(){
+  const el = $('#input'), text = el.value.trim();
+  if (!text) return;
+  const now = Date.now();
+  const it = { id:uid(), text, kind:state.kind, createdAt:now, readyAt:now + state.hours*HOUR,
+               notes:[], status:'open', resolvedAt:null, defers:0 };
+  state.items.push(it);
+  await DB.save(it);
+  el.value = ''; el.style.height = 'auto'; $('#put').disabled = true;
+  render();
+  toast(`${state.hours}시간 뒤에 열립니다`);
+}
+
+async function act(kind, id){
+  const it = find(id); if (!it) return;
+  const now = Date.now();
+
+  if (kind === 'del'){
+    if (state.armed !== id){ state.armed = id; render(); return; }
+    state.items = state.items.filter(x => x.id !== id);
+    await DB.remove(id); state.armed = null; state.openId = null; render();
+    toast('지웠습니다'); return;
+  }
+  state.armed = null;
+
+  if (kind === 'note'){
+    const ta = document.querySelector(`[data-note="${id}"]`);
+    const t = ta && ta.value.trim(); if (!t) return;
+    it.notes.push({t:now, text:t}); ta.value = '';
+    await persist(it); return;
+  }
+  if (kind === 'defer'){
+    it.readyAt = now + 24*HOUR; it.defers = (it.defers||0) + 1;
+    state.openId = null; await persist(it); toast('하루 더 묵힙니다'); return;
+  }
+  if (kind === 'done' || kind === 'drop'){
+    if (now < it.readyAt) return;
+    it.status = kind === 'done' ? 'done' : 'dropped'; it.resolvedAt = now;
+    state.openId = null; await persist(it);
+    toast(kind === 'done' ? '실행으로 옮겼습니다' : '놓아주었습니다'); return;
+  }
+  if (kind === 'reopen'){
+    it.status = 'open'; it.resolvedAt = null;
+    if (it.readyAt > now) it.readyAt = now;
+    state.openId = null; await persist(it); toast('다시 열린 것으로 옮겼습니다'); return;
+  }
+}
+
+/* ── 사건 연결 ────────────────────────────────── */
+const input = $('#input');
+input.addEventListener('input', () => {
+  input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 190) + 'px';
+  $('#put').disabled = !input.value.trim();
+});
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); add(); }
+});
+$('#put').addEventListener('click', add);
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+  document.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+  c.classList.add('on'); state.kind = c.dataset.kind;
+}));
+
+$('#board').addEventListener('click', e => {
+  const doBtn = e.target.closest('[data-do]');
+  if (doBtn){
+    const k = doBtn.dataset.do;
+    if (k === 'togglePast'){ state.pastOpen = !state.pastOpen; render(); return; }
+    act(k, doBtn.dataset.id); return;
+  }
+  const mark = e.target.closest('[data-mark]');
+  if (mark){
+    const it = find(mark.dataset.mark); if (!it) return;
+    if (it.status !== 'open'){ act('reopen', it.id); return; }
+    if (Date.now() < it.readyAt){
+      mark.classList.remove('nudge'); void mark.offsetWidth; mark.classList.add('nudge');
+      if (navigator.vibrate) navigator.vibrate(12);
+      toast(remain(it.readyAt - Date.now()) + ' — 아직 생각할 시간입니다');
+      return;
+    }
+    act('done', it.id); return;
+  }
+  const body = e.target.closest('[data-body]');
+  if (body){
+    const id = body.dataset.body;
+    state.openId = state.openId === id ? null : id;
+    state.armed = null; render();
+  }
+});
+
+/* 시트 */
+const veil = $('#veil'), sheet = $('#sheet');
+const openSheet = () => { veil.classList.add('on'); sheet.classList.add('on'); };
+const closeSheet = () => { veil.classList.remove('on'); sheet.classList.remove('on'); };
+$('#menuBtn').addEventListener('click', openSheet);
+veil.addEventListener('click', closeSheet);
+
+function paintSeg(){
+  document.querySelectorAll('#hoursSeg button').forEach(b =>
+    b.classList.toggle('on', Number(b.dataset.h) === state.hours));
+}
+$('#hoursSeg').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.hours = Number(b.dataset.h); await DB.setMeta('hours', state.hours);
+  paintSeg(); render(); toast(`앞으로 담는 것은 ${state.hours}시간 뒤에 열립니다`);
+});
+
+$('#exportBtn').addEventListener('click', () => {
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  const blob = new Blob([JSON.stringify({app:'뜸', version:1, exportedAt:Date.now(), hours:state.hours, items:state.items}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `뜸-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  closeSheet();
+});
+$('#importBtn').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const incoming = Array.isArray(data.items) ? data.items : [];
+    const have = new Set(state.items.map(i => i.id));
+    let n = 0;
+    for (const raw of incoming){
+      if (!raw || !raw.id || have.has(raw.id)) continue;
+      const it = { id:raw.id, text:String(raw.text||''), kind:raw.kind||'할 일',
+        createdAt:raw.createdAt||Date.now(), readyAt:raw.readyAt||Date.now(),
+        notes:Array.isArray(raw.notes)?raw.notes:[], status:raw.status||'open',
+        resolvedAt:raw.resolvedAt||null, defers:raw.defers||0 };
+      state.items.push(it); await DB.save(it); n++;
+    }
+    render(); closeSheet();
+    toast(n ? `${n}가지를 가져왔습니다` : '새로 가져올 것이 없습니다');
+  } catch(err){ toast('파일을 읽지 못했습니다'); }
+  e.target.value = '';
+});
+
+/* 시계 */
+let lastReady = 0;
+function tick(){
+  const now = Date.now();
+  const ready = state.items.filter(i => i.status === 'open' && now >= i.readyAt).length;
+  render();
+  if (ready > lastReady && lastReady !== 0) toast('열린 것이 있습니다');
+  lastReady = ready;
+}
+setInterval(tick, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+
+/* 시작 */
+(async () => {
+  state.hours = await DB.getMeta('hours', 24);
+  state.items = await DB.allItems();
+  paintSeg(); render();
+  lastReady = state.items.filter(i => i.status === 'open' && Date.now() >= i.readyAt).length;
+})();
+</script>
+</body>
+</html>
