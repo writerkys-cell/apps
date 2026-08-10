@@ -55,6 +55,9 @@
   .panel .title{font-size:18px;font-weight:600;line-height:1.35;word-break:break-word}
   .panel .title.quiet{font-size:15px;font-weight:400;color:#8d897c}
   .panel .ask{font-size:12.5px;color:#8d897c;margin-top:6px;line-height:1.5}
+  .panel .hist{font-size:12px;color:#a39f91;margin-top:5px;font-variant-numeric:tabular-nums}
+  .panel .hist:empty{display:none}
+  .panel .hist b{color:#8a6d00;font-weight:600}
   .panel .pacts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
   .panel .pacts button{
     font-size:14px;padding:8px 17px;border:1.4px solid #26241f;border-radius:999px;
@@ -168,6 +171,30 @@
   .hintrow{margin-top:10px;font-size:12px;color:#8d897c;min-height:18px}
   .hintrow b{color:#26241f;font-weight:600}
 
+  /* ── 완료 기록 ── */
+  #recSheet .sheet{max-height:82vh;overflow-y:auto}
+  .recsum{
+    display:flex;gap:18px;padding:12px 14px;margin-bottom:14px;
+    background:#f4f1e6;border-radius:10px;
+  }
+  .recsum div{flex:1}
+  .recsum .k{font-size:10.5px;color:#a39f91;letter-spacing:.08em}
+  .recsum .v{font-size:16px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+  .reclist{max-height:46vh;overflow-y:auto;margin:0 -4px;padding:0 4px}
+  .rec{border-bottom:1px solid #ebe7db;padding:11px 2px;display:flex;gap:10px;align-items:flex-start}
+  .rec:last-child{border-bottom:none}
+  .rec .info{flex:1;min-width:0}
+  .rec .rt{font-size:15px;font-weight:600;line-height:1.35;word-break:break-word}
+  .rec .rl{font-size:11.5px;color:#8d897c;margin-top:4px;line-height:1.6;font-variant-numeric:tabular-nums}
+  .rec .rl b{color:#26241f;font-weight:600}
+  .rec .held{color:#8a6d00}
+  .rec .del{
+    flex:none;border:1px solid #e0dccf;background:none;color:#b7b3a7;
+    font-size:11.5px;padding:4px 9px;border-radius:999px;
+  }
+  .rec .del:active{background:#f4f1e6}
+  .recempty{padding:32px 8px;text-align:center;color:#b7b3a7;font-size:13.5px;line-height:1.8}
+
   #helpSheet .sheet{max-height:78vh;overflow-y:auto}
   #helpSheet h4{font-size:13.5px;margin:14px 0 4px}
   #helpSheet li{font-size:13px;color:#5d594d;line-height:1.7;margin-left:18px}
@@ -199,8 +226,8 @@
     <button id="exportBtn">내보내기</button> ·
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
-    <span id="statLabel"></span>
-    <div class="ver">FV 3.0 · 15분 · 2026-08-10</div>
+    <button id="recordsBtn">완료 0</button>
+    <div class="ver">FV 3.2 · 15분 · 기록 · 2026-08-11</div>
   </div>
 </div>
 
@@ -241,6 +268,15 @@
   </div>
 </div>
 
+<div class="modal hidden" id="recSheet">
+  <div class="sheet">
+    <h3>완료 기록</h3>
+    <div id="recSummary" class="recsum"></div>
+    <div id="recList" class="reclist"></div>
+    <div class="sheet-acts"><button class="primary" id="recClose">닫기</button></div>
+  </div>
+</div>
+
 <div class="modal hidden" id="helpSheet">
   <div class="sheet">
     <h3>Final Version 사용법</h3>
@@ -278,6 +314,14 @@
       <li>웹은 물론 DEVONthink(<code>x-devonthink-item:</code>), Scrivener, Things(<code>things:///</code>), 단축어(<code>shortcuts://</code>) 등 어떤 앱 링크든 됩니다.</li>
       <li>링크는 끝내기 전까지 따라다닙니다 — 계속으로 다시 넣거나 비활성에서 되살려도 유지됩니다.</li>
     </ul>
+    <h4>완료 기록</h4>
+    <ul>
+      <li>아래 <b>완료 N</b>을 누르면 끝낸 할 일의 기록을 볼 수 있습니다. 하나씩 삭제할 수 있어요.</li>
+      <li><b>투여 시간</b>은 시작을 누른 뒤 실제로 붙들고 있던 시간의 합입니다. 방해로 리셋된 시간도 버리지 않고 포함합니다.</li>
+      <li><b>기간</b>은 처음 시작한 날부터 끝낸 날까지입니다. '계속'으로 여러 번 나눠서 해도 하나로 이어지며, <b>몇 번에 나눠서</b> 했는지도 남습니다.</li>
+      <li>이어서 하는 중인 할 일은 상단에 <b>"지금까지 3시간 12분 · 8번째"</b>처럼 누적이 표시됩니다.</li>
+      <li>미결로 <b>보류한 기간은 빼고</b> 셉니다. 보류 중인 할 일은 아직 기록에 남지 않고, 되살려서 끝내면 그때 기록됩니다.</li>
+    </ul>
     <h4>데이터</h4>
     <ul>
       <li>이 기기에 자동 저장됩니다. Safari에서 <b>공유 → 홈 화면에 추가</b>를 하면 앱처럼 쓸 수 있어요.</li>
@@ -293,7 +337,7 @@ const NS='http://www.w3.org/2000/svg';
 const LS_KEY='autofocus_notebook_v1';
 const PAGE_SIZE=10;
 
-let state=migrate(loadState())||{pages:[],inactive:[],doneCount:0,phase:'select'};
+let state=migrate(loadState())||{pages:[],inactive:[],doneCount:0,phase:'select',records:[]};
 let cur=0;
 let backCur=0;
 let animSet=new Set();     // 줄·형광펜 애니메이션 대상
@@ -318,6 +362,7 @@ function migrate(s){
   delete s.selectedId;delete s.selectedAt;
   if(s.phase!=='select'&&s.phase!=='run')s.phase='select';
   if(s.timer&&(typeof s.timer.startedAt!=='number'||!s.timer.id))s.timer=null;
+  if(!Array.isArray(s.records))s.records=[];
   return s;
 }
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}}
@@ -462,22 +507,49 @@ function timerState(){
   if(!tm)return 'idle';
   return remainMs()<=0?'fin':'running';
 }
+// 이 할 일에 지금까지 들인 시간과 몇 번째로 이어가는 중인지
+function investedMs(t){
+  const tm=timerFor();
+  return (t.workedMs||0)+(tm?Math.max(0,Date.now()-tm.startedAt):0);
+}
+function histText(){
+  const t=currentTask();
+  if(!t)return '';
+  const inv=investedMs(t),gen=t.gen||1;
+  if(!inv&&gen<2)return '';
+  const parts=[];
+  if(inv)parts.push('지금까지 <b>'+fmtDur(inv)+'</b>');
+  if(gen>1)parts.push('<b>'+gen+'번째</b>');
+  return parts.join(' · ');
+}
 function fmtClock(ms){
   const s=Math.ceil(ms/1000);
   return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
 }
 function startTimer(){
   const t=currentTask();if(!t)return;
+  if(!t.firstStartedAt)t.firstStartedAt=Date.now();   // 이 할 일을 처음 붙든 시각
   state.timer={id:t.id,startedAt:Date.now(),beeped:false};
   save();
   scheduleBeep(FOCUS_MS/1000);
   render();
   toast('15분 — 이 일에만 머무세요');
 }
+// 세션에 쓴 시간을 항목에 적립한다 (방해받은 시간도 투여한 시간이다)
+function bankSession(){
+  const tm=timerFor();
+  if(!tm)return 0;
+  const t=currentTask();
+  const spent=Math.max(0,Date.now()-tm.startedAt);
+  if(t)t.workedMs=(t.workedMs||0)+spent;
+  return spent;
+}
 function interruptTimer(){
-  cancelBeep();
-  state.timer=null;save();render();
-  toast('방해받음 — 15분을 처음부터');
+  const spent=bankSession();
+  const t=currentTask();
+  if(t)t.interrupts=(t.interrupts||0)+1;
+  cancelBeep();state.timer=null;save();render();
+  toast('방해받음 ('+fmtDur(spent)+' 적립) — 15분을 처음부터');
 }
 function clearTimer(){cancelBeep();state.timer=null;}
 function tick(){
@@ -488,6 +560,8 @@ function tick(){
     if(c)c.textContent=fmtClock(r);
     const b=document.getElementById('barfill');
     if(b)b.style.width=(100*(FOCUS_MS-r)/FOCUS_MS).toFixed(1)+'%';
+    const h=document.getElementById('hist');
+    if(h)h.innerHTML=histText();
   }else if(ts==='fin'&&state.timer&&!state.timer.beeped){
     state.timer.beeped=true;save();
     alertDone();render();
@@ -590,13 +664,33 @@ function openLink(url){
 }
 
 /* ---------- 추가 ---------- */
-function pushToEnd(text,link){
+// carry: 계속·활성으로 이어질 때 넘겨받는 이력
+function pushToEnd(text,link,carry){
   let lp=state.pages[state.pages.length-1];
   if(!lp||lp.length>=PAGE_SIZE){lp=[];state.pages.push(lp);}
   const it={id:uid(),text:text,status:'active'};
   if(link)it.link=link;
+  it.root=(carry&&carry.root)||it.id;
+  it.gen=(carry&&carry.gen)||1;
+  if(carry){
+    if(carry.firstStartedAt)it.firstStartedAt=carry.firstStartedAt;
+    if(carry.workedMs)it.workedMs=carry.workedMs;
+    if(carry.interrupts)it.interrupts=carry.interrupts;
+    if(carry.heldMs)it.heldMs=carry.heldMs;
+  }
   lp.push(it);
   return it;
+}
+// 한 항목의 이력을 다음 세대로 넘길 형태로
+function carryOf(it,extraHeldMs){
+  return {
+    root:it.root||it.id,
+    gen:(it.gen||1)+1,          // 다시 리스트에 오르면 한 번 더 나눠서 하는 것
+    firstStartedAt:it.firstStartedAt||0,
+    workedMs:it.workedMs||0,
+    interrupts:it.interrupts||0,
+    heldMs:(it.heldMs||0)+(extraHeldMs||0)
+  };
 }
 function addFromBox(){
   const v=addInput.value.trim();
@@ -624,22 +718,25 @@ function act(action){
   const ts=timerState();
   if(ts==='running'){toast('15분이 끝나야 누를 수 있습니다');return;}
   if(ts==='idle'&&action!=='dismiss'){toast('먼저 시작을 눌러 15분을 채우세요');return;}
-  clearTimer();
   snap();
+  bankSession();          // 이번 세션 시간 적립
+  clearTimer();
   animSet.add(it.id);
   delete it.dot;
   if(action==='done'){
     it.status='done';state.doneCount=(state.doneCount||0)+1;
-    save();render();toast('완료!',true);
+    addRecord(it);
+    save();render();toast('완료! — '+fmtDur(it.workedMs||0)+' 투여',true);
     afterAct();
   }else if(action==='dismiss'){
     it.status='dismissed';
+    it.dismissedAt=Date.now();   // 보류 시작
     save();render();toast('미결 — 다음에 다시',true);
     afterAct();
   }else if(action==='cont'){
     it.status='cont';
     save();render();
-    openContModal(it.text,{mode:'cont',link:it.link||''});
+    openContModal(it.text,{mode:'cont',link:it.link||'',carry:carryOf(it)});
   }
 }
 function afterAct(delay){
@@ -665,6 +762,14 @@ function cleanupPages(){
       pg.filter(t=>t.status==='dismissed').forEach(t=>{
         const o={id:t.id,text:t.text};
         if(t.link)o.link=t.link;
+        // 이력과 보류 시작 시각을 함께 옮긴다
+        o.root=t.root||t.id;
+        o.gen=t.gen||1;
+        if(t.firstStartedAt)o.firstStartedAt=t.firstStartedAt;
+        if(t.workedMs)o.workedMs=t.workedMs;
+        if(t.interrupts)o.interrupts=t.interrupts;
+        if(t.heldMs)o.heldMs=t.heldMs;
+        o.dismissedAt=t.dismissedAt||Date.now();
         state.inactive.push(o);
       });
       state.pages.splice(i,1);
@@ -675,6 +780,83 @@ function cleanupPages(){
   }
   if(removed){save();toast('처리가 끝난 페이지가 사라졌습니다');}
   return removed;
+}
+
+/* ---------- 완료 기록 ---------- */
+function addRecord(it){
+  const end=Date.now();
+  const start=it.firstStartedAt||end;
+  const held=it.heldMs||0;
+  state.records.push({
+    id:uid(),
+    text:it.text,
+    startedAt:start,
+    endedAt:end,
+    workedMs:it.workedMs||0,
+    interrupts:it.interrupts||0,
+    gen:it.gen||1,
+    heldMs:held,
+    spanMs:Math.max(0,end-start-held)
+  });
+}
+function fmtDur(ms){
+  const s=Math.round((ms||0)/1000);
+  if(s<60)return s+'초';
+  const m=Math.round(s/60);
+  if(m<60)return m+'분';
+  const h=Math.floor(m/60),mm=m%60;
+  return h+'시간'+(mm?' '+mm+'분':'');
+}
+function fmtSpan(ms){
+  const mins=Math.floor((ms||0)/60000);
+  if(mins<60)return mins+'분';
+  const h=Math.floor(mins/60);
+  if(h<24)return h+'시간';
+  const days=Math.floor(h/24),hh=h%24;
+  return days+'일'+(hh?' '+hh+'시간':'');
+}
+function fmtWhen(ms){
+  const d=new Date(ms);
+  return (d.getMonth()+1)+'월 '+d.getDate()+'일 '
+    +String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function renderRecords(){
+  const rs=state.records.slice().sort((a,b)=>b.endedAt-a.endedAt);
+  const totalWork=rs.reduce((s,r)=>s+(r.workedMs||0),0);
+  document.getElementById('recSummary').innerHTML=
+     '<div><div class="k">완료</div><div class="v">'+rs.length+'건</div></div>'
+    +'<div><div class="k">총 투여 시간</div><div class="v">'+fmtDur(totalWork)+'</div></div>'
+    +'<div><div class="k">방해</div><div class="v">'+rs.reduce((s,r)=>s+(r.interrupts||0),0)+'회</div></div>';
+  const list=document.getElementById('recList');
+  if(!rs.length){
+    list.innerHTML='<div class="recempty">아직 완료한 할 일이 없습니다.<br>15분을 채우고 \'끝\'을 누르면 여기에 쌓입니다.</div>';
+    return;
+  }
+  list.innerHTML=rs.map(r=>
+    '<div class="rec"><div class="info">'
+    +'<div class="rt">'+esc(r.text)+'</div>'
+    +'<div class="rl">'+fmtWhen(r.startedAt)+' → '+fmtWhen(r.endedAt)+'</div>'
+    +'<div class="rl">투여 <b>'+fmtDur(r.workedMs)+'</b>'
+      +((r.gen||1)>1?' · <b>'+r.gen+'번</b>에 나눠서':'')
+      +(r.interrupts?' · 방해 '+r.interrupts+'회':'')
+      +' · 기간 <b>'+fmtSpan(r.spanMs)+'</b>'
+      +(r.heldMs>=60000?'<span class="held"> (보류 '+fmtSpan(r.heldMs)+' 제외)</span>':'')
+    +'</div>'
+    +'</div><button class="del" data-a="delrec" data-id="'+r.id+'">삭제</button></div>'
+  ).join('');
+}
+function openRecords(){
+  renderRecords();
+  document.getElementById('recSheet').classList.remove('hidden');
+}
+function deleteRecord(id){
+  const i=state.records.findIndex(r=>r.id===id);
+  if(i<0)return;
+  if(!confirm('이 기록을 삭제할까요?'))return;
+  snap();
+  state.records.splice(i,1);
+  save();renderRecords();render();
+  toast('기록 삭제됨',true);
 }
 
 /* ---------- 계속 / 활성 모달 ---------- */
@@ -700,14 +882,16 @@ function confirmCont(){
     const i=state.inactive.findIndex(t=>t.id===ctx.id);
     if(i<0){closeModal(contModal);return;}
     snap();
+    const held=state.inactive[i].dismissedAt?Math.max(0,Date.now()-state.inactive[i].dismissedAt):0;
+    const carry=carryOf(state.inactive[i],state.inactive[i].firstStartedAt?held:0);
     state.inactive.splice(i,1);
-    pushToEnd(v||ctx.orig||'(이름 없음)',ctx.link||'');
+    pushToEnd(v||ctx.orig||'(이름 없음)',ctx.link||'',carry);
     ensureFirstDot();
     closeModal(contModal);
     save();render();
     toast('리스트 끝에 다시 들어갔습니다',true);
   }else{
-    pushToEnd(v||'(이름 없음)',ctx.link||'');
+    pushToEnd(v||'(이름 없음)',ctx.link||'',ctx.carry);
     closeModal(contModal);
     save();render();
     toast('리스트 끝에 다시 적었습니다',true);
@@ -910,6 +1094,7 @@ function renderPanel(){
     }
     panel.innerHTML='<div class="cap">지금 하는 일</div>'
       +'<div class="title">'+esc(t.text)+chipHtml(t)+'</div>'
+      +'<div class="hist" id="hist">'+histText()+'</div>'
       +'<div class="timerbox"><div class="timerline">'+clock+'</div>'
       +'<div class="tnote">'+note+'</div></div>'
       +'<div class="pacts">'+btns
@@ -1013,7 +1198,7 @@ function render(){
   const ib=document.getElementById('inactiveBtn');
   ib.classList.toggle('on',isInactive);
   ib.textContent='비활성'+(state.inactive.length?' '+state.inactive.length:'');
-  document.getElementById('statLabel').textContent=' · 완료 '+(state.doneCount||0);
+  document.getElementById('recordsBtn').textContent='완료 '+state.records.length;
 
   requestAnimationFrame(decorate);
 }
@@ -1046,7 +1231,8 @@ function importData(file){
       const s=JSON.parse(rd.result);
       if(!Array.isArray(s.pages)||!Array.isArray(s.inactive))throw 0;
       if(!confirm('현재 데이터를 백업 파일 내용으로 바꿀까요?'))return;
-      state=migrate({pages:s.pages,inactive:s.inactive,doneCount:s.doneCount||0,phase:s.phase||'select'});
+      state=migrate({pages:s.pages,inactive:s.inactive,doneCount:s.doneCount||0,
+                     phase:s.phase||'select',records:Array.isArray(s.records)?s.records:[]});
       cur=0;save();render();toast('불러왔습니다');
     }catch(e){alert('올바른 백업 파일이 아닙니다.');}
   };
@@ -1156,6 +1342,15 @@ document.getElementById('linkInput').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();saveLink();}
 });
 linkModal.addEventListener('click',e=>{if(e.target===linkModal){linkEditId=null;closeModal(linkModal);}});
+
+const recSheet=document.getElementById('recSheet');
+document.getElementById('recordsBtn').addEventListener('click',openRecords);
+document.getElementById('recClose').addEventListener('click',()=>closeModal(recSheet));
+recSheet.addEventListener('click',e=>{
+  const b=e.target.closest('button');
+  if(b&&b.dataset.a==='delrec'){deleteRecord(b.dataset.id);return;}
+  if(e.target===recSheet)closeModal(recSheet);
+});
 
 const helpSheet=document.getElementById('helpSheet');
 document.getElementById('helpBtn').addEventListener('click',()=>helpSheet.classList.remove('hidden'));
