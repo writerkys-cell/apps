@@ -65,6 +65,20 @@
   .panel .pacts button.ghost{border-color:#c9c5b8;color:#6b6759}
   .panel .pacts button:active{opacity:.6}
   .panel .pacts .remain{margin-left:auto;font-size:12px;color:#a39f91;font-variant-numeric:tabular-nums}
+  .panel .pacts button[data-a="start"]{background:#26241f;color:#fdfcf9}
+  .panel .pacts button[data-a="interrupt"]{border-color:#b5462f;color:#b5462f}
+
+  /* ── 15분 타이머 ── */
+  .timerbox{margin-top:11px}
+  .timerline{display:flex;align-items:center;gap:12px}
+  .clock{font-size:29px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em;line-height:1.1}
+  .clock.idle{color:#c9c5b8}
+  .clock.fin{font-size:16px;color:#26241f}
+  .bar{flex:1;height:3px;background:#ebe7db;border-radius:2px;overflow:hidden}
+  .bar i{display:block;height:100%;background:#26241f;width:0;transition:width .3s linear}
+  .tnote{font-size:12px;color:#a39f91;margin-top:6px;line-height:1.5}
+  @keyframes ring{0%,100%{background:#fdfcf9}30%{background:#fff3c4}}
+  .panel.flash{animation:ring .6s ease-in-out 3}
 
   /* ── 리스트 ── */
   .page{
@@ -186,7 +200,7 @@
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <span id="statLabel"></span>
-    <div class="ver">FV 2.1 · 2026-08-07</div>
+    <div class="ver">FV 3.0 · 15분 · 2026-08-10</div>
   </div>
 </div>
 
@@ -242,6 +256,10 @@
     <ul>
       <li>점 찍은 할 일을 <b>역순</b>으로 — 마지막에 찍은 것부터 — 합니다.</li>
       <li>상단 패널에 지금 할 일이 뜹니다. 처리하면 다음 할 일이 떠오릅니다.</li>
+      <li><b>모든 할 일은 최소 15분입니다.</b> <b>시작</b>을 누르면 카운트다운이 돌고, 그동안 끝·계속은 잠깁니다. 15분이 지나면 비프음이 울리고 세 버튼이 열립니다. 더 하고 싶으면 계속하세요 — 15분은 하한이지 상한이 아닙니다.</li>
+      <li>도중에 방해를 받으면 <b>방해</b>를 누르세요. 15분이 처음부터 다시 시작됩니다. 끊기지 않은 15분을 채워야 다음으로 넘어갑니다.</li>
+      <li>시작 전에는 <b>미결</b>과 <b>링크</b>만 누를 수 있습니다. 지금 15분을 낼 수 없는 일이면 미결로 미루세요.</li>
+      <li>타이머는 실제 시계로 흐릅니다. 링크를 눌러 다른 앱에서 일해도, 앱을 껐다 켜도 이어집니다.</li>
       <li><b>끝</b> — 완료. 줄이 그어집니다.</li>
       <li><b>계속</b> — 끝내지 못했을 때. 줄을 긋고 리스트 맨 끝에 다시 적습니다. 이름을 바꿔 넣어도 됩니다.</li>
       <li><b>미결</b> — 다음에 다시 생각해볼 일. 노란 형광펜이 칠해지고 나중에 '비활성 할 일'로 옮겨집니다.</li>
@@ -299,6 +317,7 @@ function migrate(s){
   if(!s)return null;
   delete s.selectedId;delete s.selectedAt;
   if(s.phase!=='select'&&s.phase!=='run')s.phase='select';
+  if(s.timer&&(typeof s.timer.startedAt!=='number'||!s.timer.id))s.timer=null;
   return s;
 }
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}}
@@ -385,6 +404,7 @@ function addDot(id){
 }
 function startRun(){
   if(!dotted().length){toast('점 찍힌 할 일이 없습니다');return;}
+  clearTimer();
   state.phase='run';
   save();
   const t=currentTask();
@@ -393,6 +413,88 @@ function startRun(){
   render();
   toast('실행 — 마지막에 찍은 것부터');
 }
+/* ---------- 15분 타이머 ---------- */
+const FOCUS_MS=15*60*1000;
+let audioCtx=null,beepNodes=[],tickTimer=null;
+function ensureAudio(){
+  try{
+    if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+  }catch(e){audioCtx=null;}
+  return audioCtx;
+}
+function cancelBeep(){beepNodes.forEach(o=>{try{o.stop();}catch(e){}});beepNodes=[];}
+// 시작 시점에 미리 예약해 두면 타이머가 눌려도 제때 울린다
+function scheduleBeep(delaySec){
+  const ctx=ensureAudio();if(!ctx)return;
+  cancelBeep();
+  const t0=ctx.currentTime+Math.max(0,delaySec);
+  for(let i=0;i<3;i++){
+    const s=t0+i*0.34;
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='sine';o.frequency.value=i===2?1046:880;
+    g.gain.setValueAtTime(0.0001,s);
+    g.gain.exponentialRampToValueAtTime(0.32,s+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,s+0.26);
+    o.connect(g);g.connect(ctx.destination);
+    o.start(s);o.stop(s+0.3);
+    beepNodes.push(o);
+  }
+}
+function alertDone(){
+  scheduleBeep(0);
+  try{if(navigator.vibrate)navigator.vibrate([200,110,200,110,320]);}catch(e){}
+  panel.classList.remove('flash');void panel.offsetWidth;panel.classList.add('flash');
+}
+function timerFor(){
+  const t=currentTask();
+  if(!t||!state.timer||state.timer.id!==t.id)return null;
+  return state.timer;
+}
+function remainMs(){
+  const tm=timerFor();
+  if(!tm)return FOCUS_MS;
+  return Math.max(0,FOCUS_MS-(Date.now()-tm.startedAt));
+}
+// 'idle' 시작 전 · 'running' 진행 중 · 'fin' 15분 완주
+function timerState(){
+  const tm=timerFor();
+  if(!tm)return 'idle';
+  return remainMs()<=0?'fin':'running';
+}
+function fmtClock(ms){
+  const s=Math.ceil(ms/1000);
+  return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+}
+function startTimer(){
+  const t=currentTask();if(!t)return;
+  state.timer={id:t.id,startedAt:Date.now(),beeped:false};
+  save();
+  scheduleBeep(FOCUS_MS/1000);
+  render();
+  toast('15분 — 이 일에만 머무세요');
+}
+function interruptTimer(){
+  cancelBeep();
+  state.timer=null;save();render();
+  toast('방해받음 — 15분을 처음부터');
+}
+function clearTimer(){cancelBeep();state.timer=null;}
+function tick(){
+  const ts=timerState();
+  if(ts==='running'){
+    const r=remainMs();
+    const c=document.getElementById('clock');
+    if(c)c.textContent=fmtClock(r);
+    const b=document.getElementById('barfill');
+    if(b)b.style.width=(100*(FOCUS_MS-r)/FOCUS_MS).toFixed(1)+'%';
+  }else if(ts==='fin'&&state.timer&&!state.timer.beeped){
+    state.timer.beeped=true;save();
+    alertDone();render();
+    toast('15분 완료 — 더 해도 되고, 여기서 정리해도 됩니다');
+  }
+}
+
 /* ---------- 날짜가 바뀌면 선택 해제 ---------- */
 function todayStr(){
   const d=new Date();
@@ -405,6 +507,7 @@ function checkNewDay(){
   const first=!state.day;
   const had=dotted().length>1||state.phase==='run';
   state.day=t;
+  clearTimer();
   flat().forEach(f=>{delete f.it.dot;});
   state.phase='select';
   ensureFirstDot();
@@ -421,6 +524,7 @@ function setDateLabel(){
 }
 
 function backToSelect(quiet){
+  clearTimer();
   state.phase='select';
   flat().forEach(f=>{delete f.it.dot;});
   ensureFirstDot();
@@ -517,6 +621,10 @@ function setLinkRow(on){
 function act(action){
   const it=currentTask();
   if(!it)return;
+  const ts=timerState();
+  if(ts==='running'){toast('15분이 끝나야 누를 수 있습니다');return;}
+  if(ts==='idle'&&action!=='dismiss'){toast('먼저 시작을 눌러 15분을 채우세요');return;}
+  clearTimer();
   snap();
   animSet.add(it.id);
   delete it.dot;
@@ -779,13 +887,32 @@ function renderPanel(){
   const chain=dotted();
   const t=currentTask();
   if(state.phase==='run'&&t){
+    const ts=timerState();
+    const lk='<button class="ghost" data-a="link" data-id="'+t.id+'">'+(t.link?'링크 수정':'링크')+'</button>';
+    let clock,note,btns;
+    if(ts==='running'){
+      const r=remainMs();
+      clock='<span class="clock" id="clock">'+fmtClock(r)+'</span>'
+        +'<span class="bar"><i id="barfill" style="width:'+(100*(FOCUS_MS-r)/FOCUS_MS).toFixed(1)+'%"></i></span>';
+      note='끝날 때까지 이 일에만 머무세요. 방해를 받으면 아래를 누르고 처음부터 다시.';
+      btns='<button data-a="interrupt">방해</button>'+lk;
+    }else if(ts==='fin'){
+      clock='<span class="clock fin">15분 완료 ✓</span>';
+      note='더 해도 되고, 여기서 정리해도 됩니다.';
+      btns='<button data-a="done">끝</button>'
+        +'<button data-a="cont">계속</button>'
+        +'<button data-a="dismiss">미결</button>'+lk;
+    }else{
+      clock='<span class="clock idle">15:00</span>';
+      note='시작을 누르면 15분 동안 이 일에만 머뭅니다. 다 채워야 끝·계속을 누를 수 있어요.';
+      btns='<button data-a="start">시작</button>'
+        +'<button data-a="dismiss">미결</button>'+lk;
+    }
     panel.innerHTML='<div class="cap">지금 하는 일</div>'
       +'<div class="title">'+esc(t.text)+chipHtml(t)+'</div>'
-      +'<div class="pacts">'
-      +'<button data-a="done">끝</button>'
-      +'<button data-a="cont">계속</button>'
-      +'<button data-a="dismiss">미결</button>'
-      +'<button class="ghost" data-a="link" data-id="'+t.id+'">'+(t.link?'링크 수정':'링크')+'</button>'
+      +'<div class="timerbox"><div class="timerline">'+clock+'</div>'
+      +'<div class="tnote">'+note+'</div></div>'
+      +'<div class="pacts">'+btns
       +'<span class="remain">체인 '+chain.length+'개</span>'
       +'</div>';
   }else if(state.phase==='run'){
@@ -957,6 +1084,8 @@ panel.addEventListener('click',e=>{
   if(a==='done'||a==='cont'||a==='dismiss'){act(a);return;}
   if(a==='link'){openLinkModal(btn.dataset.id);return;}
   if(a==='startrun'){startRun();return;}
+  if(a==='start'){startTimer();return;}
+  if(a==='interrupt'){interruptTimer();return;}
 });
 
 main.addEventListener('click',e=>{
@@ -1071,9 +1200,22 @@ main.addEventListener('touchend',e=>{
   // 앱을 켜 둔 채 자정을 넘겨도 반영
   setInterval(()=>{if(checkNewDay())render();},30000);
   document.addEventListener('visibilitychange',()=>{
-    if(!document.hidden&&checkNewDay())render();
+    if(document.hidden)return;
+    if(checkNewDay())render();
+    ensureAudio();tick();
   });
-  window.addEventListener('focus',()=>{if(checkNewDay())render();});
+  window.addEventListener('focus',()=>{if(checkNewDay())render();tick();});
+
+  // 15분 카운트다운
+  tickTimer=setInterval(tick,250);
+  tick();
+
+  // 앱을 껐다 켠 뒤에도 소리가 나도록, 첫 조작 때 오디오를 깨우고 알림을 다시 예약
+  document.addEventListener('click',function once(){
+    document.removeEventListener('click',once);
+    ensureAudio();
+    if(timerState()==='running')scheduleBeep(remainMs()/1000);
+  },true);
 })();
 </script>
 </body>
