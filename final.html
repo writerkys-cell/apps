@@ -227,7 +227,7 @@
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <button id="recordsBtn">기록</button>
-    <div class="ver">FV 3.4 · 15분 · 기록 · 2026-08-11</div>
+    <div class="ver">FV 3.5 · 15분 · 기록 · 2026-08-11</div>
   </div>
 </div>
 
@@ -317,6 +317,7 @@
     <h4>완료 기록</h4>
     <ul>
       <li>아래 <b>기록</b>을 누르면 끝낸 할 일을 볼 수 있습니다. 맨 위에 <b>오늘</b>의 완료 개수·집중 시간·방해 횟수가 뜹니다.</li>
+      <li>오늘 집중 시간과 방해 횟수는 <b>완료와 무관하게</b> 쌓입니다. 아직 아무것도 끝내지 못한 날에도 오늘 얼마나 붙들고 있었는지 보입니다.</li>
       <li>기록은 하나씩 삭제할 수 있습니다. 확인하고 지워 나가는 용도로 쓰세요.</li>
       <li><b>투여 시간</b>은 시작을 누른 뒤 실제로 붙들고 있던 시간의 합입니다. 방해로 리셋된 시간도 버리지 않고 포함합니다.</li>
       <li><b>기간</b>은 처음 시작한 날부터 끝낸 날까지입니다. '계속'으로 여러 번 나눠서 해도 하나로 이어지며, <b>몇 번에 나눠서</b> 했는지도 남습니다.</li>
@@ -338,7 +339,7 @@ const NS='http://www.w3.org/2000/svg';
 const LS_KEY='autofocus_notebook_v1';
 const PAGE_SIZE=10;
 
-let state=migrate(loadState())||{pages:[],inactive:[],doneCount:0,phase:'select',records:[]};
+let state=migrate(loadState())||{pages:[],inactive:[],doneCount:0,phase:'select',records:[],daily:{}};
 let cur=0;
 let backCur=0;
 let animSet=new Set();     // 줄·형광펜 애니메이션 대상
@@ -364,6 +365,10 @@ function migrate(s){
   if(s.phase!=='select'&&s.phase!=='run')s.phase='select';
   if(s.timer&&(typeof s.timer.startedAt!=='number'||!s.timer.id))s.timer=null;
   if(!Array.isArray(s.records))s.records=[];
+  if(!s.daily||typeof s.daily!=='object'||Array.isArray(s.daily))s.daily={};
+  // 날짜별 집계는 90일치만 보관
+  const cut=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+  Object.keys(s.daily).forEach(k=>{if(k<cut)delete s.daily[k];});
   return s;
 }
 function save(){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}}
@@ -536,19 +541,28 @@ function startTimer(){
   render();
   toast('15분 — 이 일에만 머무세요');
 }
-// 세션에 쓴 시간을 항목에 적립한다 (방해받은 시간도 투여한 시간이다)
+// 오늘 칸 (완료 여부와 상관없이 하루 단위로 쌓인다)
+function dailyBucket(){
+  if(!state.daily)state.daily={};
+  const k=todayStr();
+  if(!state.daily[k])state.daily[k]={workedMs:0,interrupts:0};
+  return state.daily[k];
+}
+// 세션에 쓴 시간을 항목과 오늘 칸에 함께 적립한다 (방해받은 시간도 투여한 시간이다)
 function bankSession(){
   const tm=timerFor();
   if(!tm)return 0;
   const t=currentTask();
   const spent=Math.max(0,Date.now()-tm.startedAt);
   if(t)t.workedMs=(t.workedMs||0)+spent;
+  dailyBucket().workedMs+=spent;
   return spent;
 }
 function interruptTimer(){
   const spent=bankSession();
   const t=currentTask();
   if(t)t.interrupts=(t.interrupts||0)+1;
+  dailyBucket().interrupts++;
   cancelBeep();state.timer=null;save();render();
   toast('방해받음 ('+fmtDur(spent)+' 적립) — 15분을 처음부터');
 }
@@ -821,13 +835,16 @@ function fmtWhen(ms){
 }
 function renderRecords(){
   const rs=state.records.slice().sort((a,b)=>b.endedAt-a.endedAt);
-  // 요약은 오늘 끝낸 것만
+  // 완료 개수는 오늘 끝낸 기록에서, 집중·방해는 오늘 실제로 쓴 시간에서
   const t0=new Date();t0.setHours(0,0,0,0);
-  const today=rs.filter(r=>r.endedAt>=t0.getTime());
+  const doneToday=rs.filter(r=>r.endedAt>=t0.getTime()).length;
+  const day=(state.daily&&state.daily[todayStr()])||{workedMs:0,interrupts:0};
+  const tm=timerFor();
+  const live=tm?Math.max(0,Date.now()-tm.startedAt):0;   // 지금 돌고 있는 세션도 포함
   document.getElementById('recSummary').innerHTML=
-     '<div><div class="k">오늘 완료</div><div class="v">'+today.length+'개</div></div>'
-    +'<div><div class="k">오늘 집중</div><div class="v">'+fmtDur(today.reduce((s,r)=>s+(r.workedMs||0),0))+'</div></div>'
-    +'<div><div class="k">오늘 방해</div><div class="v">'+today.reduce((s,r)=>s+(r.interrupts||0),0)+'회</div></div>';
+     '<div><div class="k">오늘 완료</div><div class="v">'+doneToday+'개</div></div>'
+    +'<div><div class="k">오늘 집중</div><div class="v">'+fmtDur(day.workedMs+live)+'</div></div>'
+    +'<div><div class="k">오늘 방해</div><div class="v">'+day.interrupts+'회</div></div>';
   const list=document.getElementById('recList');
   if(!rs.length){
     list.innerHTML='<div class="recempty">아직 완료한 할 일이 없습니다.<br>15분을 채우고 \'끝\'을 누르면 여기에 쌓입니다.</div>';
@@ -1232,7 +1249,8 @@ function importData(file){
       if(!Array.isArray(s.pages)||!Array.isArray(s.inactive))throw 0;
       if(!confirm('현재 데이터를 백업 파일 내용으로 바꿀까요?'))return;
       state=migrate({pages:s.pages,inactive:s.inactive,doneCount:s.doneCount||0,
-                     phase:s.phase||'select',records:Array.isArray(s.records)?s.records:[]});
+                     phase:s.phase||'select',records:Array.isArray(s.records)?s.records:[],
+                     daily:s.daily||{}});
       cur=0;save();render();toast('불러왔습니다');
     }catch(e){alert('올바른 백업 파일이 아닙니다.');}
   };
