@@ -165,6 +165,11 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .sheet .opts{display:flex;flex-wrap:wrap;gap:6px}
 .sheet .opts button{border:1px solid var(--line);padding:6px 11px;font-size:14px}
 .sheet .opts button:hover{border-color:var(--seal);color:var(--seal)}
+.etext{width:100%;min-height:110px;max-height:48vh;border:1px solid var(--line);
+  background:var(--paper2);color:var(--ink);padding:10px 11px;
+  font-family:var(--serif);font-size:15px;line-height:1.7;resize:vertical;outline:none;
+  white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;overflow-y:auto}
+.etext:focus{border-color:var(--seal)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:150px;z-index:70;
   background:var(--ink);color:var(--paper);font-size:13px;padding:9px 14px;
   display:flex;gap:14px;align-items:center;box-shadow:0 6px 22px rgba(0,0,0,.22)}
@@ -1648,15 +1653,22 @@ function catSheet(ent){
 }
 function sheet(title,body,opts,cb,isInput){
   const v=document.createElement('div'); v.className='veil';
-  v.innerHTML='<div class="sheet"><h3>'+esc(title)+'</h3>'+
-    (isInput? '<p></p><textarea class="btn" style="width:100%;min-height:80px;border:1px solid var(--line);padding:8px">'+esc(body)+'</textarea>'
+  v.innerHTML='<div class="sheet'+(isInput?' wide':'')+'"><h3>'+esc(title)+'</h3>'+
+    (isInput? '<p>고치면 분류와 날짜, 금액을 다시 헤아립니다.</p><textarea class="etext" spellcheck="false"></textarea>'
             : '<p>'+esc(body)+'</p>')+
-    '<div class="opts">'+
+    '<div class="opts" style="margin-top:12px">'+
       (opts? opts.map(o=>'<button data-k="'+o.k+'">'+esc(o.label)+'</button>').join('')
            : '<button data-k="ok">저장</button>')+
       '<button data-k="">닫기</button></div></div>';
   document.body.appendChild(v);
-  const ta=v.querySelector('textarea'); if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}
+  const ta=v.querySelector('.etext');
+  if(ta){
+    ta.value=body||'';
+    const grow=()=>{ ta.style.height='auto';
+      ta.style.height=Math.min(ta.scrollHeight+2, Math.round(window.innerHeight*0.48))+'px'; };
+    ta.addEventListener('input',grow); grow();
+    ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length);
+  }
   v.addEventListener('click',ev=>{
     if(ev.target===v){v.remove();return;}
     const b=ev.target.closest('[data-k]'); if(!b) return;
