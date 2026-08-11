@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>체</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -98,6 +98,10 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .cell .k{font-size:11px;letter-spacing:.16em;color:var(--ink3)}
 .cell .v{font-family:var(--mono);font-size:19px;margin-top:3px;letter-spacing:-.02em}
 .cell .v.in{color:var(--moss)} .cell .v.out{color:var(--seal)}
+.cell .sub{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:3px;letter-spacing:0}
+.cell.tap{cursor:pointer}
+.cell.tap:hover{background:var(--paper2)}
+.cell.tap .k::after{content:' ✎';color:var(--ink3);font-size:9px}
 .bar{height:3px;background:var(--paper2);margin-top:8px;position:relative;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--seal);opacity:.55}
 .rowline{display:flex;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px dotted var(--line);font-size:14px}
@@ -119,7 +123,9 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 
 /* ── 입력(체) ── */
 .composer{position:fixed;left:0;right:0;bottom:0;background:var(--paper);
-  border-top:1px solid var(--line2);z-index:40;padding-bottom:env(safe-area-inset-bottom)}
+  border-top:1px solid var(--line2);z-index:40;padding-bottom:env(safe-area-inset-bottom);
+  will-change:transform;transform:translate3d(0,0,0)}
+.composer.lifted{padding-bottom:0}
 .composer .wrap{padding-top:10px;padding-bottom:12px}
 .mesh{height:0;border-top:1px dashed var(--line);margin-bottom:8px;opacity:0;transition:opacity .2s}
 .mesh.on{opacity:1}
@@ -509,7 +515,38 @@ const $in=document.getElementById('in'), $chips=document.getElementById('chips')
       $mesh=document.getElementById('mesh'), $view=document.getElementById('view'),
       $menu=document.getElementById('menu');
 
-function autosize(){ $in.style.height='auto'; $in.style.height=Math.min($in.scrollHeight,160)+'px'; }
+function autosize(){ $in.style.height='auto'; $in.style.height=Math.min($in.scrollHeight,160)+'px'; fitBar(); }
+
+/* ─ 키보드가 올라와도 입력줄이 그 위에 머물게 ─ */
+const $bar=document.querySelector('.composer');
+const vv=window.visualViewport;
+let lastLift=-1, lastPad=-1, fitRaf=null;
+function fitBar(){
+  fitRaf=null;
+  let lift=0, vh=window.innerHeight;
+  if(vv){
+    vh=vv.height;
+    lift=Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  }
+  if(lift!==lastLift){
+    lastLift=lift;
+    $bar.style.transform='translate3d(0,'+(-lift)+'px,0)';
+    $bar.classList.toggle('lifted', lift>0);
+  }
+  if(!$menu.hidden) $menu.style.maxHeight=Math.max(140,Math.round(vh*0.42))+'px';
+  const pad=$bar.offsetHeight+lift+56;
+  if(Math.abs(pad-lastPad)>4){ lastPad=pad; document.body.style.paddingBottom=pad+'px'; }
+}
+function schedFit(){ if(fitRaf) return; fitRaf=requestAnimationFrame(fitBar); }
+if(vv){
+  vv.addEventListener('resize',schedFit);
+  vv.addEventListener('scroll',schedFit);
+}
+window.addEventListener('scroll',schedFit,{passive:true});
+window.addEventListener('resize',schedFit);
+window.addEventListener('orientationchange',()=>setTimeout(fitBar,350));
+$in.addEventListener('focus',()=>{ [60,200,420].forEach(d=>setTimeout(fitBar,d)); });
+$in.addEventListener('blur',()=>{ [60,300].forEach(d=>setTimeout(fitBar,d)); });
 
 /* ─ / 를 치면 분류 고르기 ─ */
 const CMDS=[
@@ -526,7 +563,7 @@ function menuQuery(){
   const m=$in.value.match(/^\/([^\s]*)$/);
   return m? m[1] : null;
 }
-function closeMenu(){ $menu.hidden=true; menuOpen=false; menuIdx=0; menuList=[]; }
+function closeMenu(){ $menu.hidden=true; menuOpen=false; menuIdx=0; menuList=[]; fitBar(); }
 function renderMenu(){
   const q=menuQuery();
   if(q===null){ closeMenu(); return; }
@@ -538,7 +575,7 @@ function renderMenu(){
     '<button data-i="'+i+'" aria-selected="'+(i===menuIdx)+'">'+
       '<span class="cm">'+CATS[c.cat].mk+'</span><span class="cn">'+c.c+'</span>'+
       '<span class="ce">/'+c.a+' · '+esc(c.ex)+'</span></button>').join('');
-  $menu.hidden=false; menuOpen=true;
+  $menu.hidden=false; menuOpen=true; fitBar();
 }
 function pickCmd(i){
   const c=menuList[i]; if(!c) return;
@@ -695,6 +732,99 @@ function recGroups(){
   }).sort((a,b)=>b.list[b.list.length-1].ts-a.list[a.list.length-1].ts);
 }
 
+/* ═══════════════ 7-b. 전체 잔액 ═══════════════ */
+function calcBalance(){
+  const b=META.balance; if(!b) return null;
+  const t=TODAY();
+  let v=b.amount;
+  E.forEach(e=>{
+    if(e.cat!=='money'||typeof e.amount!=='number') return;
+    const d=e.date||iso(new Date(e.ts));
+    if(d>t) return;
+    if(d>b.date || (d===b.date && e.ts>(b.ts||0)))
+      v += (e.flow==='in'? e.amount : -e.amount);
+  });
+  return v;
+}
+function sinceAnchor(){
+  const b=META.balance; if(!b) return {in:0,out:0,n:0};
+  const t=TODAY(); const o={in:0,out:0,n:0};
+  E.forEach(e=>{
+    if(e.cat!=='money'||typeof e.amount!=='number') return;
+    const d=e.date||iso(new Date(e.ts));
+    if(d>t) return;
+    if(d>b.date || (d===b.date && e.ts>(b.ts||0))){
+      if(e.flow==='in') o.in+=e.amount; else o.out+=e.amount; o.n++;
+    }
+  });
+  return o;
+}
+function balanceCell(){
+  const b=META.balance;
+  if(!b) return '<div class="cell tap" data-act="bal"><div class="k">전체 잔액</div>'+
+    '<div class="v" style="color:var(--ink3)">넣기</div><div class="sub">통장에 남은 돈</div></div>';
+  const cur=calcBalance(), s=sinceAnchor();
+  return '<div class="cell tap" data-act="bal"><div class="k">전체 잔액</div>'+
+    '<div class="v">'+nf(cur)+'</div>'+
+    '<div class="sub">'+fmtD(b.date)+' '+nf(b.amount)+' 이후 '+s.n+'건</div></div>';
+}
+function balanceSheet(){
+  const b=META.balance, cur=calcBalance(), s=sinceAnchor();
+  const v=document.createElement('div'); v.className='veil';
+  v.innerHTML='<div class="sheet"><h3>전체 잔액</h3>'+
+    '<p>'+(b
+      ? '셈한 잔액 <b style="font-weight:400;border-bottom:1px solid var(--line2)">'+nf(cur)+'원</b><br>'+
+        '<span style="font-size:12px;color:var(--ink3)">기준 '+fmtD(b.date,true)+' '+nf(b.amount)+'원 · '+
+        '그 뒤 수입 '+nf(s.in)+' · 지출 '+nf(s.out)+' ('+s.n+'건)</span>'
+      : '통장에 실제로 남은 돈을 한 번 넣어두면, 이후 담기는 수입과 지출을 더해 잔액을 따라갑니다.')+'</p>'+
+    '<div class="dfield"><input type="text" inputmode="numeric" class="ba" placeholder="실제 잔액">'+
+      '<input type="date" class="bd"></div>'+
+    '<p id="bdiff" style="min-height:22px;margin:0 0 12px;font-family:var(--mono);font-size:12px;color:var(--ink2)"></p>'+
+    '<div class="opts"><button data-k="ok">맞추기</button>'+
+      (b?'<button data-k="log">차액을 기록으로 남기고 맞추기</button>':'')+
+      '<button data-k="">닫기</button></div></div>';
+  document.body.appendChild(v);
+  const ba=v.querySelector('.ba'), bd=v.querySelector('.bd'), bx=v.querySelector('#bdiff');
+  bd.value=TODAY();
+  if(b) ba.value=nf(cur);
+  ba.focus(); ba.select();
+  const val=()=>{
+    const n=parseInt(String(ba.value).replace(/[^\d-]/g,''),10);
+    return isNaN(n)? null : n;
+  };
+  const upd=()=>{
+    const n=val();
+    if(n===null||cur===null){ bx.textContent=''; return; }
+    const d=n-cur;
+    bx.textContent = d===0? '셈한 값과 같습니다'
+      : (d>0? '셈한 값보다 '+nf(d)+'원 많습니다' : '셈한 값보다 '+nf(-d)+'원 적습니다');
+  };
+  ba.addEventListener('input',upd); upd();
+  v.addEventListener('click',async ev=>{
+    if(ev.target===v){ v.remove(); return; }
+    const btn=ev.target.closest('[data-k]'); if(!btn) return;
+    const k=btn.dataset.k;
+    if(k!=='ok'&&k!=='log'){ v.remove(); return; }
+    const n=val();
+    if(n===null){ bx.textContent='숫자를 넣어 주세요'; return; }
+    v.remove();
+    const now=Date.now();
+    if(k==='log'&&cur!==null&&n!==cur){
+      const d=n-cur;
+      const it={id:uid(), ts:now, raw:'잔액 조정 '+(d>0?'+':'−')+nf(Math.abs(d))+'원',
+        text:'잔액 조정', cat:'money', date:bd.value||TODAY(), time:null,
+        amount:Math.abs(d), flow:d>0?'in':'out', group:'조정', url:null,page:null,
+        num:null,unit:null,key:null,tags:[],people:[],forced:true,
+        done:false,doneAt:null,archived:false};
+      E.push(it); await put(it);
+    }
+    await metaSet('balance',{date:bd.value||TODAY(), amount:n, ts:now+1});
+    render();
+    toast('잔액을 '+nf(n)+'원으로 맞췄습니다');
+  });
+}
+
+
 /* ═══════════════ 8. 화면들 ═══════════════ */
 function vToday(){
   const t=TODAY(), q=state.q, now=new Date();
@@ -749,6 +879,7 @@ function vToday(){
      '<div class="cell"><div class="k">오늘 수입</div><div class="v in">'+nf(dIn)+'</div></div>'+
      '<div class="cell"><div class="k">오늘 지출</div><div class="v out">'+nf(dOut)+'</div></div>'+
      '<div class="cell"><div class="k">오늘 남음</div><div class="v">'+nf(dIn-dOut)+'</div></div>'+
+     balanceCell()+
      '</div>'+
      '<div class="rowline" style="border-bottom:none"><span class="g">'+(+mon.slice(5))+'월 누계</span>'+
      '<span class="n">수입 '+nf(mIn)+' · 지출 '+nf(mOut)+' · 남음 '+nf(mIn-mOut)+'</span></div>'+
@@ -829,11 +960,15 @@ function vMoney(){
         '<button data-act="mon" data-d="1">→</button>'+
         '<button data-act="mon" data-d="0">이번 달</button>'+
         '<button data-act="askm" style="margin-left:auto">✎ 이 달 물음</button></div>';
+  if(!META.balance)
+    h+='<div class="notice">통장에 실제로 남은 돈을 한 번 넣어두면, 이후 오가는 돈을 더해 잔액을 따라갑니다. '+
+       '아래 <b>전체 잔액</b> 칸을 누르세요.</div>';
   h+='<div class="grid">'+
      '<div class="cell"><div class="k">수입</div><div class="v in">'+inc.toLocaleString('ko-KR')+'</div></div>'+
      '<div class="cell"><div class="k">지출</div><div class="v out">'+out.toLocaleString('ko-KR')+'</div></div>'+
      '<div class="cell"><div class="k">남음</div><div class="v">'+(inc-out).toLocaleString('ko-KR')+'</div></div>'+
-     '<div class="cell"><div class="k">건수</div><div class="v">'+ms.length+'</div></div></div>';
+     '<div class="cell"><div class="k">건수</div><div class="v">'+ms.length+'</div></div>'+
+     balanceCell()+'</div>';
   if(Object.keys(gi).length){
     h+='<section><h2>수입 갈래</h2>';
     Object.entries(gi).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{
@@ -998,7 +1133,12 @@ function bMoney(r){
   let s=HEAD+'# 자료 · 금전 ('+r.label+')\n';
   s+='기간 '+(mk[0]||'')+' ~ '+(mk[mk.length-1]||'')+' · '+arr.length+'건 · 금액 단위 원\n';
   s+='수입 합 '+nf(tin)+' / 지출 합 '+nf(tout)+' / 남음 '+nf(tin-tout)+'\n';
-  s+='달 수 '+mk.length+' · 월평균 수입 '+nf(tin/mk.length)+' · 월평균 지출 '+nf(tout/mk.length)+'\n\n';
+  s+='달 수 '+mk.length+' · 월평균 수입 '+nf(tin/mk.length)+' · 월평균 지출 '+nf(tout/mk.length)+'\n';
+  if(META.balance){
+    const cur=calcBalance();
+    s+='오늘('+TODAY()+') 기준 전체 잔액 '+nf(cur)+' (기준값 '+META.balance.date+' '+nf(META.balance.amount)+'에서 셈함)\n';
+  }
+  s+='\n';
 
   s+='## 월별\n월 | 수입 | 지출 | 남음 | 건수\n';
   mk.forEach(k=>{const o=M[k];s+=k+' | '+nf(o.in)+' | '+nf(o.out)+' | '+nf(o.in-o.out)+' | '+o.n+'\n';});
@@ -1037,7 +1177,7 @@ function bMoney(r){
     '너는 불규칙한 수입으로 사는 사람의 살림을 오래 봐온 분석가다. 다음 차례로 답해라.\n\n'+
     '1. 사실 요약 — 숫자로 확인되는 것만 네댓 문장.\n'+
     '2. 흐름 — 늘고 준 갈래, 계절이나 달마다의 쏠림. 한 번뿐인 큰 항목과 매달 되풀이되는 항목을 갈라서 봐라. 되풀이되는 고정비의 합이 얼마인지 계산해라.\n'+
-    '3. 수입의 성질 — 어느 갈래에 얼마나 기대고 있는지, 들어오는 간격은 얼마이며 가장 마른 달과 가장 나은 달의 차이가 어느 정도인지. 수입이 끊긴 채 버틸 수 있는 달수를 지출 평균으로 계산해라.\n'+
+    '3. 수입의 성질 — 어느 갈래에 얼마나 기대고 있는지, 들어오는 간격은 얼마이며 가장 마른 달과 가장 나은 달의 차이가 어느 정도인지. 잔액이 적혀 있다면, 수입이 끊긴 채 지금 잔액으로 버틸 수 있는 달수를 지출 평균으로 계산해라. 「조정」 갈래는 잔액을 실제와 맞추며 생긴 오차이니 지출이나 수입으로 세지 말고, 그 크기가 크면 기록이 새고 있다는 뜻으로 지적해라.\n'+
     '4. 걱정되는 지점 두셋 — 왜 그렇게 보는지 근거를 붙여라.\n'+
     '5. 자료만으로는 알 수 없어 내게 물어야 할 질문 셋.\n\n'+
     '갈래가 「기타」인 항목이 많으면 그 사실을 먼저 지적하고, 어떻게 나누면 좋을지 제안해라.\n'+
@@ -1304,6 +1444,7 @@ function render(){
   $view.innerHTML=(VIEWS[state.tab]||vToday)();
   if(state.tab==='set') showUsage();
   window.scrollTo({top:0});
+  schedFit();
 }
 async function showUsage(){
   const el=document.getElementById('usage'); if(!el) return;
@@ -1342,6 +1483,7 @@ $view.addEventListener('click',async e=>{
     else{ const p=state.month.split('-'); const x=new Date(+p[0],+p[1]-1+d,1); state.month=iso(x).slice(0,7); }
     render(); return;
   }
+  if(act==='bal'){ balanceSheet(); return; }
   if(act==='range'){ state.askRange=b.dataset.k; render(); return; }
   if(act==='build'){ buildAsk(b.dataset.k); return; }
   if(act==='askk'){ buildAsk(b.dataset.k); return; }
@@ -1463,7 +1605,8 @@ function download(name,text,type,noStamp){
 }
 function expJSON(){
   download('체_'+TODAY()+'.json',
-    JSON.stringify({app:'che',v:1,exported:new Date().toISOString(),rules:RULES,entries:E},null,1),
+    JSON.stringify({app:'che',v:1,exported:new Date().toISOString(),
+      rules:RULES, balance:META.balance||null, entries:E},null,1),
     'application/json');
   toast('한 벌 내보냈습니다');
 }
@@ -1500,6 +1643,8 @@ function impFile(){
       const have=new Set(E.map(e=>e.id));
       const add=inc.filter(e=>e&&e.id&&!have.has(e.id));
       if(d.rules){ RULES={...d.rules,...RULES}; await metaSet('rules',RULES); }
+      if(d.balance && (!META.balance || (d.balance.ts||0)>(META.balance.ts||0)))
+        await metaSet('balance',d.balance);
       if(add.length){ E=E.concat(add); await put(add); }
       render(); toast('새로 더한 것 '+add.length+'개 · 이미 있던 것 '+(inc.length-add.length)+'개');
     }catch(err){ toast('파일을 읽지 못했습니다. JSON인지 확인하세요'); }
@@ -1531,7 +1676,7 @@ function wipe(){
       '<div class="empty">저장소를 열지 못했습니다. 시크릿 창이나 저장이 막힌 환경이 아닌지 확인해 주세요.</div>';
     return;
   }
-  render(); preview(); autosize();
+  render(); preview(); autosize(); fitBar();
   setTimeout(()=>{ if(window.innerWidth>640) $in.focus(); },100);
 })();
 </script>
