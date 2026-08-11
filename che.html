@@ -137,6 +137,8 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .cal-d[aria-pressed="true"].sun{color:var(--paper)}
 .cal-d .dots{position:absolute;left:6px;bottom:6px;display:flex;gap:2px;align-items:center}
 .cal-d .dots i{width:4px;height:4px;border-radius:50%;background:var(--seal);display:block}
+.cal-d .dots i.plan{background:transparent;box-shadow:inset 0 0 0 1px var(--seal)}
+.cal-d[aria-pressed="true"] .dots i.plan{background:transparent;box-shadow:inset 0 0 0 1px var(--paper)}
 .cal-d .dots b{font-size:9px;font-weight:400;color:var(--ink3);margin-left:1px}
 .cal-d[aria-pressed="true"] .dots i{background:var(--paper)}
 .cal-d[aria-pressed="true"] .dots b{color:var(--paper)}
@@ -275,13 +277,13 @@ const CATS = {
 };
 const TABS = [
   {k:'today',  name:'오늘', mk:'◎'},
+  {k:'cal',    name:'달력', mk:'▦'},
   {k:'todo',   name:'할일', mk:'○'},
   {k:'plan',   name:'일정', mk:'◇'},
   {k:'money',  name:'금전', mk:'₩'},
   {k:'ref',    name:'참조', mk:'※'},
   {k:'cycle',  name:'주기', mk:'↻'},
   {k:'rec',    name:'기록', mk:'△'},
-  {k:'note',   name:'메모', mk:'·'},
   {k:'ask',    name:'물음', mk:'✎'},
   {k:'all',    name:'전체', mk:'≡'},
   {k:'set',    name:'설정', mk:'⚙'},
@@ -678,8 +680,10 @@ $menu.addEventListener('click',e=>{
 
 function preview(){
   const v=$in.value;
+  const pc=pinCat();
   const pin = state.pinDate
-    ? '<button class="chip cat" id="unpin" title="눌러서 풉니다">'+fmtD(state.pinDate,true)+'에 담김 ✕</button>'
+    ? '<button class="chip cat" id="unpin" title="눌러서 풉니다">'+fmtD(state.pinDate,true)+
+      (pc==='plan'?' 일정':pc==='note'?' 메모':'')+'으로 ✕</button>'
     : '';
   $mesh.classList.toggle('on', !!v.trim()||!!state.pinDate);
   if(!v.trim()){
@@ -695,7 +699,7 @@ function preview(){
     return;
   }
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
-  const p=parse(lines[0]);
+  const p=applyPin(parse(lines[0]));
   let h=pin+'<span class="chip cat">'+CATS[p.cat].mk+' '+CATS[p.cat].name+(p.forced?' 지정':'')+'</span>';
   if(p.date) h+='<span class="chip">'+fmtD(p.date)+(p.time?' '+p.time:'')+'</span>';
   if(p.amount!==null) h+='<span class="chip">'+(p.flow==='in'?'+':'−')+p.amount.toLocaleString('ko-KR')+' '+p.group+'</span>';
@@ -717,13 +721,13 @@ async function commit(){
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
   const now=Date.now();
   const items=lines.map((l,i)=>{
-    const p=parse(l);
+    const p=applyPin(parse(l));
     if(state.pinDate && !p.date) p.date=state.pinDate;
     return {id:uid(), ts:now+i, ...p, done:false, doneAt:null, archived:false};
   });
   E=E.concat(items); await put(items);
   $in.value=''; closeMenu(); autosize(); preview(); render();
-  toast((state.pinDate? fmtD(state.pinDate)+'에 ':'')+
+  toast((state.pinDate? fmtD(state.pinDate)+' ':'')+
     (items.length===1? CATS[items[0].cat].name+'으로 담았습니다' : items.length+'개를 담았습니다'));
 }
 
@@ -1124,53 +1128,74 @@ function vRec(){
   });
   return h;
 }
-function vNote(){
-  const q=state.q, notes=byCat('note');
+function pinCat(){
+  if(!state.pinDate) return null;
+  const n=dday(state.pinDate);
+  return n>0? 'plan' : (n<0? 'note' : null);
+}
+function applyPin(p){
+  const pc=pinCat(); if(!pc||p.forced) return p;
+  if(pc==='plan' && p.cat==='note') p.cat='plan';
+  if(pc==='note' && p.cat==='plan') p.cat='note';
+  return p;
+}
+function vCal(){
+  const q=state.q;
+  const diary=e=>e.cat==='note'||e.cat==='plan';
+  const pool=visible().filter(diary);
   if(q){
-    const hits=notes.filter(e=>match(e,q)).sort((a,b)=>eDate(a)<eDate(b)?1:-1);
-    return '<section><h2>메모 찾기<span class="aside">'+esc(q)+' · '+hits.length+'</span></h2>'+
-      listHTML(hits,{groupByMonth:true,empty:'그 말이 든 메모가 없습니다.'})+'</section>';
+    const hits=pool.filter(e=>match(e,q)).sort((a,b)=>eDate(a)<eDate(b)?1:-1);
+    return '<section><h2>달력에서 찾기<span class="aside">'+esc(q)+' · '+hits.length+'</span></h2>'+
+      listHTML(hits,{groupByMonth:true,showCat:true,empty:'그 말이 든 것이 없습니다.'})+'</section>';
   }
   const mon=state.noteMonth, y=+mon.slice(0,4), m=+mon.slice(5);
   const first=new Date(y,m-1,1), lastD=new Date(y,m,0).getDate(), lead=first.getDay();
-  const cnt={}; let monN=0;
-  notes.forEach(e=>{ const d=eDate(e); if(ym(d)===mon){ cnt[d]=(cnt[d]||0)+1; monN++; } });
+  const cn={}, cp={}; let monN=0;
+  pool.forEach(e=>{ const d=eDate(e); if(ym(d)!==mon) return;
+    if(e.cat==='plan') cp[d]=(cp[d]||0)+1; else cn[d]=(cn[d]||0)+1; monN++; });
 
   let h='<div class="cal"><div class="cal-h">'+
     '<button data-act="nmon" data-d="-1">←</button>'+
     '<span>'+y+'년 '+m+'월</span>'+
     '<button data-act="nmon" data-d="1">→</button>'+
     '<button data-act="nmon" data-d="0">이번 달</button>'+
-    '<span class="sum">'+(monN? '메모 '+monN+'편 · '+Object.keys(cnt).length+'일':'이 달은 비어 있습니다')+'</span>'+
+    '<span class="sum">'+(monN? monN+'건 · 적힌 날 '+new Set([...Object.keys(cn),...Object.keys(cp)]).size+'일'
+                              :'이 달은 비어 있습니다')+'</span>'+
     '</div><div class="cal-grid">';
   h+=WDN.map((w,i)=>'<div class="cal-w"'+(i===0?' style="color:var(--seal)"':'')+'>'+w+'</div>').join('');
   for(let i=0;i<lead;i++) h+='<div class="cal-d blank"></div>';
   for(let d=1;d<=lastD;d++){
-    const ds=mon+'-'+pad(d), n=cnt[ds]||0, wd=new Date(y,m-1,d).getDay();
+    const ds=mon+'-'+pad(d), a=cn[ds]||0, b=cp[ds]||0, n=a+b, wd=new Date(y,m-1,d).getDay();
+    let dots='';
+    if(n){
+      const na=Math.min(a,3), nb=Math.min(b,3-na);
+      dots='<span class="dots">'+'<i></i>'.repeat(na)+'<i class="plan"></i>'.repeat(Math.max(0,nb))+
+           (n>na+nb?'<b>+'+(n-na-nb)+'</b>':'')+'</span>';
+    }
     h+='<button class="cal-d'+(wd===0?' sun':'')+(ds===TODAY()?' today':'')+'" '+
-       'data-act="nday" data-d="'+ds+'" aria-pressed="'+(ds===state.noteDay)+'">'+d+
-       (n?'<span class="dots">'+'<i></i>'.repeat(Math.min(n,3))+(n>3?'<b>+'+(n-3)+'</b>':'')+'</span>':'')+
-       '</button>';
+       'data-act="nday" data-d="'+ds+'" aria-pressed="'+(ds===state.noteDay)+'">'+d+dots+'</button>';
   }
   const tail=(7-((lead+lastD)%7))%7;
   for(let i=0;i<tail;i++) h+='<div class="cal-d blank"></div>';
   h+='</div></div>';
 
-  const day=state.noteDay;
-  const dayNotes=notes.filter(e=>eDate(e)===day).sort((a,b)=>a.ts-b.ts);
-  const dayOther=visible().filter(e=>e.cat!=='note'&&eDate(e)===day).sort((a,b)=>a.ts-b.ts);
+  const day=state.noteDay, n=dday(day);
+  const kind = n>0? 'plan' : (n<0? 'note' : null);
+  const dayMain=pool.filter(e=>eDate(e)===day).sort((a,b)=>
+    ((a.time||'99:99')===(b.time||'99:99')? a.ts-b.ts : ((a.time||'99:99')<(b.time||'99:99')?-1:1)));
+  const dayOther=visible().filter(e=>!diary(e)&&eDate(e)===day).sort((a,b)=>a.ts-b.ts);
 
   h+='<div class="pills">'+
-     '<button class="pill" data-act="pin" data-d="'+day+'" aria-pressed="'+(state.pinDate===day)+'">이 날에 담기</button>'+
+     '<button class="pill" data-act="pin" data-d="'+day+'" aria-pressed="'+(state.pinDate===day)+'">'+
+       (kind==='plan'?'이 날 일정 담기':kind==='note'?'이 날 메모 담기':'오늘에 담기')+'</button>'+
      (dayOther.length?'<button class="pill" data-act="toggle" data-k="noteAll" aria-pressed="'+state.noteAll+'">그날의 다른 것 '+dayOther.length+'</button>':'')+
      '</div>';
 
   const dd=dObj(day);
   h+='<section><h2>'+dd.getFullYear()+'년 '+(dd.getMonth()+1)+'월 '+dd.getDate()+'일 '+WDN[dd.getDay()]+'요일'+
-     '<span class="aside">'+(dayNotes.length? '메모 '+dayNotes.length:'')+'</span></h2>';
+     '<span class="aside">'+(n===0?'오늘':fmtDD(n))+(dayMain.length? ' · '+dayMain.length:'')+'</span></h2>';
   if(dayOther.length){
-    const t={};
-    dayOther.forEach(e=>{ t[e.cat]=(t[e.cat]||0)+1; });
+    const t={}; dayOther.forEach(e=>{ t[e.cat]=(t[e.cat]||0)+1; });
     const money=dayOther.filter(e=>e.cat==='money');
     const mo=money.filter(e=>e.flow!=='in').reduce((a,b)=>a+b.amount,0);
     const mi=money.filter(e=>e.flow==='in').reduce((a,b)=>a+b.amount,0);
@@ -1178,16 +1203,19 @@ function vNote(){
       Object.keys(t).map(c=>CATS[c].mk+' '+CATS[c].name+' '+t[c]).join(' · ')+
       (mo?' · 지출 '+nf(mo):'')+(mi?' · 수입 '+nf(mi):'')+'</div>';
   }
-  h+=listHTML(dayNotes,{hideStamp:true,empty:
-      day===TODAY()? '오늘은 아직 적은 것이 없습니다.'
-                   : '이 날에는 적은 것이 없습니다. 「이 날에 담기」를 켜면 지금 적는 것이 이 날짜로 갑니다.'})+
+  h+=listHTML(dayMain,{hideStamp:true,showCat:true,empty:
+      n===0? '오늘은 아직 적은 것이 없습니다.'
+     : n>0 ? '이 날에 잡힌 일정이 없습니다. 「이 날 일정 담기」를 켜고 적으면 이 날짜의 일정이 됩니다.'
+           : '이 날에는 적은 것이 없습니다. 「이 날 메모 담기」를 켜고 적으면 이 날짜의 메모가 됩니다.'})+
      '</section>';
   if(state.noteAll&&dayOther.length)
     h+='<section><h2>그날의 다른 것</h2>'+listHTML(dayOther,{showCat:true,hideStamp:true})+'</section>';
 
-  const recent=notes.filter(e=>eDate(e)!==day).sort((a,b)=>eDate(a)<eDate(b)?1:-1).slice(0,6);
-  if(recent.length)
-    h+='<section><h2>가까운 날들</h2>'+listHTML(recent,{})+'</section>';
+  const near=pool.filter(e=>eDate(e)!==day).sort((a,b)=>{
+    const x=Math.abs(dday(eDate(a))), z=Math.abs(dday(eDate(b))); return x-z;
+  }).slice(0,6).sort((a,b)=>eDate(a)<eDate(b)?1:-1);
+  if(near.length)
+    h+='<section><h2>가까운 날들</h2>'+listHTML(near,{showCat:true})+'</section>';
   return h;
 }
 function vAll(){
@@ -1596,7 +1624,7 @@ function buildAsk(kind,range){
   promptSheet(a.name+(a.ranged?' · '+r.label:''), t);
 }
 
-const VIEWS={today:vToday,todo:vTodo,plan:vPlan,money:vMoney,ref:vRef,cycle:vCycle,rec:vRec,note:vNote,ask:vAsk,all:vAll,set:vSet};
+const VIEWS={today:vToday,todo:vTodo,plan:vPlan,money:vMoney,ref:vRef,cycle:vCycle,rec:vRec,cal:vCal,ask:vAsk,all:vAll,set:vSet};
 
 /* ═══════════════ 9. 렌더 ═══════════════ */
 function counts(){
@@ -1664,7 +1692,8 @@ $view.addEventListener('click',async e=>{
     else{
       const p=state.noteMonth.split('-'), x=new Date(+p[0],+p[1]-1+d,1);
       state.noteMonth=iso(x).slice(0,7);
-      const days=byCat('note').map(e=>eDate(e)).filter(s=>ym(s)===state.noteMonth).sort();
+      const days=visible().filter(e=>e.cat==='note'||e.cat==='plan')
+        .map(e=>eDate(e)).filter(s=>ym(s)===state.noteMonth).sort();
       state.noteDay=days.length? days[days.length-1] : state.noteMonth+'-01';
     }
     render(); return;
