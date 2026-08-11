@@ -133,8 +133,21 @@ section{margin-bottom:34px;}
 .blabel .c{color:var(--seal);}
 .blabel .n{color:var(--faint);}
 
-.sides{display:flex; gap:7px; margin-bottom:9px;}
-.side-btn{
+.note.ai{border-left-color:var(--faint); border-left-style:dotted; background:transparent;}
+.note.ai .side{color:var(--faint);}
+
+/* 조언 */
+.advice{margin:12px 0 0; border:1px solid var(--line); border-radius:12px; padding:13px 14px; background:transparent;}
+.advice .head{font-family:'Gowun Dodum',sans-serif; font-size:12px; color:var(--faint); margin-bottom:9px;}
+.advice pre{
+  margin:0; max-height:230px; overflow:auto; white-space:pre-wrap; word-break:break-word;
+  font-family:'Gowun Batang',serif; font-size:14.5px; line-height:1.75; color:var(--ink-soft);
+  user-select:text; -webkit-user-select:text; -webkit-overflow-scrolling:touch;
+}
+.advice .acts{margin-top:12px;}
+.advice .paste{margin-top:12px; padding-top:12px; border-top:1px dashed var(--line);}
+
+.sides{display:flex; gap:7px; margin-bottom:9px;}.side-btn{
   font-family:'Gowun Dodum',sans-serif; font-size:12.5px; padding:5px 12px; border-radius:100px;
   border:1px solid var(--line); background:transparent; color:var(--ink-soft); cursor:pointer;
 }
@@ -306,7 +319,8 @@ const DB = (() => {
 })();
 
 /* ── 상태 ─────────────────────────────────────── */
-const state = { items:[], hours:24, kind:'할 일', openId:null, pastOpen:false, armed:null, drafts:{}, noteSide:{} };
+const state = { items:[], hours:24, kind:'할 일', openId:null, pastOpen:false, armed:null,
+                drafts:{}, noteSide:{}, adviceId:null, aiDrafts:{} };
 const HOUR = 3600000;
 const $ = s => document.querySelector(s);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -351,6 +365,52 @@ function markSVG(it, now){
     <circle class="ring-bg" cx="13" cy="13" r="11.2"/>
     <circle class="ring-fg" cx="13" cy="13" r="11.2" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C*(1-p)).toFixed(1)}" transform="rotate(-90 13 13)"/>
   </svg>`;
+}
+
+function buildPrompt(it){
+  const pro = it.notes.filter(n => n.s === 'pro');
+  const con = it.notes.filter(n => n.s === 'con');
+  const etc = it.notes.filter(n => n.s !== 'pro' && n.s !== 'con' && n.s !== 'ai');
+  const hours = Math.max(1, Math.round((Date.now() - it.createdAt) / HOUR));
+  const list = a => a.map(n => `- ${n.text.replace(/\n/g,' ')}`).join('\n');
+
+  const frame = it.kind === '답장'
+    ? '누군가에게 답장을 해야 하는 일입니다.'
+    : it.kind === '결정'
+      ? '결정을 내려야 하는 일입니다.'
+      : '할지 말지 정해야 하는 일입니다.';
+
+  let s = `저는 무엇을 정하기 전에 하루를 묵혀 두는 습관이 있습니다. 아래는 ${hours}시간 동안 묵히면서 적어 둔 것입니다. ${frame}\n\n`;
+  s += `［사안］\n${it.text}\n\n`;
+  if (pro.length) s += `［이로운 점］\n${list(pro)}\n\n`;
+  if (con.length) s += `［걸리는 점］\n${list(con)}\n\n`;
+  if (etc.length) s += `［그 밖에 든 생각］\n${list(etc)}\n\n`;
+  if (!it.notes.length) s += `［적어 둔 생각］\n따로 적어 두지 않았습니다. 하루 동안 마음에만 두었습니다.\n\n`;
+
+  s += `［부탁］\n`;
+  s += `1. 제가 매긴 무게가 실제와 어긋나 보이는 항목이 있으면 짚어 주세요. 이로운 점 중 실은 사소한 것, 걸리는 점 중 실은 결정적인 것.\n`;
+  s += `2. 제가 적지 않았지만 고려해야 할 점을 두세 가지만 알려 주세요.\n`;
+  s += `3. 지금 정하기에 정보가 모자란 부분이 있다면, 무엇을 더 알아야 하는지 말해 주세요.\n`;
+  s += it.kind === '답장'
+    ? `4. 답장을 하는 쪽과 하지 않는 쪽, 각각의 가장 강한 근거를 한 문장씩 적어 주세요. 한다면 어떤 어조가 좋을지도 한마디 덧붙여 주세요.\n`
+    : `4. 하는 쪽과 하지 않는 쪽, 각각의 가장 강한 근거를 한 문장씩 적어 주세요.\n`;
+  s += `\n결정은 제가 합니다. 어느 쪽을 택하라고 설득하지는 말고, 제가 놓친 자리만 보여 주세요. 짧게 부탁드립니다.`;
+  return s;
+}
+
+async function copyText(t){
+  try {
+    if (navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(t); return true; }
+  } catch(e){}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t; ta.setAttribute('readonly',''); 
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, t.length);
+    const ok = document.execCommand('copy');
+    ta.remove(); return ok;
+  } catch(e){ return false; }
 }
 
 function esc(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
@@ -400,8 +460,9 @@ function itemHTML(it, now, past){
   let detail = '';
   if (open){
     const notes = it.notes.map(n => {
-      const k = n.s === 'pro' ? 'pro' : n.s === 'con' ? 'con' : '';
-      const tag = n.s === 'pro' ? '<span class="side">이로운 점</span>' : n.s === 'con' ? '<span class="side">걸리는 점</span>' : '';
+      const k = n.s === 'pro' ? 'pro' : n.s === 'con' ? 'con' : n.s === 'ai' ? 'ai' : '';
+      const label = {pro:'이로운 점', con:'걸리는 점', ai:'받은 조언'}[n.s] || '';
+      const tag = label ? `<span class="side">${label}</span>` : '';
       return `<div class="note ${k}"><span class="when">${dayLabel(n.t)}${tag}</span>${esc(n.text)}</div>`;
     }).join('');
     const side = state.noteSide[it.id] || null;
@@ -409,7 +470,8 @@ function itemHTML(it, now, past){
     let acts = '';
     if (!past){
       acts = ready
-        ? `<button class="act deep" data-do="done" data-id="${it.id}">실행했습니다</button>
+        ? `<button class="act" data-do="advice" data-id="${it.id}">${state.adviceId === it.id ? '조언 문장 접기' : 'AI에게 조언 구하기'}</button>
+           <button class="act deep" data-do="done" data-id="${it.id}">실행했습니다</button>
            <button class="act seal" data-do="drop" data-id="${it.id}">하지 않기로 합니다</button>
            <button class="act" data-do="defer" data-id="${it.id}">하루 더 묵히기</button>
            <button class="act warn" data-do="del" data-id="${it.id}">${armed ? '정말 지웁니다' : '지우기'}</button>`
@@ -417,6 +479,24 @@ function itemHTML(it, now, past){
     } else {
       acts = `<button class="act" data-do="reopen" data-id="${it.id}">되돌리기</button>
               <button class="act warn" data-do="del" data-id="${it.id}">${armed ? '정말 지웁니다' : '지우기'}</button>`;
+    }
+
+    let advice = '';
+    if (!past && ready && state.adviceId === it.id){
+      advice = `<div class="advice">
+          <div class="head">그대로 복사해 AI에게 건네세요</div>
+          <pre>${esc(buildPrompt(it))}</pre>
+          <div class="acts">
+            <button class="act deep" data-do="copy" data-id="${it.id}">복사하기</button>
+            <button class="act" data-do="claude" data-id="${it.id}">복사하고 Claude 열기</button>
+          </div>
+          <div class="paste">
+            <div class="note-add">
+              <textarea data-ai="${it.id}" rows="1" placeholder="받은 조언을 여기에 붙여 두기">${esc(state.aiDrafts[it.id]||'')}</textarea>
+              <button data-do="saveAi" data-id="${it.id}">남기기</button>
+            </div>
+          </div>
+        </div>`;
     }
     detail = `<div class="detail">
         ${balanceHTML(it)}
@@ -430,6 +510,7 @@ function itemHTML(it, now, past){
           <button data-do="note" data-id="${it.id}">적기</button>
         </div>`}
         <div class="acts">${acts}</div>
+        ${advice}
       </div>`;
   }
 
@@ -492,14 +573,15 @@ function render(){
 
   // 메모를 쓰던 중이면 커서와 스크롤을 잃지 않게 되살린다
   const focused = document.activeElement;
-  const keepId = focused && focused.dataset && focused.dataset.note ? focused.dataset.note : null;
-  const keepPos = keepId ? focused.selectionStart : 0;
+  const fd = focused && focused.dataset ? focused.dataset : {};
+  const keepSel = fd.note ? `[data-note="${fd.note}"]` : fd.ai ? `[data-ai="${fd.ai}"]` : null;
+  const keepPos = keepSel ? focused.selectionStart : 0;
   const keepScroll = window.scrollY;
 
   $('#board').innerHTML = html;
 
-  if (keepId){
-    const back = document.querySelector(`[data-note="${keepId}"]`);
+  if (keepSel){
+    const back = document.querySelector(keepSel);
     if (back){
       back.focus({preventScroll:true});
       try { back.setSelectionRange(keepPos, keepPos); } catch(e){}
@@ -543,6 +625,30 @@ async function act(kind, id){
   }
   state.armed = null;
 
+  if (kind === 'advice'){
+    state.adviceId = state.adviceId === id ? null : id;
+    render(); return;
+  }
+  if (kind === 'copy' || kind === 'claude'){
+    const text = buildPrompt(it);
+    const ok = await copyText(text);
+    if (kind === 'claude'){
+      const q = encodeURIComponent(text);
+      const url = q.length < 1400 ? 'https://claude.ai/new?q=' + q : 'https://claude.ai/new';
+      window.open(url, '_blank');
+      toast(ok ? '복사했습니다. 붙여넣으세요' : 'Claude를 엽니다');
+    } else {
+      toast(ok ? '복사했습니다' : '길게 눌러 직접 복사해 주세요');
+    }
+    return;
+  }
+  if (kind === 'saveAi'){
+    const ta = document.querySelector(`[data-ai="${id}"]`);
+    const t = ta && ta.value.trim(); if (!t) return;
+    it.notes.push({t:now, text:t, s:'ai'});
+    ta.value = ''; delete state.aiDrafts[id];
+    await persist(it); toast('조언을 남겨 두었습니다'); return;
+  }
   if (kind === 'note'){
     const ta = document.querySelector(`[data-note="${id}"]`);
     const t = ta && ta.value.trim(); if (!t) return;
@@ -552,12 +658,12 @@ async function act(kind, id){
   }
   if (kind === 'defer'){
     it.readyAt = now + 24*HOUR; it.defers = (it.defers||0) + 1;
-    state.openId = null; await persist(it); toast('하루 더 묵힙니다'); return;
+    state.openId = null; state.adviceId = null; await persist(it); toast('하루 더 묵힙니다'); return;
   }
   if (kind === 'done' || kind === 'drop'){
     if (now < it.readyAt) return;
     it.status = kind === 'done' ? 'done' : 'dropped'; it.resolvedAt = now;
-    state.openId = null; await persist(it);
+    state.openId = null; state.adviceId = null; await persist(it);
     toast(kind === 'done' ? '실행으로 옮겼습니다' : '놓아주었습니다'); return;
   }
   if (kind === 'reopen'){
@@ -585,9 +691,10 @@ document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () =
 function grow(el){ el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 190) + 'px'; }
 
 $('#board').addEventListener('input', e => {
-  const ta = e.target.closest('[data-note]');
+  const ta = e.target.closest('[data-note], [data-ai]');
   if (!ta) return;
-  state.drafts[ta.dataset.note] = ta.value;
+  if (ta.dataset.note) state.drafts[ta.dataset.note] = ta.value;
+  else state.aiDrafts[ta.dataset.ai] = ta.value;
   grow(ta);
 });
 $('#board').addEventListener('keydown', e => {
@@ -627,6 +734,7 @@ $('#board').addEventListener('click', e => {
   if (body){
     const id = body.dataset.body;
     state.openId = state.openId === id ? null : id;
+    if (state.openId !== id) state.adviceId = null;
     state.armed = null; render();
   }
 });
