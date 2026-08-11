@@ -226,8 +226,9 @@
     <button id="exportBtn">내보내기</button> ·
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
-    <button id="recordsBtn">기록</button>
-    <div class="ver">FV 3.5 · 15분 · 기록 · 2026-08-11</div>
+    <button id="recordsBtn">기록</button> ·
+    <button id="scBtn">단축어</button>
+    <div class="ver">FV 3.6 · 15분 · 기록 · 단축어 · 2026-08-11</div>
   </div>
 </div>
 
@@ -323,6 +324,14 @@
       <li><b>기간</b>은 처음 시작한 날부터 끝낸 날까지입니다. '계속'으로 여러 번 나눠서 해도 하나로 이어지며, <b>몇 번에 나눠서</b> 했는지도 남습니다.</li>
       <li>이어서 하는 중인 할 일은 상단에 <b>"지금까지 3시간 12분 · 8번째"</b>처럼 누적이 표시됩니다.</li>
       <li>미결로 <b>보류한 기간은 빼고</b> 셉니다. 보류 중인 할 일은 아직 기록에 남지 않고, 되살려서 끝내면 그때 기록됩니다.</li>
+    </ul>
+    <h4>단축어 연동</h4>
+    <ul>
+      <li><b>시작</b>을 누르면 애플 <b>단축어</b>의 <code>시작</code>이 실행되고, 할 일 제목이 입력으로 전달됩니다. 단축어 안에서 '단축어 입력'으로 받아 쓰세요.</li>
+      <li><b>끝 · 계속 · 방해</b>를 누르면 단축어 <code>끝</code>이 실행됩니다. 시작했던 일을 <b>미결</b>로 미룰 때도 실행됩니다 — 켜 둔 집중 모드를 꺼야 하니까요.</li>
+      <li>같은 이름의 단축어를 미리 만들어 두세요. 없으면 실행할 때 오류가 납니다.</li>
+      <li>아래 <b>단축어 켬/끔</b>으로 연동을 끌 수 있습니다.</li>
+      <li>단축어가 실행되면 잠시 앱 밖으로 나갑니다. 그동안 15분 타이머는 시계 기준으로 계속 흐르지만, <b>비프음이 늦게 울릴 수 있습니다.</b> 알림이 중요하면 단축어 쪽에 15분 타이머를 함께 넣어 두세요.</li>
     </ul>
     <h4>데이터</h4>
     <ul>
@@ -540,6 +549,7 @@ function startTimer(){
   scheduleBeep(FOCUS_MS/1000);
   render();
   toast('15분 — 이 일에만 머무세요');
+  runShortcut(SC_START,t.text);      // 제목을 입력으로 넘긴다
 }
 // 오늘 칸 (완료 여부와 상관없이 하루 단위로 쌓인다)
 function dailyBucket(){
@@ -565,6 +575,7 @@ function interruptTimer(){
   dailyBucket().interrupts++;
   cancelBeep();state.timer=null;save();render();
   toast('방해받음 ('+fmtDur(spent)+' 적립) — 15분을 처음부터');
+  runShortcut(SC_END);
 }
 function clearTimer(){cancelBeep();state.timer=null;}
 function tick(){
@@ -670,6 +681,21 @@ function linkLabel(url){
   const m=url.match(/^([a-z][a-z0-9+.\-]*):/i);
   return {ic:'▸',name:m?m[1]:'링크'};
 }
+/* ---------- 단축어 연동 ---------- */
+const SC_START='시작';   // 15분을 시작할 때 실행할 단축어 이름
+const SC_END='끝';       // 세션이 끝날 때(끝·계속·방해) 실행할 단축어 이름
+function runShortcut(name,text){
+  if(state.shortcuts===false)return;
+  let u='shortcuts://run-shortcut?name='+encodeURIComponent(name);
+  if(text)u+='&input=text&text='+encodeURIComponent(text);
+  openLink(u);
+}
+function toggleShortcuts(){
+  state.shortcuts=(state.shortcuts===false);
+  save();render();
+  toast(state.shortcuts===false?'단축어 연동 끔':'단축어 연동 켬');
+}
+
 function openLink(url){
   if(!url)return;
   const a=document.createElement('a');
@@ -734,6 +760,7 @@ function act(action){
   if(ts==='running'){toast('15분이 끝나야 누를 수 있습니다');return;}
   if(ts==='idle'&&action!=='dismiss'){toast('먼저 시작을 눌러 15분을 채우세요');return;}
   snap();
+  const hadSession=!!timerFor();
   bankSession();          // 이번 세션 시간 적립
   clearTimer();
   animSet.add(it.id);
@@ -742,15 +769,18 @@ function act(action){
     it.status='done';state.doneCount=(state.doneCount||0)+1;
     addRecord(it);
     save();render();toast('완료! — '+fmtDur(it.workedMs||0)+' 투여',true);
+    runShortcut(SC_END);
     afterAct();
   }else if(action==='dismiss'){
     it.status='dismissed';
     it.dismissedAt=Date.now();   // 보류 시작
     save();render();toast('미결 — 다음에 다시',true);
+    if(hadSession)runShortcut(SC_END);   // 시작했던 일을 미룰 때만
     afterAct();
   }else if(action==='cont'){
     it.status='cont';
     save();render();
+    runShortcut(SC_END);
     openContModal(it.text,{mode:'cont',link:it.link||'',carry:carryOf(it)});
   }
 }
@@ -1213,6 +1243,10 @@ function render(){
     info.textContent=(cur+1)+' / '+Math.max(1,total);
     info.classList.remove('link');
   }
+  const sc=document.getElementById('scBtn');
+  sc.textContent='단축어 '+(state.shortcuts===false?'끔':'켬');
+  sc.style.color=(state.shortcuts===false)?'#c9c5b8':'#8a6d00';
+
   const ib=document.getElementById('inactiveBtn');
   ib.classList.toggle('on',isInactive);
   ib.textContent='비활성'+(state.inactive.length?' '+state.inactive.length:'');
@@ -1360,6 +1394,8 @@ document.getElementById('linkInput').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();saveLink();}
 });
 linkModal.addEventListener('click',e=>{if(e.target===linkModal){linkEditId=null;closeModal(linkModal);}});
+
+document.getElementById('scBtn').addEventListener('click',toggleShortcuts);
 
 const recSheet=document.getElementById('recSheet');
 document.getElementById('recordsBtn').addEventListener('click',openRecords);
