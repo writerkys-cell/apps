@@ -39,6 +39,9 @@ body{
 button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
 button{background:none;border:none;cursor:pointer;padding:0}
 a{color:var(--seal);text-decoration:none;border-bottom:1px solid var(--line2)}
+.applink{font-family:var(--mono);font-size:12px;border:1px solid var(--line2);border-radius:var(--r);
+  padding:0 6px;white-space:nowrap;display:inline-block;line-height:1.5;vertical-align:1px}
+.applink:hover,.applink:focus{background:var(--seal);color:var(--paper);border-color:var(--seal)}
 .wrap{max-width:720px;margin:0 auto;padding:0 20px}
 
 /* ── 머리 ── */
@@ -345,7 +348,54 @@ const REF_KW = /(출처|인용|참고|링크|자료|각주|서지|메모해둘|�
 const TODO_KW = /(해야|하기로|할 것|할것|해둘|해두기|잊지|챙겨|챙기기|보내야|사야|써야|읽어야|끝내야|처리|신청|예약|제출|연락|확인|알아보|찾아보|물어보|주문해|반납|정리하|치우|버리|고치|맡기|부치|가야|답장|회신|마감|제출해)/;
 const MONEY_RE = /([+\-])?\s*([\d][\d,]*(?:\.\d+)?)\s*(억|만|천)?\s*원/;
 const NUM_RE = /([\d]+(?:\.\d+)?)\s*(km|킬로|킬로미터|kg|㎏|g|kcal|칼로리|쪽|페이지|자|매|권|회|번|잔|개|보|걸음|시간|분|℃|도)(?![가-힣])/i;
-const URL_RE = /https?:\/\/[^\s]+/;
+const SCHEMES=[
+  {k:'x-scrivener-item', n:'Scrivener'},
+  {k:'scrivener',        n:'Scrivener'},
+  {k:'x-devonthink-item',n:'DEVONthink'},
+  {k:'devonthink',       n:'DEVONthink'},
+  {k:'things',           n:'Things',    todo:true},
+  {k:'shortcuts',        n:'단축어',     todo:true},
+  {k:'omnifocus',        n:'OmniFocus', todo:true},
+  {k:'x-apple-reminderkit', n:'미리 알림', todo:true},
+  {k:'bear',             n:'Bear'},
+  {k:'obsidian',         n:'Obsidian'},
+  {k:'ulysses',          n:'Ulysses'},
+  {k:'craftdocs',        n:'Craft'},
+  {k:'drafts',           n:'Drafts'},
+  {k:'dayone',           n:'Day One'},
+  {k:'agenda',           n:'Agenda'},
+  {k:'applenotes',       n:'메모'},
+  {k:'mobilenotes',      n:'메모'},
+  {k:'x-apple-calevent', n:'캘린더'},
+  {k:'zotero',           n:'Zotero'},
+  {k:'marginnote3app',   n:'MarginNote'},
+  {k:'marginnote4app',   n:'MarginNote'},
+  {k:'highlights',       n:'Highlights'},
+  {k:'tot',              n:'Tot'},
+  {k:'goodlinks',        n:'GoodLinks'},
+  {k:'notion',           n:'Notion'},
+  {k:'slack',            n:'Slack'},
+  {k:'spotify',          n:'Spotify'},
+  {k:'musics',           n:'음악'},
+  {k:'maps',             n:'지도'},
+  {k:'mailto',           n:'메일'},
+  {k:'message',          n:'메시지'},
+  {k:'readdle-spark',    n:'Spark'},
+  {k:'tel',              n:'전화'},
+  {k:'facetime',         n:'FaceTime'},
+  {k:'shareddocuments',  n:'파일'},
+  {k:'file',             n:'파일'},
+];
+const SCHEME_ALT=SCHEMES.map(s=>s.k).join('|');
+const LINK_RE=new RegExp('(?:https?|'+SCHEME_ALT+')://[^\\s<>"]+|(?:'+SCHEME_ALT+'):[^\\s<>"]+','i');
+const LINK_G=new RegExp(LINK_RE.source,'gi');
+const URL_RE=LINK_RE;
+function schemeOf(u){
+  const m=String(u).match(/^([a-z0-9+.\-]+):/i); if(!m) return null;
+  const k=m[1].toLowerCase();
+  if(k==='http'||k==='https') return {n:null,web:true};
+  return SCHEMES.find(s=>s.k===k)||null;
+}
 const SPEND_DICT = {
   '식비':['밥','점심','저녁','아침','커피','카페','식당','배달','술','맥주','치킨','회식','간식','장보기','마트','편의점','반찬','빵'],
   '교통':['택시','버스','지하철','기차','ktx','srt','주유','기름','톨게이트','주차','고속도로','항공','비행기'],
@@ -476,7 +526,10 @@ function parse(raw){
   // 학습된 규칙 우선
   for(const tk of tokens(text)) if(RULES[tk]){ o.cat=RULES[tk]; finishKey(o,text,ck,nm); return o; }
 
-  if(o.url || REF_KW.test(text) || o.page || /[「『""].+[」』""]/.test(text)) o.cat='ref';
+  const sc = o.url? schemeOf(o.url) : null;
+  if(sc && sc.todo) o.cat='todo';
+  else if(sc && !sc.web && TODO_KW.test(text)) o.cat='todo';
+  else if(o.url || REF_KW.test(text) || o.page || /[「『""].+[」』""]/.test(text)) o.cat='ref';
   else if(o.amount!==null) o.cat='money';
   else if(ck && future) o.cat='plan';
   else if(ck) o.cat='cycle';
@@ -500,7 +553,14 @@ const state={tab:'today', q:'', limit:60, showDone:false, showPast:false,
 let lastDeleted=null;
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const linkify=s=>esc(s).replace(/https?:\/\/[^\s]+/g,m=>'<a href="'+m+'" target="_blank" rel="noopener">'+(m.length>46?m.slice(0,44)+'…':m)+'</a>');
+function linkify(s){
+  return esc(s).replace(LINK_G,m=>{
+    const sc=schemeOf(m);
+    if(!sc||sc.web)
+      return '<a href="'+m+'" target="_blank" rel="noopener">'+(m.length>46?m.slice(0,44)+'…':m)+'</a>';
+    return '<a class="applink" href="'+m+'" title="'+m+'">⟨'+sc.n+'⟩</a>';
+  });
+}
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
 function visible(){ return E.filter(e=>state.archive? true : !e.archived); }
@@ -610,7 +670,7 @@ function preview(){
   if(p.amount!==null) h+='<span class="chip">'+(p.flow==='in'?'+':'−')+p.amount.toLocaleString('ko-KR')+' '+p.group+'</span>';
   if(p.num!==null) h+='<span class="chip">'+p.key+' '+p.num+p.unit+'</span>';
   if(p.key&&p.cat==='cycle') h+='<span class="chip">'+esc(p.key)+'</span>';
-  if(p.url) h+='<span class="chip">링크</span>';
+  if(p.url){ const sc=schemeOf(p.url); h+='<span class="chip">'+(sc&&sc.n? esc(sc.n):'링크')+'</span>'; }
   p.tags.forEach(t=>h+='<span class="chip">#'+esc(t)+'</span>');
   p.people.forEach(t=>h+='<span class="chip">@'+esc(t)+'</span>');
   if(lines.length>1) h+='<span class="chip">외 '+(lines.length-1)+'줄</span>';
@@ -1083,6 +1143,23 @@ function vSet(){
      '입력칸에서 <b>/</b>를 치면 분류 목록이 뜹니다. ↑↓로 고르고 엔터, 또는 <b>/할일</b>처럼 이어 쳐도 됩니다.<br>'+
      '<b>#</b>은 갈래, <b>@</b>는 사람. 여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
      '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.'+
+     '</div></section>';
+  h+='<section><h2>링크 걸기</h2><div class="empty">'+
+     '어느 분류든 상관없이, 링크를 문장에 붙여 두면 눌러서 바로 엽니다. '+
+     '앱 링크는 <b>⟨Scrivener⟩</b>처럼 짧은 딱지로 접혀 문장을 가리지 않습니다.<br><br>'+
+     '<span style="font-family:var(--mono);font-size:12px;line-height:2">'+
+     'Scrivener &nbsp; x-scrivener-item://…<br>'+
+     'DEVONthink &nbsp; x-devonthink-item://…<br>'+
+     'Things &nbsp; things:///show?id=…<br>'+
+     'Bear &nbsp; bear://x-callback-url/open-note?id=…<br>'+
+     '단축어 &nbsp; shortcuts://run-shortcut?name=이름<br>'+
+     '그 밖에 Obsidian · Ulysses · Craft · Drafts · Day One · Zotero · MarginNote ·<br>'+
+     '메모 · 캘린더 · 지도 · 메일 · 메시지 · 전화 · 파일'+
+     '</span><br><br>'+
+     'Scrivener는 항목을 오른쪽 눌러 「문서 링크 복사」, DEVONthink는 「항목 링크 복사」로 얻습니다. '+
+     'Things와 단축어, 미리 알림 링크는 실행하는 것이라 <b>할일</b>로 담깁니다. '+
+     '문서 링크는 <b>참조</b>로 담기되, 「고치기」 같은 말이 함께 있으면 할일로 갑니다.<br>'+
+     '컴퓨터의 사파리에서는 앱 링크가 열리지 않을 수 있습니다. 아이폰과 맥의 기본 브라우저에서는 열립니다.'+
      '</div></section>';
   return h;
 }
