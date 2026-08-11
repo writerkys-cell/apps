@@ -119,6 +119,28 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .pill[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .dd{font-family:var(--mono);font-size:12px}
+.cal{margin-bottom:20px}
+.cal-h{display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:13px;margin-bottom:9px}
+.cal-h button{border:1px solid var(--line);padding:2px 9px;color:var(--ink2)}
+.cal-h button:hover{border-color:var(--seal);color:var(--seal)}
+.cal-h .sum{margin-left:auto;font-size:11px;color:var(--ink3)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+.cal-w{background:var(--paper);text-align:center;font-family:var(--mono);font-size:10px;
+  color:var(--ink3);padding:5px 0;letter-spacing:.06em}
+.cal-d{background:var(--paper);min-height:46px;padding:4px 6px;text-align:left;position:relative;
+  font-family:var(--mono);font-size:12px;color:var(--ink2);display:block;width:100%}
+.cal-d.sun{color:var(--seal)}
+.cal-d.blank{background:var(--paper2);opacity:.45;cursor:default}
+.cal-d.today{box-shadow:inset 0 0 0 1px var(--line2)}
+.cal-d:not(.blank):hover{background:var(--paper2)}
+.cal-d[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.cal-d[aria-pressed="true"].sun{color:var(--paper)}
+.cal-d .dots{position:absolute;left:6px;bottom:6px;display:flex;gap:2px;align-items:center}
+.cal-d .dots i{width:4px;height:4px;border-radius:50%;background:var(--seal);display:block}
+.cal-d .dots b{font-size:9px;font-weight:400;color:var(--ink3);margin-left:1px}
+.cal-d[aria-pressed="true"] .dots i{background:var(--paper)}
+.cal-d[aria-pressed="true"] .dots b{color:var(--paper)}
+.trace{font-family:var(--mono);font-size:11px;color:var(--ink3);padding:6px 0 2px;line-height:1.9}
 .dd.over{color:var(--seal)} .dd.soon{color:var(--ink)} .dd.far{color:var(--ink3)}
 .more{display:block;width:100%;text-align:center;padding:14px;font-size:13px;
   color:var(--ink3);border:1px dashed var(--line);margin-top:14px}
@@ -554,7 +576,8 @@ function finishKey(o,text,ck,nm){
 
 /* ═══════════════ 4. 상태 ═══════════════ */
 const state={tab:'today', q:'', limit:60, showDone:false, showPast:false,
-             month:TODAY().slice(0,7), archive:false, askRange:'month'};
+             month:TODAY().slice(0,7), archive:false, askRange:'month',
+             noteMonth:TODAY().slice(0,7), noteDay:TODAY(), noteAll:false, pinDate:null};
 let lastDeleted=null;
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -655,22 +678,25 @@ $menu.addEventListener('click',e=>{
 
 function preview(){
   const v=$in.value;
-  $mesh.classList.toggle('on', !!v.trim());
+  const pin = state.pinDate
+    ? '<button class="chip cat" id="unpin" title="눌러서 풉니다">'+fmtD(state.pinDate,true)+'에 담김 ✕</button>'
+    : '';
+  $mesh.classList.toggle('on', !!v.trim()||!!state.pinDate);
   if(!v.trim()){
-    $chips.innerHTML='<span class="chip hint">엔터로 담기 · 줄바꿈은 ⇧엔터 · <b>/</b>를 치면 분류를 고를 수 있습니다</span>';
+    $chips.innerHTML=pin+'<span class="chip hint">엔터로 담기 · 줄바꿈은 ⇧엔터 · <b>/</b>를 치면 분류를 고를 수 있습니다</span>';
     return;
   }
   const only=v.match(/^\/(할일|일정|금전|참조|주기|기록|메모|[tsmrcgn])\s*$/);
   if(only||menuOpen){
     const c=only? CMDS.find(x=>x.c===only[1]||x.a===only[1]) : null;
-    $chips.innerHTML = c
+    $chips.innerHTML = pin + (c
       ? '<span class="chip cat">'+CATS[c.cat].mk+' '+c.c+' 지정</span><span class="chip hint">무엇을 담을까요</span>'
-      : '<span class="chip hint">↑↓로 고르고 엔터 · 그냥 이어 적어도 됩니다</span>';
+      : '<span class="chip hint">↑↓로 고르고 엔터 · 그냥 이어 적어도 됩니다</span>');
     return;
   }
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
   const p=parse(lines[0]);
-  let h='<span class="chip cat">'+CATS[p.cat].mk+' '+CATS[p.cat].name+(p.forced?' 지정':'')+'</span>';
+  let h=pin+'<span class="chip cat">'+CATS[p.cat].mk+' '+CATS[p.cat].name+(p.forced?' 지정':'')+'</span>';
   if(p.date) h+='<span class="chip">'+fmtD(p.date)+(p.time?' '+p.time:'')+'</span>';
   if(p.amount!==null) h+='<span class="chip">'+(p.flow==='in'?'+':'−')+p.amount.toLocaleString('ko-KR')+' '+p.group+'</span>';
   if(p.num!==null) h+='<span class="chip">'+p.key+' '+p.num+p.unit+'</span>';
@@ -692,11 +718,13 @@ async function commit(){
   const now=Date.now();
   const items=lines.map((l,i)=>{
     const p=parse(l);
+    if(state.pinDate && !p.date) p.date=state.pinDate;
     return {id:uid(), ts:now+i, ...p, done:false, doneAt:null, archived:false};
   });
   E=E.concat(items); await put(items);
   $in.value=''; closeMenu(); autosize(); preview(); render();
-  toast(items.length===1? CATS[items[0].cat].name+'으로 담았습니다' : items.length+'개를 담았습니다');
+  toast((state.pinDate? fmtD(state.pinDate)+'에 ':'')+
+    (items.length===1? CATS[items[0].cat].name+'으로 담았습니다' : items.length+'개를 담았습니다'));
 }
 
 $in.addEventListener('input',()=>{autosize();renderMenu();preview()});
@@ -711,7 +739,10 @@ $in.addEventListener('keydown',e=>{
   if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();commit();}
   if(e.key==='Escape'){$in.value='';closeMenu();autosize();preview();}
 });
-document.addEventListener('click',e=>{ if(e.target.id==='send') commit(); });
+document.addEventListener('click',e=>{
+  if(e.target.id==='send'){ commit(); return; }
+  if(e.target.closest('#unpin')){ state.pinDate=null; preview(); render(); return; }
+});
 
 /* ═══════════════ 6. 항목 그리기 ═══════════════ */
 function itemHTML(e,opt={}){
@@ -1094,9 +1125,70 @@ function vRec(){
   return h;
 }
 function vNote(){
-  const arr=byCat('note').filter(e=>match(e,state.q)).sort((a,b)=>b.ts-a.ts);
-  return '<section><h2>메모<span class="aside">'+arr.length+'</span></h2>'+
-    listHTML(arr,{groupByMonth:true,empty:'어디에도 속하지 않는 것들이 여기 남습니다.'})+'</section>';
+  const q=state.q, notes=byCat('note');
+  if(q){
+    const hits=notes.filter(e=>match(e,q)).sort((a,b)=>eDate(a)<eDate(b)?1:-1);
+    return '<section><h2>메모 찾기<span class="aside">'+esc(q)+' · '+hits.length+'</span></h2>'+
+      listHTML(hits,{groupByMonth:true,empty:'그 말이 든 메모가 없습니다.'})+'</section>';
+  }
+  const mon=state.noteMonth, y=+mon.slice(0,4), m=+mon.slice(5);
+  const first=new Date(y,m-1,1), lastD=new Date(y,m,0).getDate(), lead=first.getDay();
+  const cnt={}; let monN=0;
+  notes.forEach(e=>{ const d=eDate(e); if(ym(d)===mon){ cnt[d]=(cnt[d]||0)+1; monN++; } });
+
+  let h='<div class="cal"><div class="cal-h">'+
+    '<button data-act="nmon" data-d="-1">←</button>'+
+    '<span>'+y+'년 '+m+'월</span>'+
+    '<button data-act="nmon" data-d="1">→</button>'+
+    '<button data-act="nmon" data-d="0">이번 달</button>'+
+    '<span class="sum">'+(monN? '메모 '+monN+'편 · '+Object.keys(cnt).length+'일':'이 달은 비어 있습니다')+'</span>'+
+    '</div><div class="cal-grid">';
+  h+=WDN.map((w,i)=>'<div class="cal-w"'+(i===0?' style="color:var(--seal)"':'')+'>'+w+'</div>').join('');
+  for(let i=0;i<lead;i++) h+='<div class="cal-d blank"></div>';
+  for(let d=1;d<=lastD;d++){
+    const ds=mon+'-'+pad(d), n=cnt[ds]||0, wd=new Date(y,m-1,d).getDay();
+    h+='<button class="cal-d'+(wd===0?' sun':'')+(ds===TODAY()?' today':'')+'" '+
+       'data-act="nday" data-d="'+ds+'" aria-pressed="'+(ds===state.noteDay)+'">'+d+
+       (n?'<span class="dots">'+'<i></i>'.repeat(Math.min(n,3))+(n>3?'<b>+'+(n-3)+'</b>':'')+'</span>':'')+
+       '</button>';
+  }
+  const tail=(7-((lead+lastD)%7))%7;
+  for(let i=0;i<tail;i++) h+='<div class="cal-d blank"></div>';
+  h+='</div></div>';
+
+  const day=state.noteDay;
+  const dayNotes=notes.filter(e=>eDate(e)===day).sort((a,b)=>a.ts-b.ts);
+  const dayOther=visible().filter(e=>e.cat!=='note'&&eDate(e)===day).sort((a,b)=>a.ts-b.ts);
+
+  h+='<div class="pills">'+
+     '<button class="pill" data-act="pin" data-d="'+day+'" aria-pressed="'+(state.pinDate===day)+'">이 날에 담기</button>'+
+     (dayOther.length?'<button class="pill" data-act="toggle" data-k="noteAll" aria-pressed="'+state.noteAll+'">그날의 다른 것 '+dayOther.length+'</button>':'')+
+     '</div>';
+
+  const dd=dObj(day);
+  h+='<section><h2>'+dd.getFullYear()+'년 '+(dd.getMonth()+1)+'월 '+dd.getDate()+'일 '+WDN[dd.getDay()]+'요일'+
+     '<span class="aside">'+(dayNotes.length? '메모 '+dayNotes.length:'')+'</span></h2>';
+  if(dayOther.length){
+    const t={};
+    dayOther.forEach(e=>{ t[e.cat]=(t[e.cat]||0)+1; });
+    const money=dayOther.filter(e=>e.cat==='money');
+    const mo=money.filter(e=>e.flow!=='in').reduce((a,b)=>a+b.amount,0);
+    const mi=money.filter(e=>e.flow==='in').reduce((a,b)=>a+b.amount,0);
+    h+='<div class="trace">그날의 자취 · '+
+      Object.keys(t).map(c=>CATS[c].mk+' '+CATS[c].name+' '+t[c]).join(' · ')+
+      (mo?' · 지출 '+nf(mo):'')+(mi?' · 수입 '+nf(mi):'')+'</div>';
+  }
+  h+=listHTML(dayNotes,{hideStamp:true,empty:
+      day===TODAY()? '오늘은 아직 적은 것이 없습니다.'
+                   : '이 날에는 적은 것이 없습니다. 「이 날에 담기」를 켜면 지금 적는 것이 이 날짜로 갑니다.'})+
+     '</section>';
+  if(state.noteAll&&dayOther.length)
+    h+='<section><h2>그날의 다른 것</h2>'+listHTML(dayOther,{showCat:true,hideStamp:true})+'</section>';
+
+  const recent=notes.filter(e=>eDate(e)!==day).sort((a,b)=>eDate(a)<eDate(b)?1:-1).slice(0,6);
+  if(recent.length)
+    h+='<section><h2>가까운 날들</h2>'+listHTML(recent,{})+'</section>';
+  return h;
 }
 function vAll(){
   const arr=visible().filter(e=>match(e,state.q)).sort((a,b)=>b.ts-a.ts);
@@ -1564,6 +1656,23 @@ $view.addEventListener('click',async e=>{
     if(d===0) state.month=TODAY().slice(0,7);
     else{ const p=state.month.split('-'); const x=new Date(+p[0],+p[1]-1+d,1); state.month=iso(x).slice(0,7); }
     render(); return;
+  }
+  if(act==='nday'){ state.noteDay=b.dataset.d; state.limit=60; render(); return; }
+  if(act==='nmon'){
+    const d=+b.dataset.d;
+    if(d===0){ state.noteMonth=TODAY().slice(0,7); state.noteDay=TODAY(); }
+    else{
+      const p=state.noteMonth.split('-'), x=new Date(+p[0],+p[1]-1+d,1);
+      state.noteMonth=iso(x).slice(0,7);
+      const days=byCat('note').map(e=>eDate(e)).filter(s=>ym(s)===state.noteMonth).sort();
+      state.noteDay=days.length? days[days.length-1] : state.noteMonth+'-01';
+    }
+    render(); return;
+  }
+  if(act==='pin'){
+    state.pinDate = state.pinDate===b.dataset.d ? null : b.dataset.d;
+    render(); preview(); if(state.pinDate) $in.focus();
+    return;
   }
   if(act==='bal'){ balanceSheet(); return; }
   if(act==='range'){ state.askRange=b.dataset.k; render(); return; }
