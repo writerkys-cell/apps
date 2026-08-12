@@ -1118,36 +1118,49 @@ function vToday(){
        '분류가 틀리면 왼쪽 기호를 눌러 고치세요. 같은 말이 다시 오면 그대로 따릅니다.</div>';
   }
 
-  h+='<section><h2>오늘 일정<span class="aside">'+planToday.length+'</span></h2>'+
-     listHTML(planToday,{hideStamp:true,empty:'오늘 잡힌 일정이 없습니다.'})+'</section>';
-
-  if(dls.length)
+  let shown=0;
+  if(planToday.length){
+    shown++;
+    h+='<section><h2>오늘 일정<span class="aside">'+planToday.length+'</span></h2>'+
+       listHTML(planToday,{hideStamp:true})+'</section>';
+  }
+  if(dls.length){
+    shown++;
     h+='<section><h2>마감<span class="aside">'+
        (dlDue? '오늘까지 '+dlDue+' · ':'')+(dlLeft? '오늘 몫 남은 '+dlLeft:'오늘 몫 다 했습니다')+
        '</span></h2>'+dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
-
-  if(rtToday.length)
+  }
+  if(rtToday.length){
+    shown++;
     h+='<section><h2>오늘의 루틴<span class="aside">'+
        (rtLeft.length? '남은 '+rtLeft.length+' / '+rtToday.length : '다 했습니다')+'</span></h2>'+
        rtToday.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+  }
+  if(dueNow.length){
+    shown++;
+    h+='<section><h2>오늘 할 일<span class="aside">'+dueNow.length+
+       (todosAll.length>dueNow.length? ' / 남은 '+todosAll.length:'')+'</span></h2>'+
+       listHTML(dueNow,{})+'</section>';
+  }
+  if(dayM.length||META.balance){
+    shown++;
+    h+='<section><h2>오늘의 수지</h2><div class="grid">'+
+       '<div class="cell"><div class="k">오늘 수입</div><div class="v in">'+nf(dIn)+'</div></div>'+
+       '<div class="cell"><div class="k">오늘 지출</div><div class="v out">'+nf(dOut)+'</div></div>'+
+       '<div class="cell"><div class="k">오늘 남음</div><div class="v">'+nf(dIn-dOut)+'</div></div>'+
+       balanceCell()+
+       '</div>'+
+       '<div class="rowline" style="border-bottom:none"><span class="g">'+(+mon.slice(5))+'월 누계</span>'+
+       '<span class="n">수입 '+nf(mIn)+' · 지출 '+nf(mOut)+' · 남음 '+nf(mIn-mOut)+'</span></div>'+
+       (dayM.length? '<div style="margin-top:2px">'+dayM.sort((a,b)=>b.ts-a.ts).map(e=>itemHTML(e,{hideStamp:true})).join('')+'</div>':'')+
+       '</section>';
+  }
 
-  h+='<section><h2>오늘 할 일<span class="aside">'+dueNow.length+' / 남은 '+todosAll.length+'</span></h2>'+
-     listHTML(dueNow,{empty:'오늘 몫은 비어 있습니다.'})+'</section>';
-
-  h+='<section><h2>오늘의 수지</h2><div class="grid">'+
-     '<div class="cell"><div class="k">오늘 수입</div><div class="v in">'+nf(dIn)+'</div></div>'+
-     '<div class="cell"><div class="k">오늘 지출</div><div class="v out">'+nf(dOut)+'</div></div>'+
-     '<div class="cell"><div class="k">오늘 남음</div><div class="v">'+nf(dIn-dOut)+'</div></div>'+
-     balanceCell()+
-     '</div>'+
-     '<div class="rowline" style="border-bottom:none"><span class="g">'+(+mon.slice(5))+'월 누계</span>'+
-     '<span class="n">수입 '+nf(mIn)+' · 지출 '+nf(mOut)+' · 남음 '+nf(mIn-mOut)+'</span></div>'+
-     (dayM.length? '<div style="margin-top:2px">'+dayM.sort((a,b)=>b.ts-a.ts).map(e=>itemHTML(e,{hideStamp:true})).join('')+'</div>':'')+
-     '</section>';
-
-  if(planWeek.length) h+='<section><h2>이번 주 일정</h2>'+listHTML(planWeek,{hideStamp:true})+'</section>';
+  if(planWeek.length){ shown++;
+    h+='<section><h2>이번 주 일정</h2>'+listHTML(planWeek,{hideStamp:true})+'</section>'; }
 
   if(cy.length){
+    shown++;
     h+='<section><h2>돌아온 것들</h2>';
     cy.forEach(g=>{
       const n=dday(g.next);
@@ -1157,12 +1170,17 @@ function vToday(){
     });
     h+='</section>';
   }
-  if(todayRec.length)
-    h+='<section><h2>오늘의 기록</h2>'+listHTML(todayRec,{hideStamp:true})+'</section>';
+  if(todayRec.length){ shown++;
+    h+='<section><h2>오늘의 기록</h2>'+listHTML(todayRec,{hideStamp:true})+'</section>'; }
 
-  h+='<section><h2>'+(filed.length?'오늘 담은 것':'방금 담긴 것')+
-     '<span class="aside">'+(filed.length||recent.length)+'</span></h2>'+
-     listHTML(filed.length? filed.sort((a,b)=>b.ts-a.ts):recent,{showCat:true,empty:'아직 없습니다.'})+'</section>';
+  if(filed.length){ shown++;
+    h+='<section><h2>오늘 담은 것<span class="aside">'+filed.length+'</span></h2>'+
+       listHTML(filed.sort((a,b)=>b.ts-a.ts),{showCat:true})+'</section>'; }
+  else if(recent.length){ shown++;
+    h+='<section><h2>방금 담긴 것</h2>'+listHTML(recent,{showCat:true})+'</section>'; }
+
+  if(!shown&&E.length)
+    h+='<div class="empty">오늘 자리는 비어 있습니다. 아래에 적으면 여기 섭니다.</div>';
   return h;
 }
 function vTodo(){
