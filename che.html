@@ -710,8 +710,9 @@ function preview(){
     return;
   }
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
-  const p=applyPin(parse(lines[0]));
-  let h=pin+'<span class="chip cat">'+CATS[p.cat].mk+' '+CATS[p.cat].name+(p.forced?' 지정':'')+'</span>';
+  const p=applyTab(applyPin(parse(lines[0])));
+  let h=pin+'<span class="chip cat">'+CATS[p.cat].mk+' '+CATS[p.cat].name+
+        (p.forced?' 지정':p.tabbed?' · 이 탭':'')+'</span>';
   if(p.date) h+='<span class="chip">'+fmtD(p.date)+(p.time?' '+p.time:'')+'</span>';
   if(p.amount!==null) h+='<span class="chip">'+(p.flow==='in'?'+':'−')+p.amount.toLocaleString('ko-KR')+' '+p.group+'</span>';
   if(p.num!==null) h+='<span class="chip">'+p.key+' '+p.num+p.unit+'</span>';
@@ -732,8 +733,9 @@ async function commit(){
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
   const now=Date.now();
   const items=lines.map((l,i)=>{
-    const p=applyPin(parse(l));
+    const p=applyTab(applyPin(parse(l)));
     if(state.pinDate && !p.date) p.date=state.pinDate;
+    delete p.tabbed;
     return {id:uid(), ts:now+i, mt:now+i, ...p, done:false, doneAt:null, archived:false};
   });
   E=E.concat(items); await put(items);
@@ -1259,6 +1261,26 @@ function vRec(){
   });
   return h;
 }
+const TAB_CAT={cal:'note',todo:'todo',plan:'plan',money:'money',ref:'ref',cycle:'cycle',rec:'rec'};
+const TAB_HINT={
+  todo :'할일로 담깁니다 · 원고 보내기',
+  plan :'일정으로 담깁니다 · 다음 주 화요일 미팅',
+  money:'금전으로 담깁니다 · 커피 4,800원',
+  ref  :'참조로 담깁니다 · 링크나 인용',
+  cycle:'주기로 담깁니다 · 이발',
+  rec  :'기록으로 담깁니다 · 달리기 4.8km',
+  cal  :'메모로 담깁니다 · 오늘 있었던 일',
+};
+function applyTab(p){
+  const c=TAB_CAT[state.tab];
+  if(!c || p.forced || state.pinDate || p.cat===c) return p;
+  if(c==='money' && p.amount===null) return p;   // 금액이 없으면 금전으로 몰지 않는다
+  if(c==='rec'   && p.num===null)    return p;   // 숫자가 없으면 기록으로 몰지 않는다
+  p.cat=c; p.tabbed=true;
+  if(c==='cycle'&&!p.key) p.key=cycleKey(p.text)||tokens(p.text)[0]||'주기';
+  if(c==='rec'  &&!p.key) p.key=tokens(p.text)[0]||'기록';
+  return p;
+}
 function pinCat(){
   if(!state.pinDate) return null;
   const n=dday(state.pinDate);
@@ -1405,6 +1427,8 @@ function vSet(){
   h+='</section>';
   h+='<section><h2>적는 법</h2><div class="empty">'+
      '입력칸에서 <b>/</b>를 치면 분류 목록이 뜹니다. ↑↓로 고르고 엔터, 또는 <b>/할일</b>처럼 이어 쳐도 됩니다.<br>'+
+     '오늘·물음·전체·설정을 뺀 탭에서는 <b>그 탭의 분류로 담깁니다</b>. 금전 탭에서 적으면 금전, 참조 탭에서 적으면 참조. '+
+     '다른 데로 보내려면 <b>/</b>로 지정하세요. 다만 금액이 없으면 금전으로, 숫자가 없으면 기록으로 몰지 않습니다.<br>'+
      '<b>#</b>은 갈래, <b>@</b>는 사람. 여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
      '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.'+
      '</div></section>';
@@ -1797,9 +1821,11 @@ function renderNav(){
 function render(){
   renderNav();
   $view.innerHTML=(VIEWS[state.tab]||vToday)();
+  $in.placeholder=TAB_HINT[state.tab]||'무엇이든 한 줄로 적으세요';
   if(state.tab==='set') showUsage();
   window.scrollTo({top:0});
   schedFit();
+  preview();
 }
 async function showUsage(){
   const el=document.getElementById('usage'); if(!el) return;
