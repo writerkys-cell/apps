@@ -2137,9 +2137,19 @@ function editEntry(ent){
     if(v===null) return;
     const t=v.trim(); if(!t) return;
     const p=parse(t);
-    Object.assign(ent,p,{done:ent.done,doneAt:ent.doneAt,archived:ent.archived});
+    // 글에서 새로 읽어내는 것
+    ent.raw=t; ent.text=p.text;
+    ent.tags=p.tags; ent.people=p.people; ent.url=p.url; ent.page=p.page;
+    // 새로 적은 것이 있을 때만 갈아끼운다. 없으면 원래 것을 지킨다.
+    if(p.date){ ent.date=p.date; ent.time=p.time; }
+    else if(p.time) ent.time=p.time;
+    if(p.amount!==null){ ent.amount=p.amount; ent.flow=p.flow; ent.group=p.group; }
+    if(p.num!==null){ ent.num=p.num; ent.unit=p.unit; if(p.key) ent.key=p.key; }
+    if(p.forced) ent.cat=p.cat;            // /분류 로 지정했을 때만 분류를 옮긴다
     touch(ent); await put(ent); render(); toast('고쳤습니다');
-  }, true);
+  }, true,
+  '분류와 날짜, 마감·루틴·별표는 그대로 둡니다. 새로 적은 날짜나 금액이 있으면 그것만 바뀝니다. '+
+  '분류를 옮기려면 왼쪽 기호를 누르거나 앞에 /분류를 붙이세요.');
 }
 function routineSheet(ent){
   const cur=ent.rt||null;
@@ -2225,7 +2235,7 @@ function catSheet(ent){
 function sheet(title,body,opts,cb,isInput,hint){
   const v=document.createElement('div'); v.className='veil';
   v.innerHTML='<div class="sheet'+(isInput?' wide':'')+'"><h3>'+esc(title)+'</h3>'+
-    (isInput? '<p>'+esc(hint||'고치면 분류와 날짜, 금액을 다시 헤아립니다.')+'</p><textarea class="etext" spellcheck="false"></textarea>'
+    (isInput? '<p>'+esc(hint||'새로 적은 날짜나 금액이 있으면 그것만 바뀝니다.')+'</p><textarea class="etext" spellcheck="false"></textarea>'
             : '<p>'+esc(body)+'</p>')+
     '<div class="opts" style="margin-top:12px">'+
       (opts? opts.map(o=>'<button data-k="'+o.k+'">'+esc(o.label)+'</button>').join('')
