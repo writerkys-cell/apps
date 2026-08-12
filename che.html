@@ -1103,8 +1103,9 @@ function vToday(){
   let h='<div class="dayhead">'+
     '<span class="d">'+now.getFullYear()+'년 '+(now.getMonth()+1)+'월 '+now.getDate()+'일</span>'+
     '<span class="w">'+WDN[now.getDay()]+'요일</span>'+
-    '<span class="s">할 일 '+dueNow.length+(late.length?' <b>· 지난 기한 '+late.length+'</b>':'')+
-      (rtToday.length?' · 루틴 '+(rtToday.length-rtLeft.length)+'/'+rtToday.length:'')+
+    '<span class="s">'+
+      (rtToday.length? '루틴 '+(rtToday.length-rtLeft.length)+'/'+rtToday.length+' · ':'')+
+      '할 일 '+dueNow.length+(late.length?' <b>· 지난 기한 '+late.length+'</b>':'')+
       ' · 일정 '+planToday.length+
       (overdue?' · 돌아온 것 '+overdue:'')+'<br>'+
       (dOut||dIn? (dOut?'오늘 지출 '+nf(dOut):'')+(dOut&&dIn?' · ':'')+(dIn?'오늘 수입 '+nf(dIn):'')
@@ -1119,6 +1120,12 @@ function vToday(){
   }
 
   let shown=0;
+  if(rtToday.length){
+    shown++;
+    h+='<section><h2>오늘의 루틴<span class="aside">'+
+       (rtLeft.length? '남은 '+rtLeft.length+' / '+rtToday.length : '다 했습니다')+'</span></h2>'+
+       rtToday.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+  }
   if(planToday.length){
     shown++;
     h+='<section><h2>오늘 일정<span class="aside">'+planToday.length+'</span></h2>'+
@@ -1129,12 +1136,6 @@ function vToday(){
     h+='<section><h2>마감<span class="aside">'+
        (dlDue? '오늘까지 '+dlDue+' · ':'')+(dlLeft? '오늘 몫 남은 '+dlLeft:'오늘 몫 다 했습니다')+
        '</span></h2>'+dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
-  }
-  if(rtToday.length){
-    shown++;
-    h+='<section><h2>오늘의 루틴<span class="aside">'+
-       (rtLeft.length? '남은 '+rtLeft.length+' / '+rtToday.length : '다 했습니다')+'</span></h2>'+
-       rtToday.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
   }
   if(dueNow.length){
     shown++;
@@ -1554,11 +1555,18 @@ function monthRange(mon){
   const p=mon.split('-'), a=new Date(+p[0],+p[1]-1,1), b=new Date(+p[0],+p[1],0);
   return {from:iso(a),to:iso(b),label:(+p[0])+'년 '+(+p[1])+'월'};
 }
-const RANGES=[['month','이번 달'],['prev','지난달'],['quarter','이번 분기'],
-              ['year','올해'],['lastyear','지난해'],['all','전체']];
+const RANGES=[['week','이번 주'],['lastweek','지난주'],['month','이번 달'],['prev','지난달'],
+              ['quarter','이번 분기'],['year','올해'],['lastyear','지난해'],['all','전체']];
 function rangeOf(k){
   const n=new Date(), y=n.getFullYear(), m=n.getMonth();
   const f=(a,b,label)=>({from:iso(a),to:iso(b),label});
+  if(k==='week'||k==='lastweek'){
+    const a=new Date(y,m,n.getDate());
+    a.setDate(a.getDate()-((a.getDay()+6)%7)-(k==='lastweek'?7:0));
+    const b=new Date(a); b.setDate(a.getDate()+6);
+    return f(a,b,(k==='week'?'이번 주 ':'지난주 ')+
+      (a.getMonth()+1)+'.'+a.getDate()+'~'+(b.getMonth()+1)+'.'+b.getDate());
+  }
   if(k==='month')    return f(new Date(y,m,1), new Date(y,m+1,0), y+'년 '+(m+1)+'월');
   if(k==='prev')     return f(new Date(y,m-1,1), new Date(y,m,0), y+'년 '+(m||12)+'월');
   if(k==='quarter'){ const q=Math.floor(m/3)*3;
@@ -1763,7 +1771,8 @@ function bRef(r){
 function bReview(r){
   const arr=E.filter(e=>inR(eDate(e),r)&&!e.archived).sort((a,b)=>eDate(a)<eDate(b)?-1:1);
   if(!arr.length) return null;
-  let s=HEAD+'# 자료 · '+r.label+'의 기록 전부\n'+arr.length+'건\n\n';
+  const span=(r.from&&r.to)? Math.round((dObj(r.to)-dObj(r.from))/86400000)+1 : 9999;
+  let s=HEAD+'# 자료 · '+r.label+'의 기록 전부\n'+arr.length+'건'+(span<9999?' · '+span+'일':'')+'\n\n';
   Object.keys(CATS).forEach(c=>{
     const l=arr.filter(e=>e.cat===c); if(!l.length) return;
     s+='\n## '+CATS[c].name+' ('+l.length+')\n';
@@ -1777,14 +1786,28 @@ function bReview(r){
       l.forEach(e=>s+=eDate(e)+' | '+(c==='todo'?(e.done?'[끝] ':'[남음] '):'')+e.raw.replace(/\n/g,' ')+'\n');
     }
   });
+  if(span>45){
+    const sums=E.filter(e=>e.cat==='ref'&&(e.tags||[]).some(t=>/요약|되짚|정리/.test(t))&&inR(eDate(e),r))
+      .sort((a,b)=>eDate(a)<eDate(b)?-1:1);
+    if(sums.length){
+      s+='\n## 앞서 만들어 참조로 담아둔 요약 ('+sums.length+')\n'+
+         '이것은 내가 더 짧은 기간마다 정리해 둔 글이다. 날것의 기록보다 이쪽을 먼저 읽어라.\n';
+      sums.forEach(e=>s+='\n['+eDate(e)+']\n'+e.raw+'\n');
+    }
+  }
   s+='\n\n# 물음\n'+
     '이것은 '+r.label+' 동안 내가 살면서 적어둔 것 전부다. 잘잘못을 매기지 말고 다음처럼 답해라.\n\n'+
-    '1. 이 기간을 한 문단으로 서술해라. 무슨 일이 있었고 나는 무엇에 시간을 썼는가. 사실만으로.\n'+
+    (span<=10
+      ? '1. 이 기간을 한 문단으로 서술해라. 날이 며칠뿐이니 날짜별로 짚어도 좋다. 사실만으로.\n'
+      : '1. 이 기간을 한 문단으로 서술해라. 무슨 일이 있었고 나는 무엇에 시간을 썼는가. 사실만으로.\n')+
     '2. 되풀이해 나타난 말, 이름, 장소, 걱정을 뽑아 빈도와 함께 보여라.\n'+
     '3. 앞뒤가 달라진 대목 — 기간 초와 말을 견주어 무엇이 바뀌었는지.\n'+
     '4. 기록에 남지 않은 자리 — 유난히 비어 있는 날들이나, 있을 법한데 한 줄도 없는 영역을 짚어라.\n'+
     '5. 이 기록에서 글로 쓸 만한 대목 셋. 왜 그것이 글이 될 수 있는지 각각 두어 줄로.\n\n'+
-    '5번은 소재만 골라 주면 된다. 대신 써주지 말고, 문장을 지어 보이지도 마라.'+TAIL;
+    '5번은 소재만 골라 주면 된다. 대신 써주지 말고, 문장을 지어 보이지도 마라.\n\n'+
+    '마지막에 「갈무리」라는 제목으로, 이 기간을 열 줄 안쪽으로 압축한 글을 따로 붙여라. '+
+    '나는 이것을 참조로 담아 두었다가 더 긴 기간을 되짚을 때 재료로 쓸 것이다. '+
+    '그러니 이 기간에만 통하는 대명사나 앞뒤 맥락에 기대는 표현은 피하고, 날짜와 이름을 밝혀 적어라.'+TAIL;
   return s;
 }
 
@@ -1887,7 +1910,7 @@ const ASKS=[
   {k:'ref',   name:'참조 엮기', ranged:true,  build:bRef,
    desc:'주제별로 묶고, 관심이 옮겨간 자리와 이어 붙일 조합 찾기'},
   {k:'review',name:'한 시기 되짚기', ranged:true,  build:bReview,
-   desc:'그 기간의 기록 전부로 무엇을 하며 살았는지, 글이 될 대목은 어디인지'},
+   desc:'그 기간의 기록 전부로 무엇을 하며 살았는지, 글이 될 대목은 어디인지 · 주·달·계절'},
   {k:'tidy',  name:'분류 손보기', ranged:false, build:bTidy,
    desc:'메모함 정리, 새 분류 제안, 자동 분류 규칙 다듬기'},
 ];
@@ -1911,6 +1934,8 @@ function vAsk(){
      '새 대화가 열리니 그대로 붙여 넣으세요.<br>'+
      '자료가 길면 답이 성글어집니다. 기간을 좁힐수록 촘촘해집니다.<br>'+
      '하루치 일기 초고는 <b>달력</b> 탭에서 날을 고르고 「이 날 일기」를 누르세요.<br>'+
+     '<b>한 시기 되짚기</b>는 답 끝에 「갈무리」를 붙여 옵니다. 그것을 <b>/참조 #요약</b>으로 담아 두면, '+
+     '나중에 분기나 해를 되짚을 때 날것의 기록보다 그 갈무리를 먼저 읽습니다. 주 → 달 → 계절로 쌓입니다.<br>'+
      '이 글은 앱 밖으로 나가는 유일한 통로입니다. 무엇이 담겼는지 보내기 전에 눈으로 확인하세요.'+
      '</div></section>';
   return h;
