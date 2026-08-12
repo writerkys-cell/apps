@@ -743,9 +743,11 @@ function openContModal(book,mode){
   contCtx={book:book,mode:mode};
   document.getElementById('contTitle').textContent=
     mode==='cont'?'어디까지 읽었나요?':'어디부터 이어 읽나요?';
+  const scOn=(state.shortcuts!==false);
   document.getElementById('contDesc').innerHTML=
     esc(book.title)+(mode==='cont'
       ?'<br>적은 쪽수가 제목에 붙어 리스트 맨 끝에 다시 적힙니다.'
+        +(scOn?'<br>확인하면 단축어 ‘끝’이 실행됩니다.':'')
       :'<br>이 책이 리스트 맨 끝으로 돌아갑니다.');
   const inp=document.getElementById('contInput');
   inp.value=resumePage(book);
@@ -767,6 +769,10 @@ function confirmCont(){
   if(!contCtx)return;
   const book=contCtx.book, mode=contCtx.mode;
   const n=pgNum(document.getElementById('contInput').value);
+  // 단축어로 넘길 제목을 먼저 굳혀 둔다
+  const label=book.title+(n?' · '+n+'쪽':(book.page?' · '+book.page+'쪽':''));
+  // 키보드가 내려가는 도중에는 shortcuts:// 이동이 씹힐 수 있다
+  if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
   snap();
   const carry=carryOf(book);
   if(n)carry.page=String(n);
@@ -782,11 +788,11 @@ function confirmCont(){
     if(i>=0)state.inactive.splice(i,1);
     else book.revived=true;   // 리스트에 남아 있는 항목은 표시만 하고 그대로 둔다
   }
-  const newId=pushToEnd(book.title,book.author||'',carry);
+  pushToEnd(book.title,book.author||'',carry);
   closeModal(contModal);
   save();
   if(mode==='cont'){
-    runShortcut(SC_END,fullTitle(book));
+    runShortcut(SC_END,label);   // 쪽수를 넣고 확인한 이 순간에 실행
     render();
     toast('리스트 끝에 다시 적었습니다',true);
     afterAct();
