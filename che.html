@@ -1431,6 +1431,7 @@ function vCal(){
   h+='<div class="pills">'+
      '<button class="pill" data-act="pin" data-d="'+day+'" aria-pressed="'+(state.pinDate===day)+'">'+
        (kind==='plan'?'이 날 일정 담기':kind==='note'?'이 날 메모 담기':'오늘에 담기')+'</button>'+
+     '<button class="pill" data-act="diary" data-d="'+day+'">✎ 이 날 일기</button>'+
      (dayOther.length?'<button class="pill" data-act="toggle" data-k="noteAll" aria-pressed="'+state.noteAll+'">그날의 다른 것 '+dayOther.length+'</button>':'')+
      '</div>';
 
@@ -1812,6 +1813,68 @@ function bTidy(){
   return s;
 }
 
+/* ─ 그날의 일기 ─ */
+function bDiary(day){
+  const byT=(a,b)=>((a.time||'zz')===(b.time||'zz')? a.ts-b.ts : ((a.time||'zz')<(b.time||'zz')?-1:1));
+  const list=visible().filter(e=>eDate(e)===day).sort(byT);
+  const rtd=visible().filter(e=>isRt(e)&&(e.hist||[]).indexOf(day)>=0);
+  const dld=visible().filter(e=>isDL(e)&&(e.hist||[]).indexOf(day)>=0);
+  if(!list.length&&!rtd.length&&!dld.length) return null;
+  const d=dObj(day);
+  let s=HEAD+'# 자료 · '+d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+WDN[d.getDay()]+'요일\n\n';
+
+  s+='## 그날 담긴 것 (시각순)\n시각 | 갈래 | 내용\n';
+  list.forEach(e=>{
+    let tag=CATS[e.cat].name;
+    if(e.wasTodo) tag='끝낸 일';
+    else if(isDL(e)) tag='마감';
+    s+=(e.time||'-')+' | '+tag+' | '+e.raw.replace(/\n/g,' ')+'\n';
+  });
+
+  const money=list.filter(e=>e.cat==='money');
+  if(money.length){
+    const o=money.filter(e=>e.flow!=='in').reduce((a,b)=>a+b.amount,0);
+    const i=money.filter(e=>e.flow==='in').reduce((a,b)=>a+b.amount,0);
+    s+='\n## 그날 오간 돈\n'+(i?'수입 '+nf(i)+'원 · ':'')+(o?'지출 '+nf(o)+'원':'')+'\n';
+    money.forEach(e=>s+=(e.flow==='in'?'+':'−')+nf(e.amount)+' | '+(e.group||'')+' | '+e.raw.replace(/\n/g,' ')+'\n');
+  }
+  const rec=list.filter(e=>e.cat==='rec');
+  if(rec.length){
+    s+='\n## 그날의 수치\n';
+    rec.forEach(e=>s+=(e.key||'')+' '+(e.num!==null&&e.num!==undefined?e.num+(e.unit||''):'')+' | '+e.raw.replace(/\n/g,' ')+'\n');
+  }
+  if(rtd.length) s+='\n## 그날 해낸 루틴\n'+rtd.map(e=>(e.text||e.raw)+'('+rtLabel(e.rt)+')').join(' · ')+'\n';
+  if(dld.length){
+    s+='\n## 그날 손댄 마감\n';
+    dld.forEach(e=>{ const n=e.date?dday(e.date):null;
+      s+=(e.text||e.raw)+(e.date? ' — 마감 '+e.date+(n!==null?' ('+fmtDD(n)+')':''):'')+'\n'; });
+  }
+
+  const ctx=[];
+  for(let k=3;k>=1;k--){
+    const dd=new Date(d); dd.setDate(dd.getDate()-k); const ds=iso(dd);
+    visible().filter(e=>eDate(e)===ds&&(e.cat==='note'||e.cat==='plan')).slice(0,3)
+      .forEach(e=>ctx.push(ds+' | '+e.raw.replace(/\n/g,' ').slice(0,60)));
+  }
+  if(ctx.length)
+    s+='\n## 앞선 사흘 (흐름을 알기 위한 참고일 뿐이다. 이 날의 일기에 이 일들을 쓰지 마라)\n'+ctx.join('\n')+'\n';
+
+  s+='\n\n# 물음\n'+
+    '위 자료는 그 하루 동안 내가 적어둔 것 전부다. 이것으로 그날의 일기 초고를 써라.\n\n'+
+    '- 자료에 없는 일, 없는 감정, 없는 사람을 만들어 넣지 마라. 비어 있는 시간은 비어 있는 채로 두어라. '+
+    '「~했을 것이다」 「~했으리라」처럼 짐작으로 메우지도 마라.\n'+
+    '- 아름답게 쓰려 하지 마라. 나는 내가 고쳐 쓸 초고를 원하는 것이지 완성된 글을 원하는 게 아니다. '+
+    '비유, 미문, 교훈으로 맺는 마지막 문장은 넣지 마라. 문체를 흉내 내려 하지 말고 사실을 시간 순으로 꿰어 놓는 데 집중해라.\n'+
+    '- 1인칭 과거형 한국어 산문. 서너 문단, 길어도 열두 문장.\n'+
+    '- 시각이 적힌 것은 그 순서를 지키고, 시각이 없는 것에는 억지로 시간을 붙이지 마라.\n'+
+    '- 돈은 액수를 그대로 쓰되 영수증처럼 나열하지 말고 그날의 움직임 속에 녹여라.\n'+
+    '- 내가 적은 문장이 이미 일기의 문장인 경우에는 고치지 말고 그대로 살려라.\n\n'+
+    '다 쓴 뒤에 「덧」이라는 제목을 달고 세 줄을 더해라. '+
+    '첫째, 자료에 있으나 초고에 담지 못한 것. 둘째, 앞뒤가 비어 내가 채워야 할 자리. '+
+    '셋째, 이 날의 기록에서 걸리는 것 하나.'+TAIL;
+  return s;
+}
+
 const ASKS=[
   {k:'money', name:'금전 흐름 읽기', ranged:true,  build:bMoney,
    desc:'월·분기·연 단위 수지, 갈래별 집계, 수입이 어디에 기대고 있는지'},
@@ -1847,6 +1910,7 @@ function vAsk(){
      '만들기를 누르면 자료와 물음이 하나로 엮인 글이 나옵니다. 「복사하고 Claude 열기」를 누르면 '+
      '새 대화가 열리니 그대로 붙여 넣으세요.<br>'+
      '자료가 길면 답이 성글어집니다. 기간을 좁힐수록 촘촘해집니다.<br>'+
+     '하루치 일기 초고는 <b>달력</b> 탭에서 날을 고르고 「이 날 일기」를 누르세요.<br>'+
      '이 글은 앱 밖으로 나가는 유일한 통로입니다. 무엇이 담겼는지 보내기 전에 눈으로 확인하세요.'+
      '</div></section>';
   return h;
@@ -1957,6 +2021,11 @@ $view.addEventListener('click',async e=>{
     if(d===0) state.month=TODAY().slice(0,7);
     else{ const p=state.month.split('-'); const x=new Date(+p[0],+p[1]-1+d,1); state.month=iso(x).slice(0,7); }
     render(); return;
+  }
+  if(act==='diary'){
+    const day=b.dataset.d, t=bDiary(day);
+    if(!t){ toast('그날 담긴 것이 없습니다'); return; }
+    promptSheet('그날의 일기 · '+fmtD(day,true), t); return;
   }
   if(act==='nday'){ state.noteDay=b.dataset.d; state.limit=60; render(); return; }
   if(act==='nmon'){
