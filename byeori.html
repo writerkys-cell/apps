@@ -152,6 +152,11 @@ label.chk input{width:auto;margin:0}
   max-height:34vh;overflow-y:auto;color:var(--ink-soft);border-top:1px solid var(--line-soft);padding-top:12px}
 .body-view.none{color:var(--ink-faint);font-family:var(--sans);font-size:13.5px}
 .got.flat{background:none;border:none;border-left:none;padding:0;margin:0}
+.panel.cont{border-color:#E9DFC6;background:#FFFDF7}
+.panel.cont .panel-head{border-bottom-color:#EFE6D2}
+.panel.cont .panel-head h3{color:var(--amber)}
+.cont-warn{font-size:12px;color:var(--amber);margin-bottom:10px}
+.panel.cont .ref-text{color:#4A4438;max-height:44vh}
 .ref-text .guess{color:var(--amber)}
 .body-edit{width:100%;min-height:56vh;border:none;background:none;padding:0;font-size:16px;line-height:1.95}
 .body-edit:focus{background:none}
@@ -251,6 +256,19 @@ details.log summary .m{font-size:12px;color:var(--ink-soft)}
     <div class="panel-body"><div id="gotPane"></div></div>
   </div>
 
+  <div class="panel cont" id="contPanel" style="margin-bottom:14px;display:none">
+    <div class="panel-head">
+      <h3>이어쓰기</h3>
+      <span class="cnt" id="contCount"></span>
+      <div class="spacer"></div>
+      <button class="btn tiny" id="btnCopyCont">복사</button>
+    </div>
+    <div class="panel-body">
+      <p class="cont-warn">클로드가 쓴 장면입니다. 막힌 자리를 뚫으려고 보는 것이지, 여기서 문장을 가져오려는 것이 아닙니다.</p>
+      <div class="ref-text" id="contText"></div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="row" style="margin-bottom:10px">
       <label class="f-label" style="margin:0">내 본문</label>
@@ -327,6 +345,7 @@ details.log summary .m{font-size:12px;color:var(--ink-soft)}
       <label class="chk"><input type="checkbox" class="want" data-k="모순"> 모순</label>
       <label class="chk"><input type="checkbox" class="want" data-k="질문"> 질문</label>
       <label class="chk"><input type="checkbox" class="want" data-k="제안"> 제안</label>
+      <label class="chk"><input type="checkbox" class="want" data-k="이어쓰기"> 이어쓰기</label>
       <span class="sep" style="color:var(--line)">|</span>
       <label class="chk"><input type="checkbox" id="useRecap"> 앞이야기</label>
       <button class="btn tiny" id="btnEditTemplate">지시문 고치기</button>
@@ -582,15 +601,17 @@ const DEFAULT_TPL=
 const ASK={
   모순:'서로 어긋나는 대목은 본문에서 지우지 마세요. 양쪽을 그대로 둔 채 [모순]에 적어주세요. 어느 쪽을 버릴지는 내가 정합니다.',
   질문:'더 구체적으로 쓰기 위해 내가 답해야 할 질문을 [질문]에 3~6개 적어주세요. "이 글의 주제는 무엇인가" 같은 것 말고, "그날 아침에 무엇을 보았는지 한 장면만" 같은 것으로.',
-  제안:'다음 회차에 무엇을 쓰면 좋을지 [제안]에 2~4개 적어주세요. 지금 대목에 아직 맞지 않는 조각이 있으면 억지로 넣지 말고 여기에 "이 조각은 아직 이르다"고 적어주세요.'
+  제안:'다음 회차에 무엇을 쓰면 좋을지 [제안]에 2~4개 적어주세요. 지금 대목에 아직 맞지 않는 조각이 있으면 억지로 넣지 말고 여기에 "이 조각은 아직 이르다"고 적어주세요.',
+  이어쓰기:'본문이 끝난 자리에서 이어질 다음 장면을 [이어쓰기]에 직접 써주세요. 1000자 안팎으로, 요약이나 설명이 아니라 장면으로 쓰세요. 이것은 내가 그대로 쓸 글이 아니라 막힌 자리를 뚫어보려고 보는 것이니, 무난한 전개로 얼버무리지 말고 구체적인 선택을 하나 내려서 밀고 나가주세요. 길이 두 갈래로 갈린다면 나눠서 둘 다 보여줘도 좋습니다.'
 };
 const ASK_FORM={
   모순:"[모순]\n- (서로 어긋나는 지점. 없으면 '없음')",
   질문:'[질문]\n- (답해야 할 질문)',
-  제안:'[제안]\n- (다음에 쓸 것)'
+  제안:'[제안]\n- (다음에 쓸 것)',
+  이어쓰기:'[이어쓰기]\n(본문 뒤로 이어지는 다음 장면)'
 };
 function buildAsk(){
-  const on=['모순','질문','제안'].filter(k=>cur.want&&cur.want[k]);
+  const on=['모순','질문','제안','이어쓰기'].filter(k=>cur.want&&cur.want[k]);
   const rules=on.map((k,i)=>(i+6)+'. '+ASK[k]).join('\n');
   const form=['[초고]\n(조각을 제자리에 배치해 정리한 본문 전문)'].concat(on.map(k=>ASK_FORM[k])).join('\n\n');
   return (rules?rules+'\n\n':'')+
@@ -627,14 +648,15 @@ function newDoc(name){
   return {id:uid(), name:name||'새 글', createdAt:Date.now(), updatedAt:Date.now(),
     scrivener:'', body:'', bodyUndo:null, roundStart:'', pieces:[], reply:null, absorbed:false,
     promptDraft:null, tpl:DEFAULT_TPL, recapTpl:DEFAULT_RECAP_TPL,
-    archive:[], recap:null, useRecap:true, want:{모순:true,질문:true,제안:true}, rounds:[]};
+    archive:[], recap:null, useRecap:true, want:{모순:true,질문:true,제안:true,이어쓰기:false}, rounds:[]};
 }
 function normalize(d){
   const base=newDoc(d.name);
   for(const k of Object.keys(base)) if(d[k]===undefined) d[k]=base[k];
   d.pieces=d.pieces||[]; d.archive=d.archive||[]; d.rounds=d.rounds||[];
   d.pieces.forEach(p=>{ if(p.keep===undefined) p.keep=false; });
-  if(!d.want) d.want={모순:true,질문:true,제안:true};
+  if(!d.want) d.want={모순:true,질문:true,제안:true,이어쓰기:false};
+  if(d.want.이어쓰기===undefined) d.want.이어쓰기=false;
   if(d.tpl&&!d.tpl.includes('{{요청}}')){ d.tplOld=d.tpl; d.tpl=DEFAULT_TPL; }
   d.archive.forEach(a=>{ if(a.pick===undefined) a.pick=true; });
   return d;
@@ -893,7 +915,7 @@ function renderPrompt(){
   $$('.want').forEach(c=>{ c.checked=!!(cur.want&&cur.want[c.dataset.k]); });
   $('#promptHint').textContent=(cur.promptDraft!=null)
     ? '손댄 프롬프트입니다. 조각이나 본문을 고쳐도 자동으로 반영되지 않습니다 — 「처음 상태로」를 누르면 다시 만듭니다.'
-    : (()=>{ const on=['모순','질문','제안'].filter(k=>cur.want[k]);
+    : (()=>{ const on=['모순','질문','제안','이어쓰기'].filter(k=>cur.want[k]);
         return '본문 '+nf(chars(cur.body))+'자 · 조각 '+cur.pieces.length+'개'+
         ((cur.useRecap&&cur.recap)?' · 앞이야기 '+nf(chars(cur.recap.text))+'자':'')+
         ' · '+(on.length?'받을 것: '+on.join('·'):'정리만 받습니다'); })();
@@ -907,13 +929,13 @@ function renderPrompt(){
 }
 
 /* ---------- 답변 파싱 ---------- */
-const KINDS=['초고','모순','질문','제안'];
+const KINDS=['초고','모순','질문','제안','이어쓰기'];
 function parseReply(text){
-  const blocks={초고:'',모순:'',질문:'',제안:''};
+  const blocks={초고:'',모순:'',질문:'',제안:'',이어쓰기:''};
   let k=null, buf=[];
   const flush=()=>{ if(k) blocks[k]=buf.join('\n').trim(); buf=[]; };
   for(const l of (text||'').split('\n')){
-    const m=l.trim().match(/^[#\s]*[\[【]?\s*(초고|모순|질문|제안|본문|조각|앞이야기)\s*[\]】]?\s*[:：]?\s*$/);
+    const m=l.trim().match(/^[#\s]*[\[【]?\s*(초고|모순|질문|제안|이어쓰기|본문|조각|앞이야기)\s*[\]】]?\s*[:：]?\s*$/);
     if(m){ flush(); k=KINDS.includes(m[1])?m[1]:null; continue; }
     if(k) buf.push(l);
   }
@@ -951,12 +973,21 @@ function renderRewrite(){
     $('#refCount').textContent=''; $('#btnCopyRef').disabled=true;
   }
   renderGot();
+  renderCont();
   renderBodyView();
   const c=chars(cur.body);
   $('#knotHint').textContent=c>=TARGET
     ? '목표 분량을 넘었습니다. 매듭지어 서고로 보내고 다음 대목을 시작할 수 있습니다.'
     : '매듭까지 '+nf(TARGET-c)+'자 남았습니다. 남은 조각은 매듭 뒤에도 그대로 따라옵니다.';
   renderAbsorb();
+}
+function renderCont(){
+  const panel=$('#contPanel'); if(!panel) return;
+  const t=(cur.reply&&cur.reply.blocks.이어쓰기)?cur.reply.blocks.이어쓰기.trim():'';
+  panel.style.display=t?'':'none';
+  if(!t) return;
+  $('#contText').innerHTML=esc(t);
+  $('#contCount').textContent=nf(chars(t))+'자';
 }
 function renderBodyView(){
   const v=$('#bodyView'); if(!v) return;
@@ -1289,6 +1320,7 @@ function renderAll(){
   $('#btnEditBody').onclick=editBody;
   $('#btnCopyRef').onclick=()=>copyText(cur.reply?cur.reply.blocks.초고:'','받은 초고를 복사했습니다');
   $('#btnCopyGot').onclick=()=>copyText(gotPlain(),'모순·질문·제안을 복사했습니다');
+  $('#btnCopyCont').onclick=()=>copyText(cur.reply?cur.reply.blocks.이어쓰기:'','이어쓰기를 복사했습니다');
   $('#btnRevertBody').onclick=revertBody;
   $('#btnCopyBody').onclick=()=>copyText(cur.body,'본문을 복사했습니다');
   $('#btnKnot').onclick=knot;
