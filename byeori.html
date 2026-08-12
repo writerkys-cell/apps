@@ -98,6 +98,13 @@ a.linkbtn{text-decoration:none}
 .gauge{margin-top:9px;height:3px;background:var(--line-soft);border-radius:99px;overflow:hidden}
 .gauge i{display:block;height:100%;background:var(--indigo);transition:width .3s}
 .gauge.done i{background:var(--seal)}
+.today{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:11px 15px 13px;margin-bottom:18px}
+.today.done{border-color:#CBDFD2;background:#FCFEFC}
+.today .t{font-family:var(--serif);font-size:15px;font-weight:700}
+.today .c{font-size:13px;color:var(--ink-soft)}
+.today.done .c{color:var(--green);font-weight:500}
+.today .gauge{margin-top:9px}
+.today .gauge.done i{background:var(--green)}
 
 /* ---------- 담기 상자 ---------- */
 .catch-box{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:20px}
@@ -285,6 +292,7 @@ details.log summary .m{font-size:12px;color:var(--ink-soft)}
 <!-- ================= 쓰기 ================= -->
 <section class="pane active" id="pane-write">
   <div class="band" id="bandWrite"></div>
+  <div id="todayBox"></div>
 
   <h2 class="section">조각</h2>
   <p class="section-note">스크리브너에 붙여둔 본문과 질문·제안을 보면서, 새로 쓸 것을 여기에 적습니다. 한 번에 200자는 넘겨 씁니다 — 그만큼 쓰는 동안 글자가 또렷해집니다.</p>
@@ -627,7 +635,8 @@ function newDoc(name){
   return {id:uid(), name:name||'새 글', createdAt:Date.now(), updatedAt:Date.now(),
     scrivener:'', body:'', bodyUndo:null, roundStart:'', pieces:[], reply:null, absorbed:false,
     promptDraft:null, tpl:DEFAULT_TPL, recapTpl:DEFAULT_RECAP_TPL,
-    archive:[], recap:null, useRecap:true, want:{모순:true,질문:true,제안:true}, rounds:[]};
+    archive:[], recap:null, useRecap:true, want:{모순:true,질문:true,제안:true},
+    dailyGoal:1200, daily:{}, rounds:[]};
 }
 function normalize(d){
   const base=newDoc(d.name);
@@ -635,6 +644,8 @@ function normalize(d){
   d.pieces=d.pieces||[]; d.archive=d.archive||[]; d.rounds=d.rounds||[];
   d.pieces.forEach(p=>{ if(p.keep===undefined) p.keep=false; });
   if(!d.want) d.want={모순:true,질문:true,제안:true};
+  if(!d.daily) d.daily={};
+  if(!d.dailyGoal) d.dailyGoal=1200;
   if(d.tpl&&!d.tpl.includes('{{요청}}')){ d.tplOld=d.tpl; d.tpl=DEFAULT_TPL; }
   d.archive.forEach(a=>{ if(a.pick===undefined) a.pick=true; });
   return d;
@@ -679,6 +690,16 @@ function fmtDate(ts){
 const fmtDay=ts=>{const d=new Date(ts);return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')};
 const fmtTime=ts=>{const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
 const stamp=()=>{const d=new Date();return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')};
+
+/* 하루치 조각 — 회차와 무관하게 그날 담은 글자를 센다. 공백 포함. */
+const dayKey=ts=>{const d=new Date(ts||Date.now());
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+function tally(n,ts){
+  const k=dayKey(ts);
+  cur.daily[k]=Math.max(0,(cur.daily[k]||0)+n);
+  if(!cur.daily[k]) delete cur.daily[k];
+}
+const todayCount=()=>cur.daily[dayKey()]||0;
 
 let saveTimer=null;
 function save(now){
@@ -748,10 +769,13 @@ function addPiece(){
   const ta=$('#catchText'), t=ta.value.trim();
   if(t.length<MIN_PIECE){ ta.focus(); toast('200자는 넘겨야 담깁니다'); return; }
   const p=newPiece(t); p.round=roundNo();
-  cur.pieces.push(p);
+  const before=todayCount();
+  cur.pieces.push(p); tally(chars(t));
   ta.value=''; autoGrow(ta,110); updateCatchState();
-  save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb();
-  toast('담았습니다');
+  save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb(); renderToday();
+  if(before<cur.dailyGoal&&todayCount()>=cur.dailyGoal)
+    toast('오늘 몫을 다 썼습니다 — 여기서 멈춰도 좋습니다');
+  else toast('담았습니다');
 }
 function updateCatchState(){
   const ta=$('#catchText'), enough=ta.value.trim().length>=MIN_PIECE;
@@ -771,6 +795,28 @@ function pieceCard(p,no,mode){
     '<div class="piece-head"><span class="no">'+no+'</span><span>'+fmtDay(p.ts)+' '+fmtTime(p.ts)+'</span>'+
     tags+'<div class="spacer"></div>'+acts+'</div>'+
     '<div class="piece-text">'+esc(p.text)+'</div></div></div>';
+}
+function renderToday(){
+  const box=$('#todayBox'); if(!box) return;
+  const c=todayCount(), g=cur.dailyGoal||1200, pct=Math.min(100,Math.round(c/g*100)), done=c>=g;
+  box.innerHTML='<div class="today'+(done?' done':'')+'">'+
+    '<div class="band-row">'+
+      '<span class="t">오늘 담은 조각</span>'+
+      '<span class="c">'+nf(c)+' / '+nf(g)+'자</span>'+
+      (done?'<span class="stage s3">오늘 몫을 다 썼습니다</span>':'')+
+      '<div class="spacer"></div>'+
+      '<button class="btn tiny" onclick="setGoal()">몫 고치기</button>'+
+    '</div>'+
+    '<div class="gauge'+(done?' done':'')+'"><i style="width:'+pct+'%"></i></div>'+
+    (done?'':'<p class="hint" style="margin-top:7px">'+nf(g-c)+'자 남았습니다</p>')+
+  '</div>';
+}
+function setGoal(){
+  const v=prompt('하루에 담을 조각의 몫 (공백 포함 글자 수)',String(cur.dailyGoal||1200));
+  if(v===null) return;
+  const n=parseInt(String(v).replace(/[^0-9]/g,''),10);
+  if(!n||n<50){ toast('50자보다는 커야 합니다'); return; }
+  cur.dailyGoal=n; save(true); renderToday(); toast('하루 몫을 '+nf(n)+'자로 두었습니다');
 }
 function renderPieces(){
   const list=$('#pieceList'), st=$('#pieceStats');
@@ -799,14 +845,17 @@ function savePiece(id){
   const p=cur.pieces.find(x=>x.id===id); if(!p) return;
   const v=$('#e-'+id).value.trim();
   if(!v){ delPiece(id,true); return; }
-  p.text=v; save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb();
+  tally(chars(v)-chars(p.text),p.ts);
+  p.text=v; save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb(); renderToday();
 }
 function delPiece(id,silent){
   const i=cur.pieces.findIndex(x=>x.id===id); if(i<0) return;
   const gone=cur.pieces.splice(i,1)[0];
-  save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb();
+  tally(-chars(gone.text),gone.ts);
+  save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb(); renderToday();
   if(!silent) toastAction('지웠습니다','되살리기',()=>{
-    cur.pieces.splice(i,0,gone); save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb();
+    cur.pieces.splice(i,0,gone); tally(chars(gone.text),gone.ts);
+    save(); renderPieces(); renderBands(); renderPrompt(); renderAbsorb(); renderToday();
   });
 }
 function toggleKeep(id,v){
@@ -1235,7 +1284,7 @@ const openModal=id=>$('#'+id).classList.add('show');
 const closeModal=id=>$('#'+id).classList.remove('show');
 function renderAll(){
   if(!cur) return;
-  renderDocSelect(); renderBands(); renderGot(); renderPieces(); updateSealHint();
+  renderDocSelect(); renderBands(); renderToday(); renderGot(); renderPieces(); updateSealHint();
   renderPrompt(); renderRewrite(); renderArch(); renderLog();
 }
 
