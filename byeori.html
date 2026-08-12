@@ -104,7 +104,9 @@ button{font-family:var(--sans);cursor:pointer}
 
 /* ---------- 담기 상자 ---------- */
 .catch-box{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:22px}
-.catch-box textarea{min-height:110px;border:none;background:none;padding:0;font-size:16px}
+.catch-box textarea{min-height:110px;border:none;background:none;padding:0;font-size:16px;
+  color:var(--ink-faint);transition:color .5s ease}
+.catch-box textarea.full{color:var(--ink)}
 .catch-box textarea:focus{background:none}
 .catch-foot{display:flex;align-items:center;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft)}
 .catch-foot .hint{margin:0;flex:1}
@@ -217,7 +219,7 @@ details.log summary .m{font-size:12px;color:var(--ink-soft)}
   <div id="gotBox"></div>
 
   <h2 class="section">조각</h2>
-  <p class="section-note">떠오르는 대로 적습니다. 아이디어든 생각이든 초고의 한 문단이든 가리지 않습니다. 이 조각들은 다음 회차의 본문에 흡수되고 나면 역할이 끝납니다.</p>
+  <p class="section-note">떠오르는 대로 적습니다. 아이디어든 생각이든 초고의 한 문단이든 가리지 않습니다. 다만 한 번에 200자는 넘겨 씁니다 — 그만큼 쓰는 동안 글자가 또렷해집니다. 이 조각들은 다음 회차의 본문에 흡수되고 나면 역할이 끝납니다.</p>
 
   <div class="catch-box">
     <textarea id="catchText" placeholder="지금 떠오른 것…"></textarea>
@@ -507,6 +509,7 @@ function newDoc(name){
           tpl:DEFAULT_TPL, rounds:[]};
 }
 const newPiece=text=>({id:uid(), ts:Date.now(), text:text||''});
+const MIN_PIECE=200;   /* 한 번에 이만큼은 써야 담긴다. 공백 포함. */
 
 let docs=[], cur=null;
 
@@ -614,11 +617,16 @@ function renderBands(){
    ============================================================ */
 function addPiece(){
   const ta=$('#catchText'); const t=ta.value.trim();
-  if(!t){ ta.focus(); return; }
+  if(t.length<MIN_PIECE){ ta.focus(); toast('200자는 넘겨야 담깁니다'); return; }
   cur.pieces.push(newPiece(t));
-  ta.value=''; autoGrow(ta,110);
+  ta.value=''; autoGrow(ta,110); updateCatchState();
   save(); renderPieces(); renderBands(); renderPrompt();
   toast('담았습니다');
+}
+function updateCatchState(){
+  const ta=$('#catchText'), enough=ta.value.trim().length>=MIN_PIECE;
+  ta.classList.toggle('full',enough);
+  $('#btnCatch').disabled=!enough;
 }
 function renderPieces(){
   const list=$('#pieceList'), st=$('#pieceStats');
@@ -934,7 +942,7 @@ function renderAll(){
   $('#btnNewProject').onclick=createDoc;
 
   const ct=$('#catchText');
-  ct.addEventListener('input',()=>autoGrow(ct,110));
+  ct.addEventListener('input',()=>{autoGrow(ct,110);updateCatchState();});
   ct.addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();addPiece();} });
   $('#btnCatch').onclick=addPiece;
 
@@ -988,7 +996,7 @@ function renderAll(){
   };
 
   renderAll();
-  autoGrow(ct,110);
+  autoGrow(ct,110); updateCatchState();
 })();
 </script>
 </body>
