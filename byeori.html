@@ -323,7 +323,12 @@ details.log summary .m{font-size:12px;color:var(--ink-soft)}
     <div class="row" style="margin-bottom:10px">
       <label class="f-label" style="margin:0">이번 회차 프롬프트</label>
       <div class="spacer"></div>
-      <label class="chk"><input type="checkbox" id="useRecap"> 앞이야기 넣기</label>
+      <span class="hint" style="margin:0">받을 것</span>
+      <label class="chk"><input type="checkbox" class="want" data-k="모순"> 모순</label>
+      <label class="chk"><input type="checkbox" class="want" data-k="질문"> 질문</label>
+      <label class="chk"><input type="checkbox" class="want" data-k="제안"> 제안</label>
+      <span class="sep" style="color:var(--line)">|</span>
+      <label class="chk"><input type="checkbox" id="useRecap"> 앞이야기</label>
       <button class="btn tiny" id="btnEditTemplate">지시문 고치기</button>
       <button class="btn tiny" id="btnResetPrompt">처음 상태로</button>
     </div>
@@ -554,26 +559,12 @@ const DEFAULT_TPL=
 지켜주세요.
 
 1. 본문의 문장은 다시 쓰지 마세요. 순서를 바꾸거나, 끊긴 자리를 잇거나, 같은 말이 두 번 나오는 곳을 하나로 줄이는 데까지만 손대세요. 내 어휘와 말투를 그대로 두세요.
-2. 조각은 본문의 어느 자리에 들어가야 하는지 판단해 배치하세요. 문장을 다듬는 것은 최소한으로 하세요. 지금 대목에 아직 맞지 않는 조각이 있으면 억지로 넣지 말고 [제안]에 "이 조각은 아직 이르다"고 적어주세요.
+2. 조각은 본문의 어느 자리에 들어가야 하는지 판단해 배치하세요. 문장을 다듬는 것은 최소한으로 하세요.
 3. 잇기 위해 새 문장을 쓸 수밖에 없었다면, 그 문장 끝에 ※를 붙이세요.
 4. 앞이야기는 이미 끝난 것입니다. 고치지 말고, 지금 본문이 거기에 어긋나거나 같은 말을 되풀이하는 곳만 짚어주세요.
-5. 서로 어긋나는 대목은 본문에서 지우지 마세요. 양쪽을 그대로 둔 채 [모순]에 적어주세요. 어느 쪽을 버릴지는 내가 정합니다.
-6. 질문은 답할 수 있는 크기로 하세요. "이 글의 주제는 무엇인가" 같은 것 말고, "그날 아침에 무엇을 보았는지 한 장면만" 같은 것으로.
-7. 칭찬하지 마세요. 잘 되고 있다는 말도 필요 없습니다.
+5. 칭찬하지 마세요. 잘 되고 있다는 말도 필요 없습니다.
 
-이 형식으로 답해주세요. 네 개의 대괄호 제목을 그대로 써주세요.
-
-[초고]
-(정리된 본문 전문)
-
-[모순]
-- (서로 어긋나는 지점. 없으면 '없음')
-
-[질문]
-- (더 구체적으로 쓰기 위해 내가 답해야 할 질문 3~6개)
-
-[제안]
-- (다음 회차에 무엇을 쓰면 좋을지 2~4개)
+{{요청}}
 
 ────────────────
 [앞이야기]
@@ -586,6 +577,26 @@ const DEFAULT_TPL=
 ────────────────
 [조각]
 {{조각}}`;
+
+/* {{요청}} 자리에 들어갈 것 — 켜둔 갈래에 따라 달라진다 */
+const ASK={
+  모순:'서로 어긋나는 대목은 본문에서 지우지 마세요. 양쪽을 그대로 둔 채 [모순]에 적어주세요. 어느 쪽을 버릴지는 내가 정합니다.',
+  질문:'더 구체적으로 쓰기 위해 내가 답해야 할 질문을 [질문]에 3~6개 적어주세요. "이 글의 주제는 무엇인가" 같은 것 말고, "그날 아침에 무엇을 보았는지 한 장면만" 같은 것으로.',
+  제안:'다음 회차에 무엇을 쓰면 좋을지 [제안]에 2~4개 적어주세요. 지금 대목에 아직 맞지 않는 조각이 있으면 억지로 넣지 말고 여기에 "이 조각은 아직 이르다"고 적어주세요.'
+};
+const ASK_FORM={
+  모순:"[모순]\n- (서로 어긋나는 지점. 없으면 '없음')",
+  질문:'[질문]\n- (답해야 할 질문)',
+  제안:'[제안]\n- (다음에 쓸 것)'
+};
+function buildAsk(){
+  const on=['모순','질문','제안'].filter(k=>cur.want&&cur.want[k]);
+  const rules=on.map((k,i)=>(i+6)+'. '+ASK[k]).join('\n');
+  const form=['[초고]\n(조각을 제자리에 배치해 정리한 본문 전문)'].concat(on.map(k=>ASK_FORM[k])).join('\n\n');
+  return (rules?rules+'\n\n':'')+
+    '이 형식으로 답해주세요. 대괄호 제목을 그대로 써주세요.\n\n'+form+
+    (on.length?'':'\n\n다른 말은 덧붙이지 마세요. 정리한 본문만 주세요.');
+}
 
 const DEFAULT_RECAP_TPL=
 `아래는 「{{제목}}」에서 이미 완성되어 매듭지어진 대목들입니다.
@@ -616,13 +627,15 @@ function newDoc(name){
   return {id:uid(), name:name||'새 글', createdAt:Date.now(), updatedAt:Date.now(),
     scrivener:'', body:'', bodyUndo:null, roundStart:'', pieces:[], reply:null, absorbed:false,
     promptDraft:null, tpl:DEFAULT_TPL, recapTpl:DEFAULT_RECAP_TPL,
-    archive:[], recap:null, useRecap:true, rounds:[]};
+    archive:[], recap:null, useRecap:true, want:{모순:true,질문:true,제안:true}, rounds:[]};
 }
 function normalize(d){
   const base=newDoc(d.name);
   for(const k of Object.keys(base)) if(d[k]===undefined) d[k]=base[k];
   d.pieces=d.pieces||[]; d.archive=d.archive||[]; d.rounds=d.rounds||[];
   d.pieces.forEach(p=>{ if(p.keep===undefined) p.keep=false; });
+  if(!d.want) d.want={모순:true,질문:true,제안:true};
+  if(d.tpl&&!d.tpl.includes('{{요청}}')){ d.tplOld=d.tpl; d.tpl=DEFAULT_TPL; }
   d.archive.forEach(a=>{ if(a.pick===undefined) a.pick=true; });
   return d;
 }
@@ -842,7 +855,7 @@ function renderGot(){
   const groups=gotGroups();
   box.innerHTML=groups.length
     ? '<div class="got flat">'+groups.map(g=>'<div class="grp"><h4>'+g[0]+'</h4>'+listHTML(g[1])+'</div>').join('')+'</div>'
-    : '<p class="ref-none">아직 받은 것이 없습니다.</p>';
+    : '<p class="ref-none">'+(cur.reply?'이번 회차에는 정리만 받았습니다.':'아직 받은 것이 없습니다.')+'</p>';
   $('#btnCopyGot').disabled=!groups.length;
 }
 function gotPlain(){
@@ -867,6 +880,7 @@ function buildPrompt(){
     .replace(/\{\{제목\}\}/g,cur.name)
     .replace(/\{\{회차\}\}/g,String(roundNo()))
     .replace(/\{\{목표\}\}/g,String(TARGET))
+    .replace(/\{\{요청\}\}/g,buildAsk())
     .replace(/\{\{앞이야기\}\}/g,recapBlock())
     .replace(/\{\{본문\}\}/g,bodyBlock())
     .replace(/\{\{조각\}\}/g,piecesBlock());
@@ -876,10 +890,13 @@ function renderPrompt(){
   const text=(cur.promptDraft!=null)?cur.promptDraft:buildPrompt();
   if(document.activeElement!==box) box.value=text;
   $('#useRecap').checked=!!cur.useRecap;
+  $$('.want').forEach(c=>{ c.checked=!!(cur.want&&cur.want[c.dataset.k]); });
   $('#promptHint').textContent=(cur.promptDraft!=null)
     ? '손댄 프롬프트입니다. 조각이나 본문을 고쳐도 자동으로 반영되지 않습니다 — 「처음 상태로」를 누르면 다시 만듭니다.'
-    : '본문 '+nf(chars(cur.body))+'자 · 조각 '+cur.pieces.length+'개'+
-      ((cur.useRecap&&cur.recap)?' · 앞이야기 '+nf(chars(cur.recap.text))+'자':' · 앞이야기 없음');
+    : (()=>{ const on=['모순','질문','제안'].filter(k=>cur.want[k]);
+        return '본문 '+nf(chars(cur.body))+'자 · 조각 '+cur.pieces.length+'개'+
+        ((cur.useRecap&&cur.recap)?' · 앞이야기 '+nf(chars(cur.recap.text))+'자':'')+
+        ' · '+(on.length?'받을 것: '+on.join('·'):'정리만 받습니다'); })();
   $('#replyState').innerHTML=cur.reply
     ? '<div class="card tight"><div class="row">'+
       '<span style="font-size:13px;color:var(--ink-soft)">'+roundNo()+'회차 답변을 받아 두었습니다 · '+fmtDate(cur.reply.ts)+'</span>'+
@@ -1252,6 +1269,9 @@ function renderAll(){
   pb.addEventListener('input',()=>{ cur.promptDraft=pb.value; save(); });
   $('#btnCopyPrompt').onclick=()=>copyText(pb.value,'프롬프트를 복사했습니다');
   $('#btnResetPrompt').onclick=()=>{ cur.promptDraft=null; save(); renderPrompt(); toast('처음 상태로 되돌렸습니다'); };
+  $$('.want').forEach(c=>c.onchange=()=>{
+    cur.want[c.dataset.k]=c.checked; cur.promptDraft=null; save(); renderPrompt();
+  });
   $('#useRecap').onchange=e=>{ cur.useRecap=e.target.checked; cur.promptDraft=null; save(); renderPrompt(); };
   $('#btnPasteReply').onclick=()=>{ openModal('replyModal'); setTimeout(()=>$('#replyText').focus(),50); };
   $('#btnSaveReply').onclick=saveReply;
