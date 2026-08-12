@@ -143,6 +143,15 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .cal-d[aria-pressed="true"] .dots i{background:var(--paper)}
 .cal-d[aria-pressed="true"] .dots b{color:var(--paper)}
 .trace{font-family:var(--mono);font-size:11px;color:var(--ink3);padding:6px 0 2px;line-height:1.9}
+.rgrid{display:flex;gap:2px;margin:7px 0 3px;flex-wrap:wrap}
+.rgrid i{width:9px;height:9px;display:block;background:var(--paper2);box-shadow:inset 0 0 0 1px var(--line)}
+.rgrid i.ok{background:var(--seal);box-shadow:none}
+.rgrid i.off{background:transparent;box-shadow:none}
+.rgrid i.today{box-shadow:inset 0 0 0 1px var(--ink)}
+.mk.star{color:var(--seal)}
+.wdpick{display:flex;gap:5px;margin:10px 0}
+.wdpick button{flex:1;border:1px solid var(--line);padding:7px 0;font-size:14px;text-align:center}
+.wdpick button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .dd.over{color:var(--seal)} .dd.soon{color:var(--ink)} .dd.far{color:var(--ink3)}
 .more{display:block;width:100%;text-align:center;padding:14px;font-size:13px;
   color:var(--ink3);border:1px dashed var(--line);margin-top:14px}
@@ -753,6 +762,7 @@ document.addEventListener('click',e=>{
 /* ═══════════════ 6. 항목 그리기 ═══════════════ */
 function itemHTML(e,opt={}){
   const c=CATS[e.cat]||CATS.note, mt=[];
+  const rt=isRt(e), dn = rt? rtDone(e) : e.done;
   if(e.date){
     const n=dday(e.date);
     const cls=(e.cat==='todo'&&n<0&&!e.done)?'due':'';
@@ -768,15 +778,22 @@ function itemHTML(e,opt={}){
   (e.people||[]).forEach(t=>mt.push('<span class="tag">@'+esc(t)+'</span>'));
   if(opt.showCat) mt.push('<span>'+c.name+'</span>');
   if(!e.date && !opt.hideStamp) mt.push('<span>'+fmtD(iso(new Date(e.ts)))+'</span>');
+  if(rt){
+    const st=rtStreak(e);
+    mt.push('<span>↺ '+rtLabel(e.rt)+(st?' · 연속 '+st+(e.rt.mode==='n'?'회':'일'):'')+'</span>');
+  }
   if(e.archived) mt.push('<span>보관</span>');
 
-  return '<div class="it'+(e.done?' done':'')+'" data-id="'+e.id+'">'+
-    '<button class="mk" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
-      (e.cat==='todo'? (e.done?'●':'○') : c.mk)+'</button>'+
+  return '<div class="it'+(dn?' done':'')+'" data-id="'+e.id+'">'+
+    '<button class="mk'+(e.star?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
+      (e.star? '★' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
     '<div class="bd"><div class="tx">'+linkify(e.text||e.raw)+'</div>'+
       (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+'</div>'+
     '<div class="act">'+
-      (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+(e.done?'되돌리기':'완료')+'</button>':'')+
+      (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
+        (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
+      (e.cat==='todo'?'<button data-act="rt" data-id="'+e.id+'">'+(rt?'루틴 고침':'루틴')+'</button>':'')+
+      (e.cat==='ref'?'<button data-act="star" data-id="'+e.id+'">'+(e.star?'풀기':'★ 고정')+'</button>':'')+
       (e.cat==='cycle'?'<button data-act="again" data-id="'+e.id+'">오늘 또</button>':'')+
       '<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':'날짜 넣기')+'</button>'+
       '<button data-act="edit" data-id="'+e.id+'">고침</button>'+
@@ -833,6 +850,71 @@ function recGroups(){
       sum30:last30.reduce((a,b)=>a+b.num,0), n30:last30.length};
   }).sort((a,b)=>b.list[b.list.length-1].ts-a.list[a.list.length-1].ts);
 }
+
+/* ═══════════════ 7-c. 루틴 ═══════════════ */
+const isRt=e=>e.cat==='todo'&&e.rt;
+const rtDone=(e,d)=>(e.hist||[]).indexOf(d||TODAY())>=0;
+function rtLabel(r){
+  if(!r) return '';
+  if(r.mode==='day') return '매일';
+  if(r.mode==='wd'){
+    const d=(r.d||[]).slice().sort();
+    if(!d.length) return '요일 미정';
+    if(d.join()==='1,2,3,4,5') return '평일';
+    if(d.join()==='0,6') return '주말';
+    return d.map(i=>WDN[i]).join('');
+  }
+  if(r.mode==='n') return (r.n||2)+'일마다';
+  return '';
+}
+function rtOn(e,s){                       // 그날이 해당되는 날인가
+  const r=e.rt; if(!r) return false;
+  if(r.mode==='day') return true;
+  if(r.mode==='wd') return (r.d||[]).indexOf(dObj(s).getDay())>=0;
+  if(r.mode==='n'){
+    const h=(e.hist||[]).filter(x=>x<s).sort();
+    if(!h.length) return true;
+    return Math.round((dObj(s)-dObj(h[h.length-1]))/86400000) >= (r.n||2);
+  }
+  return false;
+}
+function rtStreak(e){
+  if(e.rt.mode==='n'){
+    const h=(e.hist||[]).slice().sort(); if(!h.length) return 0;
+    let n=1;
+    for(let i=h.length-1;i>0;i--){
+      const gap=Math.round((dObj(h[i])-dObj(h[i-1]))/86400000);
+      if(gap<=(e.rt.n||2)+1) n++; else break;
+    }
+    return n;
+  }
+  const set=new Set(e.hist||[]);
+  const d=new Date(); d.setHours(0,0,0,0);
+  if(!set.has(iso(d))) d.setDate(d.getDate()-1);
+  let n=0, guard=0;
+  while(guard++<800){
+    const s=iso(d);
+    if(!rtOn(e,s)){ d.setDate(d.getDate()-1); continue; }
+    if(set.has(s)){ n++; d.setDate(d.getDate()-1); } else break;
+  }
+  return n;
+}
+function rtStat(e,span){
+  span=span||30;
+  const set=new Set(e.hist||[]), days=[];
+  let due=0, hit=0;
+  for(let i=span-1;i>=0;i--){
+    const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-i);
+    const s=iso(d), on=(e.rt.mode==='n')? true : rtOn(e,s), ok=set.has(s);
+    if(on) due++; if(ok) hit++;
+    days.push({s,on,ok});
+  }
+  if(e.rt.mode==='n') due=Math.max(1,Math.round(span/(e.rt.n||2)));
+  return {days, due, hit, rate: due? Math.round(hit/due*100):0, streak:rtStreak(e)};
+}
+function routines(){ return visible().filter(isRt); }
+function rtDueToday(e){ return rtOn(e,TODAY()); }
+
 
 /* ═══════════════ 7-b. 전체 잔액 ═══════════════ */
 function calcBalance(){
@@ -932,10 +1014,12 @@ function vToday(){
   const t=TODAY(), q=state.q, now=new Date();
   const byTime=(a,b)=>((a.time||'99:99')<(b.time||'99:99')?-1:1);
 
-  const todosAll=byCat('todo').filter(e=>!e.done&&match(e,q))
+  const todosAll=byCat('todo').filter(e=>!e.done&&!isRt(e)&&match(e,q))
       .sort((a,b)=>(a.date||'9999')<(b.date||'9999')?-1:1);
   const dueNow=todosAll.filter(e=>!e.date||dday(e.date)<=0);
   const late=todosAll.filter(e=>e.date&&dday(e.date)<0);
+  const rtToday=routines().filter(e=>rtDueToday(e)&&match(e,q));
+  const rtLeft=rtToday.filter(e=>!rtDone(e));
   const planToday=visible().filter(e=>e.cat==='plan'&&e.date===t&&match(e,q)).sort(byTime);
   const planWeek=visible().filter(e=>e.cat==='plan'&&e.date&&dday(e.date)>0&&dday(e.date)<=7&&match(e,q))
       .sort((a,b)=>a.date===b.date?byTime(a,b):(a.date<b.date?-1:1));
@@ -958,6 +1042,7 @@ function vToday(){
     '<span class="d">'+now.getFullYear()+'년 '+(now.getMonth()+1)+'월 '+now.getDate()+'일</span>'+
     '<span class="w">'+WDN[now.getDay()]+'요일</span>'+
     '<span class="s">할 일 '+dueNow.length+(late.length?' <b>· 지난 기한 '+late.length+'</b>':'')+
+      (rtToday.length?' · 루틴 '+(rtToday.length-rtLeft.length)+'/'+rtToday.length:'')+
       ' · 일정 '+planToday.length+
       (overdue?' · 돌아온 것 '+overdue:'')+'<br>'+
       (dOut||dIn? (dOut?'오늘 지출 '+nf(dOut):'')+(dOut&&dIn?' · ':'')+(dIn?'오늘 수입 '+nf(dIn):'')
@@ -973,6 +1058,11 @@ function vToday(){
 
   h+='<section><h2>오늘 일정<span class="aside">'+planToday.length+'</span></h2>'+
      listHTML(planToday,{hideStamp:true,empty:'오늘 잡힌 일정이 없습니다.'})+'</section>';
+
+  if(rtToday.length)
+    h+='<section><h2>오늘의 루틴<span class="aside">'+
+       (rtLeft.length? '남은 '+rtLeft.length+' / '+rtToday.length : '다 했습니다')+'</span></h2>'+
+       rtToday.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
 
   h+='<section><h2>오늘 할 일<span class="aside">'+dueNow.length+' / 남은 '+todosAll.length+'</span></h2>'+
      listHTML(dueNow,{empty:'오늘 몫은 비어 있습니다.'})+'</section>';
@@ -1010,15 +1100,28 @@ function vToday(){
 }
 function vTodo(){
   const q=state.q;
-  let arr=byCat('todo').filter(e=>match(e,q));
+  const all=byCat('todo').filter(e=>match(e,q));
+  const rts=all.filter(isRt);
+  const arr=all.filter(e=>!isRt(e));
   const done=arr.filter(e=>e.done), un=arr.filter(e=>!e.done);
   un.sort((a,b)=>{
     const x=a.date||'9999-99-99', y=b.date||'9999-99-99';
     return x===y? b.ts-a.ts : (x<y?-1:1);
   });
+  const dueRt=rts.filter(rtDueToday), restRt=rts.filter(e=>!rtDueToday(e));
   let h='<div class="pills">'+
     '<button class="pill" data-act="toggle" data-k="showDone" aria-pressed="'+state.showDone+'">완료 '+done.length+'개 보기</button>'+
     '<button class="pill" data-act="askk" data-k="todo">✎ 묵은 일 물음</button></div>';
+  if(rts.length){
+    const left=dueRt.filter(e=>!rtDone(e)).length;
+    h+='<section><h2>루틴<span class="aside">'+
+       (left? '오늘 남은 '+left+' / '+dueRt.length : dueRt.length? '오늘 몫 다 했습니다':'오늘은 해당 없음')+
+       '</span></h2>'+
+       dueRt.map(e=>itemHTML(e,{hideStamp:true})).join('')+
+       (restRt.length? '<div class="trace">오늘은 해당 없음 · '+
+          restRt.map(e=>esc((e.text||e.raw).slice(0,12))+'('+rtLabel(e.rt)+')').join(' · ')+'</div>':'')+
+       '</section>';
+  }
   h+='<section><h2>남은 일<span class="aside">'+un.length+'</span></h2>'+
      listHTML(un,{empty:'남은 일이 없습니다.'})+'</section>';
   if(state.showDone)
@@ -1093,9 +1196,15 @@ function vMoney(){
 function vRef(){
   const q=state.q;
   const arr=byCat('ref').filter(e=>match(e,q)).sort((a,b)=>b.ts-a.ts);
-  return '<div class="pills"><button class="pill" data-act="askk" data-k="ref">✎ 참조 엮기 물음</button></div>'+
-    '<section><h2>참조<span class="aside">'+arr.length+'</span></h2>'+
-    listHTML(arr,{groupByMonth:true,empty:'주소·인용·출처를 적으면 여기 모입니다.'})+'</section>';
+  const stars=arr.filter(e=>e.star), rest=arr.filter(e=>!e.star);
+  let h='<div class="pills"><button class="pill" data-act="askk" data-k="ref">✎ 참조 엮기 물음</button></div>';
+  if(stars.length)
+    h+='<section><h2>고정<span class="aside">★ '+stars.length+'</span></h2>'+
+       stars.map(e=>itemHTML(e,{})).join('')+'</section>';
+  h+='<section><h2>참조<span class="aside">'+rest.length+'</span></h2>'+
+     listHTML(rest,{groupByMonth:true,empty:'주소·인용·출처를 적으면 여기 모입니다. 자주 볼 것은 ★로 위에 붙여 두세요.'})+
+     '</section>';
+  return h;
 }
 function vCycle(){
   const gs=cycleGroups();
@@ -1114,9 +1223,29 @@ function vCycle(){
   return h;
 }
 function vRec(){
-  const gs=recGroups();
-  if(!gs.length) return '<div class="empty">달리기 4.8km, 몸무게 63kg, 원고 1200자처럼 숫자가 붙은 것을 적으면 여기서 추이를 봅니다.</div>';
+  const gs=recGroups(), rts=routines();
+  if(!gs.length&&!rts.length)
+    return '<div class="empty">달리기 4.8km, 몸무게 63kg, 원고 1200자처럼 숫자가 붙은 것을 적으면 여기서 추이를 봅니다.<br>'+
+           '할일을 루틴으로 삼으면 그 이행도 여기서 점검합니다.</div>';
   let h='<div class="pills"><button class="pill" data-act="askk" data-k="rec">✎ 추이 물음 만들기</button></div>';
+  if(rts.length){
+    h+='<section><h2>루틴 점검<span class="aside">'+rts.length+'</span></h2>';
+    rts.forEach(e=>{
+      const s=rtStat(e,30), t=TODAY();
+      h+='<div class="rowline" style="border-bottom:none;padding-bottom:0">'+
+         '<span class="g">↺ '+esc(e.text||e.raw)+'</span>'+
+         '<span class="n">'+rtLabel(e.rt)+' · 연속 '+s.streak+(e.rt.mode==='n'?'회':'일')+'</span>'+
+         '<span class="dd '+(s.rate>=80?'far':s.rate>=50?'soon':'over')+'">'+s.rate+'%</span></div>'+
+         '<div class="rgrid">'+s.days.map(d=>
+            '<i class="'+(d.ok?'ok':(d.on?'':'off'))+(d.s===t?' today':'')+'" title="'+d.s+'"></i>').join('')+
+         '</div>'+
+         '<div class="trace" style="padding-top:0;border-bottom:1px dotted var(--line);padding-bottom:8px">'+
+           '30일 가운데 '+s.due+'번 해당 · '+s.hit+'번 했음'+
+           (rtDueToday(e)? (rtDone(e)?' · 오늘 몫 마침':' · <span style="color:var(--seal)">오늘 아직</span>') : ' · 오늘은 해당 없음')+
+         '</div>';
+    });
+    h+='</section>';
+  }
   gs.forEach(g=>{
     const bars=g.nums.slice(-24), mx=Math.max(...bars.map(b=>b.num),1);
     h+='<section><h2>△ '+esc(g.key)+'<span class="aside">'+
@@ -1400,7 +1529,8 @@ function bMoney(r){
 /* ─ 기록 ─ */
 function bRec(r){
   const arr=E.filter(e=>e.cat==='rec'&&inR(eDate(e),r));
-  if(!arr.length) return null;
+  const rts=E.filter(e=>isRt(e)&&!e.archived);
+  if(!arr.length&&!rts.length) return null;
   const gs={};
   arr.forEach(e=>{const k=e.key||'기록';(gs[k]=gs[k]||[]).push(e)});
   let s=HEAD+'# 자료 · 기록 ('+r.label+')\n총 '+arr.length+'건 · 항목 '+Object.keys(gs).length+'\n\n';
@@ -1419,13 +1549,25 @@ function bRec(r){
       s+=d+' | '+WDN[dObj(d).getDay()]+' | '+(e.num!==null&&e.num!==undefined?e.num+(e.unit||''):'-')+
          ' | '+e.raw.replace(/\n/g,' ')+'\n';});
   });
+  if(rts.length){
+    s+='\n## 루틴 (되풀이하기로 정한 할일)\n이름 | 주기 | 연속 | 30일 해당 | 30일 이행 | 이행률\n';
+    rts.forEach(e=>{ const t=rtStat(e,30);
+      s+=(e.text||e.raw).replace(/\n/g,' ')+' | '+rtLabel(e.rt)+' | '+t.streak+' | '+t.due+' | '+t.hit+' | '+t.rate+'%\n'; });
+    rts.forEach(e=>{
+      const h2=(e.hist||[]).slice(-120);
+      s+='\n### '+(e.text||e.raw).replace(/\n/g,' ')+' — 해낸 날\n'+(h2.length? h2.join(', '):'(아직 없음)')+'\n';
+    });
+  }
   s+='\n\n# 물음\n'+
     '너는 오랜 기록을 읽고 흐름을 짚어주는 사람이다. 다음 차례로 답해라.\n\n'+
     '1. 항목마다 무엇이 늘고 무엇이 줄었는지. 기간을 앞뒤로 갈라 견주어라.\n'+
     '2. 끊긴 자리 — 며칠 이상 비어 있는 구간을 찾아 언제였는지 짚어라. 그 무렵 다른 항목은 어땠는지도 함께 봐라.\n'+
     '3. 요일과 주기 — 특정 요일에 몰리거나 비는 패턴이 있는지.\n'+
     '4. 항목끼리의 관계 — 함께 늘거나 서로 밀어내는 항목이 있는지. 있다면 몇 건을 근거로 그렇게 보는지 밝히고, 우연일 가능성도 함께 말해라.\n'+
-    '5. 기록 자체에 대한 지적 — 재는 방식이 들쭉날쭉하거나 단위가 섞였다면 알려라.\n\n'+
+    '5. 기록 자체에 대한 지적 — 재는 방식이 들쭉날쭉하거나 단위가 섞였다면 알려라.\n'+
+    '6. 루틴이 적혀 있다면, 끊긴 자리가 언제였고 어떤 요일이나 시기에 자주 무너지는지 짚어라. '+
+    '이행률이 낮은 것은 의지의 문제로 몰지 말고, 주기 설정 자체가 무리인지 먼저 따져라. '+
+    '루틴의 이행과 수치 기록이 함께 움직이는지도 봐라.\n\n'+
     '몸에 관한 수치(체중, 식사, 운동량 따위)가 있어도 목표치나 감량·증량 계획을 세워주지 마라.\n'+
     '무엇이 더 나은 값인지 판정하지 말고, 관찰된 흐름과 그 흐름이 무엇을 시사하는지만 말해라.'+TAIL;
   return s;
@@ -1433,7 +1575,7 @@ function bRec(r){
 
 /* ─ 할일 ─ */
 function bTodo(){
-  const un=E.filter(e=>e.cat==='todo'&&!e.done&&!e.archived);
+  const un=E.filter(e=>e.cat==='todo'&&!e.done&&!e.archived&&!isRt(e));
   const done=E.filter(e=>e.cat==='todo'&&e.done&&Date.now()-(e.doneAt||e.ts)<90*86400000);
   if(!un.length&&!done.length) return null;
   const age=e=>Math.round((Date.now()-e.ts)/86400000);
@@ -1485,15 +1627,16 @@ function bCycle(){
 function bRef(r){
   const arr=E.filter(e=>e.cat==='ref'&&inR(eDate(e),r)).sort((a,b)=>a.ts-b.ts);
   if(!arr.length) return null;
-  let s=HEAD+'# 자료 · 참조 ('+r.label+')\n'+arr.length+'건\n\n날짜 | 내용\n';
-  arr.forEach(e=>s+=eDate(e)+' | '+e.raw.replace(/\n/g,' ')+'\n');
+  let s=HEAD+'# 자료 · 참조 ('+r.label+')\n'+arr.length+'건 · ★은 내가 위에 고정해 둔 것\n\n날짜 | 내용\n';
+  arr.forEach(e=>s+=eDate(e)+' | '+(e.star?'★ ':'')+e.raw.replace(/\n/g,' ')+'\n');
   s+='\n\n# 물음\n'+
     '이것은 내가 지나가다 붙들어 둔 주소, 인용, 출처들이다.\n\n'+
     '1. 주제별로 묶어라. 내가 붙인 이름이 아니라 내용을 보고 묶고, 묶음마다 이름을 새로 지어라.\n'+
     '2. 시간에 따라 관심이 어떻게 옮겨갔는지 짚어라. 사그라든 갈래와 자라고 있는 갈래를 갈라라.\n'+
     '3. 서로 멀어 보이지만 이어 붙이면 글감이 될 만한 조합 셋을 찾아 각각 왜 그런지 말해라.\n'+
     '4. 한 묶음 안에서 자료가 얕은 곳, 곧 더 찾아봐야 할 구석을 일러라.\n'+
-    '5. 다시 들춰볼 일이 없어 보이는 것을 골라라.'+TAIL;
+    '5. 다시 들춰볼 일이 없어 보이는 것을 골라라. 다만 ★이 붙은 것은 빼라.\n'+
+    '6. ★이 붙지 않았는데 자주 쓰일 것 같아 고정할 만한 것을 셋 골라라.'+TAIL;
   return s;
 }
 
@@ -1731,9 +1874,20 @@ $view.addEventListener('click',async e=>{
   if(act==='wipe') return wipe();
   if(!ent) return;
   if(act==='done'){
+    if(isRt(ent)){
+      const t=TODAY(); ent.hist=(ent.hist||[]).slice();
+      const i=ent.hist.indexOf(t);
+      if(i>=0) ent.hist.splice(i,1); else ent.hist.push(t);
+      ent.hist.sort(); ent.done=false; touch(ent); await put(ent); render(); return;
+    }
     ent.done=!ent.done; ent.doneAt=ent.done?Date.now():null; touch(ent);
     await put(ent); render(); return;
   }
+  if(act==='star'){
+    ent.star=!ent.star; touch(ent); await put(ent); render();
+    toast(ent.star?'위에 고정했습니다':'고정을 풀었습니다'); return;
+  }
+  if(act==='rt') return routineSheet(ent);
   if(act==='again'){
     const n={...ent,id:uid(),ts:Date.now(),mt:Date.now(),date:TODAY(),done:false,archived:false};
     E.push(n); await put(n); render(); toast(esc(ent.key||'주기')+'을(를) 오늘로 기록했습니다'); return;
@@ -1761,6 +1915,45 @@ function editEntry(ent){
     Object.assign(ent,p,{done:ent.done,doneAt:ent.doneAt,archived:ent.archived});
     touch(ent); await put(ent); render(); toast('고쳤습니다');
   }, true);
+}
+function routineSheet(ent){
+  const cur=ent.rt||null;
+  let wd = cur&&cur.mode==='wd'? (cur.d||[]).slice() : [];
+  const v=document.createElement('div'); v.className='veil';
+  v.innerHTML='<div class="sheet"><h3>루틴으로 삼기</h3>'+
+    '<p>'+esc(ent.text||ent.raw)+(cur?'<br><span style="font-size:12px;color:var(--ink3)">지금 '+rtLabel(cur)+'</span>':'')+'</p>'+
+    '<div class="opts"><button data-m="day">매일</button><button data-m="weekday">평일</button>'+
+      '<button data-m="weekend">주말</button></div>'+
+    '<div class="wdpick">'+WDN.map((w,i)=>'<button data-w="'+i+'" aria-pressed="'+(wd.indexOf(i)>=0)+'">'+w+'</button>').join('')+'</div>'+
+    '<div class="opts"><button data-n="2">이틀마다</button><button data-n="3">사흘마다</button>'+
+      '<button data-n="7">이레마다</button></div>'+
+    '<div class="opts" style="margin-top:14px"><button data-k="wd">고른 요일로</button>'+
+      (cur?'<button data-k="off">루틴 풀기</button>':'')+'<button data-k="">닫기</button></div></div>';
+  document.body.appendChild(v);
+  const save=async r=>{
+    if(r){ ent.rt=r; ent.hist=ent.hist||[]; ent.done=false; ent.doneAt=null; }
+    else { delete ent.rt; }
+    touch(ent); await put(ent); render();
+    toast(r? '루틴 · '+rtLabel(r) : '루틴을 풀었습니다');
+  };
+  v.addEventListener('click',async ev=>{
+    if(ev.target===v){ v.remove(); return; }
+    const w=ev.target.closest('[data-w]');
+    if(w){ const i=+w.dataset.w, k=wd.indexOf(i);
+      if(k>=0) wd.splice(k,1); else wd.push(i);
+      w.setAttribute('aria-pressed', wd.indexOf(i)>=0); return; }
+    const m=ev.target.closest('[data-m]');
+    if(m){ v.remove();
+      const mo=m.dataset.m;
+      await save(mo==='day'? {mode:'day'} : {mode:'wd', d: mo==='weekday'?[1,2,3,4,5]:[0,6]});
+      return; }
+    const n=ev.target.closest('[data-n]');
+    if(n){ v.remove(); await save({mode:'n', n:+n.dataset.n}); return; }
+    const b=ev.target.closest('[data-k]'); if(!b) return;
+    const k=b.dataset.k; v.remove();
+    if(k==='wd'){ if(!wd.length){ toast('요일을 하나 이상 고르세요'); return; } await save({mode:'wd',d:wd}); }
+    else if(k==='off') await save(null);
+  });
 }
 function dateSheet(ent){
   const v=document.createElement('div'); v.className='veil';
