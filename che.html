@@ -290,7 +290,9 @@ const TABS = [
 ];
 
 /* ═══════════════ 1. 저장소 (IndexedDB) ═══════════════ */
-let db=null, E=[], RULES={}, META={};
+let db=null, E=[], RULES={}, META={}, GRAVES={};
+const MT=e=>e.mt||e.ts||0;
+const touch=e=>{ e.mt=Date.now(); return e; };
 function openDB(){
   return new Promise((res,rej)=>{
     const r=indexedDB.open('che',1);
@@ -723,7 +725,7 @@ async function commit(){
   const items=lines.map((l,i)=>{
     const p=applyPin(parse(l));
     if(state.pinDate && !p.date) p.date=state.pinDate;
-    return {id:uid(), ts:now+i, ...p, done:false, doneAt:null, archived:false};
+    return {id:uid(), ts:now+i, mt:now+i, ...p, done:false, doneAt:null, archived:false};
   });
   E=E.concat(items); await put(items);
   $in.value=''; closeMenu(); autosize(); preview(); render();
@@ -911,7 +913,7 @@ function balanceSheet(){
     const now=Date.now();
     if(k==='log'&&cur!==null&&n!==cur){
       const d=n-cur;
-      const it={id:uid(), ts:now, raw:'잔액 조정 '+(d>0?'+':'−')+nf(Math.abs(d))+'원',
+      const it={id:uid(), ts:now, mt:now, raw:'잔액 조정 '+(d>0?'+':'−')+nf(Math.abs(d))+'원',
         text:'잔액 조정', cat:'money', date:bd.value||TODAY(), time:null,
         amount:Math.abs(d), flow:d>0?'in':'out', group:'조정', url:null,page:null,
         num:null,unit:null,key:null,tags:[],people:[],forced:true,
@@ -1237,7 +1239,7 @@ function vSet(){
   if(n>0&&stale) h+='<div class="notice">'+(lastEx? '마지막 내보내기가 '+lastEx+'입니다. ':'아직 한 번도 내보내지 않았습니다. ')+
       '브라우저 저장소는 지워질 수 있습니다. 파일로 한 벌 받아두세요.</div>';
   h+='<section><h2>보관</h2>'+
-     '<div class="set-row"><span class="lbl">담긴 것 <small>'+n+'개 · 보관 '+arch+'개 · '+
+     '<div class="set-row"><span class="lbl">담긴 것 <small>'+n+'개 · 보관 '+arch+'개 · 지운 자취 '+Object.keys(GRAVES).length+'개<br>'+
        Object.keys(CATS).map(c=>CATS[c].name+' '+E.filter(e=>e.cat===c).length).join(' · ')+'</small></span></div>'+
      '<div class="set-row"><span class="lbl">저장 공간 <small id="usage">재는 중…</small></span></div>'+
      '<div class="set-row"><span class="lbl">한 벌 내보내기 <small>모든 것을 JSON 한 파일로. 다시 불러올 수 있습니다.</small></span>'+
@@ -1246,9 +1248,17 @@ function vSet(){
        '<button class="btn" data-act="exp-md">마크다운</button></div>'+
      '<div class="set-row"><span class="lbl">금전만 표로 <small>엑셀에서 열리는 CSV.</small></span>'+
        '<button class="btn" data-act="exp-csv">CSV</button></div>'+
-     '<div class="set-row"><span class="lbl">불러오기 <small>같은 것은 건너뛰고 새것만 더합니다.</small></span>'+
+     '<div class="set-row"><span class="lbl">불러오기 <small>덮어쓰지 않습니다. 없는 것은 더하고, 같은 것은 나중에 손댄 쪽을 남기고, 한쪽에서 지운 것은 지운 채로 둡니다.</small></span>'+
        '<button class="btn" data-act="imp">파일 고르기</button></div>'+
      '</section>';
+  h+='<section><h2>두 기기 오가기</h2><div class="empty">'+
+     '아이폰으로는 <b>담기만</b> 하고, 완료·삭제·분류 정리는 맥북에서 하시는 편이 깔끔합니다. '+
+     '담는 일은 서로 부딪칠 일이 없고, 정리는 한곳에서 해야 머릿속이 헷갈리지 않습니다.<br><br>'+
+     '한쪽에서 <b>한 벌 내보내기</b>로 받은 파일을 다른 쪽에서 <b>불러오기</b>로 열면 됩니다. '+
+     '아이클라우드 드라이브에 두고 오가면 편합니다. 같은 항목을 양쪽에서 고쳤다면 '+
+     '<b>나중에 고친 쪽</b>이 남으니, 두 기기의 시계만 맞으면 됩니다.<br><br>'+
+     '브라우저 저장소는 기기끼리 저절로 오가지 않습니다. 파일을 주고받는 것이 유일한 길입니다.'+
+     '</div></section>';
   h+='<section><h2>덜어내기</h2>'+
      '<div class="set-row"><span class="lbl">12개월 지난 것 보관하기 <small>목록에서 감춥니다. 지우지는 않습니다.</small></span>'+
        '<button class="btn" data-act="arch">보관</button></div>'+
@@ -1715,22 +1725,27 @@ $view.addEventListener('click',async e=>{
   if(act==='imp') return impFile();
   if(act==='arch') return archiveOld();
   if(act==='unarch'){
-    const c=E.filter(x=>x.archived); c.forEach(x=>x.archived=false);
+    const c=E.filter(x=>x.archived); c.forEach(x=>{x.archived=false;touch(x)});
     await put(c); render(); toast(c.length+'개를 되돌렸습니다'); return;
   }
   if(act==='wipe') return wipe();
   if(!ent) return;
   if(act==='done'){
-    ent.done=!ent.done; ent.doneAt=ent.done?Date.now():null;
+    ent.done=!ent.done; ent.doneAt=ent.done?Date.now():null; touch(ent);
     await put(ent); render(); return;
   }
   if(act==='again'){
-    const n={...ent,id:uid(),ts:Date.now(),date:TODAY(),done:false,archived:false};
+    const n={...ent,id:uid(),ts:Date.now(),mt:Date.now(),date:TODAY(),done:false,archived:false};
     E.push(n); await put(n); render(); toast(esc(ent.key||'주기')+'을(를) 오늘로 기록했습니다'); return;
   }
   if(act==='del'){
-    lastDeleted=ent; E=E.filter(x=>x.id!==id); await del(id); render();
-    toast('지웠습니다','되돌리기',async()=>{ E.push(lastDeleted); await put(lastDeleted); render(); });
+    lastDeleted=ent; E=E.filter(x=>x.id!==id);
+    GRAVES[id]=Date.now(); await metaSet('graves',GRAVES);
+    await del(id); render();
+    toast('지웠습니다','되돌리기',async()=>{
+      const r=lastDeleted; delete GRAVES[r.id]; await metaSet('graves',GRAVES);
+      touch(r); E.push(r); await put(r); render();
+    });
     return;
   }
   if(act==='edit') return editEntry(ent);
@@ -1744,7 +1759,7 @@ function editEntry(ent){
     const t=v.trim(); if(!t) return;
     const p=parse(t);
     Object.assign(ent,p,{done:ent.done,doneAt:ent.doneAt,archived:ent.archived});
-    await put(ent); render(); toast('고쳤습니다');
+    touch(ent); await put(ent); render(); toast('고쳤습니다');
   }, true);
 }
 function dateSheet(ent){
@@ -1767,11 +1782,11 @@ function dateSheet(ent){
     const b=ev.target.closest('[data-k]'); if(!b) return;
     const k=b.dataset.k; v.remove();
     if(k==='ok'){
-      ent.date=di.value||null; ent.time=ti.value||null;
+      ent.date=di.value||null; ent.time=ti.value||null; touch(ent);
       await put(ent); render();
       toast(ent.date? fmtD(ent.date,true)+(ent.time?' '+ent.time:'')+'로 정했습니다' : '날짜를 지웠습니다');
     }else if(k==='clear'){
-      ent.date=null; ent.time=null; await put(ent); render(); toast('날짜를 지웠습니다');
+      ent.date=null; ent.time=null; touch(ent); await put(ent); render(); toast('날짜를 지웠습니다');
     }
   });
 }
@@ -1783,7 +1798,7 @@ function catSheet(ent){
     if(k==='cycle'&&!ent.key) ent.key=cycleKey(ent.text)||tokens(ent.text)[0]||'주기';
     if(k==='rec'&&!ent.key) ent.key=tokens(ent.text)[0]||'기록';
     if(k==='money'&&ent.amount===null){ const m=parseMoney(ent.text); if(m) Object.assign(ent,m); }
-    await put(ent);
+    touch(ent); await put(ent);
     const tk=tokens(ent.text)[0];
     if(tk){ RULES[tk]=k; await metaSet('rules',RULES); }
     render(); toast(CATS[k].name+'으로 옮겼습니다'+(tk?' · “'+tk+'”를 익혔습니다':''));
@@ -1830,10 +1845,15 @@ function download(name,text,type,noStamp){
   a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   if(!noStamp) metaSet('lastExport',TODAY());
 }
+function pruneGraves(){
+  const cut=Date.now()-365*86400000;
+  Object.keys(GRAVES).forEach(id=>{ if(GRAVES[id]<cut) delete GRAVES[id]; });
+}
 function expJSON(){
+  pruneGraves();
   download('체_'+TODAY()+'.json',
-    JSON.stringify({app:'che',v:1,exported:new Date().toISOString(),
-      rules:RULES, balance:META.balance||null, entries:E},null,1),
+    JSON.stringify({app:'che',v:2,exported:new Date().toISOString(),
+      rules:RULES, balance:META.balance||null, graves:GRAVES, entries:E},null,1),
     'application/json');
   toast('한 벌 내보냈습니다');
 }
@@ -1860,20 +1880,56 @@ function expCSV(){
   download('체_금전_'+TODAY()+'.csv',csv,'text/csv;charset=utf-8');
   toast('CSV로 내보냈습니다');
 }
+async function mergeIn(d){
+  const inc = Array.isArray(d)? d : (d.entries||[]);
+  const incG = (d && d.graves) || {};
+  const cur = new Map(E.map(e=>[e.id,e]));
+  const add=[], upd=[], gone=[];
+
+  inc.forEach(e=>{
+    if(!e||!e.id) return;
+    const ig=incG[e.id];        if(ig && ig>=MT(e)) return;   // 저쪽에서 나중에 지운 것
+    const mg=GRAVES[e.id];      if(mg && mg>=MT(e)) return;   // 이쪽에서 나중에 지운 것
+    const me=cur.get(e.id);
+    if(!me) add.push(e);
+    else if(MT(e)>MT(me)) upd.push(e);
+  });
+
+  Object.keys(incG).forEach(id=>{
+    const t=incG[id];
+    if(!GRAVES[id]||GRAVES[id]<t) GRAVES[id]=t;
+    const me=cur.get(id);
+    if(me && MT(me)<=t) gone.push(id);          // 지운 뒤로 손대지 않았으면 지움
+  });
+
+  const write=add.concat(upd);
+  if(write.length){
+    const m=new Map(E.map(e=>[e.id,e]));
+    write.forEach(e=>m.set(e.id,e));
+    E=[...m.values()];
+    await put(write);
+  }
+  if(gone.length){
+    const g=new Set(gone);
+    E=E.filter(e=>!g.has(e.id));
+    await del(gone);
+  }
+  pruneGraves(); await metaSet('graves',GRAVES);
+  return {add:add.length, upd:upd.length, gone:gone.length,
+          same:inc.length-add.length-upd.length};
+}
 function impFile(){
   const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json';
   i.onchange=async()=>{
     const f=i.files[0]; if(!f) return;
     try{
       const d=JSON.parse(await f.text());
-      const inc=Array.isArray(d)?d:(d.entries||[]);
-      const have=new Set(E.map(e=>e.id));
-      const add=inc.filter(e=>e&&e.id&&!have.has(e.id));
       if(d.rules){ RULES={...d.rules,...RULES}; await metaSet('rules',RULES); }
       if(d.balance && (!META.balance || (d.balance.ts||0)>(META.balance.ts||0)))
         await metaSet('balance',d.balance);
-      if(add.length){ E=E.concat(add); await put(add); }
-      render(); toast('새로 더한 것 '+add.length+'개 · 이미 있던 것 '+(inc.length-add.length)+'개');
+      const r=await mergeIn(d);
+      render();
+      toast('새로 '+r.add+' · 고쳐 맞춘 것 '+r.upd+' · 지움 반영 '+r.gone+' · 그대로 '+Math.max(0,r.same));
     }catch(err){ toast('파일을 읽지 못했습니다. JSON인지 확인하세요'); }
   };
   i.click();
@@ -1881,14 +1937,14 @@ function impFile(){
 async function archiveOld(){
   const cut=Date.now()-365*86400000;
   const c=E.filter(e=>!e.archived&&e.ts<cut&&!(e.cat==='todo'&&!e.done));
-  c.forEach(e=>e.archived=true);
+  c.forEach(e=>{e.archived=true;touch(e)});
   await put(c); render(); toast(c.length+'개를 보관했습니다');
 }
 function wipe(){
   sheet('전부 지울까요','담긴 '+E.length+'개가 모두 사라집니다. 되돌릴 수 없습니다.',
     [{k:'yes',label:'네, 지웁니다'}], async k=>{
       if(k!=='yes') return;
-      await clearAll(); E=[]; RULES={}; META={}; render(); toast('모두 지웠습니다');
+      await clearAll(); E=[]; RULES={}; META={}; GRAVES={}; render(); toast('모두 지웠습니다');
     });
 }
 
@@ -1896,7 +1952,7 @@ function wipe(){
 (async function(){
   try{
     await openDB(); await metaLoad();
-    RULES=META.rules||{};
+    RULES=META.rules||{}; GRAVES=META.graves||{};
     E=await loadAll();
   }catch(err){
     document.getElementById('view').innerHTML=
