@@ -53,13 +53,16 @@ header{border-bottom:1px solid var(--line);background:var(--paper);position:stic
 .search{border:1px solid var(--line);background:transparent;border-radius:var(--r);
   padding:5px 10px;width:150px;outline:none;font-size:13px;transition:width .2s}
 .search:focus{width:210px;border-color:var(--line2)}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding-bottom:0}
+nav{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;padding-bottom:0;-webkit-overflow-scrolling:touch}
 nav::-webkit-scrollbar{display:none}
-nav button{white-space:nowrap;padding:7px 11px 9px;font-size:14px;color:var(--ink2);
-  border-bottom:2px solid transparent;letter-spacing:.02em}
-nav button .m{font-family:var(--mono);font-size:11px;margin-right:5px;opacity:.6}
+nav button{white-space:nowrap;padding:7px 9px 9px;font-size:14px;color:var(--ink2);
+  border-bottom:2px solid transparent;letter-spacing:0}
+nav button .m{font-family:var(--mono);font-size:11px;margin-right:4px;opacity:.6}
 nav button[aria-current="true"]{color:var(--ink);border-bottom-color:var(--seal)}
-nav button .n{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-left:4px}
+nav button .n{font-family:var(--mono);font-size:10px;color:var(--ink3);margin-left:3px}
+@media (min-width:560px){
+  nav{overflow:visible;flex-wrap:wrap}
+}
 
 /* ── 본문 ── */
 main{padding:22px 0 40px}
@@ -784,20 +787,30 @@ function itemHTML(e,opt={}){
     const st=rtStreak(e);
     mt.push('<span>↺ '+rtLabel(e.rt)+(st?' · 연속 '+st+(e.rt.mode==='n'?'회':'일'):'')+'</span>');
   }
+  const dl=isDL(e), pastPlan=e.cat==='plan'&&e.date&&dday(e.date)<=0;
+  if(dl){
+    mt.push('<span class="due">마감'+(e.date?'':' · 날짜 없음')+'</span>');
+    if(dlProgToday(e)) mt.push('<span>오늘 몫 적음</span>');
+  }
   if(e.archived) mt.push('<span>보관</span>');
 
   return '<div class="it'+(dn?' done':'')+'" data-id="'+e.id+'">'+
-    '<button class="mk'+(e.star?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
-      (e.star? '★' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
+    '<button class="mk'+(e.star||dl?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
+      (e.star? '★' : dl? '◈' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
     '<div class="bd"><div class="tx">'+linkify(e.text||e.raw)+'</div>'+
       (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+'</div>'+
     '<div class="act">'+
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
         (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
       (e.cat==='todo'?'<button data-act="rt" data-id="'+e.id+'">'+(rt?'루틴 고침':'루틴')+'</button>':'')+
+      (dl&&!pastPlan?'<button data-act="prog" data-id="'+e.id+'">오늘 몫'+(dlProgToday(e)?' ✓':'')+'</button>':'')+
+      (dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">마감했다</button>'+
+                    '<button data-act="date" data-id="'+e.id+'">새 마감일</button>':'')+
+      (!dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">완료</button>':'')+
+      (e.cat==='plan'?'<button data-act="dl" data-id="'+e.id+'">'+(dl?'마감 풀기':'마감으로')+'</button>':'')+
       (e.cat==='ref'?'<button data-act="star" data-id="'+e.id+'">'+(e.star?'풀기':'★ 고정')+'</button>':'')+
       (e.cat==='cycle'?'<button data-act="again" data-id="'+e.id+'">오늘 또</button>':'')+
-      '<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':'날짜 넣기')+'</button>'+
+      (dl&&pastPlan?'':'<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':'날짜 넣기')+'</button>')+
       '<button data-act="edit" data-id="'+e.id+'">고침</button>'+
       '<button data-act="del" data-id="'+e.id+'">지움</button>'+
     '</div></div>';
@@ -918,6 +931,50 @@ function routines(){ return visible().filter(isRt); }
 function rtDueToday(e){ return rtOn(e,TODAY()); }
 
 
+/* ═══════════════ 7-d. 마감 일정 ═══════════════ */
+const isDL=e=>e.cat==='plan'&&e.dl;
+const dlProgToday=e=>(e.hist||[]).indexOf(TODAY())>=0;
+function deadlines(){
+  return visible().filter(isDL).sort((a,b)=>{
+    const x=a.date||'9999-99-99', y=b.date||'9999-99-99';
+    return x===y? a.ts-b.ts : (x<y?-1:1);
+  });
+}
+function finishItem(ent){
+  const isPlan=ent.cat==='plan', wasDL=isDL(ent);
+  const day = isPlan? (ent.date||TODAY()) : TODAY();
+  sheet(wasDL?'마감을 마치고 적기':'마치고 적기', ent.raw, null, async v=>{
+    if(v===null) return;
+    const t=(v||'').trim(); if(!t) return;
+    const p=parse(t);
+    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people,
+      url:p.url, page:p.page, cat:'note', dl:false, date:day,
+      time:isPlan?ent.time:null, done:false, doneAt:Date.now()});
+    if(!isPlan) ent.wasTodo=true;
+    touch(ent); await put(ent); render();
+    toast(fmtD(day)+' 자취로 남겼습니다');
+  }, true,
+  (isPlan? '어떻게 되었는지 적으세요.' : '무엇을 했는지 적으세요.')+
+  ' 저장하면 '+fmtD(day,true)+' 날짜의 메모로 남습니다.');
+}
+function progressSheet(ent){
+  const t=TODAY();
+  sheet('오늘 몫 적기', '', null, async v=>{
+    if(v===null) return;
+    const txt=(v||'').trim(); if(!txt) return;
+    const p=parse(txt), now=Date.now();
+    const it={id:uid(), ts:now, mt:now, ...p, cat:'note', date:t, time:null,
+              done:false, doneAt:null, archived:false};
+    E.push(it); await put(it);
+    ent.hist=(ent.hist||[]).slice();
+    if(ent.hist.indexOf(t)<0){ ent.hist.push(t); ent.hist.sort(); }
+    touch(ent); await put(ent);
+    render(); toast('오늘 몫을 메모로 남겼습니다');
+  }, true,
+  '「'+(ent.text||ent.raw)+'」을(를) 향해 오늘 무엇을 했는지 적으세요. 오늘 날짜의 메모로 남습니다.');
+}
+
+
 /* ═══════════════ 7-b. 전체 잔액 ═══════════════ */
 function calcBalance(){
   const b=META.balance; if(!b) return null;
@@ -1022,9 +1079,12 @@ function vToday(){
   const late=todosAll.filter(e=>e.date&&dday(e.date)<0);
   const rtToday=routines().filter(e=>rtDueToday(e)&&match(e,q));
   const rtLeft=rtToday.filter(e=>!rtDone(e));
-  const planToday=visible().filter(e=>e.cat==='plan'&&e.date===t&&match(e,q)).sort(byTime);
-  const planWeek=visible().filter(e=>e.cat==='plan'&&e.date&&dday(e.date)>0&&dday(e.date)<=7&&match(e,q))
+  const planToday=visible().filter(e=>e.cat==='plan'&&!e.dl&&e.date===t&&match(e,q)).sort(byTime);
+  const planWeek=visible().filter(e=>e.cat==='plan'&&!e.dl&&e.date&&dday(e.date)>0&&dday(e.date)<=7&&match(e,q))
       .sort((a,b)=>a.date===b.date?byTime(a,b):(a.date<b.date?-1:1));
+  const dls=deadlines().filter(e=>match(e,q));
+  const dlDue=dls.filter(e=>!e.date||dday(e.date)<=0).length;
+  const dlLeft=dls.filter(e=>e.date&&dday(e.date)>0&&!dlProgToday(e)).length;
   const cy=cycleGroups().filter(g=>g.next&&dday(g.next)<=14);
   const overdue=cy.filter(g=>dday(g.next)<=0).length;
 
@@ -1060,6 +1120,11 @@ function vToday(){
 
   h+='<section><h2>오늘 일정<span class="aside">'+planToday.length+'</span></h2>'+
      listHTML(planToday,{hideStamp:true,empty:'오늘 잡힌 일정이 없습니다.'})+'</section>';
+
+  if(dls.length)
+    h+='<section><h2>마감<span class="aside">'+
+       (dlDue? '오늘까지 '+dlDue+' · ':'')+(dlLeft? '오늘 몫 남은 '+dlLeft:'오늘 몫 다 했습니다')+
+       '</span></h2>'+dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
 
   if(rtToday.length)
     h+='<section><h2>오늘의 루틴<span class="aside">'+
@@ -1105,7 +1170,9 @@ function vTodo(){
   const all=byCat('todo').filter(e=>match(e,q));
   const rts=all.filter(isRt);
   const arr=all.filter(e=>!isRt(e));
-  const done=arr.filter(e=>e.done), un=arr.filter(e=>!e.done);
+  const un=arr.filter(e=>!e.done);
+  const done=arr.filter(e=>e.done).concat(
+    visible().filter(e=>e.wasTodo&&e.cat==='note'&&match(e,q)&&Date.now()-(e.doneAt||e.ts)<60*86400000));
   un.sort((a,b)=>{
     const x=a.date||'9999-99-99', y=b.date||'9999-99-99';
     return x===y? b.ts-a.ts : (x<y?-1:1);
@@ -1127,18 +1194,23 @@ function vTodo(){
   h+='<section><h2>남은 일<span class="aside">'+un.length+'</span></h2>'+
      listHTML(un,{empty:'남은 일이 없습니다.'})+'</section>';
   if(state.showDone)
-    h+='<section><h2>끝낸 일</h2>'+listHTML(done.sort((a,b)=>(b.doneAt||b.ts)-(a.doneAt||a.ts)))+'</section>';
+    h+='<section><h2>끝낸 일<span class="aside">최근 60일</span></h2>'+
+       listHTML(done.sort((a,b)=>(b.doneAt||b.ts)-(a.doneAt||a.ts)),{showCat:true})+'</section>';
   return h;
 }
 function vPlan(){
   const q=state.q;
-  const pool=visible().filter(e=>(e.cat==='plan'||(e.cat==='todo'&&e.date&&!e.done))&&match(e,q));
+  const pool=visible().filter(e=>((e.cat==='plan'&&!e.dl)||(e.cat==='todo'&&e.date&&!e.done))&&match(e,q));
   const arr=pool.filter(e=>e.date);
   const undated=pool.filter(e=>!e.date&&e.cat==='plan');
   const byT=(a,b)=>((a.time||'99:99')<(b.time||'99:99')?-1:1);
   const up=arr.filter(e=>dday(e.date)>=0).sort((a,b)=>a.date===b.date?byT(a,b):(a.date<b.date?-1:1));
   const past=arr.filter(e=>dday(e.date)<0).sort((a,b)=>a.date===b.date?byT(a,b):(a.date>b.date?-1:1));
   let h='';
+  const dls=deadlines().filter(e=>match(e,q));
+  if(dls.length)
+    h+='<section><h2>마감<span class="aside">◈ '+dls.length+'</span></h2>'+
+       dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
   if(undated.length)
     h+='<section><h2>날짜를 기다리는 일정<span class="aside">'+undated.length+'</span></h2>'+
        listHTML(undated,{empty:''})+'</section>';
@@ -1430,7 +1502,11 @@ function vSet(){
      '오늘·물음·전체·설정을 뺀 탭에서는 <b>그 탭의 분류로 담깁니다</b>. 금전 탭에서 적으면 금전, 참조 탭에서 적으면 참조. '+
      '다른 데로 보내려면 <b>/</b>로 지정하세요. 다만 금액이 없으면 금전으로, 숫자가 없으면 기록으로 몰지 않습니다.<br>'+
      '<b>#</b>은 갈래, <b>@</b>는 사람. 여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
-     '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.'+
+     '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.<br>'+
+     '할일과 지나간 일정의 <b>완료</b>를 누르면 무엇을 했는지 적게 됩니다. 저장하면 그날의 메모로 남습니다. '+
+     '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
+     '일정을 <b>마감으로</b> 삼으면 오늘 화면 일정 아래에 서서 마감일까지 매일 나타납니다. '+
+     '<b>오늘 몫</b>으로 그날 한 일을 오늘 날짜의 메모로 남기고, 마감일이 되면 마쳤는지 새 날짜를 잡을지 고릅니다.'+
      '</div></section>';
   h+='<section><h2>링크 걸기</h2><div class="empty">'+
      '어느 분류든 상관없이, 링크를 문장에 붙여 두면 눌러서 바로 엽니다. '+
@@ -1600,7 +1676,7 @@ function bRec(r){
 /* ─ 할일 ─ */
 function bTodo(){
   const un=E.filter(e=>e.cat==='todo'&&!e.done&&!e.archived&&!isRt(e));
-  const done=E.filter(e=>e.cat==='todo'&&e.done&&Date.now()-(e.doneAt||e.ts)<90*86400000);
+  const done=E.filter(e=>((e.cat==='todo'&&e.done)||e.wasTodo)&&Date.now()-(e.doneAt||e.ts)<90*86400000);
   if(!un.length&&!done.length) return null;
   const age=e=>Math.round((Date.now()-e.ts)/86400000);
   let s=HEAD+'# 자료 · 할일\n남은 일 '+un.length+' · 최근 90일에 끝낸 일 '+done.length+'\n\n';
@@ -1906,8 +1982,19 @@ $view.addEventListener('click',async e=>{
       if(i>=0) ent.hist.splice(i,1); else ent.hist.push(t);
       ent.hist.sort(); ent.done=false; touch(ent); await put(ent); render(); return;
     }
+    if(ent.cat==='todo'&&!ent.done) return finishItem(ent);
     ent.done=!ent.done; ent.doneAt=ent.done?Date.now():null; touch(ent);
     await put(ent); render(); return;
+  }
+  if(act==='fin')  return finishItem(ent);
+  if(act==='prog') return progressSheet(ent);
+  if(act==='dl'){
+    ent.dl=!ent.dl; if(ent.dl) ent.hist=ent.hist||[];
+    touch(ent); await put(ent); render();
+    toast(ent.dl? (ent.date? '마감으로 삼았습니다':'마감으로 삼았습니다. 마감일을 정해 주세요')
+                : '마감을 풀었습니다');
+    if(ent.dl&&!ent.date) dateSheet(ent);
+    return;
   }
   if(act==='star'){
     ent.star=!ent.star; touch(ent); await put(ent); render();
@@ -2023,10 +2110,10 @@ function catSheet(ent){
     render(); toast(CATS[k].name+'으로 옮겼습니다'+(tk?' · “'+tk+'”를 익혔습니다':''));
   });
 }
-function sheet(title,body,opts,cb,isInput){
+function sheet(title,body,opts,cb,isInput,hint){
   const v=document.createElement('div'); v.className='veil';
   v.innerHTML='<div class="sheet'+(isInput?' wide':'')+'"><h3>'+esc(title)+'</h3>'+
-    (isInput? '<p>고치면 분류와 날짜, 금액을 다시 헤아립니다.</p><textarea class="etext" spellcheck="false"></textarea>'
+    (isInput? '<p>'+esc(hint||'고치면 분류와 날짜, 금액을 다시 헤아립니다.')+'</p><textarea class="etext" spellcheck="false"></textarea>'
             : '<p>'+esc(body)+'</p>')+
     '<div class="opts" style="margin-top:12px">'+
       (opts? opts.map(o=>'<button data-k="'+o.k+'">'+esc(o.label)+'</button>').join('')
