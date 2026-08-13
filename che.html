@@ -85,6 +85,10 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .bd{flex:1;min-width:0}
 .tx{word-break:break-word;white-space:pre-wrap}
 .tx a.tl{color:inherit;border-bottom:1px solid var(--line2);text-decoration:none}
+.tx .wl{font-family:inherit;font-size:inherit;color:var(--seal);padding:0;
+  border-bottom:1px dotted var(--seal);line-height:inherit}
+.tx .wl:hover,.tx .wl:focus{background:var(--seal);color:var(--paper);border-bottom-color:var(--seal)}
+.it.done .tx .wl{color:var(--ink3);border-bottom-color:var(--line2)}
 .tx a.tl::after{content:'↗';font-family:var(--mono);font-size:9px;color:var(--ink3);
   vertical-align:2px;margin-left:3px;border:none}
 .tx a.tl:hover,.tx a.tl:focus{color:var(--seal);border-bottom-color:var(--seal)}
@@ -93,7 +97,9 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .it.done .tx{color:var(--ink3);text-decoration:line-through;text-decoration-color:var(--line2)}
 .mt{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:.02em;
   margin-top:2px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.mt .tag{color:var(--ink2)}
+.mt .tag{color:var(--ink2);font-family:var(--mono);font-size:11px;
+  border-bottom:1px dotted var(--line2);padding:0;cursor:pointer}
+.mt .tag:hover,.mt .tag:focus{color:var(--seal);border-bottom-color:var(--seal)}
 .mt .due{color:var(--seal)}
 .mt .amt{color:var(--ink);font-size:12px}
 .mt .amt.in{color:var(--moss)}
@@ -548,10 +554,28 @@ function recKey(t,matched){
   return w || (t.match(/[가-힣A-Za-z]{2,}/)||['기록'])[0];
 }
 
+const WIKI_G=/\[\[([^\[\]\n]{1,60})\]\]/g;
+const WIKI_RE=/\[\[([^\[\]\n]{1,60})\]\]/;
+function wikiNames(t){
+  const out=[]; let m; WIKI_G.lastIndex=0;
+  while((m=WIKI_G.exec(t))){ const n=m[1].trim(); if(n&&out.indexOf(n)<0) out.push(n); }
+  return out;
+}
+function wrapWiki(raw,name){
+  const low=raw.toLowerCase(), ln=name.toLowerCase();
+  let from=0;
+  while(true){
+    const k=low.indexOf(ln,from);
+    if(k<0) return raw.trim()+' [['+name+']]';
+    if(!(raw.slice(k-2,k)==='[['&&raw.slice(k+name.length,k+name.length+2)===']]'))
+      return raw.slice(0,k)+'[['+raw.substr(k,name.length)+']]'+raw.slice(k+name.length);
+    from=k+ln.length;
+  }
+}
 function parse(raw){
   let text=raw.trim();
   const o={raw:raw.trim(),text,cat:null,date:null,time:null,amount:null,flow:null,
-           group:null,url:null,page:null,num:null,unit:null,key:null,tags:[],people:[],forced:false};
+           group:null,url:null,page:null,num:null,unit:null,key:null,tags:[],people:[],links:[],forced:false};
   if(!text) return o;
 
   // 명시 지정: /할일 …  또는 //todo
@@ -561,8 +585,8 @@ function parse(raw){
   if(cm){ o.cat=cmdMap[cm[1]]; o.forced=true; text=cm[2].trim(); o.text=text; }
 
   // 태그 / 사람
-  o.tags   = (text.match(/#[^\s#@]+/g)||[]).map(s=>s.slice(1));
-  o.people = (text.match(/@[^\s#@]+/g)||[]).map(s=>s.slice(1));
+  o.links  = wikiNames(text);
+  o.tags   = []; o.people = [];
 
   const u=text.match(URL_RE); if(u) o.url=u[0];
   const dt=parseDate(text); if(dt) o.date=dt.date;
@@ -614,21 +638,30 @@ function hostOf(u){
     return (x.hostname.replace(/^www\./,'')+p).slice(0,44);
   }catch(err){ return String(u).replace(/^[a-z0-9+.\-]+:\/*/i,'').slice(0,44); }
 }
+function wikiHTML(t){
+  return t.replace(WIKI_G,(m,n)=>{
+    const nm=n.trim();
+    return '<button class="wl" data-act="q" data-q="[['+nm+']]">'+nm+'</button>';
+  });
+}
+function urlChip(u){
+  const sc=schemeOf(u), web=!sc||sc.web;
+  return ' <a class="applink" href="'+esc(u)+'"'+(web?' target="_blank" rel="noopener"':'')+
+         ' title="'+esc(u)+'">'+esc(sc&&sc.n? sc.n : hostOf(u).slice(0,18))+' ↗</a>';
+}
 function titleHTML(e){
   const raw=e.text||e.raw||'';
-  const links=raw.match(LINK_G)||[];
-  if(!links.length) return esc(raw);
+  const urls=raw.match(LINK_G)||[];
+  if(!urls.length) return wikiHTML(esc(raw));
   const rest=raw.replace(LINK_G,' ').replace(/\s{2,}/g,' ').trim();
-  const first=links[0], sc=schemeOf(first);
-  const web=!sc||sc.web;
+  const first=urls[0], sc=schemeOf(first), web=!sc||sc.web;
+  if(WIKI_RE.test(rest)){
+    return wikiHTML(esc(rest))+urls.map(urlChip).join('');
+  }
   const label=rest || (sc&&sc.n? sc.n : hostOf(first));
   let h='<a class="tl" href="'+esc(first)+'"'+(web?' target="_blank" rel="noopener"':'')+
         ' title="'+esc(first)+'">'+esc(label)+'</a>';
-  links.slice(1).forEach(u=>{
-    const s2=schemeOf(u), w2=!s2||s2.web;
-    h+=' <a class="applink" href="'+esc(u)+'"'+(w2?' target="_blank" rel="noopener"':'')+
-       ' title="'+esc(u)+'">'+esc(s2&&s2.n? s2.n : hostOf(u).slice(0,18))+'</a>';
-  });
+  urls.slice(1).forEach(u=>{ h+=urlChip(u); });
   return h;
 }
 function linkify(s){
@@ -662,17 +695,17 @@ function hay(e){
   if(e.rt) flags.push('루틴 '+rtLabel(e.rt));
   if(e.archived) flags.push('보관');
   if(e.url) flags.push('링크');
-  const s=((e.raw||'')+' '+(e.tags||[]).join(' ')+' '+(e.people||[]).join(' ')+' '+
+  const s=((e.raw||'')+' '+(e.links||[]).join(' ')+' '+(e.tags||[]).join(' ')+' '+(e.people||[]).join(' ')+' '+
     (e.key||'')+' '+(e.group||'')+' '+(e.unit||'')+' '+
     (CATS[e.cat]?CATS[e.cat].name:'')+' '+flags.join(' ')+' '+eDate(e)).toLowerCase();
   HAY.set(e.id,{mt:MT(e),s});
   return s;
 }
 function parseQuery(q){
-  const toks=[], re=/"([^"]*)"|'([^']*)'|(\S+)/g; let m;
+  const toks=[], re=/(\[\[[^\]]*\]\])|"([^"]*)"|'([^']*)'|(\S+)/g; let m;
   while((m=re.exec(q))){
-    const phrase = m[1]!==undefined || m[2]!==undefined;
-    let raw = phrase? (m[1]!==undefined?m[1]:m[2]) : m[3];
+    const phrase = m[2]!==undefined || m[3]!==undefined;
+    let raw = m[1]!==undefined? m[1] : (phrase? (m[2]!==undefined?m[2]:m[3]) : m[4]);
     let neg=false;
     if(!phrase && raw.length>1 && (raw[0]==='-'||raw[0]==='!')){ neg=true; raw=raw.slice(1); }
     if(raw) toks.push({raw:raw.toLowerCase(), neg, phrase});
@@ -682,6 +715,8 @@ function parseQuery(q){
 function testTok(e,h,t){
   const s=t.raw;
   if(!t.phrase){
+    const w=s.match(/^\[\[(.*)\]\]$/);
+    if(w) return (e.links||[]).some(x=>x.toLowerCase()===w[1].trim());
     if(s[0]==='#') return (e.tags||[]).some(x=>x.toLowerCase().indexOf(s.slice(1))>=0);
     if(s[0]==='@') return (e.people||[]).some(x=>x.toLowerCase().indexOf(s.slice(1))>=0);
     const c=s.match(/^(분류|갈래|cat):(.+)$/);
@@ -803,7 +838,7 @@ function preview(){
     : '';
   $mesh.classList.toggle('on', !!v.trim()||!!state.pinDate);
   if(!v.trim()){
-    $chips.innerHTML=pin+'<span class="chip hint">엔터로 담기 · 줄바꿈은 ⇧엔터 · <b>/</b>를 치면 분류를 고를 수 있습니다</span>';
+    $chips.innerHTML=pin+'<span class="chip hint">엔터로 담기 · ⇧엔터로 줄바꿈 · <b>/</b>로 분류 고르기 · <b>[[이름]]</b>으로 잇기</span>';
     return;
   }
   const only=v.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s*$/);
@@ -823,8 +858,7 @@ function preview(){
   if(p.num!==null) h+='<span class="chip">'+p.key+' '+p.num+p.unit+'</span>';
   if(p.key&&p.cat==='cycle') h+='<span class="chip">'+esc(p.key)+'</span>';
   if(p.url){ const sc=schemeOf(p.url); h+='<span class="chip">'+(sc&&sc.n? esc(sc.n):'링크')+'</span>'; }
-  p.tags.forEach(t=>h+='<span class="chip">#'+esc(t)+'</span>');
-  p.people.forEach(t=>h+='<span class="chip">@'+esc(t)+'</span>');
+  (p.links||[]).forEach(t=>h+='<span class="chip">'+esc(t)+' 이음</span>');
   if(lines.length>1) h+='<span class="chip">외 '+(lines.length-1)+'줄</span>';
   h+='<span class="grow"></span><button class="send" id="send">담기 ⏎</button>';
   $chips.innerHTML=h;
@@ -883,8 +917,10 @@ function itemHTML(e,opt={}){
             (e.group?' <span>'+esc(e.group)+'</span>':''));
   if(e.num!==null&&e.num!==undefined&&e.cat==='rec') mt.push('<span>'+esc(e.key)+' '+e.num+esc(e.unit||'')+'</span>');
   if(e.page) mt.push('<span>p.'+e.page+'</span>');
-  (e.tags||[]).forEach(t=>mt.push('<span class="tag">#'+esc(t)+'</span>'));
-  (e.people||[]).forEach(t=>mt.push('<span class="tag">@'+esc(t)+'</span>'));
+  (e.tags||[]).forEach(t=>mt.push('<button class="tag" data-act="q" data-q="#'+esc(t)+'">#'+esc(t)+'</button>'));
+  (e.people||[]).forEach(t=>mt.push('<button class="tag" data-act="q" data-q="@'+esc(t)+'">@'+esc(t)+'</button>'));
+  if(e.links&&e.links.length&&!WIKI_RE.test(e.text||e.raw||''))
+    e.links.forEach(t=>mt.push('<button class="tag" data-act="q" data-q="[['+esc(t)+']]">'+esc(t)+'</button>'));
   if(opt.showCat) mt.push('<span>'+c.name+'</span>');
   if(!e.date && !opt.hideStamp) mt.push('<span>'+fmtD(iso(new Date(e.ts)))+'</span>');
   if(rt){
@@ -917,6 +953,7 @@ function itemHTML(e,opt={}){
       (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+
       (pray?lineageHTML(e):'')+'</div>'+
     '<div class="act">'+
+      (opt.linkAs?'<button data-act="lk" data-id="'+e.id+'" data-q="'+esc(opt.linkAs)+'">잇기</button>':'')+
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
         (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
       (e.cat==='todo'?'<button data-act="rt" data-id="'+e.id+'">'+(rt?'루틴 고침':'루틴')+'</button>':'')+
@@ -1067,7 +1104,7 @@ function finishItem(ent){
     if(v===null) return;
     const t=(v||'').trim(); if(!t) return;
     const p=parse(t);
-    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people,
+    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people, links:p.links,
       url:p.url, page:p.page, cat:'note', dl:false, date:day,
       time:isPlan?ent.time:null, done:false, doneAt:Date.now()});
     if(!isPlan) ent.wasTodo=true;
@@ -1145,7 +1182,7 @@ function prayFulfill(ent){
     if(v===null) return;
     const t=(v||'').trim(); if(!t) return;
     const p=parse(t);
-    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people,
+    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people, links:p.links,
       url:p.url, page:p.page, cat:'note', date:day, time:null,
       wasPray:true, done:false, doneAt:Date.now()});
     touch(ent); await put(ent); render();
@@ -1159,7 +1196,7 @@ function prayAgain(ent){
     const t=(v||'').trim(); if(!t) return;
     ent.lineage=(ent.lineage||[]).concat([{text:ent.raw, sealed:iso(new Date(ent.ts)), due:ent.date}]);
     const p=parse(t);
-    ent.raw=t; ent.text=p.text; ent.tags=p.tags; ent.people=p.people; ent.url=p.url;
+    ent.raw=t; ent.text=p.text; ent.tags=p.tags; ent.people=p.people; ent.links=p.links; ent.url=p.url;
     ent.ts=Date.now(); ent.date=p.date||null; ent.time=null;
     touch(ent); await put(ent); render();
     if(ent.date) toast(fmtD(ent.date,true)+'에 옵니다'); else sealSheet(ent);
@@ -1672,10 +1709,33 @@ function vAll(){
     '<button class="pill" data-act="toggle" data-k="archive" aria-pressed="'+state.archive+'">보관함까지 보기</button>'+
     '<button class="pill" data-act="askk" data-k="review">✎ 한 시기 되짚기</button>'+
     '<button class="pill" data-act="askk" data-k="tidy">✎ 분류 손보기</button></div>';
-  h+='<section><h2>전체<span class="aside">'+arr.length+(state.q?' / '+esc(state.q):'')+'</span></h2>'+
-     listHTML(arr,{showCat:true,groupByMonth:true,empty:'찾는 것이 없습니다. 낱말을 줄이거나 따옴표·제외를 풀어 보세요.'})+'</section>';
+  const wk=state.q.match(/^\[\[(.+)\]\]$/);
+  const sg=state.q.match(/^([#@])([^\s#@]+)$/);
+  const label=wk? '이음 '+wk[1].trim() : sg? (sg[1]==='#'?'갈래 ':'사람 ')+state.q : '전체';
+  h+='<section><h2>'+esc(label)+'<span class="aside">'+arr.length+
+     (state.q&&!sg?' / '+esc(state.q):'')+'</span></h2>'+
+     listHTML(arr,{showCat:true,groupByMonth:true,
+       empty: (wk||sg)? '아직 이어진 것이 없습니다.'
+                : '찾는 것이 없습니다. 낱말을 줄이거나 따옴표·제외를 풀어 보세요.'})+'</section>';
+  if(wk||sg){
+    const name=(wk? wk[1].trim() : sg[2]), ln=name.toLowerCase();
+    const has=e=>(e.links||[]).some(x=>x.toLowerCase()===ln)
+      ||(!wk&&(sg[1]==='#'?(e.tags||[]):(e.people||[])).some(x=>x.toLowerCase()===ln));
+    const loose=visible().filter(e=>!has(e)&&(e.raw||'').toLowerCase().indexOf(ln)>=0)
+      .sort((a,b)=>b.ts-a.ts);
+    if(loose.length){
+      h+='<section><h2>이어지지 않은 채 이름만 든 것<span class="aside">'+loose.length+'</span></h2>'+
+         '<div class="trace" style="padding-bottom:8px">「잇기」를 누르면 그 자리의 '+esc(name)+
+         '을(를) [[ ]]로 감싸 같은 것으로 묶습니다.</div>'+
+         loose.slice(0,state.limit).map(e=>itemHTML(e,{showCat:true,linkAs:name})).join('')+
+         (loose.length>state.limit?'<button class="more" data-act="more">더 보기 · 남은 '+(loose.length-state.limit)+'개</button>':'')+
+         '</section>';
+    }
+  }
   if(state.q)
-    h+='<div class="trace">낱말을 띄우면 <b>모두</b> 든 것 · '+
+    h+='<div class="pills" style="margin-top:14px">'+
+       '<button class="pill" data-act="qclear">‹ 찾기 지우기</button></div>'+
+       '<div class="trace">낱말을 띄우면 <b>모두</b> 든 것 · '+
        '<b>-낱말</b> 빼기 · <b>"두 낱말"</b> 붙은 그대로 · <b>가|나</b> 둘 중 하나 · '+
        '<b>#갈래</b> <b>@사람</b> <b>분류:할일</b> <b>2026-08</b> <b>&gt;10000</b></div>';
   return h;
@@ -1728,7 +1788,10 @@ function vSet(){
      '입력칸에서 <b>/</b>를 치면 분류 목록이 뜹니다. ↑↓로 고르고 엔터, 또는 <b>/할일</b>처럼 이어 쳐도 됩니다.<br>'+
      '오늘·물음·전체·설정을 뺀 탭에서는 <b>그 탭의 분류로 담깁니다</b>. 금전 탭에서 적으면 금전, 참조 탭에서 적으면 참조. '+
      '다른 데로 보내려면 <b>/</b>로 지정하세요. 다만 금액이 없으면 금전으로, 숫자가 없으면 기록으로 몰지 않습니다.<br>'+
-     '<b>#</b>은 갈래, <b>@</b>는 사람. 여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
+     '이름을 <b>[[대괄호 둘]]</b>로 감싸면 이음이 됩니다. <b>[[김편집]]과 만났다</b>처럼 적으면 '+
+     '「김편집」에 줄이 그어지고, 누르면 그 이름이 이어진 것이 모두 모입니다. '+
+     '괄호가 경계를 잡아 주니 조사도 띄어쓰기도 상관없습니다 — <b>[[생활성서 연재]]</b>도 됩니다.<br>'+
+     '여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
      '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.<br>'+
      '할일과 지나간 일정의 <b>완료</b>를 누르면 무엇을 했는지 적게 됩니다. 저장하면 그날의 메모로 남습니다. '+
      '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
@@ -1755,7 +1818,7 @@ function vSet(){
      '"생활성서 마감" &nbsp;— 붙은 그대로<br>'+
      '원고 -강연 &nbsp;— 원고는 들고 강연은 안 든 것<br>'+
      '치과|병원 &nbsp;— 둘 중 하나<br>'+
-     '#요약 &nbsp;@김편집 &nbsp;— 갈래와 사람<br>'+
+     '[[김편집]] &nbsp;— 그 이름으로 이어진 것<br>'+
      '분류:할일 &nbsp;분류:금전 &nbsp;— 그 분류만<br>'+
      '2026-08 &nbsp;2026-08-13 &nbsp;— 그 달, 그 날<br>'+
      '&gt;100000 &nbsp;&lt;5000 &nbsp;— 금액이 그보다 크거나 작은 것<br>'+
@@ -2023,7 +2086,7 @@ function bReview(r){
     }
   });
   if(span>45){
-    const sums=E.filter(e=>e.cat==='ref'&&(e.tags||[]).some(t=>/요약|되짚|정리/.test(t))&&inR(eDate(e),r))
+    const sums=E.filter(e=>e.cat==='ref'&&[...(e.links||[]),...(e.tags||[])].some(t=>/요약|되짚|정리|갈무리/.test(t))&&inR(eDate(e),r))
       .sort((a,b)=>eDate(a)<eDate(b)?-1:1);
     if(sums.length){
       s+='\n## 앞서 만들어 참조로 담아둔 요약 ('+sums.length+')\n'+
@@ -2312,6 +2375,24 @@ $view.addEventListener('click',async e=>{
   const b=e.target.closest('[data-act]'); if(!b) return;
   const act=b.dataset.act, id=b.dataset.id, ent=E.find(x=>x.id===id);
   if(act==='more'){ state.limit+=60; render(); return; }
+  if(act==='q'){
+    state.q=b.dataset.q; state.limit=60; state.tab='all';
+    const box=document.getElementById('q'); if(box) box.value=state.q;
+    render(); return;
+  }
+  if(act==='lk'){
+    const name=b.dataset.q;
+    const raw=wrapWiki(ent.raw||'', name);
+    const p=parse(raw);
+    ent.raw=raw; ent.text=p.text; ent.links=p.links;
+    touch(ent); await put(ent); render(); toast('[['+name+']]으로 이었습니다');
+    return;
+  }
+  if(act==='qclear'){
+    state.q=''; state.limit=60;
+    const box=document.getElementById('q'); if(box) box.value='';
+    render(); return;
+  }
   if(act==='toggle'){ state[b.dataset.k]=!state[b.dataset.k]; render(); return; }
   if(act==='mon'){
     const d=+b.dataset.d;
@@ -2414,7 +2495,7 @@ function editEntry(ent){
     const p=parse(t);
     // 글에서 새로 읽어내는 것
     ent.raw=t; ent.text=p.text;
-    ent.tags=p.tags; ent.people=p.people; ent.url=p.url; ent.page=p.page;
+    ent.tags=p.tags; ent.people=p.people; ent.links=p.links; ent.url=p.url; ent.page=p.page;
     // 새로 적은 것이 있을 때만 갈아끼운다. 없으면 원래 것을 지킨다.
     if(p.date){ ent.date=p.date; ent.time=p.time; }
     else if(p.time) ent.time=p.time;
