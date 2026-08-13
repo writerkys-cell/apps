@@ -42,7 +42,7 @@ a{color:var(--seal);text-decoration:none;border-bottom:1px solid var(--line2)}
 .applink{font-family:var(--mono);font-size:12px;border:1px solid var(--line2);border-radius:var(--r);
   padding:0 6px;white-space:nowrap;display:inline-block;line-height:1.5;vertical-align:1px}
 .applink:hover,.applink:focus{background:var(--seal);color:var(--paper);border-color:var(--seal)}
-.wrap{max-width:720px;margin:0 auto;padding:0 20px}
+.wrap{max-width:764px;margin:0 auto;padding:0 20px}
 
 /* ── 머리 ── */
 header{border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:30}
@@ -55,7 +55,7 @@ header{border-bottom:1px solid var(--line);background:var(--paper);position:stic
 .search:focus{width:210px;border-color:var(--line2)}
 nav{display:flex;gap:0;overflow-x:auto;scrollbar-width:none;padding-bottom:0;-webkit-overflow-scrolling:touch}
 nav::-webkit-scrollbar{display:none}
-nav button{white-space:nowrap;padding:7px 9px 9px;font-size:14px;color:var(--ink2);
+nav button{white-space:nowrap;padding:7px 8px 9px;font-size:14px;color:var(--ink2);
   border-bottom:2px solid transparent;letter-spacing:0}
 nav button .m{font-family:var(--mono);font-size:11px;margin-right:4px;opacity:.6}
 nav button[aria-current="true"]{color:var(--ink);border-bottom-color:var(--seal)}
@@ -152,6 +152,9 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .cal-d[aria-pressed="true"] .dots i{background:var(--paper)}
 .cal-d[aria-pressed="true"] .dots b{color:var(--paper)}
 .trace{font-family:var(--mono);font-size:11px;color:var(--ink3);padding:6px 0 2px;line-height:1.9}
+.lineage{margin-top:5px;padding-left:11px;border-left:1px solid var(--line)}
+.lineage p{margin:2px 0;font-size:13px;color:var(--ink3);line-height:1.6}
+.lineage .gen{font-family:var(--mono);font-size:10px;color:var(--line2);margin-right:7px}
 .rgrid{display:flex;gap:2px;margin:7px 0 3px;flex-wrap:wrap}
 .rgrid i{width:9px;height:9px;display:block;background:var(--paper2);box-shadow:inset 0 0 0 1px var(--line)}
 .rgrid i.ok{background:var(--seal);box-shadow:none}
@@ -264,7 +267,7 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
       <h1>체</h1>
       <span class="sub">부으면 갈라진다</span>
       <span class="grow"></span>
-      <input id="q" class="search" type="search" placeholder="찾기 ⌘K" autocomplete="off">
+      <input id="q" class="search" type="search" placeholder="찾기 ⌘K · 낱말을 띄우면 모두 든 것" autocomplete="off">
     </div>
     <nav id="nav"></nav>
   </div>
@@ -292,6 +295,7 @@ const CATS = {
   cycle:{name:'주기',  mk:'↻'},
   rec  :{name:'기록',  mk:'△'},
   note :{name:'메모',  mk:'·'},
+  pray :{name:'기도',  mk:'◌'},
 };
 const TABS = [
   {k:'today',  name:'오늘', mk:'◎'},
@@ -302,6 +306,7 @@ const TABS = [
   {k:'ref',    name:'참조', mk:'※'},
   {k:'cycle',  name:'주기', mk:'↻'},
   {k:'rec',    name:'기록', mk:'△'},
+  {k:'pray',   name:'기도', mk:'◌'},
   {k:'ask',    name:'물음', mk:'✎'},
   {k:'all',    name:'전체', mk:'≡'},
   {k:'set',    name:'설정', mk:'⚙'},
@@ -550,9 +555,9 @@ function parse(raw){
   if(!text) return o;
 
   // 명시 지정: /할일 …  또는 //todo
-  const cmdMap={'할일':'todo','일정':'plan','금전':'money','참조':'ref','주기':'cycle','기록':'rec','메모':'note',
-                t:'todo',s:'plan',m:'money',r:'ref',c:'cycle',g:'rec',n:'note'};
-  const cm=text.match(/^\/(할일|일정|금전|참조|주기|기록|메모|[tsmrcgn])\s+([\s\S]+)/);
+  const cmdMap={'할일':'todo','일정':'plan','금전':'money','참조':'ref','주기':'cycle','기록':'rec','메모':'note','기도':'pray',
+                t:'todo',s:'plan',m:'money',r:'ref',c:'cycle',g:'rec',n:'note',p:'pray'};
+  const cm=text.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s+([\s\S]+)/);
   if(cm){ o.cat=cmdMap[cm[1]]; o.forced=true; text=cm[2].trim(); o.text=text; }
 
   // 태그 / 사람
@@ -599,7 +604,7 @@ function finishKey(o,text,ck,nm){
 /* ═══════════════ 4. 상태 ═══════════════ */
 const state={tab:'today', q:'', limit:60, showDone:false, showPast:false,
              month:TODAY().slice(0,7), archive:false, askRange:'month',
-             noteMonth:TODAY().slice(0,7), noteDay:TODAY(), noteAll:false, pinDate:null};
+             noteMonth:TODAY().slice(0,7), noteDay:TODAY(), noteAll:false, pinDate:null, peek:false};
 let lastDeleted=null;
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -636,11 +641,78 @@ function linkify(s){
 }
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
-function visible(){ return E.filter(e=>state.archive? true : !e.archived); }
+const sealedP=e=>e.cat==='pray'&&e.date&&dday(e.date)>0;
+function visible(){
+  return E.filter(e=>{
+    if(!state.archive && e.archived) return false;
+    if(sealedP(e) && !state.peek) return false;
+    return true;
+  });
+}
 function byCat(c){ return visible().filter(e=>e.cat===c); }
+const HAY=new Map();
+function hay(e){
+  const c=HAY.get(e.id);
+  if(c && c.mt===MT(e)) return c.s;
+  const flags=[];
+  if(e.done) flags.push('완료');
+  if(e.wasTodo) flags.push('완료 끝낸');
+  if(e.star) flags.push('고정 별표');
+  if(e.dl) flags.push('마감');
+  if(e.rt) flags.push('루틴 '+rtLabel(e.rt));
+  if(e.archived) flags.push('보관');
+  if(e.url) flags.push('링크');
+  const s=((e.raw||'')+' '+(e.tags||[]).join(' ')+' '+(e.people||[]).join(' ')+' '+
+    (e.key||'')+' '+(e.group||'')+' '+(e.unit||'')+' '+
+    (CATS[e.cat]?CATS[e.cat].name:'')+' '+flags.join(' ')+' '+eDate(e)).toLowerCase();
+  HAY.set(e.id,{mt:MT(e),s});
+  return s;
+}
+function parseQuery(q){
+  const toks=[], re=/"([^"]*)"|'([^']*)'|(\S+)/g; let m;
+  while((m=re.exec(q))){
+    const phrase = m[1]!==undefined || m[2]!==undefined;
+    let raw = phrase? (m[1]!==undefined?m[1]:m[2]) : m[3];
+    let neg=false;
+    if(!phrase && raw.length>1 && (raw[0]==='-'||raw[0]==='!')){ neg=true; raw=raw.slice(1); }
+    if(raw) toks.push({raw:raw.toLowerCase(), neg, phrase});
+  }
+  return toks;
+}
+function testTok(e,h,t){
+  const s=t.raw;
+  if(!t.phrase){
+    if(s[0]==='#') return (e.tags||[]).some(x=>x.toLowerCase().indexOf(s.slice(1))>=0);
+    if(s[0]==='@') return (e.people||[]).some(x=>x.toLowerCase().indexOf(s.slice(1))>=0);
+    const c=s.match(/^(분류|갈래|cat):(.+)$/);
+    if(c){ const n=c[2];
+      return Object.keys(CATS).some(k=>(k===n||CATS[k].name===n)&&e.cat===k); }
+    const a=s.match(/^([<>])\s*([\d,]+)$/);
+    if(a){
+      if(typeof e.amount!=='number') return false;
+      const v=parseInt(a[2].replace(/,/g,''),10);
+      return a[1]==='>' ? e.amount>v : e.amount<v;
+    }
+    if(/^\d{4}(-\d{1,2}){0,2}$/.test(s)){
+      const norm=s.split('-').map((x,i)=>i?pad(+x):x).join('-');
+      return eDate(e).indexOf(norm)===0;
+    }
+    if(s.indexOf('|')>0)
+      return s.split('|').filter(Boolean).some(x=>h.indexOf(x)>=0);
+  }
+  return h.indexOf(s)>=0;
+}
+let QC={q:null,toks:[]};
 function match(e,q){
-  if(!q) return true; const s=q.toLowerCase();
-  return (e.raw||'').toLowerCase().includes(s) || (e.tags||[]).some(t=>t.toLowerCase().includes(s));
+  if(!q) return true;
+  if(QC.q!==q) QC={q, toks:parseQuery(q)};
+  if(!QC.toks.length) return true;
+  const h=hay(e);
+  for(const t of QC.toks){
+    const ok=testTok(e,h,t);
+    if(t.neg ? ok : !ok) return false;
+  }
+  return true;
 }
 
 /* ═══════════════ 5. 입력 ═══════════════ */
@@ -690,6 +762,7 @@ const CMDS=[
   {c:'주기', a:'c', cat:'cycle', ex:'이발'},
   {c:'기록', a:'g', cat:'rec',   ex:'달리기 4.8km'},
   {c:'메모', a:'n', cat:'note',  ex:'그냥 남겨둘 것'},
+  {c:'기도', a:'p', cat:'pray',  ex:'봉해서 미래로 띄울 한 문장'},
 ];
 let menuOpen=false, menuIdx=0, menuList=[];
 function menuQuery(){
@@ -733,7 +806,7 @@ function preview(){
     $chips.innerHTML=pin+'<span class="chip hint">엔터로 담기 · 줄바꿈은 ⇧엔터 · <b>/</b>를 치면 분류를 고를 수 있습니다</span>';
     return;
   }
-  const only=v.match(/^\/(할일|일정|금전|참조|주기|기록|메모|[tsmrcgn])\s*$/);
+  const only=v.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s*$/);
   if(only||menuOpen){
     const c=only? CMDS.find(x=>x.c===only[1]||x.a===only[1]) : null;
     $chips.innerHTML = pin + (c
@@ -759,7 +832,7 @@ function preview(){
 
 async function commit(){
   const v=$in.value.trim(); if(!v) return;
-  if(/^\/(할일|일정|금전|참조|주기|기록|메모|[tsmrcgn])\s*$/.test(v)){
+  if(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s*$/.test(v)){
     toast('분류만 골랐습니다. 담을 내용을 이어 적으세요'); return;
   }
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -772,6 +845,8 @@ async function commit(){
   });
   E=E.concat(items); await put(items);
   $in.value=''; closeMenu(); autosize(); preview(); render();
+  const np=items.find(x=>x.cat==='pray'&&!x.date);
+  if(np){ sealSheet(np); return; }
   toast((state.pinDate? fmtD(state.pinDate)+' ':'')+
     (items.length===1? CATS[items[0].cat].name+'으로 담았습니다' : items.length+'개를 담았습니다'));
 }
@@ -816,6 +891,18 @@ function itemHTML(e,opt={}){
     const st=rtStreak(e);
     mt.push('<span>↺ '+rtLabel(e.rt)+(st?' · 연속 '+st+(e.rt.mode==='n'?'회':'일'):'')+'</span>');
   }
+  const pray=e.cat==='pray', pSealed=pray&&e.date&&dday(e.date)>0;
+  const pArrived=pray&&e.date&&dday(e.date)<=0;
+  if(pray){
+    if(e.date){
+      const n=dday(e.date);
+      mt.push('<span class="'+(pArrived?'due':'')+'">'+
+        (pSealed? fmtD(e.date,true)+'에 옴 · '+fmtDD(n)
+                : '봉한 날 '+fmtD(iso(new Date(e.ts)),true)+(n<0?' · '+fmtDD(n):' · 오늘 도래'))+'</span>');
+    } else mt.push('<span class="due">아직 안 봉함</span>');
+    if(e.lineage&&e.lineage.length) mt.push('<span>'+(e.lineage.length+1)+'대째</span>');
+  }
+  if(e.wasPray) mt.push('<span>실현된 기도</span>');
   const dl=isDL(e), pastPlan=e.cat==='plan'&&e.date&&dday(e.date)<=0;
   if(dl){
     mt.push('<span class="due">마감'+(e.date?'':' · 날짜 없음')+'</span>');
@@ -825,9 +912,10 @@ function itemHTML(e,opt={}){
 
   return '<div class="it'+(dn?' done':'')+'" data-id="'+e.id+'">'+
     '<button class="mk'+(e.star||dl?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
-      (e.star? '★' : dl? '◈' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
+      (e.star? '★' : dl? '◈' : pArrived? '✧' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
     '<div class="bd"><div class="tx">'+titleHTML(e)+'</div>'+
-      (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+'</div>'+
+      (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+
+      (pray?lineageHTML(e):'')+'</div>'+
     '<div class="act">'+
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
         (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
@@ -837,6 +925,9 @@ function itemHTML(e,opt={}){
                     '<button data-act="date" data-id="'+e.id+'">새 마감일</button>':'')+
       (!dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">완료</button>':'')+
       (e.cat==='plan'?'<button data-act="dl" data-id="'+e.id+'">'+(dl?'마감 풀기':'마감으로')+'</button>':'')+
+      (pArrived?'<button data-act="pfin" data-id="'+e.id+'">실현</button>'+
+                '<button data-act="pagain" data-id="'+e.id+'">다시</button>':'')+
+      (pray&&!e.date?'<button data-act="pseal" data-id="'+e.id+'">봉하기</button>':'')+
       (e.cat==='ref'?'<button data-act="star" data-id="'+e.id+'">'+(e.star?'풀기':'★ 고정')+'</button>':'')+
       (e.cat==='cycle'?'<button data-act="again" data-id="'+e.id+'">오늘 또</button>':'')+
       (dl&&pastPlan?'':'<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':'날짜 넣기')+'</button>')+
@@ -1004,6 +1095,83 @@ function progressSheet(ent){
 }
 
 
+/* ═══════════════ 7-e. 기도 — 봉해서 띄우기 ═══════════════ */
+const TERMS=[['이레 뒤','d',7],['한 달 뒤','m',1],['석 달 뒤','m',3],
+             ['백일 뒤','d',100],['한 해 뒤','m',12],['세 해 뒤','m',36]];
+function addM(d,n){
+  const day=d.getDate(), t=new Date(d.getFullYear(),d.getMonth()+n,1);
+  t.setDate(Math.min(day,new Date(t.getFullYear(),t.getMonth()+1,0).getDate()));
+  return t;
+}
+function termDate(kind,n){
+  const d=new Date(); d.setHours(0,0,0,0);
+  if(kind==='d'){ d.setDate(d.getDate()+n); return iso(d); }
+  return iso(addM(d,n));
+}
+const prayAll   =()=>E.filter(e=>e.cat==='pray'&&!e.archived);
+const praySealed=()=>prayAll().filter(e=>e.date&&dday(e.date)>0);
+const prayArrived=()=>prayAll().filter(e=>e.date&&dday(e.date)<=0)
+  .sort((a,b)=>a.date<b.date?-1:1);
+const prayWaiting=()=>prayAll().filter(e=>!e.date);
+const prayDone  =()=>E.filter(e=>e.wasPray&&!e.archived).sort((a,b)=>(b.doneAt||b.ts)-(a.doneAt||a.ts));
+
+function sealSheet(ent){
+  const v=document.createElement('div'); v.className='veil';
+  v.innerHTML='<div class="sheet"><h3>언제 열까요</h3>'+
+    '<p>'+esc(ent.text||ent.raw)+'<br><span style="font-size:12px;color:var(--ink3)">'+
+    '봉하면 그날까지 어디에도 보이지 않습니다.</span></p>'+
+    '<div class="opts">'+TERMS.map((t,i)=>'<button data-t="'+i+'">'+t[0]+'</button>').join('')+'</div>'+
+    '<div class="dfield" style="margin-top:14px"><input type="date" class="bd"></div>'+
+    '<div class="opts"><button data-k="pick">이 날로</button>'+
+      '<button data-k="">아직 안 정함</button></div></div>';
+  document.body.appendChild(v);
+  const bd=v.querySelector('.bd');
+  const seal=async d=>{
+    ent.date=d; ent.time=null; touch(ent); await put(ent); render();
+    toast('봉했습니다 · '+fmtD(d,true)+'에 옵니다');
+  };
+  v.addEventListener('click',async ev=>{
+    if(ev.target===v){ v.remove(); return; }
+    const t=ev.target.closest('[data-t]');
+    if(t){ const [,k,n]=TERMS[+t.dataset.t]; v.remove(); await seal(termDate(k,n)); return; }
+    const b=ev.target.closest('[data-k]'); if(!b) return;
+    const k=b.dataset.k; v.remove();
+    if(k==='pick'&&bd.value) await seal(bd.value);
+  });
+}
+function prayFulfill(ent){
+  const day=ent.date||TODAY();
+  sheet('실현', ent.raw, null, async v=>{
+    if(v===null) return;
+    const t=(v||'').trim(); if(!t) return;
+    const p=parse(t);
+    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people,
+      url:p.url, page:p.page, cat:'note', date:day, time:null,
+      wasPray:true, done:false, doneAt:Date.now()});
+    touch(ent); await put(ent); render();
+    toast(fmtD(day)+' 자취로 남겼습니다');
+  }, true,
+  '무엇이 이것을 오게 했는지 함께 적으세요. 저장하면 '+fmtD(day,true)+' 날짜의 메모로 남습니다.');
+}
+function prayAgain(ent){
+  sheet('다시 봉하기', ent.raw, null, async v=>{
+    if(v===null) return;
+    const t=(v||'').trim(); if(!t) return;
+    ent.lineage=(ent.lineage||[]).concat([{text:ent.raw, sealed:iso(new Date(ent.ts)), due:ent.date}]);
+    const p=parse(t);
+    ent.raw=t; ent.text=p.text; ent.tags=p.tags; ent.people=p.people; ent.url=p.url;
+    ent.ts=Date.now(); ent.date=p.date||null; ent.time=null;
+    touch(ent); await put(ent); render();
+    if(ent.date) toast(fmtD(ent.date,true)+'에 옵니다'); else sealSheet(ent);
+  }, true, '고쳐 말하고 다시 봉합니다. 지난 문장은 대(代)로 남습니다.');
+}
+function lineageHTML(e){
+  if(!e.lineage||!e.lineage.length) return '';
+  return '<div class="lineage">'+e.lineage.map((g,i)=>
+    '<p><span class="gen">'+(i+1)+'대 · '+fmtD(g.sealed,true)+'</span>'+esc(g.text)+'</p>').join('')+'</div>';
+}
+
+
 /* ═══════════════ 7-b. 전체 잔액 ═══════════════ */
 function calcBalance(){
   const b=META.balance; if(!b) return null;
@@ -1148,12 +1316,17 @@ function vToday(){
        '분류가 틀리면 왼쪽 기호를 눌러 고치세요. 같은 말이 다시 오면 그대로 따릅니다.</div>';
   }
 
+  const arrivedPray=prayArrived().filter(e=>match(e,q));
   let shown=0;
-  if(rtToday.length){
+  if(arrivedPray.length){
     shown++;
-    h+='<section><h2>오늘의 루틴<span class="aside">'+
-       (rtLeft.length? '남은 '+rtLeft.length+' / '+rtToday.length : '다 했습니다')+'</span></h2>'+
-       rtToday.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+    h+='<section><h2>도래한 기도<span class="aside">✧ '+arrivedPray.length+'</span></h2>'+
+       arrivedPray.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+  }
+  if(rtLeft.length){
+    shown++;
+    h+='<section><h2>오늘의 루틴<span class="aside">남은 '+rtLeft.length+' / '+rtToday.length+'</span></h2>'+
+       rtLeft.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
   }
   if(planToday.length){
     shown++;
@@ -1381,7 +1554,7 @@ function vRec(){
   });
   return h;
 }
-const TAB_CAT={cal:'note',todo:'todo',plan:'plan',money:'money',ref:'ref',cycle:'cycle',rec:'rec'};
+const TAB_CAT={cal:'note',todo:'todo',plan:'plan',money:'money',ref:'ref',cycle:'cycle',rec:'rec',pray:'pray'};
 const TAB_HINT={
   todo :'할일로 담깁니다 · 원고 보내기',
   plan :'일정으로 담깁니다 · 다음 주 화요일 미팅',
@@ -1390,6 +1563,7 @@ const TAB_HINT={
   cycle:'주기로 담깁니다 · 이발',
   rec  :'기록으로 담깁니다 · 달리기 4.8km',
   cal  :'메모로 담깁니다 · 오늘 있었던 일',
+  pray :'봉해서 띄웁니다 · 이미 그렇게 된 것처럼 한 문장',
 };
 function applyTab(p){
   const c=TAB_CAT[state.tab];
@@ -1498,8 +1672,12 @@ function vAll(){
     '<button class="pill" data-act="toggle" data-k="archive" aria-pressed="'+state.archive+'">보관함까지 보기</button>'+
     '<button class="pill" data-act="askk" data-k="review">✎ 한 시기 되짚기</button>'+
     '<button class="pill" data-act="askk" data-k="tidy">✎ 분류 손보기</button></div>';
-  h+='<section><h2>전체<span class="aside">'+arr.length+(state.q?' / “'+esc(state.q)+'”':'')+'</span></h2>'+
-     listHTML(arr,{showCat:true,groupByMonth:true,empty:'찾는 것이 없습니다.'})+'</section>';
+  h+='<section><h2>전체<span class="aside">'+arr.length+(state.q?' / '+esc(state.q):'')+'</span></h2>'+
+     listHTML(arr,{showCat:true,groupByMonth:true,empty:'찾는 것이 없습니다. 낱말을 줄이거나 따옴표·제외를 풀어 보세요.'})+'</section>';
+  if(state.q)
+    h+='<div class="trace">낱말을 띄우면 <b>모두</b> 든 것 · '+
+       '<b>-낱말</b> 빼기 · <b>"두 낱말"</b> 붙은 그대로 · <b>가|나</b> 둘 중 하나 · '+
+       '<b>#갈래</b> <b>@사람</b> <b>분류:할일</b> <b>2026-08</b> <b>&gt;10000</b></div>';
   return h;
 }
 function vSet(){
@@ -1556,6 +1734,32 @@ function vSet(){
      '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
      '일정을 <b>마감으로</b> 삼으면 오늘 화면 일정 아래에 서서 마감일까지 매일 나타납니다. '+
      '<b>오늘 몫</b>으로 그날 한 일을 오늘 날짜의 메모로 남기고, 마감일이 되면 마쳤는지 새 날짜를 잡을지 고릅니다.'+
+     '</div></section>';
+  h+='<section><h2>기도</h2><div class="empty">'+
+     '바라는 것을 <b>이미 그렇게 된 것처럼</b> 한 문장으로 적고, 언제 열지 고릅니다. '+
+     '이레·한 달·석 달·백일·한 해·세 해 뒤 가운데 고르거나 날짜를 직접 잡으면 됩니다.<br><br>'+
+     '봉하고 나면 <b>그날까지 어디에도 보이지 않습니다</b> — 목록에도, 달력에도, 찾기에도, 물음에 실리는 자료에도. '+
+     '기도 탭에는 몇 개가 떠 있고 가장 가까운 것이 언제 오는지만 보입니다.<br><br>'+
+     '그날이 오면 오늘 화면 맨 위에 섭니다. 셋 가운데 고르시면 됩니다.<br>'+
+     '<b>실현</b> — 무엇이 이것을 오게 했는지 적어 그 날짜의 메모로 남깁니다.<br>'+
+     '<b>다시</b> — 고쳐 말하고 다시 봉합니다. 지난 문장은 대(代)로 아래에 쌓입니다.<br>'+
+     '<b>지움</b> — 그냥 보냅니다.<br><br>'+
+     '적어두고 잊기 위한 자리라 미리 보는 것을 권하지 않습니다만, 기도 탭에 「봉인 열어 보기」를 두었습니다.'+
+     '</div></section>';
+  h+='<section><h2>찾는 법</h2><div class="empty">'+
+     '<span style="font-family:var(--mono);font-size:12px;line-height:2.1">'+
+     '김편집 신촌 &nbsp;— 둘 다 든 것<br>'+
+     '"생활성서 마감" &nbsp;— 붙은 그대로<br>'+
+     '원고 -강연 &nbsp;— 원고는 들고 강연은 안 든 것<br>'+
+     '치과|병원 &nbsp;— 둘 중 하나<br>'+
+     '#요약 &nbsp;@김편집 &nbsp;— 갈래와 사람<br>'+
+     '분류:할일 &nbsp;분류:금전 &nbsp;— 그 분류만<br>'+
+     '2026-08 &nbsp;2026-08-13 &nbsp;— 그 달, 그 날<br>'+
+     '&gt;100000 &nbsp;&lt;5000 &nbsp;— 금액이 그보다 크거나 작은 것<br>'+
+     '마감 &nbsp;루틴 &nbsp;완료 &nbsp;고정 &nbsp;보관 &nbsp;링크 &nbsp;— 표시로도 찾힘'+
+     '</span><br><br>'+
+     '섞어 쓸 수 있습니다. <b>분류:금전 2026-07 &gt;50000 -조정</b> 은 7월에 오간 5만원 넘는 돈에서 잔액 조정을 뺀 것입니다.<br>'+
+     '본문·갈래·사람·날짜·수입지출 갈래·단위·분류 이름을 모두 훑습니다. 대소문자는 가리지 않습니다.'+
      '</div></section>';
   h+='<section><h2>링크 걸기</h2><div class="empty">'+
      '어느 분류든 상관없이, 링크를 문장에 붙여 두면 눌러서 바로 엽니다. '+
@@ -1798,7 +2002,7 @@ function bRef(r){
 
 /* ─ 회고 ─ */
 function bReview(r){
-  const arr=E.filter(e=>inR(eDate(e),r)&&!e.archived).sort((a,b)=>eDate(a)<eDate(b)?-1:1);
+  const arr=E.filter(e=>inR(eDate(e),r)&&!e.archived&&!sealedP(e)).sort((a,b)=>eDate(a)<eDate(b)?-1:1);
   if(!arr.length) return null;
   const span=(r.from&&r.to)? Math.round((dObj(r.to)-dObj(r.from))/86400000)+1 : 9999;
   let s=HEAD+'# 자료 · '+r.label+'의 기록 전부\n'+arr.length+'건'+(span<9999?' · '+span+'일':'')+'\n\n';
@@ -2013,7 +2217,46 @@ function buildAsk(kind,range){
   promptSheet(a.name+(a.ranged?' · '+r.label:''), t);
 }
 
-const VIEWS={today:vToday,todo:vTodo,plan:vPlan,money:vMoney,ref:vRef,cycle:vCycle,rec:vRec,cal:vCal,ask:vAsk,all:vAll,set:vSet};
+function vPray(){
+  const q=state.q;
+  const arrived=prayArrived().filter(e=>match(e,q));
+  const waiting=prayWaiting().filter(e=>match(e,q));
+  const sealedL=praySealed().sort((a,b)=>a.date<b.date?-1:1);
+  const done=prayDone().filter(e=>match(e,q));
+  let h='';
+  if(arrived.length)
+    h+='<section><h2>도래한 기도<span class="aside">✧ '+arrived.length+'</span></h2>'+
+       arrived.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+  if(waiting.length)
+    h+='<section><h2>아직 봉하지 않은 것<span class="aside">'+waiting.length+'</span></h2>'+
+       waiting.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+
+  h+='<section><h2>바다에 떠 있는 것<span class="aside">◌ '+sealedL.length+'</span></h2>';
+  if(!sealedL.length)
+    h+='<div class="empty">아래에 한 문장을 적으면 언제 열지 묻습니다. '+
+       '봉하고 나면 그날까지 어디에도 보이지 않습니다 — 목록에도, 달력에도, 찾기에도.<br>'+
+       '이미 그렇게 된 것처럼 적으시는 편이 좋습니다.</div>';
+  else{
+    const next=sealedL[0];
+    h+='<div class="trace">가장 가까운 것이 '+fmtD(next.date,true)+'에 옵니다 · '+fmtDD(dday(next.date))+
+       (sealedL.length>1? ' · 그 뒤로 '+(sealedL.length-1)+'개':'')+'</div>';
+    h+='<div class="rgrid" style="gap:4px;margin:10px 0 4px">'+
+       sealedL.slice(0,60).map(()=>'<i style="width:11px;height:11px;border-radius:50%"></i>').join('')+'</div>';
+    if(state.peek)
+      h+=sealedL.map(e=>itemHTML(e,{hideStamp:true})).join('');
+    h+='<div class="pills" style="margin-top:12px">'+
+       '<button class="pill" data-act="toggle" data-k="peek" aria-pressed="'+state.peek+'">'+
+       (state.peek?'다시 덮기':'봉인 열어 보기')+'</button></div>'+
+       (state.peek?'<div class="trace">적어두고 잊기 위한 자리입니다. 보고 나면 다시 덮으세요.</div>':'');
+  }
+  h+='</section>';
+
+  if(done.length)
+    h+='<section><h2>실현된 것<span class="aside">'+done.length+'</span></h2>'+
+       listHTML(done,{hideStamp:true})+'</section>';
+  return h;
+}
+const VIEWS={today:vToday,todo:vTodo,plan:vPlan,money:vMoney,ref:vRef,cycle:vCycle,rec:vRec,cal:vCal,pray:vPray,ask:vAsk,all:vAll,set:vSet};
 
 /* ═══════════════ 9. 렌더 ═══════════════ */
 function counts(){
@@ -2021,6 +2264,7 @@ function counts(){
   c.todo=byCat('todo').filter(e=>!e.done).length;
   c.plan=byCat('plan').filter(e=>e.date&&dday(e.date)>=0).length;
   c.cycle=cycleGroups().filter(g=>g.next&&dday(g.next)<=0).length;
+  c.pray=prayArrived().length+prayWaiting().length;
   return c;
 }
 function renderNav(){
@@ -2128,6 +2372,9 @@ $view.addEventListener('click',async e=>{
     await put(ent); render(); return;
   }
   if(act==='fin')  return finishItem(ent);
+  if(act==='pfin')   return prayFulfill(ent);
+  if(act==='pagain') return prayAgain(ent);
+  if(act==='pseal')  return sealSheet(ent);
   if(act==='prog') return progressSheet(ent);
   if(act==='dl'){
     ent.dl=!ent.dl; if(ent.dl) ent.hist=ent.hist||[];
