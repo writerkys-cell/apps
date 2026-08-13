@@ -178,37 +178,44 @@ ul.scraps li:hover button{opacity:1}
 .box.closed .lid{transform:none}
 .box.open .lid{transform:rotateX(115deg) translateY(-6px)}
 
-/* 두께 */
-.towers{
-  display:grid;grid-template-columns:1fr 1fr;gap:26px;
-  margin:44px 0 10px;padding-top:26px;border-top:1px solid var(--line);
+/* 날마다 쌓기 */
+.grid{margin:44px 0 10px;padding-top:26px;border-top:1px solid var(--line)}
+.grid h3{
+  font-size:13px;letter-spacing:.16em;color:var(--ink-2);
+  margin:0 0 18px;font-weight:400;
 }
-.tower{}
-.tower .tname{font-size:12.5px;letter-spacing:.1em;color:var(--ink-2);margin-bottom:2px}
-.tower .tmm{font-size:27px;font-variant-numeric:tabular-nums;letter-spacing:.01em}
-.tower .tmm em{font-style:normal;font-size:13px;color:var(--ink-3);margin-left:3px}
-.tower .tsub{font-size:12px;color:var(--ink-3);margin-bottom:16px}
-.stackwrap{height:250px;display:flex;align-items:flex-end;padding-left:14px}
-.stack{position:relative;width:150px}
-.stack .top{
-  height:15px;margin-left:0;transform:skewX(-58deg);transform-origin:bottom left;
-  background:var(--paper-hi);border:1px solid var(--line);border-bottom:0;
+.gscroll{overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+.gdays{display:flex;gap:3px;min-width:min-content;align-items:flex-end}
+.gday{display:flex;flex-direction:column;gap:3px;flex:0 0 auto}
+.gday .c{
+  width:12px;height:12px;border-radius:2px;
+  border:1px solid rgba(42,38,34,.13);background:transparent;
 }
-.stack .side{
-  border:1px solid var(--line);
-  background:
-    repeating-linear-gradient(to bottom,
-      #FBF8F1 0 1.1px, rgba(42,38,34,.16) 1.1px 1.7px, #EFE9DB 1.7px 2.6px);
-  transition:height .7s cubic-bezier(.2,.8,.2,1);
-  box-shadow:0 3px 8px rgba(42,38,34,.10);
+.gday .c.on{border-color:transparent}
+.c.on.s5{background:rgba(42,38,34,.16)}
+.c.on.s4{background:rgba(42,38,34,.30)}
+.c.on.s3{background:rgba(42,38,34,.46)}
+.c.on.s2{background:rgba(42,38,34,.62)}
+.c.on.s1{background:rgba(42,38,34,.80)}
+.gday .gdate{
+  font-style:normal;font-size:9px;line-height:1;margin-top:4px;
+  text-align:center;color:var(--ink-3);font-variant-numeric:tabular-nums;
 }
-.stack .none{
-  border-top:1px dashed var(--line);height:0;
+.gday.first .gdate{color:var(--ink-2)}
+.gday.today .gdate{color:var(--seal)}
+.gday.today .c{border-color:rgba(163,58,46,.30)}
+.gday.today .c.on{border-color:transparent}
+.glegend{
+  display:flex;align-items:center;gap:14px;margin-top:14px;
+  font-size:11px;color:var(--ink-3);letter-spacing:.02em;
 }
-.stack .todaymark{
-  position:absolute;left:-14px;width:9px;background:var(--seal);
-  transition:height .7s cubic-bezier(.2,.8,.2,1), bottom .7s;
+.glegend .grow{flex:1}
+.glegend .lg{display:inline-flex;align-items:center;gap:5px;margin-right:11px}
+.glegend .lg i{
+  width:9px;height:9px;border-radius:2px;display:inline-block;
+  border:1px solid rgba(42,38,34,.13);
 }
+.gempty{font-size:13px;color:var(--ink-3);padding:8px 0}
 
 /* 서고 */
 .archive{margin-top:44px;padding-top:22px;border-top:1px solid var(--line)}
@@ -315,33 +322,20 @@ select.ptsel{
 
   <main id="stage"></main>
 
-  <section class="towers">
-    <div class="tower">
-      <div class="tname">모닝페이지 바인더</div>
-      <div class="tmm" id="mpMM">0.0<em>mm</em></div>
-      <div class="tsub" id="mpSub">0장</div>
-      <div class="stackwrap"><div class="stack">
-        <div class="todaymark" id="mpToday"></div>
-        <div class="top" id="mpTop"></div>
-        <div class="side" id="mpSide"></div>
-      </div></div>
-    </div>
-    <div class="tower">
-      <div class="tname">출력 원고의 탑</div>
-      <div class="tmm" id="msMM">0.0<em>mm</em></div>
-      <div class="tsub" id="msSub">0장</div>
-      <div class="stackwrap"><div class="stack">
-        <div class="todaymark" id="msToday"></div>
-        <div class="top" id="msTop"></div>
-        <div class="side" id="msSide"></div>
-      </div></div>
+  <section class="grid">
+    <h3>날마다 쌓기</h3>
+    <div class="gscroll" id="gScroll"><div class="gdays" id="gDays"></div></div>
+    <div class="glegend">
+      <span id="gKeys"></span>
+      <span class="grow"></span>
+      <span id="gFull"></span>
     </div>
   </section>
 
   <section class="archive">
     <h3>지나간 하루</h3>
     <table class="arch"><thead>
-      <tr><th>날짜</th><th class="hide-s">모닝</th><th class="hide-s">원고</th><th>장</th><th>씨앗</th><th></th></tr>
+      <tr><th>날짜</th><th class="hide-s">모닝</th><th class="hide-s">원고</th><th>씨앗</th><th></th></tr>
     </thead><tbody id="archBody"></tbody></table>
   </section>
 
@@ -369,7 +363,6 @@ select.ptsel{
 const KEY = 'kyeo.v1';
 const DAY_START = 4;      // 새벽 4시에 하루가 바뀐다
 const SHUTDOWN  = 17;     // 오후 5시 셧다운
-const SHEET_MM  = 0.1;    // 종이 한 장 두께
 
 const STAGES = [
   {k:'mp',   n:'1', t:'모닝페이지', when:'아침'},
@@ -537,7 +530,7 @@ function sMorning(box, past){
     s.style.textAlign='center';
     s.style.padding='42px 18px';
     s.appendChild(el('p',null,'노트에 손으로 썼습니다.'));
-    const h = el('p','hint', `${day.mp.sheets}쪽 · 오늘 아침은 종이 위에서 끝냈습니다.`);
+    const h = el('p','hint', '오늘 아침은 종이 위에서 끝냈습니다.');
     h.style.marginBottom='0';
     s.appendChild(h);
     box.appendChild(s);
@@ -569,10 +562,10 @@ function sMorning(box, past){
     const bClose = el('button','btn seal','덮고 바인더에 꽂기');
     bClose.disabled = !ta.value.trim();
     ta.addEventListener('input', ()=>{ bClose.disabled = !ta.value.trim(); });
-    bClose.onclick = ()=> askSheets(box, 'mp', ta.value, '', false);
+    bClose.onclick = ()=> confirmStep(box, 'mp', false);
     bar.append(bPrint, bClose);
   }else{
-    bar.append(el('span','hint', `덮었습니다 · 바인더에 ${day.mp.sheets}장`));
+    bar.append(el('span','hint', '덮었습니다.'));
   }
   box.appendChild(bar);
 
@@ -582,7 +575,7 @@ function sMorning(box, past){
     foot.appendChild(el('span','hint','덮으면 다시 열 수 없습니다. 그게 이 단계의 전부입니다.'));
     foot.appendChild(el('span','grow'));
     const bHand = el('button','btn ghost','노트에 손으로 썼음');
-    bHand.onclick = ()=> askSheets(box, 'mp', '', '', true);
+    bHand.onclick = ()=> confirmStep(box, 'mp', true);
     foot.appendChild(bHand);
     box.appendChild(foot);
   }
@@ -647,10 +640,10 @@ function sTyping(box, past){
     const bNext = el('button','btn seal','원고 들고 나가기');
     bNext.disabled = !ta.value.trim();
     ta.addEventListener('input', ()=>{ bNext.disabled = !ta.value.trim(); });
-    bNext.onclick = ()=> askSheets(box, 'ms', ta.value, pseed);
+    bNext.onclick = ()=> confirmStep(box, 'ms', false);
     bar.append(bPrint, bNext);
   }else{
-    bar.append(el('span','hint', `탑에 ${day.ms.sheets}장`));
+    bar.append(el('span','hint', '들고 나갔습니다.'));
   }
   box.appendChild(bar);
   if(!locked) box.appendChild(el('p','hint','원고는 화면에 두는 게 아니라 종이로 들고 나갑니다. 출력한 뒤 다음으로 넘어가세요.'));
@@ -726,7 +719,7 @@ function sShut(box, past){
     b.onclick = ()=>{ bx.className='box closed'; setTimeout(closeDay, 700); };
     w.appendChild(b);
   }else{
-    const mpTxt = day.mp.byHand ? `모닝 손글씨 ${day.mp.sheets}쪽` : `모닝 ${day.mp.text.length.toLocaleString()}자`;
+    const mpTxt = day.mp.byHand ? '모닝 손글씨' : `모닝 ${day.mp.text.length.toLocaleString()}자`;
     const s = el('p','hint',`${day.closedAt}에 닫음 · ${mpTxt} · 원고 ${day.ms.text.length.toLocaleString()}자 · 조각 ${day.scraps.length}`);
     w.appendChild(s);
     const b = el('button','btn ghost','밤으로');
@@ -769,33 +762,31 @@ function sSeed(box, past){
 }
 
 /* ══════════ 단계 이동 · 장수 확정 ══════════ */
-function askSheets(box, which, text, seed, hand){
+/* ══════════ 단계 이동 ══════════ */
+function confirmStep(box, which, hand){
   const old = box.querySelector('.inline-ask'); if(old) old.remove();
   const w = el('div','inline-ask');
   w.appendChild(el('span',null,
-    hand ? '노트에 쓴 쪽수' : (which==='mp' ? '바인더에 꽂은 장수' : '탑에 올린 장수')));
-  const inp = document.createElement('input');
-  inp.type='number'; inp.min='0';
-  inp.value = hand ? 3 : sheetsFor(text, seed);
-  const b = el('button','btn seal','확정');
+    hand        ? '노트에 손으로 썼습니다. 오늘 아침은 종이에서 끝냅니다.' :
+    which==='mp'? '모닝페이지를 덮습니다. 다시 열 수 없습니다.' :
+                  '원고를 종이로 들고 나갑니다. 화면에서는 잠깁니다.'));
+  const b = el('button','btn seal','그렇게');
   b.onclick = ()=>{
-    const n = Math.max(0, parseInt(inp.value||'0',10));
     if(which==='mp'){
-      day.mp.sheets=n; day.mp.closed=true; day.mp.byHand=!!hand;
-      day.stage=Math.max(day.stage,1);
+      day.mp.closed = true; day.mp.byHand = !!hand;
+      day.stage = Math.max(day.stage, 1);
+    }else{
+      day.ms.closed = true;
+      day.stage = Math.max(day.stage, 2);
     }
-    else{ day.ms.sheets=n; day.ms.closed=true; day.stage=Math.max(day.stage,2); }
-    viewing=null; save(); renderAll();
-    toast(hand ? '노트째로 쌓았습니다.' : (which==='mp' ? '덮었습니다.' : '들고 나가세요.'));
+    viewing = null; save(); renderAll();
+    toast(hand ? '노트로 끝냈습니다.' : (which==='mp' ? '덮었습니다.' : '들고 나가세요.'));
   };
   const s = el('button','btn ghost','아직');
   s.onclick = ()=> w.remove();
-  w.append(inp, b, s);
-  w.appendChild(el('span','hint',
-    hand ? '오늘 아침 실제로 채운 노트 쪽수를 적으세요.'
-         : '실제로 뽑은 장수를 적으세요. 두께는 거짓말하면 안 됩니다.'));
+  w.append(b, s);
   box.appendChild(w);
-  inp.focus(); inp.select();
+  b.focus();
 }
 
 function closeDay(){
@@ -820,34 +811,52 @@ function runShortcut(name){
 }
 function stopTimer(){ typState = 'idle'; }
 
-/* ══════════ 두께 ══════════ */
-function totals(){
-  let mp=0, ms=0;
-  Object.values(db.days).forEach(d=>{ mp += d.mp.sheets||0; ms += d.ms.sheets||0; });
-  return {mp, ms};
+/* ══════════ 날마다 쌓기 ══════════ */
+const GRID_DAYS = 56;   // 여덟 주. 리듬이 보이면서 한 화면에 들어가는 길이
+
+function stageDoneOf(d, i){
+  if(i===0) return !!d.mp.closed;
+  if(i===1) return !!d.ms.closed;
+  if(i===2) return (d.stage||0) > 2;
+  if(i===3) return !!d.closedAt;
+  if(i===4) return !!d.seed;
+  return false;
 }
-function renderTowers(){
-  const t = totals();
-  paintTower('mp', t.mp, day.mp.sheets||0);
-  paintTower('ms', t.ms, day.ms.sheets||0);
+function stackOf(d){
+  let n = 0;
+  for(let i=0;i<5;i++) if(stageDoneOf(d,i)) n++;
+  return n;
 }
-function paintTower(id, sheets, todaySheets){
-  const mm = sheets*SHEET_MM;
-  $('#'+id+'MM').innerHTML = mm.toFixed(1)+'<em>mm</em>';
-  $('#'+id+'Sub').textContent = sheets.toLocaleString()+'장' + (todaySheets? ` · 오늘 +${todaySheets}` : '');
-  const maxH = 210;
-  const scale = Math.min(1, maxH / Math.max(1, sheets*2.6));
-  const h = Math.min(maxH, sheets*2.6);
-  const side = $('#'+id+'Side');
-  side.style.height = h+'px';
-  side.style.borderTop = sheets? '1px solid var(--line)' : '1px dashed var(--line)';
-  const tp = $('#'+id+'Top');
-  tp.style.opacity = sheets? 1 : .35;
-  const mark = $('#'+id+'Today');
-  const mh = Math.min(maxH, todaySheets*2.6*scale);
-  mark.style.height = mh+'px';
-  mark.style.bottom = '0px';
-  mark.style.opacity = todaySheets? .85 : 0;
+function renderGrid(){
+  const track = $('#gDays'), scroll = $('#gScroll');
+
+  const [ty,tm,td] = TODAY.split('-').map(Number);
+  const end = new Date(ty, tm-1, td);
+  let start = new Date(end); start.setDate(end.getDate() - (GRID_DAYS-1));
+  const keys = Object.keys(db.days).sort();
+  if(keys.length){                       // 첫 기록 이전은 그리지 않는다
+    const [fy,fm,fd] = keys[0].split('-').map(Number);
+    const first = new Date(fy, fm-1, fd);
+    if(first > start) start = first;
+  }
+
+  const out = []; let full = 0;
+  for(const d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+    const k = ymd(d), rec = db.days[k];
+    const n = rec ? stackOf(rec) : 0;
+    if(n === 5) full++;
+    let cells = '';
+    for(let lv=5; lv>=1; lv--) cells += `<span class="c${n>=lv ? ' on s'+lv : ''}"></span>`;
+    const cls = (k===TODAY ? ' today' : '') + (d.getDate()===1 ? ' first' : '');
+    out.push(`<div class="gday${cls}">${cells}<em class="gdate">${d.getDate()}</em></div>`);
+  }
+  track.innerHTML = out.join('');
+  scroll.scrollLeft = scroll.scrollWidth;   // 오늘이 오른쪽 끝
+
+  $('#gKeys').innerHTML = STAGES.map((s,i)=>
+    `<span class="lg"><i class="on s${i+1}" style="background:rgba(42,38,34,${[.80,.62,.46,.30,.16][i]});border-color:transparent"></i>${s.t.split(' ')[0]}</span>`
+  ).join('');
+  $('#gFull').textContent = full ? `다섯 칸 다 채운 날 ${full}` : '';
 }
 
 /* ══════════ 서고 ══════════ */
@@ -856,7 +865,7 @@ function renderArchive(){
   const tb = $('#archBody'); tb.innerHTML='';
   const keys = Object.keys(db.days).sort().reverse().filter(k=>k!==TODAY);
   if(!keys.length){
-    const tr = el('tr','empty'); const td = el('td',null,'아직 지나간 하루가 없습니다.'); td.colSpan=6; tr.appendChild(td); tb.appendChild(tr);
+    const tr = el('tr','empty'); const td = el('td',null,'아직 지나간 하루가 없습니다.'); td.colSpan=5; tr.appendChild(td); tb.appendChild(tr);
     return;
   }
   keys.slice(0,60).forEach(k=>{
@@ -866,7 +875,6 @@ function renderArchive(){
     tr.appendChild(el('td','num', `${M}.${D}`));
     const a = el('td','num hide-s', d.mp.byHand ? '손' : (d.mp.text.length||0).toLocaleString()); tr.appendChild(a);
     const b = el('td','num hide-s', (d.ms.text.length||0).toLocaleString()); tr.appendChild(b);
-    tr.appendChild(el('td','num', ((d.mp.sheets||0)+(d.ms.sheets||0))+''));
     tr.appendChild(el('td','seed', d.seed || '—'));
     const td6 = el('td');
     const btn = el('button','arch-open','열기');
@@ -876,7 +884,7 @@ function renderArchive(){
 
     if(openRow===k){
       const dr = el('tr','arch-detail');
-      const td = el('td'); td.colSpan=6;
+      const td = el('td'); td.colSpan=5;
       td.appendChild(el('div',null, d.ms.text || '(원고 없음)'));
       if(d.scraps && d.scraps.length){
         const s = el('div',null, '\n조각 — ' + d.scraps.map(x=>x.v).join(' / '));
@@ -1043,7 +1051,7 @@ $('#fileIn').onchange = e => {
 };
 
 /* ══════════ 실행 ══════════ */
-function renderAll(){ renderOrbit(); renderStage(); renderTowers(); renderArchive(); }
+function renderAll(){ renderOrbit(); renderStage(); renderGrid(); renderArchive(); }
 tick(); renderAll();
 /* 본문 서체가 실제로 로드된 뒤에 장수를 다시 센다 */
 if(document.fonts && document.fonts.ready){
