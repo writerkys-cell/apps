@@ -36,14 +36,15 @@
     font-size:14.5px;padding:7px 16px;color:#26241f;
   }
   .addrow button:active{background:#26241f;color:#fdfcf9}
-  #authorToggle{padding:7px 12px;font-size:14px;border-color:#c9c5b8;color:#8d897c}
-  #authorToggle.on{border-color:#26241f;color:#26241f;background:#f4f1e6}
-  .authorrow{margin:0 0 6px}
-  .authorrow input{
-    width:100%;border:none;border-bottom:1.5px dashed #c9c5b8;background:transparent;
+  .addmeta{display:flex;gap:12px;margin:0 0 6px}
+  .addmeta input{
+    border:none;border-bottom:1.5px dashed #c9c5b8;background:transparent;
     font-size:14px;padding:7px 2px;outline:none;border-radius:0;color:#5d594d;
   }
-  .authorrow input::placeholder{color:#c2beb2}
+  .addmeta #addAuthor{flex:1;min-width:0}
+  .addmeta #addTotal{width:76px;text-align:center;font-variant-numeric:tabular-nums}
+  .addmeta input::placeholder{color:#c2beb2}
+  .addmeta input.need{border-bottom-color:#c9a227;border-bottom-style:solid}
 
   /* ── 상단 패널 ── */
   .panel{
@@ -59,6 +60,10 @@
   .panel .hist{font-size:12px;color:#a39f91;margin-top:6px;font-variant-numeric:tabular-nums}
   .panel .hist:empty{display:none}
   .panel .hist b{color:#8a6d00;font-weight:600}
+  .panel .bar{
+    margin-top:10px;height:3px;border-radius:2px;background:#ece8dc;overflow:hidden;
+  }
+  .panel .bar i{display:block;height:100%;background:#26241f;border-radius:2px}
   .panel .tnote{font-size:12px;color:#a39f91;margin-top:9px;line-height:1.5}
   .panel .pacts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
   .panel .pacts button{
@@ -80,9 +85,16 @@
     padding:2px 14px;box-shadow:0 1px 4px rgba(40,35,20,.05);
   }
   .row{
-    border-bottom:1px solid #ebe7db;min-height:46px;
+    border-bottom:1px solid #ebe7db;min-height:46px;position:relative;
     display:flex;align-items:center;padding:9px 2px;gap:2px;
   }
+  .prog{
+    position:absolute;left:0;bottom:-1px;height:2.5px;border-radius:2px;
+    background:#57544a;pointer-events:none;
+  }
+  .done .prog,.cont .prog{background:#c9c5b8}
+  .dismissed .prog{background:#d9b93a;opacity:.7}
+  .item.current .prog{background:#26241f;height:3px}
   .row:last-child{border-bottom:none}
   .row.blank{min-height:46px}
   .dotcell{width:26px;flex:none;position:relative;height:22px}
@@ -174,6 +186,9 @@
   .sheet .sheet-acts button{flex:1;font-size:15px;padding:12px;border-radius:12px;border:1.5px solid #26241f;background:none;color:#26241f}
   .sheet .sheet-acts button.primary{background:#26241f;color:#fdfcf9}
   .sheet .sheet-acts button.danger{border-color:#b5462f;color:#b5462f;flex:0 0 auto;padding:12px 16px}
+  .trow{display:flex;align-items:center;gap:10px;margin-top:14px}
+  .trow span{font-size:12.5px;color:#8d897c;flex:none}
+  .trow input{flex:1;border-bottom-color:#c9a227}
   .hintrow{margin-top:10px;font-size:12px;color:#8d897c;min-height:18px}
   .hintrow b{color:#26241f;font-weight:600}
 
@@ -282,11 +297,11 @@
 
   <div class="addrow">
     <input id="addInput" type="text" placeholder="읽을 책 추가…" enterkeyhint="next" autocomplete="off">
-    <button id="authorToggle" title="지은이">✎</button>
     <button id="addBtn">추가</button>
   </div>
-  <div class="authorrow" id="authorRow" hidden>
-    <input id="addAuthor" type="text" placeholder="지은이 (비워도 됩니다)" enterkeyhint="done" autocomplete="off">
+  <div class="addmeta">
+    <input id="addAuthor" type="text" placeholder="지은이" enterkeyhint="next" autocomplete="off">
+    <input id="addTotal" type="text" inputmode="numeric" placeholder="총 쪽" enterkeyhint="done" autocomplete="off">
   </div>
 
   <div class="panel" id="panel"></div>
@@ -321,6 +336,10 @@
     <h3 id="contTitle">어디까지 읽었나요?</h3>
     <p id="contDesc"></p>
     <input id="contInput" type="text" inputmode="numeric" enterkeyhint="done" autocomplete="off" placeholder="쪽">
+    <div class="trow" id="contTotalRow" hidden>
+      <span>총 쪽</span>
+      <input id="contTotal" type="text" inputmode="numeric" autocomplete="off" placeholder="이 책의 마지막 쪽">
+    </div>
     <div class="hintrow" id="contHint"></div>
     <div class="sheet-acts">
       <button id="contCancel">취소</button>
@@ -336,7 +355,9 @@
     <p>제목과 지은이를 고칩니다.</p>
     <input id="infoTitle" type="text" placeholder="제목" enterkeyhint="next" autocomplete="off">
     <div style="height:12px"></div>
-    <input id="infoAuthor" type="text" placeholder="지은이" enterkeyhint="done" autocomplete="off">
+    <input id="infoAuthor" type="text" placeholder="지은이" enterkeyhint="next" autocomplete="off">
+    <div style="height:12px"></div>
+    <input id="infoTotal" type="text" inputmode="numeric" placeholder="총 쪽" enterkeyhint="done" autocomplete="off">
     <div class="sheet-acts">
       <button id="infoCancel">취소</button>
       <button class="primary" id="infoOk">저장</button>
@@ -393,10 +414,11 @@
       <li>점 찍은 책을 <b>역순</b>으로 — 마지막에 찍은 것부터 — 읽습니다.</li>
       <li><b>시작</b>을 누르면 단축어 <code>시작</code>이 실행되고 자리가 열립니다.</li>
       <li><b>문장</b>을 누르면 책 페이지가 열립니다. 입력창을 길게 눌러 <b>텍스트 스캔</b>으로 본문을 찍어 오고, 쪽수를 적고 저장하세요.</li>
-      <li><b>계속 읽기</b> — 오늘은 여기까지. 읽은 쪽수를 적으면 제목에 붙어 리스트 맨 끝에 다시 적힙니다.</li>
-      <li><b>완독</b> — 다 읽었습니다. 줄이 그어지고 기록으로 갑니다.</li>
+      <li><b>끝</b> — 오늘은 여기까지. 읽은 쪽수를 적으면 <b>총 쪽수와 견주어 저절로 갈립니다.</b> 마지막 쪽까지 읽었으면 완독, 아니면 계속 읽기.</li>
+      <li>계속 읽기가 되면 쪽수가 제목에 붙어 리스트 맨 끝에 다시 적힙니다. 완독이 되면 줄이 그어지고 기록으로 갑니다.</li>
+      <li>쪽수를 치는 동안 확인 버튼의 이름이 <b>계속 읽기</b>와 <b>완독</b> 사이를 오갑니다. 누르기 전에 어느 쪽인지 보입니다.</li>
       <li><b>포기</b> — 더 읽지 않기로 합니다. 노란 형광펜이 칠해지고 '포기한 책'으로 옮겨집니다.</li>
-      <li>계속 읽기·완독·포기를 누르면 단축어 <code>끝</code>이 실행됩니다. 두 단축어 모두 <b>책 제목</b>을 입력으로 받습니다.</li>
+      <li>끝·포기를 누르면 단축어 <code>끝</code>이 실행됩니다. 두 단축어 모두 <b>책 제목</b>을 입력으로 받습니다.</li>
     </ul>
     <h4>3. 문장</h4>
     <ul>
@@ -411,6 +433,8 @@
     </ul>
     <h4>4. 리스트</h4>
     <ul>
+      <li>책을 넣을 때 <b>총 쪽수는 반드시</b> 적어야 합니다. 완독을 가르는 기준이자 진행을 재는 자입니다.</li>
+      <li>줄 아래 굵은 밑줄이 읽은 만큼 차오릅니다. 지금 읽는 책은 패널에도 자와 퍼센트, 남은 쪽수가 함께 나옵니다.</li>
       <li>한 페이지는 10줄입니다. 새 책은 언제나 마지막 페이지 끝에 들어갑니다.</li>
       <li>더 이상 읽을 책이 없는 페이지는 자동으로 사라집니다.</li>
       <li>잘못 눌러 완독한 책도 되살릴 수 있습니다. 리스트에서 줄 그어진 책을 탭하거나, <b>기록</b>에서 <b>다시 읽기</b>를 누르세요. 기록에서 빠지고 리스트 맨 끝으로 돌아갑니다.</li>
@@ -511,6 +535,23 @@ function pageOf(id){
 function pgNum(v){
   const n=parseInt(String(v==null?'':v).replace(/[^0-9]/g,''),10);
   return isNaN(n)?null:n;
+}
+function totalOf(b){const n=pgNum(b.total);return n&&n>0?n:null;}
+// 0~1, 총 쪽을 모르면 null
+function progress(b){
+  if(b.status==='done')return 1;
+  const t=totalOf(b);if(!t)return null;
+  const p=pgNum(b.page);if(!p)return 0;
+  return Math.max(0,Math.min(1,p/t));
+}
+function pctText(b){
+  const r=progress(b);
+  return r===null?'':Math.round(r*100)+'%';
+}
+function pageText(b){
+  const t=totalOf(b),p=pgNum(b.page);
+  if(!p)return '';
+  return t?(p+'/'+t+'쪽'):(p+'쪽');
 }
 function fullTitle(b){
   return b.page?(b.title+' · '+b.page+'쪽'):b.title;
@@ -649,6 +690,7 @@ function pushToEnd(title,author,carry){
     if(carry.page)it.page=carry.page;
     if(carry.firstReadAt)it.firstReadAt=carry.firstReadAt;
     if(carry.sittings)it.sittings=carry.sittings;
+    if(carry.total)it.total=carry.total;
   }
   lp.push(it);
   return it.id;
@@ -660,19 +702,27 @@ function carryOf(it){
     quotes:it.quotes||[],
     firstReadAt:it.firstReadAt,
     sittings:it.sittings||0,
-    author:it.author||''
+    author:it.author||'',
+    total:totalOf(it)||null
   };
 }
 function addBook(){
   const inp=document.getElementById('addInput');
   const au=document.getElementById('addAuthor');
+  const tp=document.getElementById('addTotal');
   const title=inp.value.trim();
-  if(!title){inp.focus();return;}
+  tp.classList.remove('need');
+  if(!title){inp.focus();toast('제목을 적어 주세요');return;}
+  const total=pgNum(tp.value);
+  if(!total){
+    tp.classList.add('need');tp.focus();
+    toast('총 쪽수를 적어 주세요 — 완독을 가르는 기준입니다');
+    return;
+  }
   snap();
-  pushToEnd(title,au.value.trim(),null);
-  inp.value='';au.value='';
-  document.getElementById('authorRow').hidden=true;
-  document.getElementById('authorToggle').classList.remove('on');
+  const id=pushToEnd(title,au.value.trim(),null);
+  findItem(id).total=total;
+  inp.value='';au.value='';tp.value='';
   save();
   cur=state.pages.length-1;
   render();
@@ -699,23 +749,15 @@ function act(action){
   if(!it)return;
   const had=inSession();
   if(!had&&action!=='drop'){toast('먼저 시작을 누르세요');return;}
-  if(action==='cont'){
-    openContModal(it,'cont');
+  if(action==='done'){
+    openContModal(it,'finish');
     return;
   }
   snap();
   animSet.add(it.id);
   delete it.dot;
   state.session=null;
-  if(action==='done'){
-    it.status='done';
-    it.finishedAt=Date.now();
-    addRecord(it);
-    save();render();
-    toast('다 읽었습니다 — 문장 '+(it.quotes||[]).length+'개',true);
-    runShortcut(SC_END,fullTitle(it));
-    afterAct();
-  }else if(action==='drop'){
+  if(action==='drop'){
     it.status='dismissed';
     it.droppedAt=Date.now();
     save();render();
@@ -763,6 +805,7 @@ function addRecord(it){
     title:it.title,
     author:it.author||'',
     page:it.page||'',
+    total:totalOf(it)||null,
     quotes:it.quotes||[],
     startedAt:it.firstReadAt||Date.now(),
     endedAt:Date.now(),
@@ -777,11 +820,18 @@ function openContModal(book,mode){
   contCtx={book:book,mode:mode};
   const wasDone=state.records.some(r=>r.id===book.id);
   document.getElementById('contTitle').textContent=
-    mode==='cont'?'어디까지 읽었나요?':(wasDone?'다시 읽습니다':'어디부터 이어 읽나요?');
+    mode==='finish'?'어디까지 읽었나요?':(wasDone?'다시 읽습니다':'어디부터 이어 읽나요?');
+  // 총 쪽을 모르는 책(예전 데이터)이면 여기서 채운다
+  const needTotal=(mode==='finish'&&!totalOf(book));
+  const trow=document.getElementById('contTotalRow');
+  trow.hidden=!needTotal;
+  document.getElementById('contTotal').value='';
   const scOn=(state.shortcuts!==false);
+  const tt=totalOf(book);
   document.getElementById('contDesc').innerHTML=
-    esc(book.title)+(mode==='cont'
-      ?'<br>적은 쪽수가 제목에 붙어 리스트 맨 끝에 다시 적힙니다.'
+    esc(book.title)+(mode==='finish'
+      ?(tt?'<br>총 '+tt+'쪽. 마지막 쪽까지 읽었으면 완독으로, 아니면 계속 읽기로 갈립니다.'
+          :'<br>이 책의 총 쪽수를 아직 모릅니다. 아래에 적어 주세요.')
         +(scOn?'<br>확인하면 단축어 ‘끝’이 실행됩니다.':'')
       :(wasDone
         ?'<br>완독 기록에서 빼고 리스트 맨 끝으로 돌립니다. 모은 문장은 그대로 따라갑니다.'
@@ -789,18 +839,38 @@ function openContModal(book,mode){
   const inp=document.getElementById('contInput');
   inp.value=resumePage(book);
   document.getElementById('contOk').textContent=
-    mode==='cont'?'리스트 끝에 다시':(wasDone?'다시 읽기':'되살리기');
+    mode==='finish'?'계속 읽기':(wasDone?'다시 읽기':'되살리기');
   updateContHint();
   openModal(contModal);
   setTimeout(()=>{inp.focus();inp.select();},60);
 }
+// 지금 입력으로 완독이 되는가
+function willFinish(){
+  if(!contCtx||contCtx.mode!=='finish')return false;
+  const n=pgNum(document.getElementById('contInput').value);
+  const t=totalOf(contCtx.book)||pgNum(document.getElementById('contTotal').value);
+  return !!(n&&t&&n>=t);
+}
 function updateContHint(){
-  const v=document.getElementById('contInput').value.trim();
   const h=document.getElementById('contHint');
   if(!contCtx){h.textContent='';return;}
-  const n=pgNum(v);
-  h.innerHTML=n?('<b>'+esc(contCtx.book.title)+' · '+n+'쪽</b>으로 들어갑니다')
-                :'쪽수를 비워 두면 제목만 들어갑니다';
+  const n=pgNum(document.getElementById('contInput').value);
+  const btn=document.getElementById('contOk');
+  if(contCtx.mode!=='finish'){
+    h.innerHTML=n?('<b>'+esc(contCtx.book.title)+' · '+n+'쪽</b>으로 들어갑니다')
+                 :'쪽수를 비워 두면 제목만 들어갑니다';
+    return;
+  }
+  const t=totalOf(contCtx.book)||pgNum(document.getElementById('contTotal').value);
+  if(!n){h.innerHTML='읽은 쪽수를 적어 주세요.';btn.textContent='계속 읽기';return;}
+  if(!t){h.innerHTML='총 쪽수를 적어야 완독인지 갈립니다.';btn.textContent='계속 읽기';return;}
+  if(n>=t){
+    h.innerHTML='<b>완독</b> — 마지막 쪽까지 읽었습니다.';
+    btn.textContent='완독';
+  }else{
+    h.innerHTML='<b>계속 읽기</b> — '+Math.round(n/t*100)+'% · '+(t-n)+'쪽 남음';
+    btn.textContent='계속 읽기';
+  }
 }
 function confirmCont(){
   if(!contCtx)return;
@@ -811,17 +881,50 @@ function confirmCont(){
   const label=book.title+(n?' · '+n+'쪽':(book.page?' · '+book.page+'쪽':''));
   // 키보드가 내려가는 도중에는 shortcuts:// 이동이 씹힐 수 있다
   if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
+
+  if(mode==='finish'){
+    // 총 쪽을 모르던 책이면 여기서 채워 넣는다
+    const tIn=pgNum(document.getElementById('contTotal').value);
+    if(!totalOf(book)){
+      if(!tIn){toast('총 쪽수를 적어 주세요');document.getElementById('contTotal').focus();return;}
+      book.total=tIn;
+    }
+    if(!n){toast('읽은 쪽수를 적어 주세요');document.getElementById('contInput').focus();return;}
+    const t=totalOf(book);
+    snap();
+    animSet.add(book.id);
+    book.page=String(n);
+    delete book.dot;
+    state.session=null;
+    closeModal(contModal);
+    if(n>=t){
+      book.status='done';
+      book.finishedAt=Date.now();
+      addRecord(book);
+      save();
+      runShortcut(SC_END,book.title+' · 완독');
+      render();
+      toast('완독 — 문장 '+(book.quotes||[]).length+'개',true);
+    }else{
+      book.status='cont';
+      const carry2=carryOf(book);
+      carry2.page=String(n);
+      pushToEnd(book.title,book.author||'',carry2);
+      save();
+      runShortcut(SC_END,label);
+      render();
+      toast('리스트 끝에 다시 — '+Math.round(n/t*100)+'%',true);
+    }
+    afterAct();
+    contCtx=null;
+    return;
+  }
+
   snap();
   const carry=carryOf(book);
   if(n)carry.page=String(n);
   else delete carry.page;
-  if(mode==='cont'){
-    animSet.add(book.id);
-    book.status='cont';
-    book.page=n?String(n):book.page;
-    delete book.dot;
-    state.session=null;
-  }else{
+  {
     const i=state.inactive.findIndex(b=>b.id===book.id);
     if(i>=0)state.inactive.splice(i,1);
     else book.revived=true;   // 리스트에 남아 있는 항목은 표시만 하고 그대로 둔다
@@ -831,16 +934,9 @@ function confirmCont(){
   pushToEnd(book.title,book.author||'',carry);
   closeModal(contModal);
   save();
-  if(mode==='cont'){
-    runShortcut(SC_END,label);   // 쪽수를 넣고 확인한 이 순간에 실행
-    render();
-    toast('리스트 끝에 다시 적었습니다',true);
-    afterAct();
-  }else{
-    cur=state.pages.length-1;
-    render();
-    toast(wasRec?'완독을 물렸습니다 — 다시 읽는 책으로':'되살렸습니다',true);
-  }
+  cur=state.pages.length-1;
+  render();
+  toast(wasRec?'완독을 물렸습니다 — 다시 읽는 책으로':'되살렸습니다',true);
   contCtx=null;
 }
 
@@ -853,6 +949,7 @@ function openInfo(id){
   infoId=id;
   document.getElementById('infoTitle').value=b.title||'';
   document.getElementById('infoAuthor').value=b.author||'';
+  document.getElementById('infoTotal').value=totalOf(b)||'';
   openModal(infoModal);
   setTimeout(()=>document.getElementById('infoTitle').focus(),60);
 }
@@ -865,6 +962,8 @@ function saveInfo(){
   b.title=t;
   const a=document.getElementById('infoAuthor').value.trim();
   if(a)b.author=a;else delete b.author;
+  const tv=pgNum(document.getElementById('infoTotal').value);
+  if(tv)b.total=tv;else delete b.total;
   closeModal(infoModal);
   save();render();
   if(openBookId)renderBook();
@@ -1140,7 +1239,6 @@ function quoteChip(b){
 }
 function histText(b){
   const bits=[];
-  if((b.gen||1)>1)bits.push('<b>'+(b.gen)+'번째</b> 자리');
   if(b.sittings)bits.push(b.sittings+'번 펼침');
   if(b.firstReadAt)bits.push(fmtDate(b.firstReadAt)+'부터');
   return bits.join(' · ');
@@ -1152,10 +1250,9 @@ function renderPanel(){
     const ses=inSession();
     let note,btns;
     if(ses){
-      note='읽다가 걸리는 문장이 있으면 문장을 누르세요.';
+      note='덮을 때 끝을 누르고 읽은 쪽수를 적으면, 계속 읽기와 완독이 알아서 갈립니다.';
       btns='<button data-a="collect">문장</button>'
-        +'<button data-a="cont">계속 읽기</button>'
-        +'<button data-a="done">완독</button>'
+        +'<button data-a="done">끝</button>'
         +'<button data-a="drop">포기</button>';
     }else{
       note='시작을 누르면 단축어 ‘시작’이 실행되고 문장을 모을 수 있습니다.';
@@ -1163,12 +1260,16 @@ function renderPanel(){
         +'<button class="ghost" data-a="collect">문장</button>'
         +'<button data-a="drop">포기</button>';
     }
+    const r=progress(t),tt=totalOf(t),pp=pgNum(t.page);
+    const left=(tt&&pp)?(tt-pp):null;
     panel.innerHTML='<div class="cap">지금 읽는 책</div>'
       +'<div class="title">'+esc(t.title)
-        +(t.page?'<span class="au">'+esc(t.page)+'쪽부터</span>':'')
+        +(pageText(t)?'<span class="au">'+esc(pageText(t))+'부터</span>':(tt?'<span class="au">'+tt+'쪽</span>':''))
         +quoteChip(t)+'</div>'
       +(t.author?'<div class="hist">'+esc(t.author)+'</div>':'')
-      +'<div class="hist">'+histText(t)+'</div>'
+      +(r===null?'':'<div class="bar"><i style="width:'+(r*100).toFixed(1)+'%"></i></div>')
+      +'<div class="hist">'+[pctText(t),(left!==null&&left>0?left+'쪽 남음':''),histText(t)]
+          .filter(Boolean).join(' · ')+'</div>'
       +'<div class="tnote">'+note+'</div>'
       +'<div class="pacts">'+btns
       +'<span class="remain">체인 '+chain.length+'권</span></div>';
@@ -1181,8 +1282,12 @@ function renderPanel(){
       panel.innerHTML='<div class="cap">고르는 중</div>'
         +'<div class="title quiet">책을 추가하면 첫 항목에 점이 찍힙니다.</div>';
     }else{
+      const br=progress(bench);
       panel.innerHTML='<div class="cap">고르는 중 · <b>점 '+chain.length+'개</b></div>'
-        +'<div class="title">'+esc(fullTitle(bench))+quoteChip(bench)+'</div>'
+        +'<div class="title">'+esc(bench.title)
+          +(pageText(bench)?'<span class="au">'+esc(pageText(bench))+'</span>':'')
+          +quoteChip(bench)+'</div>'
+        +(br===null?'':'<div class="bar"><i style="width:'+(br*100).toFixed(1)+'%"></i></div>')
         +'<div class="ask">이걸 읽기 전에 읽고 싶은 책이 있나? — 아래로 훑으며 탭해 점을 찍으세요.</div>'
         +'<div class="pacts"><button data-a="startrun">선택 끝 → 읽기</button></div>';
     }
@@ -1238,11 +1343,14 @@ function render(){
           dotHtml+=' data-dot="'+(isCur?'cur':'on')+'" data-id="'+it.id+'"';
         }
         dotHtml+='>'+(it.dot&&it.status==='active'?'<span class="ord">'+it.dot+'</span>':'')+'</span>';
+        const r=progress(it);
         html+='<li class="'+cls.join(' ')+'" data-id="'+it.id+'" data-st="'+it.status+'">'
           +dotHtml
           +'<span class="body"><span class="txt"><span class="t">'+esc(it.title)
-            +(it.page?' <span class="pg">· '+esc(it.page)+'쪽</span>':'')
-          +'</span></span>'+quoteChip(it)+'</span></li>';
+            +(pageText(it)?' <span class="pg">· '+esc(pageText(it))+'</span>':'')
+          +'</span></span>'+quoteChip(it)+'</span>'
+          +(r!==null&&r>0?'<span class="prog" style="width:'+(r*100).toFixed(1)+'%"></span>':'')
+          +'</li>';
       });
       for(let i=pg.length;i<PAGE_SIZE;i++)html+='<li class="row blank"></li>';
     }
@@ -1337,7 +1445,8 @@ function openRecords(){
       meta.push(fmtDate(r.startedAt)+'–'+fmtDate(r.endedAt));
       meta.push(fmtSpan(r.startedAt,r.endedAt));
       if(r.sittings>1)meta.push(r.sittings+'번에 나눠');
-      if(r.page)meta.push(r.page+'쪽');
+      if(r.total)meta.push(r.total+'쪽');
+      else if(r.page)meta.push(r.page+'쪽');
       meta.push('<b>문장 '+((r.quotes||[]).length)+'</b>');
       return '<div class="rec"><div class="info" data-a="book" data-id="'+r.id+'">'
         +'<div class="rt">'+esc(r.title)+(r.author?' <span style="font-weight:400;color:#8d897c;font-size:13px">'+esc(r.author)+'</span>':'')+'</div>'
@@ -1378,19 +1487,16 @@ function importData(file){
 /* ---------- 이벤트 ---------- */
 document.getElementById('addBtn').addEventListener('click',addBook);
 document.getElementById('addInput').addEventListener('keydown',e=>{
-  if(e.key==='Enter'){e.preventDefault();
-    if(document.getElementById('authorRow').hidden)addBook();
-    else document.getElementById('addAuthor').focus();}
+  if(e.key==='Enter'){e.preventDefault();document.getElementById('addAuthor').focus();}
 });
 document.getElementById('addAuthor').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();document.getElementById('addTotal').focus();}
+});
+document.getElementById('addTotal').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();addBook();}
 });
-document.getElementById('authorToggle').addEventListener('click',()=>{
-  const row=document.getElementById('authorRow');
-  row.hidden=!row.hidden;
-  document.getElementById('authorToggle').classList.toggle('on',!row.hidden);
-  if(!row.hidden)document.getElementById('addAuthor').focus();
-});
+document.getElementById('addTotal').addEventListener('input',e=>e.target.classList.remove('need'));
+document.getElementById('contTotal').addEventListener('input',updateContHint);
 
 panel.addEventListener('click',e=>{
   const btn=e.target.closest('button[data-a]');
