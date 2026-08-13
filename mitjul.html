@@ -153,9 +153,19 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
   #toast button{border:none;background:none;color:#ffdf4d;font-size:13.5px;font-weight:600;padding:0}
 
-  .modal{position:fixed;inset:0;background:rgba(30,28,22,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+  .modal{
+    position:fixed;inset:0;background:rgba(30,28,22,.45);
+    display:flex;align-items:flex-end;justify-content:center;z-index:50;
+    padding-bottom:var(--kb,0px);
+  }
   .modal.hidden{display:none}
-  .sheet{background:#fdfcf9;border-radius:18px 18px 0 0;width:100%;max-width:540px;padding:24px 22px calc(28px + env(safe-area-inset-bottom))}
+  .sheet{
+    background:#fdfcf9;border-radius:18px 18px 0 0;width:100%;max-width:540px;
+    padding:24px 22px calc(28px + env(safe-area-inset-bottom));
+    max-height:calc(var(--vvh,100vh) - 24px);overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .modal.kbup .sheet{padding-bottom:20px}
   .sheet h3{font-size:16px;margin-bottom:6px}
   .sheet p{font-size:13px;color:#8d897c;margin-bottom:16px;line-height:1.6}
   .sheet input{width:100%;border:none;border-bottom:1.5px solid #26241f;background:transparent;font-size:16px;padding:8px 2px;outline:none;border-radius:0;color:#26241f}
@@ -167,7 +177,7 @@
   .hintrow b{color:#26241f;font-weight:600}
 
   /* ── 책 페이지 ── */
-  #bookSheet .sheet{max-height:92vh;overflow-y:auto;padding-top:18px}
+  #bookSheet .sheet{padding-top:18px}
   .bk-head{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
   .bk-head .bt{font-size:19px;font-weight:600;line-height:1.35;word-break:break-word;flex:1}
   .bk-head .edit{border:none;background:none;font-size:12px;color:#a39f91;padding:4px 2px;text-decoration:underline;text-underline-offset:3px}
@@ -218,7 +228,7 @@
     font-size:13.5px;line-height:1.7;color:#6b6759;white-space:pre-wrap;word-break:break-word;
   }
   .qempty{padding:30px 8px;text-align:center;color:#b7b3a7;font-size:13.5px;line-height:1.9}
-  .bk-foot{display:flex;gap:10px;margin-top:20px}
+  .bk-foot{display:flex;gap:10px;margin:0 0 18px}
   .bk-foot button{flex:1;font-size:14.5px;padding:11px;border-radius:12px;border:1.5px solid #26241f;background:none;color:#26241f}
   .bk-foot button.primary{background:#26241f;color:#fdfcf9}
   .bk-count{font-size:11.5px;letter-spacing:.1em;color:#a39f91;margin:2px 0 8px}
@@ -235,7 +245,7 @@
   #qEditSheet #qEditNote{min-height:80px;font-size:15px}
 
   /* ── 기록 ── */
-  #recSheet .sheet{max-height:82vh;overflow-y:auto}
+
   .recsum{display:flex;gap:18px;padding:12px 14px;margin-bottom:14px;background:#f4f1e6;border-radius:10px}
   .recsum div{flex:1}
   .recsum .k{font-size:10.5px;color:#a39f91;letter-spacing:.08em}
@@ -251,7 +261,7 @@
   .rec .del:active{background:#f4f1e6}
   .recempty{padding:32px 8px;text-align:center;color:#b7b3a7;font-size:13.5px;line-height:1.8}
 
-  #helpSheet .sheet{max-height:78vh;overflow-y:auto}
+
   #helpSheet h4{font-size:13.5px;margin:14px 0 4px}
   #helpSheet li{font-size:13px;color:#5d594d;line-height:1.7;margin-left:18px}
   #helpSheet code{font-size:12px;color:#8a6d00}
@@ -899,6 +909,9 @@ function renderBook(){
     +(noteOpen?'<div class="notewrap"><textarea id="qNote" placeholder="이 문장에 대해 남길 말"></textarea></div>':'')
     +'<div class="scanhint">입력창을 길게 눌러 <b>텍스트 스캔</b>을 고르면 카메라가 열립니다. 문장을 탭하면 나중에 코멘트를 붙일 수 있습니다.</div>'
     +'</div>';
+  h+='<div class="bk-foot">'
+    +'<button data-a="copy">복사</button>'
+    +'<button class="primary" data-a="closebook">닫기</button></div>';
   h+='<div class="bk-count">모은 문장 '+qs.length+'개</div>';
   h+='<div class="qlist">';
   if(!qs.length){
@@ -913,9 +926,6 @@ function renderBook(){
     });
   }
   h+='</div>';
-  h+='<div class="bk-foot">'
-    +'<button data-a="copy">복사</button>'
-    +'<button class="primary" data-a="closebook">닫기</button></div>';
   bookBody.innerHTML=h;
 }
 function saveQuote(){
@@ -1268,9 +1278,34 @@ function toast(msg,withUndo){
   toastTimer=setTimeout(()=>toastEl.classList.remove('show'),withUndo?4500:2200);
 }
 
-/* ---------- 모달 ---------- */
-function openModal(m){m.classList.remove('hidden');}
+/* ---------- 모달 · 키보드 ---------- */
+function openModal(m){m.classList.remove('hidden');fitViewport();}
 function closeModal(m){m.classList.add('hidden');}
+
+// 아이폰 키보드가 올라오면 시트를 그만큼 띄우고, 포커스된 칸을 화면 안으로 끌어온다.
+const vv=window.visualViewport||null;
+function fitViewport(){
+  const root=document.documentElement;
+  const h=vv?vv.height:window.innerHeight;
+  const kb=vv?Math.max(0,window.innerHeight-vv.height-vv.offsetTop):0;
+  root.style.setProperty('--vvh',h+'px');
+  root.style.setProperty('--kb',(kb>90?kb:0)+'px');
+  document.querySelectorAll('.modal').forEach(m=>m.classList.toggle('kbup',kb>90));
+}
+if(vv){vv.addEventListener('resize',fitViewport);vv.addEventListener('scroll',fitViewport);}
+window.addEventListener('orientationchange',()=>setTimeout(fitViewport,250));
+function bringIntoView(el){
+  if(!el||!el.scrollIntoView)return;
+  setTimeout(()=>{
+    fitViewport();
+    try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){el.scrollIntoView();}
+  },260);
+}
+document.addEventListener('focusin',e=>{
+  const f=e.target;
+  if(!f.closest||!f.closest('.modal'))return;
+  if(f.tagName==='TEXTAREA'||f.tagName==='INPUT')bringIntoView(f);
+});
 
 /* ---------- 기록 ---------- */
 function openRecords(){
@@ -1428,7 +1463,11 @@ bookBody.addEventListener('click',e=>{
       renderBook();
       document.getElementById('qInput').value=keep.t;
       document.getElementById('qPage').value=keep.p;
-      if(noteOpen)document.getElementById('qNote').focus();
+      if(noteOpen){
+        const nt=document.getElementById('qNote');
+        nt.focus();
+        bringIntoView(nt);
+      }
     }
     else if(a==='copy')copyBook();
     else if(a==='info')openInfo(openBookId);
@@ -1478,6 +1517,7 @@ document.getElementById('importFile').addEventListener('change',e=>{
   document.getElementById('dateLabel').textContent=(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+days[d.getDay()]+')';
   const t=currentTask();
   if(state.phase==='run'&&t){const p=pageOf(t.id);if(p>=0)cur=p;}
+  fitViewport();
   render();
 })();
 </script>
