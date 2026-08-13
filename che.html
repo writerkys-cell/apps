@@ -84,6 +84,12 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .mk:hover{color:var(--seal);background:var(--paper2)}
 .bd{flex:1;min-width:0}
 .tx{word-break:break-word;white-space:pre-wrap}
+.tx a.tl{color:inherit;border-bottom:1px solid var(--line2);text-decoration:none}
+.tx a.tl::after{content:'↗';font-family:var(--mono);font-size:9px;color:var(--ink3);
+  vertical-align:2px;margin-left:3px;border:none}
+.tx a.tl:hover,.tx a.tl:focus{color:var(--seal);border-bottom-color:var(--seal)}
+.tx a.tl:hover::after{color:var(--seal)}
+.it.done .tx a.tl{color:var(--ink3)}
 .it.done .tx{color:var(--ink3);text-decoration:line-through;text-decoration-color:var(--line2)}
 .mt{font-family:var(--mono);font-size:11px;color:var(--ink3);letter-spacing:.02em;
   margin-top:2px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -597,6 +603,29 @@ const state={tab:'today', q:'', limit:60, showDone:false, showPast:false,
 let lastDeleted=null;
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function hostOf(u){
+  try{ const x=new URL(u);
+    const p=(x.pathname&&x.pathname!=='/')? x.pathname : '';
+    return (x.hostname.replace(/^www\./,'')+p).slice(0,44);
+  }catch(err){ return String(u).replace(/^[a-z0-9+.\-]+:\/*/i,'').slice(0,44); }
+}
+function titleHTML(e){
+  const raw=e.text||e.raw||'';
+  const links=raw.match(LINK_G)||[];
+  if(!links.length) return esc(raw);
+  const rest=raw.replace(LINK_G,' ').replace(/\s{2,}/g,' ').trim();
+  const first=links[0], sc=schemeOf(first);
+  const web=!sc||sc.web;
+  const label=rest || (sc&&sc.n? sc.n : hostOf(first));
+  let h='<a class="tl" href="'+esc(first)+'"'+(web?' target="_blank" rel="noopener"':'')+
+        ' title="'+esc(first)+'">'+esc(label)+'</a>';
+  links.slice(1).forEach(u=>{
+    const s2=schemeOf(u), w2=!s2||s2.web;
+    h+=' <a class="applink" href="'+esc(u)+'"'+(w2?' target="_blank" rel="noopener"':'')+
+       ' title="'+esc(u)+'">'+esc(s2&&s2.n? s2.n : hostOf(u).slice(0,18))+'</a>';
+  });
+  return h;
+}
 function linkify(s){
   return esc(s).replace(LINK_G,m=>{
     const sc=schemeOf(m);
@@ -797,7 +826,7 @@ function itemHTML(e,opt={}){
   return '<div class="it'+(dn?' done':'')+'" data-id="'+e.id+'">'+
     '<button class="mk'+(e.star||dl?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
       (e.star? '★' : dl? '◈' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
-    '<div class="bd"><div class="tx">'+linkify(e.text||e.raw)+'</div>'+
+    '<div class="bd"><div class="tx">'+titleHTML(e)+'</div>'+
       (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+'</div>'+
     '<div class="act">'+
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
