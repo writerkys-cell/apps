@@ -258,8 +258,11 @@
   .rec .rt{font-size:15px;font-weight:600;line-height:1.35;word-break:break-word}
   .rec .rl{font-size:11.5px;color:#8d897c;margin-top:4px;line-height:1.6;font-variant-numeric:tabular-nums}
   .rec .rl b{color:#26241f;font-weight:600}
-  .rec .del{flex:none;border:1px solid #e0dccf;background:none;color:#b7b3a7;font-size:11.5px;padding:4px 9px;border-radius:999px}
-  .rec .del:active{background:#f4f1e6}
+  .rec .racts{flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+  .rec .racts button{border:1px solid #e0dccf;background:none;font-size:11.5px;padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .rec .rev{border-color:#c9c5b8;color:#6b6759}
+  .rec .del{color:#b7b3a7}
+  .rec .racts button:active{background:#f4f1e6}
   .recempty{padding:32px 8px;text-align:center;color:#b7b3a7;font-size:13.5px;line-height:1.8}
 
 
@@ -410,6 +413,7 @@
     <ul>
       <li>한 페이지는 10줄입니다. 새 책은 언제나 마지막 페이지 끝에 들어갑니다.</li>
       <li>더 이상 읽을 책이 없는 페이지는 자동으로 사라집니다.</li>
+      <li>잘못 눌러 완독한 책도 되살릴 수 있습니다. 리스트에서 줄 그어진 책을 탭하거나, <b>기록</b>에서 <b>다시 읽기</b>를 누르세요. 기록에서 빠지고 리스트 맨 끝으로 돌아갑니다.</li>
       <li>포기한 책은 언제든 되살릴 수 있습니다. 리스트에서 형광펜 칠해진 줄을 탭하거나, 포기 목록에서 <b>활성</b>을 누르세요. 이어 읽을 쪽을 적으면 됩니다.</li>
     </ul>
     <h4>5. 카메라</h4>
@@ -771,18 +775,21 @@ const contModal=document.getElementById('contModal');
 let contCtx=null;
 function openContModal(book,mode){
   contCtx={book:book,mode:mode};
+  const wasDone=state.records.some(r=>r.id===book.id);
   document.getElementById('contTitle').textContent=
-    mode==='cont'?'어디까지 읽었나요?':'어디부터 이어 읽나요?';
+    mode==='cont'?'어디까지 읽었나요?':(wasDone?'다시 읽습니다':'어디부터 이어 읽나요?');
   const scOn=(state.shortcuts!==false);
   document.getElementById('contDesc').innerHTML=
     esc(book.title)+(mode==='cont'
       ?'<br>적은 쪽수가 제목에 붙어 리스트 맨 끝에 다시 적힙니다.'
         +(scOn?'<br>확인하면 단축어 ‘끝’이 실행됩니다.':'')
-      :'<br>이 책이 리스트 맨 끝으로 돌아갑니다.');
+      :(wasDone
+        ?'<br>완독 기록에서 빼고 리스트 맨 끝으로 돌립니다. 모은 문장은 그대로 따라갑니다.'
+        :'<br>이 책이 리스트 맨 끝으로 돌아갑니다.'));
   const inp=document.getElementById('contInput');
   inp.value=resumePage(book);
   document.getElementById('contOk').textContent=
-    mode==='cont'?'리스트 끝에 다시':'되살리기';
+    mode==='cont'?'리스트 끝에 다시':(wasDone?'다시 읽기':'되살리기');
   updateContHint();
   openModal(contModal);
   setTimeout(()=>{inp.focus();inp.select();},60);
@@ -798,6 +805,7 @@ function updateContHint(){
 function confirmCont(){
   if(!contCtx)return;
   const book=contCtx.book, mode=contCtx.mode;
+  const wasRec=state.records.some(r=>r.id===book.id);
   const n=pgNum(document.getElementById('contInput').value);
   // 단축어로 넘길 제목을 먼저 굳혀 둔다
   const label=book.title+(n?' · '+n+'쪽':(book.page?' · '+book.page+'쪽':''));
@@ -817,6 +825,8 @@ function confirmCont(){
     const i=state.inactive.findIndex(b=>b.id===book.id);
     if(i>=0)state.inactive.splice(i,1);
     else book.revived=true;   // 리스트에 남아 있는 항목은 표시만 하고 그대로 둔다
+    const j=state.records.findIndex(r=>r.id===book.id);
+    if(j>=0)state.records.splice(j,1);   // 완독 기록에서 빼낸다
   }
   pushToEnd(book.title,book.author||'',carry);
   closeModal(contModal);
@@ -829,7 +839,7 @@ function confirmCont(){
   }else{
     cur=state.pages.length-1;
     render();
-    toast('되살렸습니다',true);
+    toast(wasRec?'완독을 물렸습니다 — 다시 읽는 책으로':'되살렸습니다',true);
   }
   contCtx=null;
 }
@@ -1222,7 +1232,7 @@ function render(){
         const cls=['row','item',it.status];
         if(isCur)cls.push('current');
         if(passed)cls.push('dimmed');
-        if(selectable||(it.status==='dismissed'&&!it.revived))cls.push('taponly');
+        if(selectable||((it.status==='dismissed'||it.status==='done')&&!it.revived))cls.push('taponly');
         let dotHtml='<span class="dotcell"';
         if(it.dot&&it.status==='active'){
           dotHtml+=' data-dot="'+(isCur?'cur':'on')+'" data-id="'+it.id+'"';
@@ -1332,7 +1342,9 @@ function openRecords(){
       return '<div class="rec"><div class="info" data-a="book" data-id="'+r.id+'">'
         +'<div class="rt">'+esc(r.title)+(r.author?' <span style="font-weight:400;color:#8d897c;font-size:13px">'+esc(r.author)+'</span>':'')+'</div>'
         +'<div class="rl">'+meta.join(' · ')+'</div></div>'
-        +'<button class="del" data-a="recdel" data-id="'+r.id+'">삭제</button></div>';
+        +'<div class="racts">'
+        +'<button class="rev" data-a="recrev" data-id="'+r.id+'">다시 읽기</button>'
+        +'<button class="del" data-a="recdel" data-id="'+r.id+'">삭제</button></div></div>';
     }).join('');
   }
   openModal(document.getElementById('recSheet'));
@@ -1415,7 +1427,7 @@ main.addEventListener('click',e=>{
   }
   const li=e.target.closest('.item');
   if(!li)return;
-  if(li.dataset.st==='dismissed'){
+  if(li.dataset.st==='dismissed'||li.dataset.st==='done'){
     const b=findItem(li.dataset.id);
     if(b&&!b.revived)openContModal(b,'revive');
     return;
@@ -1493,6 +1505,12 @@ document.getElementById('recList').addEventListener('click',e=>{
   const t=e.target.closest('[data-a]');
   if(!t)return;
   if(t.dataset.a==='book'){closeModal(document.getElementById('recSheet'));openBook(t.dataset.id);}
+  else if(t.dataset.a==='recrev'){
+    const r=state.records.find(x=>x.id===t.dataset.id);
+    if(!r)return;
+    closeModal(document.getElementById('recSheet'));
+    openContModal(r,'revive');
+  }
   else if(t.dataset.a==='recdel'){
     if(!confirm('기록을 지웁니다. 모은 문장도 함께 사라집니다.'))return;
     snap();
