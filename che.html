@@ -604,7 +604,7 @@ function finishKey(o,text,ck,nm){
 /* ═══════════════ 4. 상태 ═══════════════ */
 const state={tab:'today', q:'', limit:60, showDone:false, showPast:false,
              month:TODAY().slice(0,7), archive:false, askRange:'month',
-             noteMonth:TODAY().slice(0,7), noteDay:TODAY(), noteAll:false, pinDate:null, peek:false};
+             noteMonth:TODAY().slice(0,7), noteDay:TODAY(), noteAll:false, pinDate:null};
 let lastDeleted=null;
 
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -645,7 +645,7 @@ const sealedP=e=>e.cat==='pray'&&e.date&&dday(e.date)>0;
 function visible(){
   return E.filter(e=>{
     if(!state.archive && e.archived) return false;
-    if(sealedP(e) && !state.peek) return false;
+    if(sealedP(e)) return false;
     return true;
   });
 }
@@ -1744,7 +1744,10 @@ function vSet(){
      '<b>실현</b> — 무엇이 이것을 오게 했는지 적어 그 날짜의 메모로 남깁니다.<br>'+
      '<b>다시</b> — 고쳐 말하고 다시 봉합니다. 지난 문장은 대(代)로 아래에 쌓입니다.<br>'+
      '<b>지움</b> — 그냥 보냅니다.<br><br>'+
-     '적어두고 잊기 위한 자리라 미리 보는 것을 권하지 않습니다만, 기도 탭에 「봉인 열어 보기」를 두었습니다.'+
+     '<b>미리 열어 보는 길은 없습니다.</b> 앱 안에서는 고칠 수도, 앞당길 수도, 무를 수도 없습니다. '+
+     '적어두고 잊기 위한 자리이므로 그렇게 두었습니다. '+
+     '다만 「한 벌 내보내기」로 받은 백업 파일은 사람이 읽을 수 있는 글이니, 궁금하면 그것을 열어 볼 수는 있습니다. '+
+     '읽을 수 있게 내보내는 마크다운에는 봉인 중인 기도를 싣지 않습니다.'+
      '</div></section>';
   h+='<section><h2>찾는 법</h2><div class="empty">'+
      '<span style="font-family:var(--mono);font-size:12px;line-height:2.1">'+
@@ -2242,12 +2245,8 @@ function vPray(){
        (sealedL.length>1? ' · 그 뒤로 '+(sealedL.length-1)+'개':'')+'</div>';
     h+='<div class="rgrid" style="gap:4px;margin:10px 0 4px">'+
        sealedL.slice(0,60).map(()=>'<i style="width:11px;height:11px;border-radius:50%"></i>').join('')+'</div>';
-    if(state.peek)
-      h+=sealedL.map(e=>itemHTML(e,{hideStamp:true})).join('');
-    h+='<div class="pills" style="margin-top:12px">'+
-       '<button class="pill" data-act="toggle" data-k="peek" aria-pressed="'+state.peek+'">'+
-       (state.peek?'다시 덮기':'봉인 열어 보기')+'</button></div>'+
-       (state.peek?'<div class="trace">적어두고 잊기 위한 자리입니다. 보고 나면 다시 덮으세요.</div>':'');
+    h+='<div class="trace" style="padding-top:10px">'+
+       '열어 보는 길은 없습니다. 고칠 수도, 앞당길 수도, 무를 수도 없습니다. 그날까지 기다리는 수밖에.</div>';
   }
   h+='</section>';
 
@@ -2563,8 +2562,9 @@ function expJSON(){
 }
 function expMD(){
   let s='# 체 — '+TODAY()+'\n';
+  const sealN=E.filter(sealedP).length;
   Object.keys(CATS).forEach(c=>{
-    const arr=E.filter(e=>e.cat===c).sort((a,b)=>a.ts-b.ts);
+    const arr=E.filter(e=>e.cat===c&&!sealedP(e)).sort((a,b)=>a.ts-b.ts);
     if(!arr.length) return;
     s+='\n## '+CATS[c].name+' ('+arr.length+')\n\n';
     arr.forEach(e=>{
@@ -2572,6 +2572,7 @@ function expMD(){
       s+='- '+(c==='todo'?(e.done?'[x] ':'[ ] '):'')+d+' · '+e.raw+'\n';
     });
   });
+  if(sealN) s+='\n\n(봉인 중인 기도 '+sealN+'개는 싣지 않았습니다.)\n';
   download('체_'+TODAY()+'.md',s,'text/markdown;charset=utf-8');
   toast('마크다운으로 내보냈습니다');
 }
