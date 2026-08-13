@@ -194,6 +194,13 @@
     font-size:14.5px;padding:8px 20px;
   }
   .catch .crow button:active{opacity:.6}
+  .catch .notewrap{margin-top:10px}
+  .catch .notewrap textarea{min-height:56px;font-size:15px;background:#fdfcf9;border-color:#e0dccf}
+  .catch .ntoggle{
+    border:1px solid #d8d3c4;background:none;color:#8d897c;border-radius:999px;
+    font-size:12.5px;padding:5px 12px;
+  }
+  .catch .ntoggle.on{border-color:#8a6d00;color:#8a6d00;background:#fff8e1}
   .catch .scanhint{font-size:11.5px;color:#a39f91;margin-top:9px;line-height:1.6}
   .catch .scanhint b{color:#8a6d00;font-weight:600}
 
@@ -204,7 +211,12 @@
     flex:none;width:38px;text-align:right;font-size:12.5px;color:#a39f91;
     font-variant-numeric:tabular-nums;padding-top:3px;
   }
-  .q .qt{flex:1;font-size:15.5px;line-height:1.72;word-break:break-word;white-space:pre-wrap}
+  .q .qbody{flex:1;min-width:0}
+  .q .qt{font-size:15.5px;line-height:1.72;word-break:break-word;white-space:pre-wrap}
+  .q .qn{
+    margin-top:7px;padding-left:10px;border-left:2px solid #d8ccae;
+    font-size:13.5px;line-height:1.7;color:#6b6759;white-space:pre-wrap;word-break:break-word;
+  }
   .qempty{padding:30px 8px;text-align:center;color:#b7b3a7;font-size:13.5px;line-height:1.9}
   .bk-foot{display:flex;gap:10px;margin-top:20px}
   .bk-foot button{flex:1;font-size:14.5px;padding:11px;border-radius:12px;border:1.5px solid #26241f;background:none;color:#26241f}
@@ -219,6 +231,8 @@
   #qEditSheet .prow{display:flex;gap:9px;align-items:center;margin-top:12px}
   #qEditSheet .prow span{font-size:13px;color:#8d897c}
   #qEditSheet .prow input{width:80px;text-align:center;font-variant-numeric:tabular-nums}
+  #qEditSheet .flabel{font-size:11px;letter-spacing:.1em;color:#a39f91;margin:16px 0 6px}
+  #qEditSheet #qEditNote{min-height:80px;font-size:15px}
 
   /* ── 기록 ── */
   #recSheet .sheet{max-height:82vh;overflow-y:auto}
@@ -325,9 +339,11 @@
 <div class="modal hidden" id="qEditSheet">
   <div class="sheet">
     <h3>문장 고치기</h3>
-    <p>스캔한 글자가 틀렸으면 여기서 바로잡습니다.</p>
+    <p>스캔한 글자를 바로잡고, 코멘트를 붙이거나 고칩니다.</p>
     <textarea id="qEditText"></textarea>
     <div class="prow"><span>쪽</span><input id="qEditPage" type="text" inputmode="numeric" autocomplete="off"></div>
+    <div class="flabel">내 코멘트</div>
+    <textarea id="qEditNote" placeholder="이 문장에 대해 남길 말"></textarea>
     <div class="sheet-acts">
       <button class="danger" id="qEditDel">삭제</button>
       <button id="qEditCancel">취소</button>
@@ -373,7 +389,9 @@
       <li>모은 문장은 <b>쪽수 순서대로</b> 저장됩니다. 늦게 넣어도 제자리를 찾아갑니다.</li>
       <li>줄바꿈·행 끝 하이픈·군더더기 공백은 저장할 때 자동으로 정리됩니다. 그 외에는 손대지 않습니다.</li>
       <li>스캔한 글자에 판면의 쪽번호가 딸려 오면 <b>쪽 칸에 자동으로</b> 들어갑니다.</li>
-      <li>문장을 탭하면 고치거나 지울 수 있습니다.</li>
+      <li>문장을 탭하면 글자를 고치고, 쪽수를 바꾸고, <b>내 코멘트</b>를 붙이거나 지울 수 있습니다.</li>
+      <li>코멘트는 저장할 때 <b>코멘트</b> 칸을 펴서 함께 넣어도 되고, 나중에 문장을 탭해 따로 붙여도 됩니다.</li>
+      <li>복사할 때 코멘트는 문장 아래에 <code>—</code>로 시작하는 줄로 따라갑니다.</li>
       <li><b>복사</b>는 책 전체를 플레인 텍스트로 클립보드에 담습니다.</li>
       <li>문장은 계속·포기·완독을 거쳐도 그대로 따라다닙니다. 기록과 포기한 책에서도 열어 볼 수 있습니다.</li>
     </ul>
@@ -416,6 +434,7 @@ let toastTimer=null;
 let pendingCheck=null;
 let openBookId=null;  // 책 페이지에 열려 있는 책
 let editingQuote=null;
+let noteOpen=false;   // 책 페이지의 코멘트 칸을 펼쳐 두었는가
 
 /* ---------- 저장 ---------- */
 function loadState(){
@@ -874,8 +893,11 @@ function renderBook(){
     +'<textarea id="qInput" placeholder="여기를 길게 눌러 → 텍스트 스캔" enterkeyhint="done"></textarea>'
     +'<div class="crow"><span class="pglabel">쪽</span>'
     +'<input id="qPage" type="text" inputmode="numeric" autocomplete="off" value="'+esc(resumePage(b))+'">'
+    +'<span style="width:6px"></span>'
+    +'<button class="ntoggle'+(noteOpen?' on':'')+'" data-a="togglenote">코멘트</button>'
     +'<span class="sp"></span><button data-a="savequote">저장</button></div>'
-    +'<div class="scanhint">입력창을 길게 눌러 <b>텍스트 스캔</b>을 고르면 카메라가 열립니다. 사진에서 복사해 붙여넣어도 됩니다.</div>'
+    +(noteOpen?'<div class="notewrap"><textarea id="qNote" placeholder="이 문장에 대해 남길 말"></textarea></div>':'')
+    +'<div class="scanhint">입력창을 길게 눌러 <b>텍스트 스캔</b>을 고르면 카메라가 열립니다. 문장을 탭하면 나중에 코멘트를 붙일 수 있습니다.</div>'
     +'</div>';
   h+='<div class="bk-count">모은 문장 '+qs.length+'개</div>';
   h+='<div class="qlist">';
@@ -885,7 +907,9 @@ function renderBook(){
     qs.forEach(q=>{
       h+='<div class="q" data-a="editq" data-qid="'+q.id+'">'
         +'<div class="qp">'+(q.page?esc(q.page):'—')+'</div>'
-        +'<div class="qt">'+esc(q.text)+'</div></div>';
+        +'<div class="qbody"><div class="qt">'+esc(q.text)+'</div>'
+        +(q.note?'<div class="qn">'+esc(q.note)+'</div>':'')
+        +'</div></div>';
     });
   }
   h+='</div>';
@@ -904,9 +928,13 @@ function saveQuote(){
   if(!text){ta.focus();toast('문장이 비었습니다');return;}
   let page=pi.value.trim();
   if(peeled.page&&!page)page=peeled.page;
+  const noteEl=document.getElementById('qNote');
+  const note=noteEl?noteEl.value.trim():'';
   snap();
   if(!b.quotes)b.quotes=[];
-  b.quotes.push({id:uid(),page:page,text:text,at:Date.now()});
+  const rec={id:uid(),page:page,text:text,at:Date.now()};
+  if(note)rec.note=note;
+  b.quotes.push(rec);
   sortQuotes(b);
   save();
   ta.value='';
@@ -918,6 +946,7 @@ function bookText(b){
   let out=b.title+(b.author?' · '+b.author:'')+'\n';
   (b.quotes||[]).forEach(q=>{
     out+='\n'+(q.page||'')+'\n'+q.text+'\n';
+    if(q.note)out+='— '+q.note.replace(/\n/g,'\n  ')+'\n';
   });
   return out;
 }
@@ -948,6 +977,7 @@ function openQEdit(qid){
   editingQuote=qid;
   document.getElementById('qEditText').value=q.text;
   document.getElementById('qEditPage').value=q.page||'';
+  document.getElementById('qEditNote').value=q.note||'';
   openModal(qEditSheet);
 }
 function saveQEdit(){
@@ -960,6 +990,8 @@ function saveQEdit(){
   snap();
   q.text=t;
   q.page=document.getElementById('qEditPage').value.trim();
+  const nt=document.getElementById('qEditNote').value.trim();
+  if(nt)q.note=nt;else delete q.note;
   sortQuotes(b);
   save();closeModal(qEditSheet);renderBook();
   toast('저장됨',true);
@@ -1390,6 +1422,14 @@ bookBody.addEventListener('click',e=>{
   if(btn){
     const a=btn.dataset.a;
     if(a==='savequote')saveQuote();
+    else if(a==='togglenote'){
+      const keep={t:document.getElementById('qInput').value,p:document.getElementById('qPage').value};
+      noteOpen=!noteOpen;
+      renderBook();
+      document.getElementById('qInput').value=keep.t;
+      document.getElementById('qPage').value=keep.p;
+      if(noteOpen)document.getElementById('qNote').focus();
+    }
     else if(a==='copy')copyBook();
     else if(a==='info')openInfo(openBookId);
     else if(a==='closebook'){closeModal(bookSheet);openBookId=null;render();}
