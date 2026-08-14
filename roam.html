@@ -330,6 +330,27 @@ html[data-theme="dark"] .content mark{background:#5C5326}
   border-left:2px solid var(--line);padding:3px 0 3px 12px;margin:3px 0;cursor:pointer;
   border-radius:0 3px 3px 0;
 }
+.ref-row{display:flex;align-items:flex-start;gap:10px}
+.ref-row .ref-body{flex:1;min-width:0}
+.link-btn{
+  flex:0 0 auto;margin-top:1px;font-size:11.5px;padding:1px 9px;border-radius:99px;
+  border:1px solid var(--line);color:var(--ink-3);
+}
+.link-btn:hover{border-color:var(--indigo);color:var(--indigo);background:var(--paper)}
+.section-head.foldable{cursor:pointer;user-select:none}
+.section-head.foldable::after{content:none}
+.section-head .rule{flex:1;height:1px;background:var(--line)}
+.section-head .fold{
+  display:inline-block;width:9px;font-size:8px;color:var(--ink-3);
+  transition:transform .12s;transform-origin:50% 50%;
+}
+.section-head .fold.open{transform:rotate(90deg)}
+.section-head.foldable:hover .fold,.section-head.foldable:hover .label{color:var(--indigo)}
+.section-head .link-all{
+  font-size:11px;letter-spacing:0;text-transform:none;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:99px;padding:1px 9px;
+}
+.section-head .link-all:hover{border-color:var(--indigo);color:var(--indigo)}
 .ref-item:hover{border-left-color:var(--indigo);background:var(--paper-2)}
 .ref-path{font-size:11px;color:var(--ink-3);font-family:var(--mono);margin-bottom:1px}
 .ref-body{white-space:pre-wrap;word-break:break-word}
@@ -1360,7 +1381,8 @@ const HELP_HTML = [
 "<li><code>[[제목]]</code> — 페이지 링크. <code>[[</code>를 치면 있는 페이지 목록이 뜨고, 없는 이름이면 맨 위에 '새 페이지'로 제안됩니다. 블록을 빠져나가는 순간 실제 페이지가 만들어집니다.</li>",
 "<li><code>#태그</code> — 같은 링크입니다. 짧게 쓰고 싶을 때.</li>",
 "<li><b>연결된 참조</b> — 페이지 아래에, 다른 곳에서 그 제목을 <code>[[ ]]</code>로 부른 블록이 모입니다. 어느 페이지에서 왔는지, 어떤 블록 아래에 있었는지까지 보여 줍니다. 눌러 가면 그 자리에서 바로 고칠 수 있습니다.</li>",
-"<li><b>언급됨 · 링크 없음</b> — 괄호 없이 제목만 적힌 블록. 링크로 승격시킬 만한 곳을 찾을 때 봅니다.</li>",
+"<li><b>언급됨 · 링크 없음</b> — 괄호 없이 제목만 적힌 블록. 오른쪽 <b>잇기</b>를 누르면 그 블록 안에서 제목을 찾아 <code>[[ ]]</code>로 둘러 줍니다. 이미 묶여 있는 자리는 건드리지 않고, 한 블록에 여러 번 나오면 모두 묶습니다. 머리글의 <b>모두 잇기</b>는 목록 전체에 같은 일을 합니다(확인을 한 번 받습니다).</li>",
+"<li>두 절 모두 머리글을 눌러 <b>접었다 펼</b> 수 있습니다. 접힘 상태는 저장되어 다음에 열 때도 그대로입니다. 처음에는 「언급됨」 쪽이 접혀 있습니다.</li>",
 "<li><b>괄호는 평소에 숨어 있습니다.</b> 화면에는 제목만 남고, 그 블록을 눌러 편집에 들어가면 <code>[[ ]]</code>가 다시 나타납니다. 읽을 때는 문장이 끊기지 않고, 고칠 때는 괄호를 정확히 다룰 수 있습니다.</li>",
 "<li>페이지 제목을 누르면 바로 고칠 수 있고, 고치면 다른 글에 적힌 <code>[[옛 제목]]</code>까지 함께 바뀝니다.</li>",
 "<li>글머리 점을 누르면 그 블록만 확대해서 봅니다. 위쪽 이름표를 눌러 되돌아옵니다.</li>",
@@ -1441,24 +1463,76 @@ function buildRefIndex(){
   }
   return idx;
 }
+function refFold(key){
+  if(!G.meta.refFold) G.meta.refFold = { linked:false, unlinked:true };
+  return !!G.meta.refFold[key];
+}
+function toggleRefFold(key){
+  refFold(key);
+  G.meta.refFold[key] = !G.meta.refFold[key];
+  scheduleSave();
+  render();
+}
+/** 접었다 펼 수 있는 머리글을 만든다. */
+function foldHead(key, label, count, extra){
+  const head = document.createElement("div");
+  head.className = "section-head foldable";
+  const folded = refFold(key);
+  const arrow = document.createElement("span");
+  arrow.className = "fold" + (folded ? "" : " open");
+  arrow.textContent = "▶";
+  const lab = document.createElement("span");
+  lab.className = "label"; lab.textContent = label;
+  const pill = document.createElement("span");
+  pill.className = "count-pill"; pill.textContent = count;
+  const rule = document.createElement("span");
+  rule.className = "rule";
+  head.append(arrow, lab, pill, rule);
+  if(extra) head.appendChild(extra);
+  head.addEventListener("click", e => {
+    if(e.target.closest(".link-all")) return;
+    toggleRefFold(key);
+  });
+  return head;
+}
+/** 블록 본문에서 아직 묶이지 않은 제목을 찾아 [[ ]]로 두른다. 두른 곳 수를 돌려준다. */
+function linkMentions(blockId, title){
+  const b = G.blocks[blockId];
+  const key = String(title || "").trim().toLowerCase();
+  if(!b || !key) return 0;
+  const src = b.content, low = src.toLowerCase();
+  const spans = [];
+  let m; LINK_RE.lastIndex = 0;
+  while((m = LINK_RE.exec(src))) spans.push([m.index, m.index + m[0].length]);
+  const inside = i => spans.some(sp => i >= sp[0] && i < sp[1]);
+  let out = "", i = 0, n = 0;
+  while(i <= src.length){
+    const at = low.indexOf(key, i);
+    if(at < 0){ out += src.slice(i); break; }
+    if(inside(at)){ out += src.slice(i, at + key.length); i = at + key.length; continue; }
+    out += src.slice(i, at) + "[[" + src.substr(at, key.length) + "]]";
+    i = at + key.length; n++;
+  }
+  if(n){ b.content = out; touch(blockId); scheduleSave(); }
+  return n;
+}
+
 function referencesSection(title, pageId){
   const frag = document.createDocumentFragment();
   const key = title.trim().toLowerCase();
   const idx = buildRefIndex();
   const linked = (idx.get(key) || []).filter(bid => G.blocks[bid] && pageOf(bid)?.id !== pageId);
 
-  const head = document.createElement("div");
-  head.className = "section-head";
-  head.innerHTML = `<span>연결된 참조</span><span class="count-pill">${linked.length}</span>`;
-  frag.appendChild(head);
-
-  if(!linked.length){
-    const e = document.createElement("div");
-    e.className = "empty-note";
-    e.textContent = `다른 블록에서 [[${title}]] 을 적으면 이 자리에 모입니다.`;
-    frag.appendChild(e);
-  }else{
-    frag.appendChild(groupRefs(linked));
+  frag.appendChild(foldHead("linked", "연결된 참조", linked.length));
+  if(!refFold("linked")){
+    if(!linked.length){
+      const e = document.createElement("div");
+      e.className = "empty-note";
+      e.textContent = `다른 블록에서 [[${title}]] 을 적으면 이 자리에 모입니다.`;
+      frag.appendChild(e);
+    }else{
+      frag.appendChild(groupRefs(linked));
+    }
   }
 
   // 언급됨(링크 없음)
@@ -1471,20 +1545,33 @@ function referencesSection(title, pageId){
       if(b.content.toLowerCase().includes(low)) unlinked.push(b.id);
     }
   }
-  const h2 = document.createElement("div");
-  h2.className = "section-head";
-  h2.innerHTML = `<span>언급됨 · 링크 없음</span><span class="count-pill">${unlinked.length}</span>`;
-  frag.appendChild(h2);
-  if(!unlinked.length){
-    const e = document.createElement("div");
-    e.className = "empty-note"; e.textContent = "괄호 없이 이 제목을 쓴 블록이 아직 없습니다.";
-    frag.appendChild(e);
-  }else{
-    frag.appendChild(groupRefs(unlinked.slice(0, 60)));
+  let all = null;
+  if(unlinked.length){
+    all = document.createElement("button");
+    all.className = "link-all";
+    all.textContent = `모두 잇기 ${unlinked.length}`;
+    all.onclick = e => {
+      e.stopPropagation();
+      if(!confirm(`${unlinked.length}개 블록에서 "${title}"을(를) 찾아 [[ ]]로 두릅니다.\n계속할까요?`)) return;
+      let n = 0;
+      unlinked.forEach(id => { n += linkMentions(id, title); });
+      render();
+      toast(n ? `${n}곳을 이었습니다` : "이을 곳을 찾지 못했습니다");
+    };
+  }
+  frag.appendChild(foldHead("unlinked", "언급됨 · 링크 없음", unlinked.length, all));
+  if(!refFold("unlinked")){
+    if(!unlinked.length){
+      const e = document.createElement("div");
+      e.className = "empty-note"; e.textContent = "괄호 없이 이 제목을 쓴 블록이 아직 없습니다.";
+      frag.appendChild(e);
+    }else{
+      frag.appendChild(groupRefs(unlinked.slice(0, 60), { linkTitle: title }));
+    }
   }
   return frag;
 }
-function groupRefs(blockIds){
+function groupRefs(blockIds, opts){
   const wrap = document.createElement("div");
   const byPage = new Map();
   blockIds.forEach(bid => {
@@ -1506,9 +1593,23 @@ function groupRefs(blockIds){
       item.className = "ref-item";
       const path = ancestors(bid).filter(a => a.type === "block").map(a => a.label.slice(0,20)).join(" › ");
       item.innerHTML = (path ? `<div class="ref-path">${esc(path)}</div>` : "") +
-                       `<div class="ref-body">${renderInline(b.content)}</div>`;
+                       `<div class="ref-row"><div class="ref-body">${renderInline(b.content)}</div></div>`;
+      if(opts && opts.linkTitle){
+        const btn = document.createElement("button");
+        btn.className = "link-btn";
+        btn.textContent = "잇기";
+        btn.title = `이 블록의 "${opts.linkTitle}"에 [[ ]]를 두릅니다`;
+        btn.addEventListener("mousedown", e => e.stopPropagation());
+        btn.onclick = e => {
+          e.stopPropagation();
+          const n = linkMentions(bid, opts.linkTitle);
+          render();
+          toast(n ? `${n}곳을 이었습니다` : "이을 곳을 찾지 못했습니다");
+        };
+        item.querySelector(".ref-row").appendChild(btn);
+      }
       item.addEventListener("mousedown", e => {
-        if(e.target.closest(".page-link,.tag,a")) return;
+        if(e.target.closest(".page-link,.tag,a,.link-btn")) return;
         openPage(pid, bid);
       });
       g.appendChild(item);
