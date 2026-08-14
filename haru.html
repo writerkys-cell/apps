@@ -114,7 +114,9 @@ textarea.small{min-height:110px;background-image:none}
 .bar .grow{flex:1}
 .count{font-variant-numeric:tabular-nums}
 .gauge{height:3px;background:var(--paper-lo);width:150px;position:relative;overflow:hidden}
-.gauge i{position:absolute;left:0;top:0;bottom:0;background:var(--seal);transition:width .4s}
+.gauge i{position:absolute;left:0;top:0;bottom:0;background:var(--ink-3);transition:width .4s, background-color .6s}
+.gauge.over i{background:var(--seal)}
+.count.over{color:var(--seal)}
 
 .btn{
   background:transparent;border:1px solid var(--ink);padding:8px 18px;
@@ -549,26 +551,35 @@ function sMorning(box, past){
   const cnt = el('span','count');
   const g = el('div','gauge'); const gi = el('i'); g.appendChild(gi);
   const GOAL = db.settings.mpGoalWords || 750;
+  let bClose = null;
   const upd = ()=>{
-    const w = wordCount(ta.value), n = ta.value.length;
-    cnt.textContent = `${w.toLocaleString()} / ${GOAL}단어 · ${n.toLocaleString()}자`;
+    const w = wordCount(ta.value);
+    const over = w >= GOAL;
+    // 목표를 넘긴 뒤로는 초과분을 세지 않는다
+    cnt.textContent = over
+      ? `${GOAL}단어를 넘었습니다`
+      : `${w.toLocaleString()} / ${GOAL}단어 · ${ta.value.length.toLocaleString()}자`;
+    cnt.classList.toggle('over', over);
+    g.classList.toggle('over', over);
     gi.style.width = Math.min(100, w/GOAL*100)+'%';
+    if(bClose){
+      bClose.className = over ? 'btn seal' : 'btn ghost';
+      bClose.disabled = !ta.value.trim();
+    }
   };
   ta.oninput = ()=>{ day.mp.text = ta.value; upd(); autosave(); };
-  upd();
   bar.append(cnt, g, el('span','grow'));
 
   if(!locked){
     const bPrint = el('button','btn ghost','세로 A5로 출력');
     bPrint.onclick = ()=> doPrint();
-    const bClose = el('button','btn seal','덮고 바인더에 꽂기');
-    bClose.disabled = !ta.value.trim();
-    ta.addEventListener('input', ()=>{ bClose.disabled = !ta.value.trim(); });
+    bClose = el('button','btn ghost','덮고 바인더에 꽂기');
     bClose.onclick = ()=> confirmStep(box, 'mp', false);
     bar.append(bPrint, bClose);
   }else{
     bar.append(el('span','hint', '덮었습니다.'));
   }
+  upd();
   box.appendChild(bar);
 
   if(!locked){
