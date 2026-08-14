@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>먹실 · Local Outliner</title>
+<title>쪽글 · Local Outliner</title>
 <style>
 /* ===========================================================
-   먹실 (Ink Thread) — 로컬 아웃라이너
+   쪽글 — 로컬 아웃라이너
    팔레트: 한지(paper) / 먹(ink) / 쪽빛(indigo) / 인주(cinnabar)
    =========================================================== */
 :root{
@@ -209,6 +209,27 @@ html[data-theme="dark"] .content mark{background:#5C5326}
 .todo.done{color:var(--indigo-soft)}
 .done-text{color:var(--ink-3);text-decoration:line-through}
 
+/* ---------- 쪽글(태그 셔플) ---------- */
+.shuffle-bar{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  border:1px solid var(--line);border-radius:7px;background:var(--paper-2);
+  padding:8px 12px;margin-bottom:22px;
+}
+.shuffle-bar .tagname{font-family:var(--mono);font-size:12.5px;color:var(--indigo)}
+.shuffle-bar .meta{font-size:11.5px;font-family:var(--mono);color:var(--ink-3)}
+.shuffle-bar .grow{flex:1}
+.shuffle-bar button{
+  font-size:12.5px;padding:4px 11px;border-radius:99px;border:1px solid var(--line);color:var(--ink-2);
+}
+.shuffle-bar button:hover{border-color:var(--indigo);color:var(--indigo);background:var(--paper)}
+.shuffle-bar button.primary{border-color:var(--indigo);color:var(--indigo);font-weight:600}
+.shuffle-bar button.primary:hover{background:var(--indigo);color:var(--paper)}
+.blank{
+  border:1px dashed var(--line);border-radius:8px;padding:26px 22px;color:var(--ink-2);
+  font-size:14px;line-height:1.75;
+}
+.blank code{font-family:var(--mono);font-size:.88em;background:var(--paper-3);padding:1px 5px;border-radius:3px}
+
 /* ---------- 백링크 ---------- */
 .ref-group{border-top:1px solid var(--line-soft);padding:14px 0 6px}
 .ref-group:first-of-type{border-top:none}
@@ -309,11 +330,13 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
 <div id="app">
   <aside id="sidebar">
     <div class="brand">
-      <h1>먹실</h1><span class="sub">local outliner</span>
+      <h1>쪽글</h1><span class="sub">local outliner</span>
     </div>
     <nav class="side-nav">
       <button class="nav-item" data-go="daily"><span class="ico">◷</span>오늘의 노트</button>
       <button class="nav-item" data-go="all"><span class="ico">▤</span>전체 페이지</button>
+      <button class="nav-item" data-go="shuffle"><span class="ico">✎</span>쪽글<span class="kbd" id="shuffle-n"></span></button>
+      <button class="nav-item" id="btn-random"><span class="ico">⚄</span>무작위 페이지</button>
       <button class="nav-item" id="btn-search"><span class="ico">⌕</span>검색<span class="kbd">⌘K</span></button>
       <button class="nav-item" id="btn-new"><span class="ico">＋</span>새 페이지</button>
     </nav>
@@ -336,6 +359,7 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
       <button class="icon-btn" id="btn-menu" style="display:none">☰</button>
       <div class="crumb" id="crumb"></div>
       <div class="spacer"></div>
+      <button class="icon-btn" id="btn-delete" title="이 페이지 지우기" style="display:none">지우기</button>
       <button class="icon-btn" id="btn-today">오늘</button>
       <button class="icon-btn" id="btn-search2">⌕</button>
     </div>
@@ -381,7 +405,8 @@ function toast(msg){
 /* ============================================================
    2. 저장소 — IndexedDB (그래프 전체를 하나의 레코드로)
    ============================================================ */
-const DB_NAME = "meoksil-db", STORE = "graph", KEY = "main";
+const DB_NAME = "jjokgeul-db", STORE = "graph", KEY = "main";
+const LEGACY_DB = "meoksil-db";        // 이전 이름으로 저장된 그래프를 한 번 옮겨온다
 let _db = null;
 
 function openDB(){
@@ -410,6 +435,25 @@ async function dbPut(data){
   });
 }
 
+/** 이전 이름(meoksil-db)에 남아 있는 그래프를 읽어온다. 없으면 null. */
+function legacyGet(){
+  return new Promise(res => {
+    let req;
+    try{ req = indexedDB.open(LEGACY_DB, 1); }catch{ return res(null); }
+    req.onupgradeneeded = e => { try{ e.target.result.createObjectStore(STORE); }catch{} };
+    req.onerror = () => res(null);
+    req.onsuccess = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(STORE)) return res(null);
+      try{
+        const g = db.transaction(STORE, "readonly").objectStore(STORE).get(KEY);
+        g.onsuccess = () => res(g.result || null);
+        g.onerror  = () => res(null);
+      }catch{ res(null); }
+    };
+  });
+}
+
 /* ============================================================
    3. 데이터 모델
    G = { version, pages:{id:Page}, blocks:{id:Block}, meta:{} }
@@ -419,6 +463,7 @@ async function dbPut(data){
 let G = null;
 let view = { type:"daily" };     // daily | page | zoom | all
 let editing = null;              // 편집 중인 블록 id
+let composing = false;           // IME(한글 등) 조합 중 여부
 let saveTimer = null;
 
 function emptyGraph(){ return { version:1, pages:{}, blocks:{}, meta:{ createdAt: now() } }; }
@@ -587,7 +632,7 @@ function exportJSON(){
   const blob = new Blob([JSON.stringify(G, null, 2)], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `meoksil-${dateKey()}.json`;
+  a.download = `roam-${dateKey()}.json`;
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
   toast("JSON 파일을 내려받았습니다");
@@ -635,7 +680,21 @@ function render(){
   if(view.type === "daily") v.appendChild(renderDailyFeed());
   else if(view.type === "page") v.appendChild(renderPageView(view.id));
   else if(view.type === "zoom") v.appendChild(renderZoomView(view.id));
+  else if(view.type === "shuffle") v.appendChild(renderShuffleView());
   else if(view.type === "all")  v.appendChild(renderAllPages());
+  syncDeleteBtn();
+}
+function syncDeleteBtn(){
+  const btn = $("#btn-delete");
+  const pid = (view.type === "page" || view.type === "shuffle") ? view.id : null;
+  if(pid && G.pages[pid]){
+    btn.style.display = "";
+    btn.onclick = () => deletePage(pid, () => {
+      if(view.type === "shuffle") nextShuffle(); else go({ type:"daily" });
+    });
+  }else{
+    btn.style.display = "none"; btn.onclick = null;
+  }
 }
 
 function renderSidebar(){
@@ -653,6 +712,8 @@ function renderSidebar(){
   });
   $$(".nav-item[data-go]").forEach(el =>
     el.classList.toggle("active", el.dataset.go === view.type));
+  const n = pagesWithTag(shuffleTag()).length;
+  $("#shuffle-n").textContent = n ? n : "";
 }
 function countBlocks(pid){
   let n = 0;
@@ -669,6 +730,10 @@ function renderCrumb(){
   const sep = () => { const s=document.createElement("span"); s.className="sep"; s.textContent="›"; c.appendChild(s); };
   if(view.type === "daily") add("오늘의 노트", null, true);
   if(view.type === "all")   add("전체 페이지", null, true);
+  if(view.type === "shuffle"){
+    add("쪽글", () => nextShuffle()); sep();
+    add(G.pages[view.id] ? G.pages[view.id].title : "모으는 중", null, true);
+  }
   if(view.type === "page"){
     add("페이지", () => go({type:"all"})); sep();
     add(G.pages[view.id] ? G.pages[view.id].title : "?", null, true);
@@ -858,12 +923,7 @@ function renderAllPages(){
     const td5 = document.createElement("td");
     const del = document.createElement("button");
     del.className = "del-btn"; del.textContent = "삭제";
-    del.onclick = () => {
-      if(!confirm(`"${p.title}" 페이지와 그 안의 블록을 모두 지웁니다. 계속할까요?`)) return;
-      p.children.slice().forEach(deleteBlockDeep);
-      delete G.pages[p.id];
-      scheduleSave(); render(); toast("페이지를 지웠습니다");
-    };
+    del.onclick = () => deletePage(p.id);
     td5.appendChild(del);
     tr.append(td1, td2, td3, td4, td5);
     tb.appendChild(tr);
@@ -871,6 +931,109 @@ function renderAllPages(){
   table.appendChild(tb);
   frag.appendChild(table);
   return frag;
+}
+
+/* ---- 쪽글: 특정 태그가 붙은 페이지를 무작위로 순회 ---- */
+let shuffleQueue = [];
+function shuffleTag(){ return (G.meta && G.meta.shuffleTag) || "쪽글"; }
+/** 태그가 달린 페이지 id 목록. 블록 어딘가에 #태그 또는 [[태그]]가 있으면 그 페이지가 포함된다. */
+function pagesWithTag(tag){
+  const key = String(tag || "").trim().toLowerCase();
+  if(!key) return [];
+  const set = new Set();
+  for(const b of Object.values(G.blocks)){
+    if(!linksIn(b.content).has(key)) continue;
+    const pg = pageOf(b.id);
+    if(pg && pg.title.trim().toLowerCase() !== key) set.add(pg.id);
+  }
+  return Array.from(set);
+}
+function nextShuffle(){
+  const all = pagesWithTag(shuffleTag());
+  exitEdit();
+  if(!all.length){ view = { type:"shuffle", id:null }; render(); $("#main").scrollTop = 0; closeSidebarMobile(); return; }
+  shuffleQueue = shuffleQueue.filter(id => all.includes(id));
+  if(!shuffleQueue.length){
+    shuffleQueue = all.slice();
+    for(let i = shuffleQueue.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
+    }
+    // 방금 본 쪽글이 곧바로 또 나오지 않도록 맨 뒤로 돌린다
+    if(shuffleQueue.length > 1 && shuffleQueue[shuffleQueue.length - 1] === view.id)
+      shuffleQueue.unshift(shuffleQueue.pop());
+  }
+  const id = shuffleQueue.pop();
+  view = { type:"shuffle", id, total: all.length };
+  render();
+  $("#main").scrollTop = 0;
+  closeSidebarMobile();
+}
+function renderShuffleView(){
+  const frag = document.createDocumentFragment();
+  const tag = shuffleTag();
+  const all = pagesWithTag(tag);
+
+  const bar = document.createElement("div");
+  bar.className = "shuffle-bar";
+  const label = document.createElement("span");
+  label.className = "tagname"; label.textContent = "#" + tag;
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = all.length
+    ? `${all.length}편 · 이번 바퀴 ${Math.max(shuffleQueue.length, 0)}편 남음`
+    : "아직 없음";
+  const grow = document.createElement("span"); grow.className = "grow";
+  const next = document.createElement("button");
+  next.className = "primary"; next.textContent = "다음 쪽글 →";
+  next.onclick = nextShuffle;
+  const chg = document.createElement("button");
+  chg.textContent = "태그 바꾸기";
+  chg.onclick = () => {
+    const t = prompt("어떤 태그를 모을까요?", tag);
+    if(t === null) return;
+    const v = t.trim().replace(/^#/, "");
+    if(!v) return;
+    G.meta.shuffleTag = v; shuffleQueue = []; scheduleSave(); nextShuffle();
+  };
+  bar.append(label, meta, grow, chg, next);
+  frag.appendChild(bar);
+
+  if(!all.length){
+    const b = document.createElement("div");
+    b.className = "blank";
+    b.innerHTML = `아직 <code>#${esc(tag)}</code> 태그가 붙은 페이지가 없습니다.<br>
+      아무 페이지의 블록에 <code>#${esc(tag)}</code> 또는 <code>[[${esc(tag)}]]</code> 를 적어 두면,
+      그 페이지가 이 자리에서 무작위로 다시 펼쳐집니다.<br>
+      짧은 글 하나에 페이지 하나씩 두고 태그를 달아 두면, 눌러 볼 때마다 지난 조각을 다시 만나게 됩니다.`;
+    frag.appendChild(b);
+    return frag;
+  }
+  const p = G.pages[view.id];
+  if(!p){ nextShuffle(); return frag; }
+  if(!p.children.length) newBlock(p.id, "");
+  frag.appendChild(pageHeader(p));
+  frag.appendChild(outline(p.id));
+  frag.appendChild(referencesSection(p.title, p.id));
+  return frag;
+}
+
+/* ---- 페이지 삭제 ---- */
+function deletePage(pid, after){
+  const p = G.pages[pid];
+  if(!p) return false;
+  const n = countBlocks(pid);
+  const msg = `"${p.title}" 페이지를 지웁니다.\n안에 든 블록 ${n}개가 함께 사라지고, 되돌릴 수 없습니다.\n`
+            + `다른 글에 적힌 [[${p.title}]] 표시는 그대로 남습니다.\n\n계속할까요?`;
+  if(!confirm(msg)) return false;
+  exitEdit();
+  p.children.slice().forEach(deleteBlockDeep);
+  delete G.pages[pid];
+  shuffleQueue = shuffleQueue.filter(x => x !== pid);
+  scheduleSave();
+  toast(`"${p.title}" 페이지를 지웠습니다`);
+  if(typeof after === "function") after(); else render();
+  return true;
 }
 
 /* ---- 백링크 ---- */
@@ -963,7 +1126,10 @@ function groupRefs(blockIds){
 /* ============================================================
    7. 내비게이션
    ============================================================ */
-function go(v){ exitEdit(); view = v; render(); $("#main").scrollTop = 0; closeSidebarMobile(); }
+function go(v){
+  if(v.type === "shuffle"){ nextShuffle(); return; }
+  exitEdit(); view = v; render(); $("#main").scrollTop = 0; closeSidebarMobile();
+}
 function openPage(id, focusBlock){
   exitEdit(); view = { type:"page", id }; render();
   $("#main").scrollTop = 0;
@@ -991,6 +1157,19 @@ function renamePage(pid, newTitle){
   scheduleSave(); render();
   toast(n ? `제목을 바꾸고 링크 ${n}곳을 함께 고쳤습니다` : "제목을 바꿨습니다");
 }
+/** 무작위 페이지로 이동. 내용이 있는 일반 페이지를 우선하고,
+ *  없으면 링크로만 만들어진 빈 페이지, 그래도 없으면 데일리 노트까지 넓힌다. */
+function randomPage(){
+  const currentId = view.type === "page" ? view.id : null;
+  const all = Object.values(G.pages).filter(p => p.id !== currentId);
+  const normal = all.filter(p => !isDailyTitle(p.title));
+  const withText = normal.filter(p => countBlocks(p.id) > 0);
+  const pool = withText.length ? withText : (normal.length ? normal : all);
+  if(!pool.length){ toast("아직 옮겨 갈 페이지가 없습니다"); return; }
+  const p = pool[Math.floor(Math.random() * pool.length)];
+  openPage(p.id);
+  toast("무작위 · " + p.title);
+}
 function closeSidebarMobile(){ if(window.innerWidth <= 760) $("#sidebar").classList.remove("open"); }
 
 /* ============================================================
@@ -1017,6 +1196,7 @@ function enterEdit(id, pos = null){
   ta.value = G.blocks[id].content;
   row.appendChild(ta);
   editing = id;
+  composing = false;
   autosize(ta);
   ta.focus();
   const p = pos == null ? ta.value.length : Math.max(0, Math.min(pos, ta.value.length));
@@ -1025,6 +1205,11 @@ function enterEdit(id, pos = null){
   ta.addEventListener("keydown", onKeydown);
   ta.addEventListener("blur", onBlur);
   ta.addEventListener("click", () => updateAutocomplete(ta));
+  ta.addEventListener("compositionstart", () => { composing = true; });
+  ta.addEventListener("compositionend", () => {
+    composing = false;
+    commit(); autosize(ta); scheduleSave(); updateAutocomplete(ta);
+  });
 }
 function currentTA(){ return document.querySelector(".editor"); }
 function commit(){
@@ -1052,6 +1237,7 @@ function exitEdit(){
     content.innerHTML = renderInline(b.content, id);
   }
   editing = null;
+  composing = false;
   closeAC();
   scheduleSave();
 }
@@ -1207,6 +1393,9 @@ function relocate(id, targetId, mode){
 /* ---- 키 입력 ---- */
 function onKeydown(e){
   const ta = e.target, id = editing;
+  // 한글·일본어·중국어 조합 중에는 Enter/Tab/Backspace를 IME가 먼저 쓰게 둔다.
+  // (Safari는 조합을 끝내는 keydown에서 isComposing이 false로 오므로 자체 플래그도 함께 본다)
+  if(composing || e.isComposing || e.keyCode === 229) return;
   if(!id || !G.blocks[id]) return;
   const b = G.blocks[id];
   const mod = e.metaKey || e.ctrlKey;
@@ -1497,6 +1686,7 @@ document.addEventListener("keydown", e => {
 window.addEventListener("beforeunload", () => { commit(); if(G) dbPut(G); });
 document.addEventListener("visibilitychange", () => { if(document.hidden){ commit(); doSave(); } });
 
+$("#btn-random").onclick  = randomPage;
 $("#btn-search").onclick  = openSearch;
 $("#btn-search2").onclick = openSearch;
 $("#btn-today").onclick   = () => go({ type:"daily" });
@@ -1511,7 +1701,7 @@ $("#file-input").onchange = e => { if(e.target.files[0]) importJSON(e.target.fil
 $("#btn-theme").onclick = () => {
   const cur = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = cur;
-  localStorage.setItem("meoksil-theme", cur);
+  localStorage.setItem("jjokgeul-theme", cur);
 };
 $("#btn-menu").onclick = () => $("#sidebar").classList.toggle("open");
 function syncMobile(){ $("#btn-menu").style.display = window.innerWidth <= 760 ? "" : "none"; }
@@ -1524,13 +1714,14 @@ function seed(){
   G = emptyGraph();
   const today = createPage(dateKey(), false);
   const lines = [
-    ["먹실에 오신 것을 환영합니다. 이 줄을 눌러 바로 고쳐 쓰세요.", 0],
+    ["쪽글에 오신 것을 환영합니다. 이 줄을 눌러 바로 고쳐 쓰세요.", 0],
     ["Tab 으로 들여쓰고, Shift+Tab 으로 내어씁니다.", 0],
     ["Enter 는 아래에 새 블록을 만들고, 빈 블록에서 Backspace 를 누르면 위와 합쳐집니다.", 1],
     ["글머리 점을 끌어다 놓으면 순서와 계층이 바뀝니다. ⌘⇧↑ / ⌘⇧↓ 로도 옮길 수 있습니다.", 1],
     ["대괄호 두 개로 페이지를 잇습니다 → [[먹실 사용법]]", 0],
     ["#태그 도 같은 페이지 링크로 취급합니다.", 1],
     ["⌘K 를 눌러 페이지와 블록을 한꺼번에 찾아보세요.", 0],
+    ["블록에 `#쪽글` 을 달아 두면, 왼쪽 ‘쪽글’ 메뉴에서 그 페이지들을 무작위로 다시 만납니다.", 0],
     ["{{TODO}} 왼쪽 사이드바에서 JSON 내보내기로 백업하기", 0],
     ["**굵게** · __기울임__ · ~~취소선~~ · ^^형광^^ · `코드` 를 쓸 수 있습니다.", 0],
   ];
@@ -1539,19 +1730,36 @@ function seed(){
     if(depth === 0){ lastTop = newBlock(today.id, text); }
     else { newBlock(lastTop.id, text); }
   });
-  const guide = createPage("먹실 사용법", false);
+  const guide = createPage("쪽글 사용법", false);
   newBlock(guide.id, "이 페이지는 [[" + dateKey() + "]] 의 링크를 눌러 만들어졌습니다.");
   newBlock(guide.id, "아래 ‘연결된 참조’를 보면, 이 제목을 언급한 블록이 모두 모입니다.");
   newBlock(guide.id, "글머리 점을 누르면 그 블록만 확대해서 볼 수 있습니다.");
+  newBlock(guide.id, "페이지를 지우려면 오른쪽 위 ‘지우기’를 누르거나, 전체 페이지 목록에서 지웁니다.");
+
+  const s1 = createPage("쪽글 · 첫 조각", false);
+  newBlock(s1.id, "#쪽글");
+  newBlock(s1.id, "짧은 글 하나에 페이지 하나. 제목은 나중에 찾을 실마리만 되면 충분합니다.");
+  const s2 = createPage("쪽글 · 둘째 조각", false);
+  newBlock(s2.id, "#쪽글");
+  newBlock(s2.id, "왼쪽 ‘쪽글’을 누를 때마다 지난 조각이 무작위로 하나씩 올라옵니다. 한 바퀴를 다 돌기 전에는 같은 글이 다시 나오지 않습니다.");
 }
 async function boot(){
-  document.documentElement.dataset.theme = localStorage.getItem("meoksil-theme") || "light";
+  document.documentElement.dataset.theme = localStorage.getItem("jjokgeul-theme") || localStorage.getItem("meoksil-theme") || "light";
   syncMobile();
   let data = null;
   try{ data = await dbGet(); }catch(e){ console.warn("IndexedDB 사용 불가", e); }
+  let migrated = false;
+  if(!(data && data.pages && data.blocks)){
+    try{
+      const old = await legacyGet();
+      if(old && old.pages && old.blocks){ data = old; migrated = true; }
+    }catch(e){ /* 이전 저장소 없음 */ }
+  }
   if(data && data.pages && data.blocks){
     G = data; repair();
-    setStatus("saved", "불러옴");
+    if(!G.meta) G.meta = {};
+    if(migrated){ await dbPut(G).catch(()=>{}); setTimeout(()=>toast("이전 이름으로 저장돼 있던 글을 그대로 옮겨 왔습니다"), 400); }
+    setStatus("saved", migrated ? "이관 완료" : "불러옴");
   }else{
     seed();
     await dbPut(G).catch(()=>{});
