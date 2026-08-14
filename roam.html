@@ -191,6 +191,36 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   font-family:inherit;
 }
 
+/* ---------- 오른쪽 사이드 ---------- */
+#rightbar{
+  width:360px;flex:0 0 360px;background:var(--paper-2);border-left:1px solid var(--line);
+  display:none;flex-direction:column;overflow:hidden;
+}
+body.rb-open #rightbar{display:flex}
+.rb-head{
+  display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line);
+  font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);
+}
+.rb-head .grow{flex:1}
+.rb-head button{color:var(--ink-3);font-size:11.5px;letter-spacing:0;text-transform:none;padding:2px 6px;border-radius:4px}
+.rb-head button:hover{color:var(--indigo);background:var(--paper-3)}
+#side-body{flex:1;overflow-y:auto;padding:12px 14px 40vh}
+.rb-card{border-bottom:1px solid var(--line);padding:6px 0 16px;margin-bottom:14px}
+.rb-card:last-child{border-bottom:none}
+.rb-card-head{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.rb-card-head .t{
+  font-family:var(--serif);font-size:16px;font-weight:600;color:var(--ink);cursor:pointer;
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.rb-card-head .t:hover{color:var(--indigo)}
+.rb-card-head .kind{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.rb-card-head .x{color:var(--ink-3);font-size:13px;padding:0 4px;border-radius:3px}
+.rb-card-head .x:hover{color:var(--cinnabar);background:var(--paper-3)}
+.rb-card .content,.rb-card .editor{font-size:14px}
+.rb-card .children{margin-left:16px}
+.rb-empty{color:var(--ink-3);font-size:13px;line-height:1.7;padding:10px 2px}
+@media (max-width:1100px){ body.rb-open #rightbar{display:none} }
+
 /* ---------- 블록 다중 선택 ---------- */
 body.selecting{user-select:none;-webkit-user-select:none;cursor:default}
 .block.is-sel > .block-row{background:var(--sel);border-radius:4px}
@@ -235,6 +265,11 @@ body.has-selbar #toast{bottom:84px}
 }
 .doc .todo-card h4{margin:0 0 3px;font-size:14px;color:var(--ink);font-weight:600}
 .doc .todo-card p{margin:0;font-size:13px;color:var(--ink-2)}
+.doc button{
+  border:1px solid var(--line);border-radius:99px;padding:4px 13px;font-size:12.5px;
+  color:var(--ink-2);margin:6px 0;
+}
+.doc button:hover{border-color:var(--indigo);color:var(--indigo)}
 .doc .todo-card .where{
   display:block;margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3);
 }
@@ -243,6 +278,11 @@ body.has-selbar #toast{bottom:84px}
 .page-link{color:var(--indigo);cursor:pointer;border-radius:2px}
 .page-link:hover{background:var(--sel);text-decoration:underline}
 .page-link .brk{color:var(--ink-3);opacity:.55}
+body.hide-brackets .page-link .brk{display:none}
+body.hide-brackets .page-link{
+  background-image:linear-gradient(var(--sel),var(--sel));
+  background-size:100% 0;background-repeat:no-repeat;background-position:0 100%;
+}
 .page-link.ghost{color:var(--indigo-soft);border-bottom:1px dashed var(--indigo-soft)}
 .tag{color:var(--indigo-soft);cursor:pointer;font-size:.93em}
 .tag:hover{text-decoration:underline}
@@ -399,6 +439,9 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
         <button class="nav-item" data-go="help">도움말</button>
         <button class="nav-item" id="btn-theme">테마 전환</button>
       </div>
+      <div class="row">
+        <button class="nav-item" id="btn-brackets">괄호 보이기</button>
+      </div>
       <div class="status"><span class="dot" id="save-dot"></span><span id="save-text">준비됨</span></div>
     </div>
   </aside>
@@ -408,12 +451,21 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
       <button class="icon-btn" id="btn-menu" style="display:none">☰</button>
       <div class="crumb" id="crumb"></div>
       <div class="spacer"></div>
+      <button class="icon-btn" id="btn-side" title="이 페이지를 오른쪽에 두기 (링크·글머리 점을 Shift+클릭해도 됩니다)">옆에</button>
       <button class="icon-btn" id="btn-delete" title="이 페이지 지우기" style="display:none">지우기</button>
       <button class="icon-btn" id="btn-today">오늘</button>
       <button class="icon-btn" id="btn-search2">⌕</button>
     </div>
     <div class="wrap" id="view"></div>
   </main>
+
+  <aside id="rightbar">
+    <div class="rb-head">
+      <span>옆에 두기</span><span class="grow"></span>
+      <button id="rb-clear">비우기</button><button id="rb-close">닫기 ✕</button>
+    </div>
+    <div id="side-body"></div>
+  </aside>
 </div>
 
 <input type="file" id="file-input" accept="application/json,.json" style="display:none">
@@ -673,6 +725,20 @@ async function doSave(){
     console.error(e); setStatus("", "저장 실패");
   }
 }
+/** [[ ]] 괄호를 화면에 드러낼지 여부. 기본값은 감추기. */
+function bracketsShown(){ return !!(G && G.meta && G.meta.showBrackets); }
+function applyBrackets(){
+  document.body.classList.toggle("hide-brackets", !bracketsShown());
+  const b = $("#btn-brackets");
+  if(b) b.textContent = bracketsShown() ? "괄호 감추기" : "괄호 보이기";
+}
+function toggleBrackets(){
+  if(!G.meta) G.meta = {};
+  G.meta.showBrackets = !bracketsShown();
+  applyBrackets();
+  scheduleSave();
+  toast(bracketsShown() ? "괄호를 드러냅니다" : "괄호를 감춥니다");
+}
 function setStatus(cls, text){
   const d = $("#save-dot"); d.className = "dot " + cls;
   $("#save-text").textContent = text;
@@ -732,8 +798,10 @@ function render(){
   else if(view.type === "shuffle") v.appendChild(renderShuffleView());
   else if(view.type === "all")  v.appendChild(renderAllPages());
   else if(view.type === "help") v.appendChild(renderHelp());
+  renderSide();
   syncDeleteBtn();
   paintSel();
+  applyBrackets();
 }
 function syncDeleteBtn(){
   const btn = $("#btn-delete");
@@ -824,9 +892,12 @@ function blockEl(id){
   const bullet = document.createElement("span");
   bullet.className = "bullet" + (b.collapsed && b.children.length ? " has-collapsed" : "");
   bullet.innerHTML = `<span class="dot-b"></span>`;
-  bullet.title = "클릭하면 이 블록으로 확대";
+  bullet.title = "클릭: 이 블록만 확대 · Shift+클릭: 오른쪽에 두기";
   bullet.draggable = true;
-  bullet.onclick = () => go({ type:"zoom", id });
+  bullet.onclick = e => {
+    if(e.shiftKey) sideAdd({ type:"block", id });
+    else go({ type:"zoom", id });
+  };
   bullet.addEventListener("dragstart", e => {
     dragId = id; e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", id);
@@ -1071,6 +1142,82 @@ function renderShuffleView(){
   return frag;
 }
 
+/* ---- 오른쪽 사이드 ---- */
+function sideItems(){
+  if(!G.meta.sidebar) G.meta.sidebar = [];
+  G.meta.sidebar = G.meta.sidebar.filter(it =>
+    it && (it.type === "page" ? !!G.pages[it.id] : !!G.blocks[it.id]));
+  return G.meta.sidebar;
+}
+function sideAdd(item){
+  const list = sideItems();
+  const k = it => it.type + ":" + it.id;
+  G.meta.sidebar = [item].concat(list.filter(x => k(x) !== k(item))).slice(0, 8);
+  G.meta.sidebarOpen = true;
+  scheduleSave();
+  render();
+  toast("오른쪽에 두었습니다");
+}
+function sideRemove(i){
+  sideItems().splice(i, 1);
+  if(!G.meta.sidebar.length) G.meta.sidebarOpen = false;
+  scheduleSave(); render();
+}
+function sideToggle(){
+  const list = sideItems();
+  if(!list.length){
+    const pid = (view.type === "page" || view.type === "shuffle") ? view.id : null;
+    if(pid && G.pages[pid]) return sideAdd({ type:"page", id:pid });
+    toast("링크나 글머리 점을 Shift+클릭하면 오른쪽에 쌓입니다");
+    return;
+  }
+  G.meta.sidebarOpen = !G.meta.sidebarOpen;
+  scheduleSave(); render();
+}
+function renderSide(){
+  const list = sideItems();
+  const open = !!(G.meta.sidebarOpen && list.length);
+  document.body.classList.toggle("rb-open", open);
+  const body = $("#side-body");
+  if(!body) return;
+  body.innerHTML = "";
+  if(!open) return;
+  list.forEach((it, i) => {
+    const card = document.createElement("div");
+    card.className = "rb-card";
+    const head = document.createElement("div");
+    head.className = "rb-card-head";
+    const kind = document.createElement("span");
+    kind.className = "kind"; kind.textContent = it.type === "page" ? "페이지" : "블록";
+    const t = document.createElement("span");
+    t.className = "t";
+    const x = document.createElement("button");
+    x.className = "x"; x.textContent = "✕"; x.title = "치우기";
+    x.onclick = () => sideRemove(i);
+    head.append(kind, t, x);
+    card.appendChild(head);
+
+    if(it.type === "page"){
+      const p = G.pages[it.id];
+      t.textContent = p.title;
+      t.onclick = () => openPage(p.id);
+      if(!p.children.length) newBlock(p.id, "");
+      card.appendChild(outline(p.id));
+    }else{
+      const b = G.blocks[it.id];
+      const pg = pageOf(it.id);
+      t.textContent = plainText(b.content).slice(0, 40) || "빈 블록";
+      t.title = pg ? pg.title : "";
+      t.onclick = () => openPage(pg?.id, it.id);
+      const holder = document.createElement("div");
+      holder.className = "children";
+      holder.appendChild(blockEl(it.id));
+      card.appendChild(holder);
+    }
+    body.appendChild(card);
+  });
+}
+
 /* ---- 페이지 삭제 ---- */
 function deletePage(pid, after){
   const p = G.pages[pid];
@@ -1103,6 +1250,22 @@ function renderHelp(){
   const doc = document.createElement("div");
   doc.className = "doc";
   doc.innerHTML = HELP_HTML;
+  doc.querySelectorAll("[data-toggle='plainindent']").forEach(el => {
+    const sync = () => el.textContent = plainIndentOn()
+      ? "지금은 계층을 탭으로 남깁니다 — 펴기" : "지금은 계층을 펴서 붙입니다 — 탭으로 남기기";
+    sync();
+    el.onclick = () => {
+      G.meta.plainIndent = !plainIndentOn();
+      scheduleSave(); sync();
+      toast(plainIndentOn() ? "계층을 탭으로 남깁니다" : "계층을 펴서 붙입니다");
+    };
+  });
+  doc.querySelectorAll("[data-toggle='brackets']").forEach(el => {
+    const sync = () => el.textContent = bracketsShown()
+      ? "지금은 괄호가 보입니다 — 감추기" : "지금은 괄호가 숨어 있습니다 — 보이기";
+    sync();
+    el.onclick = () => { toggleBrackets(); sync(); };
+  });
   doc.querySelectorAll("[data-jump]").forEach(el => {
     el.style.cursor = "pointer";
     el.onclick = () => go({ type: el.dataset.jump });
@@ -1144,6 +1307,8 @@ const HELP_HTML = [
 "<tr><td><code>⌘C</code></td><td>선택한 블록을 자식까지 통째로 복사합니다.</td></tr>",
 "<tr><td><code>⌘X</code></td><td>복사하고 지웁니다.</td></tr>",
 "<tr><td><code>Backspace</code></td><td>선택한 블록을 지웁니다.</td></tr>",
+"<tr><td><code>⌘⇧C</code></td><td>스크리브너용 플레인 텍스트로 복사합니다.</td></tr>",
+"<tr><td><code>Tab</code> / <code>Shift+Tab</code></td><td>선택한 블록을 한꺼번에 들여쓰기 / 내어쓰기.</td></tr>",
 "<tr><td><code>⌘A</code></td><td>그 페이지의 블록을 모두 선택합니다.</td></tr>",
 "<tr><td><code>Enter</code></td><td>선택을 풀고 첫 블록 편집으로 들어갑니다.</td></tr>",
 "<tr><td><code>Esc</code></td><td>선택 해제.</td></tr>",
@@ -1151,14 +1316,42 @@ const HELP_HTML = [
 "<p>붙여넣기는 <b>블록 안에 캐럿을 두고</b> <code>⌘V</code>. 빈 블록에 붙이면 그 자리를 첫 줄이 차지하고, 글이 있는 블록에 붙이면 바로 아래에 형제로 들어갑니다. <b>계층은 그대로 옮겨집니다.</b></p>",
 "<p>클립보드에는 <code>- </code> 글머리표와 두 칸 들여쓰기로 된 보통 글이 담깁니다. 그래서 다른 페이지는 물론 Obsidian·Scrivener·메모장에 붙여도 목록 모양이 살아 있고, 거꾸로 그런 목록을 복사해 와서 붙이면 계층 있는 블록으로 풀립니다. 들여쓴 줄만 있고 글머리표가 없는 글도 들여쓰기 폭을 보고 계층을 잡습니다.</p>",
 
+"<h3>한꺼번에 들여쓰기</h3>",
+"<p>여러 블록을 고른 채 <code>Tab</code>을 누르면 모두 한 칸씩 들어갑니다. 부모가 같은 것끼리 묶어 그 묶음의 바로 앞 형제 밑으로 순서대로 들어가고, 앞에 기댈 형제가 없는 묶음은 그대로 남습니다. <code>Shift+Tab</code>은 부모 바로 뒤로 나란히 빠져나옵니다. 자식은 따라옵니다.</p>",
+
+"<h3>스크리브너로 넘기기 — 플레인 복사</h3>",
+"<p>복사에는 두 갈래가 있습니다.</p>",
+"<ul>",
+"<li><code>⌘C</code> <b>아웃라인 복사</b> — <code>- </code> 글머리표와 두 칸 들여쓰기가 붙습니다. 이 앱 안에서 옮기거나 Obsidian 같은 아웃라이너로 보낼 때.</li>",
+"<li><code>⌘⇧C</code> <b>플레인 복사</b> — 원고로 넘길 때. 글머리표를 떼고, <code>[[제목]]</code>은 제목 글자만 남기고, <code>#태그</code>와 <code>**</code> <code>__</code> <code>~~</code> <code>^^</code> <code>`</code> 같은 기호, <code>{{TODO}}</code> 표시를 모두 지웁니다. 블록 하나가 한 문단이 되도록 줄바꿈 하나로만 이어서, 스크리브너에 붙이면 문단 하나씩 정확히 들어갑니다. 태그만 적힌 블록은 빈 줄이 되므로 아예 빠집니다.</li>",
+"</ul>",
+"<p>선택 알약의 <b>플레인 복사</b> 단추도 같은 일을 합니다.</p>",
+"<h3>플레인 복사에서 계층을 남기려면</h3>",
+"<p>기본은 계층을 펴서 문단만 이어 붙입니다. 자료 정리용으로 옮길 때처럼 깊이를 탭으로 남기고 싶다면 아래에서 바꿉니다.</p>",
+"<p><button data-toggle='plainindent'></button></p>",
+
 "<h2>4. 페이지 잇기와 백링크</h2>",
 "<ul>",
 "<li><code>[[제목]]</code> — 페이지 링크. <code>[[</code>를 치면 있는 페이지 목록이 뜨고, 없는 이름이면 맨 위에 '새 페이지'로 제안됩니다. 블록을 빠져나가는 순간 실제 페이지가 만들어집니다.</li>",
 "<li><code>#태그</code> — 같은 링크입니다. 짧게 쓰고 싶을 때.</li>",
 "<li><b>연결된 참조</b> — 페이지 아래에, 다른 곳에서 그 제목을 <code>[[ ]]</code>로 부른 블록이 모입니다. 어느 페이지에서 왔는지, 어떤 블록 아래에 있었는지까지 보여 줍니다. 눌러 가면 그 자리에서 바로 고칠 수 있습니다.</li>",
 "<li><b>언급됨 · 링크 없음</b> — 괄호 없이 제목만 적힌 블록. 링크로 승격시킬 만한 곳을 찾을 때 봅니다.</li>",
+"<li><b>괄호는 평소에 숨어 있습니다.</b> 화면에는 제목만 남고, 그 블록을 눌러 편집에 들어가면 <code>[[ ]]</code>가 다시 나타납니다. 읽을 때는 문장이 끊기지 않고, 고칠 때는 괄호를 정확히 다룰 수 있습니다.</li>",
 "<li>페이지 제목을 누르면 바로 고칠 수 있고, 고치면 다른 글에 적힌 <code>[[옛 제목]]</code>까지 함께 바뀝니다.</li>",
 "<li>글머리 점을 누르면 그 블록만 확대해서 봅니다. 위쪽 이름표를 눌러 되돌아옵니다.</li>",
+"</ul>",
+
+"<h3>괄호를 늘 보이게 하려면</h3>",
+"<p>편집 중이 아닐 때도 <code>[[ ]]</code>를 드러내 두는 편이 편하다면 아래 단추로 바꿉니다. 왼쪽 아래 사이드바에도 같은 단추가 있습니다. 고른 값은 그래프에 함께 저장되고, JSON을 내보내고 다시 불러와도 유지됩니다.</p>",
+"<p><button data-toggle='brackets'></button></p>",
+
+"<h2>4-b. 오른쪽에 두기</h2>",
+"<p>글을 쓰면서 다른 페이지를 곁눈질해야 할 때가 있습니다. <b>링크나 글머리 점을 <code>Shift</code>+클릭</b>하면 그 페이지(또는 블록 하나)가 오른쪽에 쌓입니다. 위쪽 <b>옆에</b> 단추는 지금 보는 페이지를 오른쪽으로 보냅니다.</p>",
+"<ul>",
+"<li>오른쪽에 놓인 글도 <b>그대로 고칠 수 있습니다.</b> 본문과 오른쪽에 같은 블록이 함께 떠 있으면, 편집을 마치는 순간 양쪽이 같이 갱신됩니다.</li>",
+"<li>카드 제목을 누르면 본문 자리로 옮겨 열립니다. <code>✕</code>로 하나씩 치우고, 머리의 <b>비우기</b>로 전부 내립니다.</li>",
+"<li>여덟 장까지 쌓이고, 새로 넣은 것이 맨 위로 옵니다. 무엇을 놓아 두었는지는 저장되어 다음에 열 때도 그대로입니다.</li>",
+"<li>화면 너비가 1100px보다 좁으면 자리를 아끼려고 감춥니다.</li>",
 "</ul>",
 
 "<h2>5. 쪽글</h2>",
@@ -1191,10 +1384,10 @@ const HELP_HTML = [
 "<p>지금 없는 것들을 적어 둡니다. 필요한 항목을 골라 말씀하시면 그 부분을 손보겠습니다. 괄호 안은 코드에서 건드릴 자리입니다.</p>",
 
 "<div class='todo-card'><h4>블록 참조 <code>((블록))</code></h4><p>다른 블록을 통째로 끌어와 비추고, 원본을 고치면 같이 바뀌는 기능. 지금은 페이지 단위 링크만 됩니다.<span class='where'>renderInline · buildRefIndex</span></p></div>",
-"<div class='todo-card'><h4>선택한 블록 여럿을 한꺼번에 들여쓰기</h4><p>여러 블록을 고른 상태에서 <code>Tab</code>이 아직 듣지 않습니다. 낱개로는 됩니다.<span class='where'>onKeydown · indent/outdent</span></p></div>",
+
 "<div class='todo-card'><h4>되돌리기 / 다시 하기</h4><p>블록 삭제와 잘라내기가 지금은 되돌릴 수 없습니다. 그래프 스냅숏을 스택에 쌓아 <code>⌘Z</code>를 붙이는 방식이 어울립니다.<span class='where'>scheduleSave 주변</span></p></div>",
-"<div class='todo-card'><h4>오른쪽 사이드바(여러 페이지 나란히 보기)</h4><p>Roam의 shift+클릭처럼, 참조를 옆에 띄워 두고 본문을 쓰는 구성.<span class='where'>레이아웃 · render</span></p></div>",
-"<div class='todo-card'><h4>마크다운 / Scrivener 내보내기</h4><p>지금은 JSON만 나갑니다. 페이지별 <code>.md</code> 묶음이나 한 편 통짜 원고로 뽑는 길.<span class='where'>exportJSON 옆에</span></p></div>",
+
+"<div class='todo-card'><h4>마크다운 / 원고 파일로 내보내기</h4><p>블록 선택 없이 페이지나 그래프 전체를 <code>.md</code> 묶음 또는 한 편 통짜 원고 파일로 뽑는 길. 지금은 선택해서 플레인 복사하는 것까지만 됩니다.<span class='where'>exportJSON 옆에</span></p></div>",
 "<div class='todo-card'><h4>이미지·파일 붙이기</h4><p>붙여넣은 그림을 base64로 품거나 파일 손잡이만 들고 있는 방식. 내보내기 용량과 맞바꿔야 합니다.<span class='where'>onPaste</span></p></div>",
 "<div class='todo-card'><h4>태그 목록 화면</h4><p>쓰인 태그를 빈도순으로 늘어놓고 눌러 들어가는 화면. 지금은 <code>#쪽글</code> 하나만 셔플로 씁니다.<span class='where'>pagesWithTag 재사용</span></p></div>",
 "<div class='todo-card'><h4>날짜 범위로 데일리 노트 훑기</h4><p>지난 7일 말고 임의 구간, 달력 보기.<span class='where'>renderDailyFeed</span></p></div>",
@@ -1345,14 +1538,16 @@ function closeSidebarMobile(){ if(window.innerWidth <= 760) $("#sidebar").classL
    ============================================================ */
 function autosize(ta){ ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
 
-function enterEdit(id, pos = null){
-  if(editing === id){
+function enterEdit(id, pos = null, root = null){
+  const scope = (root && document.contains(root)) ? root : (editRoot && document.contains(editRoot) ? editRoot : $("#view"));
+  if(editing === id && scope.contains(currentTA())){
     const ta = currentTA();
     if(ta && pos != null){ ta.focus(); ta.setSelectionRange(pos, pos); }
     return;
   }
   if(editing) exitEdit();
-  const blockEl = document.querySelector(`.block[data-id="${id}"]`);
+  const blockEl = scope.querySelector(`.block[data-id="${id}"]`) || document.querySelector(`.block[data-id="${id}"]`);
+  editRoot = paneOf(blockEl);
   if(!blockEl || !G.blocks[id]) return;
   const row = blockEl.querySelector(":scope > .block-row");
   const content = row.querySelector(".content");
@@ -1383,6 +1578,10 @@ function enterEdit(id, pos = null){
   });
 }
 function currentTA(){ return document.querySelector(".editor"); }
+/** 편집기가 붙은 창. 본문(#view)과 오른쪽 사이드(#side-body)에 같은 블록이 동시에 그려질 수 있어
+ *  블록을 찾을 때는 항상 어느 창인지부터 정한다. */
+let editRoot = null;
+function paneOf(el){ return el && el.closest("#side-body") ? $("#side-body") : $("#view"); }
 function commit(){
   const ta = currentTA();
   if(ta && editing && G.blocks[editing]){
@@ -1401,11 +1600,15 @@ function exitEdit(){
   if(b) ensureLinkedPages(b.content);
   const row = ta.parentElement;
   ta.remove();
-  const content = row?.querySelector(".content");
-  if(content && b){
-    content.style.display = "";
-    content.className = "content" + (b.content ? "" : " empty");
-    content.innerHTML = renderInline(b.content, id);
+  if(b){
+    // 본문과 오른쪽 사이드에 같은 블록이 있으면 양쪽 다 새로 그린다
+    $$(`.block[data-id="${id}"] > .block-row > .content`).forEach(el => {
+      el.style.display = "";
+      el.className = "content" + (b.content ? "" : " empty");
+      el.innerHTML = renderInline(b.content, id);
+    });
+  }else if(row){
+    row.querySelector(".content")?.style.removeProperty("display");
   }
   editing = null;
   composing = false;
@@ -1440,12 +1643,19 @@ function onBlur(){
 function afterStructure(focusId, caret){
   scheduleSave();
   const keep = $("#main").scrollTop;
+  const keepSide = $("#side-body").scrollTop;
+  const root = editRoot;
   editing = null;
   render();
   $("#main").scrollTop = keep;
-  if(focusId) enterEdit(focusId, caret);
+  $("#side-body").scrollTop = keepSide;
+  if(focusId) enterEdit(focusId, caret, root);
 }
-function visibleOrder(){ return $$(".block").map(el => el.dataset.id); }
+function visibleOrder(){
+  const scope = (editRoot && document.contains(editRoot)) ? editRoot : $("#view");
+  const ids = $$(".block", scope).map(el => el.dataset.id);
+  return ids.length ? ids : $$(".block").map(el => el.dataset.id);
+}
 function prevVisible(id){ const o = visibleOrder(), i = o.indexOf(id); return i > 0 ? o[i-1] : null; }
 function nextVisible(id){ const o = visibleOrder(), i = o.indexOf(id); return i >= 0 && i < o.length-1 ? o[i+1] : null; }
 
@@ -1701,12 +1911,15 @@ function updateSelBar(){
   const total = selWithDescendants().size;
   bar.innerHTML = `<span><b>${sel.size}</b>개 선택</span>`
     + (total > sel.size ? `<span class="s">하위 포함 ${total}</span>` : `<span class="s"></span>`)
-    + `<button data-a="copy">복사</button><button data-a="cut">잘라내기</button>`
-    + `<button data-a="del">삭제</button><button data-a="clear">해제</button>`;
+    + `<button data-a="copy">복사</button><button data-a="plain">플레인 복사</button>`
+    + `<button data-a="cut">잘라내기</button><button data-a="del">삭제</button>`
+    + `<button data-a="clear">해제</button>`;
   bar.querySelectorAll("button").forEach(b => b.onclick = () => {
     const a = b.dataset.a;
-    if(a === "copy"){ const t = copySel(); if(t) navigator.clipboard?.writeText(t).catch(()=>{}); }
-    else if(a === "cut"){ const t = copySel(); if(t) navigator.clipboard?.writeText(t).catch(()=>{}); deleteSel(); }
+    const n = selWithDescendants().size;
+    if(a === "copy"){ const t = copySel(); if(t){ writeClipboard(t); toast(`블록 ${n}개를 복사했습니다`); } }
+    else if(a === "plain"){ const t = copySel(true); if(t){ writeClipboard(t); toast(`플레인 텍스트로 복사했습니다`); } }
+    else if(a === "cut"){ const t = copySel(); if(t) writeClipboard(t); deleteSel(); }
     else if(a === "del") deleteSel();
     else clearSel();
   });
@@ -1714,6 +1927,7 @@ function updateSelBar(){
 
 /* ---- 마우스 드래그 ---- */
 function beginPointerSelect(id, startOff, ev){
+  editRoot = paneOf(ev.target);
   if(ev.shiftKey && selAnchor && G.blocks[selAnchor]){
     exitEdit(); setRange(selAnchor, id); return;
   }
@@ -1750,11 +1964,12 @@ function onSelUp(e){
   if(!dr) return;
   if(dr.mode === "block") return;               // 블록 선택 상태 유지
   clearSel();
-  const el = document.querySelector(`.block[data-id="${dr.id}"] > .block-row > .content`);
+  const scope = (editRoot && document.contains(editRoot)) ? editRoot : document;
+  const el = scope.querySelector(`.block[data-id="${dr.id}"] > .block-row > .content`);
   let endOff = dr.startOff;
   if(el && G.blocks[dr.id])
     endOff = renderedToRaw(G.blocks[dr.id].content, caretOffsetFromPoint(el, e.clientX, e.clientY));
-  enterEdit(dr.id, dr.startOff);
+  enterEdit(dr.id, dr.startOff, editRoot);
   const ta = currentTA();
   if(ta && endOff !== dr.startOff)
     ta.setSelectionRange(Math.min(dr.startOff, endOff), Math.max(dr.startOff, endOff));
@@ -1816,12 +2031,54 @@ function lastDescendant(id){
   return lastDescendant(b.children[b.children.length - 1]);
 }
 
+/* ---- 원고용 플레인 텍스트 ----
+   [[제목]]은 제목만 남기고, #태그와 강조 기호·할 일 표시는 지운다.
+   블록 하나가 한 문단이 되도록 줄바꿈 하나로만 잇는다(스크리브너에서 문단 하나로 들어온다). */
+function toPlain(text){
+  let t = String(text || "");
+  t = t.replace(/^\{\{(TODO|DONE)\}\}\s*/, "");
+  t = t.replace(LINK_RE, "$1");
+  t = t.replace(TAG_RE, "$1");
+  t = t.replace(/\*\*([^*\n]+)\*\*/g, "$1");
+  t = t.replace(/__([^_\n]+)__/g, "$1");
+  t = t.replace(/~~([^~\n]+)~~/g, "$1");
+  t = t.replace(/\^\^([^^\n]+)\^\^/g, "$1");
+  t = t.replace(/`([^`\n]+)`/g, "$1");
+  return t.replace(/[ \t]+$/g, "").trim();
+}
+function plainIndentOn(){ return !!(G.meta && G.meta.plainIndent); }
+function plainTree(tree, depth){
+  const out = [];
+  tree.forEach(n => {
+    const body = toPlain(n.content);
+    if(body){
+      const pad = plainIndentOn() ? "\t".repeat(depth) : "";
+      body.split("\n").forEach(line => out.push(pad + line));
+    }
+    out.push.apply(out, plainTree(n.children, body ? depth + 1 : depth));
+  });
+  return out;
+}
+const serializePlain = tree => plainTree(tree, 0).join("\n");
+
 /* ---- 복사 / 잘라내기 / 삭제 / 붙여넣기 ---- */
-function copySel(){
+function copySel(plain){
   const ids = selOrdered();
   if(!ids.length) return null;
   clip = treeOf(ids);
-  return serialize(clip);
+  return plain ? serializePlain(clip) : serialize(clip);
+}
+/** 클립보드에 직접 쓴다(단추로 누를 때). 실패하면 숨은 textarea로 대신한다. */
+function writeClipboard(text){
+  if(navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  fallbackCopy(text);
+}
+function fallbackCopy(text){
+  const t = document.createElement("textarea");
+  t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+  document.body.appendChild(t); t.select();
+  try{ document.execCommand("copy"); }catch{}
+  t.remove();
 }
 function deleteSel(){
   const ids = selOrdered();
@@ -1838,6 +2095,64 @@ function deleteSel(){
   if(before && G.blocks[before]) enterEdit(before);
   toast(`블록 ${n}개를 지웠습니다`);
 }
+/** 선택한 블록들을 한꺼번에 들여쓴다. 부모가 같은 것끼리 묶어,
+ *  그 묶음의 첫 블록 바로 앞 형제 밑으로 순서대로 넣는다. */
+function indentGroup(){
+  const ids = selOrdered();
+  if(!ids.length) return;
+  const groups = new Map();
+  ids.forEach(id => {
+    const p = G.blocks[id].parent;
+    if(!groups.has(p)) groups.set(p, []);
+    groups.get(p).push(id);
+  });
+  let moved = 0;
+  for(const [parent, members] of groups){
+    const arr = childrenOf(parent);
+    const firstIdx = Math.min.apply(null, members.map(id => arr.indexOf(id)));
+    if(firstIdx <= 0) continue;                       // 앞에 기댈 형제가 없다
+    const target = G.blocks[arr[firstIdx - 1]];
+    if(!target || sel.has(target.id)) continue;
+    members.sort((a, b) => arr.indexOf(a) - arr.indexOf(b)).forEach(id => {
+      detach(id);
+      target.children.push(id);
+      G.blocks[id].parent = target.id;
+      touch(id); moved++;
+    });
+    target.collapsed = false;
+  }
+  if(!moved){ toast("더 들여쓸 수 없습니다"); return; }
+  scheduleSave(); editing = null; render();
+}
+/** 선택한 블록들을 한꺼번에 내어쓴다. 부모 바로 뒤로 순서대로 빠져나온다. */
+function outdentGroup(){
+  const ids = selOrdered();
+  if(!ids.length) return;
+  const groups = new Map();
+  ids.forEach(id => {
+    const p = G.blocks[id].parent;
+    if(!groups.has(p)) groups.set(p, []);
+    groups.get(p).push(id);
+  });
+  let moved = 0;
+  for(const [parentId, members] of groups){
+    const parent = G.blocks[parentId];
+    if(!parent) continue;                             // 이미 페이지 바로 아래
+    const arr = childrenOf(parentId);
+    members.sort((a, b) => arr.indexOf(a) - arr.indexOf(b));
+    const gp = childrenOf(parent.parent);
+    let at = gp.indexOf(parentId) + 1;
+    members.forEach(id => {
+      detach(id);
+      gp.splice(at++, 0, id);
+      G.blocks[id].parent = parent.parent;
+      touch(id); moved++;
+    });
+  }
+  if(!moved){ toast("더 내어쓸 수 없습니다"); return; }
+  scheduleSave(); editing = null; render();
+}
+
 function onPaste(e){
   const text = (e.clipboardData || window.clipboardData)?.getData("text/plain");
   if(!text) return;
@@ -2053,7 +2368,12 @@ function pickResult(r){
    ============================================================ */
 document.addEventListener("click", e => {
   const link = e.target.closest(".page-link, .tag");
-  if(link){ e.preventDefault(); openPageByTitle(link.dataset.title); return; }
+  if(link){
+    e.preventDefault();
+    const p = getOrCreatePage(link.dataset.title);
+    if(e.shiftKey) sideAdd({ type:"page", id:p.id }); else openPage(p.id);
+    return;
+  }
   const todo = e.target.closest(".todo");
   if(todo && todo.dataset.todo){
     const id = todo.dataset.todo;
@@ -2096,6 +2416,17 @@ document.addEventListener("keydown", e => {
       const ids = visibleOrder().filter(id => pageOf(id)?.id === pg);
       sel = new Set(topLevelOf(ids)); paintSel(); return;
     }
+    if(e.key === "Tab"){
+      e.preventDefault();
+      e.shiftKey ? outdentGroup() : indentGroup();
+      return;
+    }
+    if(mod && e.shiftKey && e.key.toLowerCase() === "c"){
+      e.preventDefault();
+      const t = copySel(true);
+      if(t){ writeClipboard(t); toast("플레인 텍스트로 복사했습니다"); }
+      return;
+    }
     if(e.key === "Enter"){
       e.preventDefault();
       const first = selOrdered()[0]; clearSel(); if(first) enterEdit(first); return;
@@ -2126,6 +2457,10 @@ $("#btn-theme").onclick = () => {
   document.documentElement.dataset.theme = cur;
   localStorage.setItem("jjokgeul-theme", cur);
 };
+$("#btn-brackets").onclick = toggleBrackets;
+$("#btn-side").onclick   = sideToggle;
+$("#rb-close").onclick   = () => { G.meta.sidebarOpen = false; scheduleSave(); render(); };
+$("#rb-clear").onclick   = () => { G.meta.sidebar = []; G.meta.sidebarOpen = false; scheduleSave(); render(); };
 $("#btn-menu").onclick = () => $("#sidebar").classList.toggle("open");
 function syncMobile(){ $("#btn-menu").style.display = window.innerWidth <= 760 ? "" : "none"; }
 window.addEventListener("resize", syncMobile);
