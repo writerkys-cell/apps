@@ -191,6 +191,54 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
   font-family:inherit;
 }
 
+/* ---------- 블록 다중 선택 ---------- */
+body.selecting{user-select:none;-webkit-user-select:none;cursor:default}
+.block.is-sel > .block-row{background:var(--sel);border-radius:4px}
+.block.is-sel > .block-row .content{cursor:default}
+#selbar{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:120;
+  display:flex;align-items:center;gap:8px;padding:7px 10px 7px 15px;
+  background:var(--paper);border:1px solid var(--line);border-radius:99px;
+  box-shadow:0 8px 26px rgba(0,0,0,.16);font-size:13px;white-space:nowrap;
+}
+#selbar b{color:var(--indigo)}
+#selbar .s{color:var(--ink-3);font-size:11.5px;font-family:var(--mono);margin-right:4px}
+#selbar button{
+  border:1px solid var(--line);border-radius:99px;padding:3px 11px;font-size:12px;color:var(--ink-2);
+}
+#selbar button:hover{border-color:var(--indigo);color:var(--indigo)}
+body.has-selbar #toast{bottom:84px}
+
+/* ---------- 도움말 ---------- */
+.doc{font-size:14.5px;line-height:1.8;color:var(--ink-2);max-width:100%}
+.doc h2{
+  font-family:var(--serif);font-size:20px;color:var(--ink);font-weight:600;
+  margin:34px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line);
+}
+.doc h3{font-size:14px;color:var(--ink);font-weight:600;margin:20px 0 4px}
+.doc p{margin:8px 0}
+.doc ul{margin:8px 0;padding-left:20px}
+.doc li{margin:4px 0}
+.doc code{
+  font-family:var(--mono);font-size:.85em;background:var(--paper-3);
+  padding:1px 5px;border-radius:3px;color:var(--ink);white-space:nowrap;
+}
+.doc table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+.doc td{padding:6px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.doc td:first-child{width:180px;white-space:nowrap;color:var(--ink)}
+.doc .lead{
+  font-family:var(--serif);font-size:16px;color:var(--ink);line-height:1.75;
+  border-left:2px solid var(--indigo);padding-left:14px;margin:14px 0 6px;
+}
+.doc .todo-card{
+  border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:10px 0;background:var(--paper-2);
+}
+.doc .todo-card h4{margin:0 0 3px;font-size:14px;color:var(--ink);font-weight:600}
+.doc .todo-card p{margin:0;font-size:13px;color:var(--ink-2)}
+.doc .todo-card .where{
+  display:block;margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3);
+}
+
 /* ---------- 인라인 문법 ---------- */
 .page-link{color:var(--indigo);cursor:pointer;border-radius:2px}
 .page-link:hover{background:var(--sel);text-decoration:underline}
@@ -348,6 +396,7 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
         <button class="nav-item" id="btn-import">불러오기</button>
       </div>
       <div class="row">
+        <button class="nav-item" data-go="help">도움말</button>
         <button class="nav-item" id="btn-theme">테마 전환</button>
       </div>
       <div class="status"><span class="dot" id="save-dot"></span><span id="save-text">준비됨</span></div>
@@ -682,7 +731,9 @@ function render(){
   else if(view.type === "zoom") v.appendChild(renderZoomView(view.id));
   else if(view.type === "shuffle") v.appendChild(renderShuffleView());
   else if(view.type === "all")  v.appendChild(renderAllPages());
+  else if(view.type === "help") v.appendChild(renderHelp());
   syncDeleteBtn();
+  paintSel();
 }
 function syncDeleteBtn(){
   const btn = $("#btn-delete");
@@ -730,6 +781,7 @@ function renderCrumb(){
   const sep = () => { const s=document.createElement("span"); s.className="sep"; s.textContent="›"; c.appendChild(s); };
   if(view.type === "daily") add("오늘의 노트", null, true);
   if(view.type === "all")   add("전체 페이지", null, true);
+  if(view.type === "help")  add("도움말", null, true);
   if(view.type === "shuffle"){
     add("쪽글", () => nextShuffle()); sep();
     add(G.pages[view.id] ? G.pages[view.id].title : "모으는 중", null, true);
@@ -785,10 +837,11 @@ function blockEl(id){
   content.className = "content" + (b.content ? "" : " empty");
   content.innerHTML = renderInline(b.content, id);
   content.addEventListener("mousedown", e => {
+    if(e.button !== 0) return;
     if(e.target.closest(".page-link,.tag,a,.todo")) return;
     e.preventDefault();
-    const off = caretOffsetFromPoint(content, e.clientX, e.clientY);
-    enterEdit(id, renderedToRaw(b.content, off));
+    const off = renderedToRaw(b.content, caretOffsetFromPoint(content, e.clientX, e.clientY));
+    beginPointerSelect(id, off, e);
   });
 
   row.append(arrow, bullet, content);
@@ -1036,6 +1089,121 @@ function deletePage(pid, after){
   return true;
 }
 
+/* ============================================================
+   도움말 (코드에 붙어 있는 정적 문서)
+   ============================================================ */
+function renderHelp(){
+  const frag = document.createDocumentFragment();
+  const h = document.createElement("div");
+  h.className = "page-title"; h.textContent = "도움말";
+  const m = document.createElement("div");
+  m.className = "page-meta";
+  m.innerHTML = '<span>쪽글 · roam.html</span><span>서버 없이 브라우저에서만 도는 아웃라이너</span>';
+  frag.append(h, m);
+  const doc = document.createElement("div");
+  doc.className = "doc";
+  doc.innerHTML = HELP_HTML;
+  doc.querySelectorAll("[data-jump]").forEach(el => {
+    el.style.cursor = "pointer";
+    el.onclick = () => go({ type: el.dataset.jump });
+  });
+  frag.appendChild(doc);
+  return frag;
+}
+const HELP_HTML = [
+"<p class='lead'>글 한 덩어리를 <b>블록</b>이라 부릅니다. 블록은 서로 품고 물리며 하나의 페이지를 이루고, 페이지는 <code>[[제목]]</code>으로 서로를 부릅니다. 부른 자리는 불린 페이지 아래에 저절로 모입니다. 이 두 규칙이 전부입니다.</p>",
+
+"<h2>1. 화면 구성</h2>",
+"<ul>",
+"<li><b>오늘의 노트</b> — 앱을 열면 나오는 첫 화면. 오늘 날짜 페이지가 자동으로 만들어지고, 그 아래로 최근 데일리 노트 일곱 개가 이어집니다. 날짜를 누르면 그 하루만 따로 볼 수 있습니다.</li>",
+"<li><b>쪽글</b> — <code>#쪽글</code> 태그가 붙은 페이지를 무작위로 하나씩 꺼내 줍니다.</li>",
+"<li><b>무작위 페이지</b> — 태그와 상관없이 아무 페이지나 엽니다. 내용이 있는 페이지를 먼저 고르고, 데일리 노트는 뺍니다.</li>",
+"<li><b>전체 페이지</b> — 제목·블록 수·피참조 수·수정 시각을 한 표로 봅니다. 여기서 지울 수도 있습니다.</li>",
+"<li><b>페이지 목록</b> — 최근 고친 순서로 60개까지. 오른쪽 숫자는 내용이 있는 블록 수입니다.</li>",
+"</ul>",
+
+"<h2>2. 글쓰기 — 한 블록 안에서</h2>",
+"<table><tbody>",
+"<tr><td><code>Enter</code></td><td>캐럿 자리에서 블록을 나눕니다. 자식이 있으면 새 블록은 첫 자식으로, 없으면 바로 아래 형제로 들어갑니다.</td></tr>",
+"<tr><td><code>Shift + Enter</code></td><td>블록을 나누지 않고 줄만 바꿉니다.</td></tr>",
+"<tr><td><code>Tab</code> / <code>Shift + Tab</code></td><td>들여쓰기 / 내어쓰기. 들여쓰면 바로 위 형제의 자식이 됩니다.</td></tr>",
+"<tr><td><code>Backspace</code> (맨 앞)</td><td>위 블록과 합칩니다. 자식이 있으면 그 자식들도 함께 따라갑니다.</td></tr>",
+"<tr><td><code>Delete</code> (맨 끝)</td><td>아래 블록을 끌어와 붙입니다.</td></tr>",
+"<tr><td><code>↑</code> / <code>↓</code></td><td>첫 줄·끝 줄에서 누르면 위아래 블록으로 건너갑니다.</td></tr>",
+"<tr><td><code>⌘⇧↑</code> / <code>⌘⇧↓</code></td><td>블록을 통째로 위아래로 옮깁니다. 형제 밖으로 나가면 부모 앞뒤로 빠져나옵니다.</td></tr>",
+"<tr><td><code>⌘.</code></td><td>자식 접기·펼치기. 접힌 블록은 글머리 점에 테두리가 생깁니다.</td></tr>",
+"<tr><td><code>⌘B</code> / <code>⌘I</code></td><td>굵게 / 기울임.</td></tr>",
+"<tr><td><code>⌘Enter</code></td><td>할 일 표시를 <code>{{TODO}}</code> → <code>{{DONE}}</code> → 없음 순으로 돌립니다. 체크칸을 직접 눌러도 됩니다.</td></tr>",
+"<tr><td><code>Esc</code></td><td>편집을 끝냅니다.</td></tr>",
+"</tbody></table>",
+"<p>한글·일본어·중국어를 칠 때 글자가 아직 조합 중이면 <code>Enter</code>·<code>Tab</code>·<code>Backspace</code>는 입력기에 먼저 넘깁니다. \"사랑\"을 치고 바로 <code>Enter</code>를 누르면 첫 번째는 글자를 굳히고, 한 번 더 눌러야 새 블록이 생깁니다.</p>",
+
+"<h2>3. 여러 블록을 한꺼번에</h2>",
+"<p>블록 본문에서 <b>마우스를 눌러 다른 블록까지 끌면</b> 블록 단위 선택으로 바뀝니다. 한 블록 안에서만 끌면 예전처럼 글자 선택입니다. <code>Shift</code>를 누른 채 다른 블록을 클릭해도 그 사이가 잡힙니다.</p>",
+"<table><tbody>",
+"<tr><td><code>⌘C</code></td><td>선택한 블록을 자식까지 통째로 복사합니다.</td></tr>",
+"<tr><td><code>⌘X</code></td><td>복사하고 지웁니다.</td></tr>",
+"<tr><td><code>Backspace</code></td><td>선택한 블록을 지웁니다.</td></tr>",
+"<tr><td><code>⌘A</code></td><td>그 페이지의 블록을 모두 선택합니다.</td></tr>",
+"<tr><td><code>Enter</code></td><td>선택을 풀고 첫 블록 편집으로 들어갑니다.</td></tr>",
+"<tr><td><code>Esc</code></td><td>선택 해제.</td></tr>",
+"</tbody></table>",
+"<p>붙여넣기는 <b>블록 안에 캐럿을 두고</b> <code>⌘V</code>. 빈 블록에 붙이면 그 자리를 첫 줄이 차지하고, 글이 있는 블록에 붙이면 바로 아래에 형제로 들어갑니다. <b>계층은 그대로 옮겨집니다.</b></p>",
+"<p>클립보드에는 <code>- </code> 글머리표와 두 칸 들여쓰기로 된 보통 글이 담깁니다. 그래서 다른 페이지는 물론 Obsidian·Scrivener·메모장에 붙여도 목록 모양이 살아 있고, 거꾸로 그런 목록을 복사해 와서 붙이면 계층 있는 블록으로 풀립니다. 들여쓴 줄만 있고 글머리표가 없는 글도 들여쓰기 폭을 보고 계층을 잡습니다.</p>",
+
+"<h2>4. 페이지 잇기와 백링크</h2>",
+"<ul>",
+"<li><code>[[제목]]</code> — 페이지 링크. <code>[[</code>를 치면 있는 페이지 목록이 뜨고, 없는 이름이면 맨 위에 '새 페이지'로 제안됩니다. 블록을 빠져나가는 순간 실제 페이지가 만들어집니다.</li>",
+"<li><code>#태그</code> — 같은 링크입니다. 짧게 쓰고 싶을 때.</li>",
+"<li><b>연결된 참조</b> — 페이지 아래에, 다른 곳에서 그 제목을 <code>[[ ]]</code>로 부른 블록이 모입니다. 어느 페이지에서 왔는지, 어떤 블록 아래에 있었는지까지 보여 줍니다. 눌러 가면 그 자리에서 바로 고칠 수 있습니다.</li>",
+"<li><b>언급됨 · 링크 없음</b> — 괄호 없이 제목만 적힌 블록. 링크로 승격시킬 만한 곳을 찾을 때 봅니다.</li>",
+"<li>페이지 제목을 누르면 바로 고칠 수 있고, 고치면 다른 글에 적힌 <code>[[옛 제목]]</code>까지 함께 바뀝니다.</li>",
+"<li>글머리 점을 누르면 그 블록만 확대해서 봅니다. 위쪽 이름표를 눌러 되돌아옵니다.</li>",
+"</ul>",
+
+"<h2>5. 쪽글</h2>",
+"<p>페이지 안 아무 블록에나 <code>#쪽글</code>을 적어 두면 그 페이지가 <span data-jump='shuffle' style='color:var(--indigo)'>쪽글</span> 목록에 들어갑니다. 누를 때마다 하나씩 무작위로 올라오되, <b>한 바퀴를 다 돌기 전에는 같은 글이 다시 나오지 않습니다.</b> 위쪽 띠에 남은 편수가 보입니다. '태그 바꾸기'로 <code>#초고</code>, <code>#버릴것</code> 같은 다른 묶음을 돌릴 수도 있습니다.</p>",
+"<p>짧은 글 하나에 페이지 하나씩 두고 태그를 달아 두는 쓰임을 생각하고 만들었습니다. 제목은 나중에 찾을 실마리만 되면 충분합니다.</p>",
+
+"<h2>6. 찾기</h2>",
+"<p><code>⌘K</code>로 페이지 제목과 블록 본문을 한꺼번에 훑습니다. <code>↑↓</code>로 고르고 <code>↵</code>로 엽니다. 없는 제목을 치면 맨 아래에 '새 페이지 만들기'가 붙습니다. 블록을 고르면 그 블록에 캐럿이 놓인 채로 페이지가 열립니다.</p>",
+
+"<h2>7. 글자 꾸미기</h2>",
+"<table><tbody>",
+"<tr><td><code>**굵게**</code></td><td>굵게</td></tr>",
+"<tr><td><code>__기울임__</code></td><td>기울임</td></tr>",
+"<tr><td><code>~~취소~~</code></td><td>취소선</td></tr>",
+"<tr><td><code>^^형광^^</code></td><td>형광펜</td></tr>",
+"<tr><td><code>`코드`</code></td><td>고정폭</td></tr>",
+"<tr><td><code>{{TODO}}</code></td><td>할 일 체크칸</td></tr>",
+"<tr><td>http://…</td><td>저절로 링크가 됩니다</td></tr>",
+"</tbody></table>",
+
+"<h2>8. 데이터는 어디에 있나</h2>",
+"<ul>",
+"<li>브라우저 안 IndexedDB(<code>jjokgeul-db</code>)에 그래프 전체가 한 덩어리로 들어갑니다. 손을 멈추고 0.45초 뒤 자동 저장되고, 탭을 가리거나 닫을 때도 한 번 더 씁니다. 왼쪽 아래 점이 붉으면 쓰는 중, 푸르면 끝난 것입니다.</li>",
+"<li><b>JSON 내보내기</b> — <code>roam-날짜.json</code>. 페이지·블록·계층·링크가 다 들어 있는 완전한 사본입니다.</li>",
+"<li><b>불러오기</b> — 개수를 확인시킨 뒤 현재 그래프를 갈아 끼웁니다. 깨진 참조는 자동으로 정리합니다.</li>",
+"<li>서버가 없으니 이 파일을 연 브라우저에만 글이 있습니다. <b>다른 기기로 옮길 때는 반드시 JSON을 거쳐야 합니다.</b> 브라우저 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 사라지니, 주기적으로 내보내 두세요.</li>",
+"</ul>",
+
+"<h2>9. 아직 없는 기능 — 붙이거나 고칠 만한 곳</h2>",
+"<p>지금 없는 것들을 적어 둡니다. 필요한 항목을 골라 말씀하시면 그 부분을 손보겠습니다. 괄호 안은 코드에서 건드릴 자리입니다.</p>",
+
+"<div class='todo-card'><h4>블록 참조 <code>((블록))</code></h4><p>다른 블록을 통째로 끌어와 비추고, 원본을 고치면 같이 바뀌는 기능. 지금은 페이지 단위 링크만 됩니다.<span class='where'>renderInline · buildRefIndex</span></p></div>",
+"<div class='todo-card'><h4>선택한 블록 여럿을 한꺼번에 들여쓰기</h4><p>여러 블록을 고른 상태에서 <code>Tab</code>이 아직 듣지 않습니다. 낱개로는 됩니다.<span class='where'>onKeydown · indent/outdent</span></p></div>",
+"<div class='todo-card'><h4>되돌리기 / 다시 하기</h4><p>블록 삭제와 잘라내기가 지금은 되돌릴 수 없습니다. 그래프 스냅숏을 스택에 쌓아 <code>⌘Z</code>를 붙이는 방식이 어울립니다.<span class='where'>scheduleSave 주변</span></p></div>",
+"<div class='todo-card'><h4>오른쪽 사이드바(여러 페이지 나란히 보기)</h4><p>Roam의 shift+클릭처럼, 참조를 옆에 띄워 두고 본문을 쓰는 구성.<span class='where'>레이아웃 · render</span></p></div>",
+"<div class='todo-card'><h4>마크다운 / Scrivener 내보내기</h4><p>지금은 JSON만 나갑니다. 페이지별 <code>.md</code> 묶음이나 한 편 통짜 원고로 뽑는 길.<span class='where'>exportJSON 옆에</span></p></div>",
+"<div class='todo-card'><h4>이미지·파일 붙이기</h4><p>붙여넣은 그림을 base64로 품거나 파일 손잡이만 들고 있는 방식. 내보내기 용량과 맞바꿔야 합니다.<span class='where'>onPaste</span></p></div>",
+"<div class='todo-card'><h4>태그 목록 화면</h4><p>쓰인 태그를 빈도순으로 늘어놓고 눌러 들어가는 화면. 지금은 <code>#쪽글</code> 하나만 셔플로 씁니다.<span class='where'>pagesWithTag 재사용</span></p></div>",
+"<div class='todo-card'><h4>날짜 범위로 데일리 노트 훑기</h4><p>지난 7일 말고 임의 구간, 달력 보기.<span class='where'>renderDailyFeed</span></p></div>",
+"<div class='todo-card'><h4>검색 고도화</h4><p>지금은 단순 부분일치입니다. 여러 낱말 AND, 페이지 한정, 최근 항목 가중치 같은 것.<span class='where'>runSearch</span></p></div>",
+"<div class='todo-card'><h4>글자 수 세기</h4><p>페이지·선택 범위의 자 수를 띄우기. 2,667자 단위로 쓰신다면 목표 대비 막대까지.<span class='where'>pageHeader · updateSelBar</span></p></div>",
+"<div class='todo-card'><h4>자동 저장 기록(버전)</h4><p>하루 한 번 스냅숏을 따로 두고 되돌아갈 수 있게.<span class='where'>doSave</span></p></div>",
+"<div class='todo-card'><h4>모바일에서 들여쓰기 단추</h4><p>화면 키보드에는 <code>Tab</code>이 없어, 아래쪽에 들여쓰기·내어쓰기 단추가 필요합니다.<span class='where'>@media (max-width:760px)</span></p></div>"
+].join("");
+
 /* ---- 백링크 ---- */
 function buildRefIndex(){
   const idx = new Map();                       // 소문자제목 -> [blockId]
@@ -1197,6 +1365,8 @@ function enterEdit(id, pos = null){
   row.appendChild(ta);
   editing = id;
   composing = false;
+  selAnchor = id;
+  clearSel();
   autosize(ta);
   ta.focus();
   const p = pos == null ? ta.value.length : Math.max(0, Math.min(pos, ta.value.length));
@@ -1205,6 +1375,7 @@ function enterEdit(id, pos = null){
   ta.addEventListener("keydown", onKeydown);
   ta.addEventListener("blur", onBlur);
   ta.addEventListener("click", () => updateAutocomplete(ta));
+  ta.addEventListener("paste", onPaste);
   ta.addEventListener("compositionstart", () => { composing = true; });
   ta.addEventListener("compositionend", () => {
     composing = false;
@@ -1477,6 +1648,222 @@ function toggleTodo(id){
   scheduleSave();
 }
 
+/* ============================================================
+   8-b. 블록 여러 개 선택 · 잘라내기 · 복사 · 붙여넣기
+   ============================================================ */
+let sel = new Set();        // 선택된 "최상위" 블록 id (하위는 따라온다)
+let selDrag = null;         // 드래그 중 상태
+let selAnchor = null;       // shift+클릭 기준점
+let clip = null;            // 앱 내부 클립보드 (계층 그대로)
+
+function selWithDescendants(){
+  const out = new Set();
+  const walk = id => { out.add(id); (G.blocks[id]?.children || []).forEach(walk); };
+  sel.forEach(walk);
+  return out;
+}
+function paintSel(){
+  sel = new Set(Array.from(sel).filter(id => G.blocks[id]));
+  const marked = selWithDescendants();
+  $$(".block").forEach(el => el.classList.toggle("is-sel", marked.has(el.dataset.id)));
+  updateSelBar();
+}
+function clearSel(){ if(!sel.size) return; sel.clear(); paintSel(); }
+/** 같은 페이지 안에서, 화면에 보이는 순서대로 두 블록 사이를 선택 */
+function setRange(aId, bId){
+  const order = visibleOrder();
+  let i = order.indexOf(aId), j = order.indexOf(bId);
+  if(i < 0 || j < 0) return;
+  if(i > j){ const t = i; i = j; j = t; }
+  const pg = pageOf(aId)?.id;
+  const ids = order.slice(i, j + 1).filter(id => pageOf(id)?.id === pg);
+  sel = new Set(topLevelOf(ids));
+  paintSel();
+}
+/** 조상이 함께 뽑힌 블록은 빼서, 겹치지 않는 뿌리들만 남긴다 */
+function topLevelOf(ids){
+  const set = new Set(ids);
+  return ids.filter(id => {
+    let p = G.blocks[id]?.parent;
+    while(p && G.blocks[p]){ if(set.has(p)) return false; p = G.blocks[p].parent; }
+    return true;
+  });
+}
+function selOrdered(){
+  const order = visibleOrder();
+  return Array.from(sel).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+}
+function updateSelBar(){
+  let bar = $("#selbar");
+  if(!sel.size){ bar?.remove(); document.body.classList.remove("has-selbar"); return; }
+  if(!bar){ bar = document.createElement("div"); bar.id = "selbar"; document.body.appendChild(bar); }
+  document.body.classList.add("has-selbar");
+  const total = selWithDescendants().size;
+  bar.innerHTML = `<span><b>${sel.size}</b>개 선택</span>`
+    + (total > sel.size ? `<span class="s">하위 포함 ${total}</span>` : `<span class="s"></span>`)
+    + `<button data-a="copy">복사</button><button data-a="cut">잘라내기</button>`
+    + `<button data-a="del">삭제</button><button data-a="clear">해제</button>`;
+  bar.querySelectorAll("button").forEach(b => b.onclick = () => {
+    const a = b.dataset.a;
+    if(a === "copy"){ const t = copySel(); if(t) navigator.clipboard?.writeText(t).catch(()=>{}); }
+    else if(a === "cut"){ const t = copySel(); if(t) navigator.clipboard?.writeText(t).catch(()=>{}); deleteSel(); }
+    else if(a === "del") deleteSel();
+    else clearSel();
+  });
+}
+
+/* ---- 마우스 드래그 ---- */
+function beginPointerSelect(id, startOff, ev){
+  if(ev.shiftKey && selAnchor && G.blocks[selAnchor]){
+    exitEdit(); setRange(selAnchor, id); return;
+  }
+  clearSel();
+  selAnchor = id;
+  selDrag = { id, startOff, x: ev.clientX, y: ev.clientY, mode: "text" };
+  document.addEventListener("mousemove", onSelMove);
+  document.addEventListener("mouseup", onSelUp);
+}
+function blockIdAtPoint(x, y){
+  const el = document.elementFromPoint(x, y);
+  return el?.closest(".content")?.closest(".block")?.dataset.id || null;
+}
+function onSelMove(e){
+  if(!selDrag) return;
+  const overId = blockIdAtPoint(e.clientX, e.clientY);
+  if(overId && overId !== selDrag.id){
+    if(selDrag.mode !== "block"){
+      selDrag.mode = "block";
+      exitEdit();
+      document.body.classList.add("selecting");
+      window.getSelection()?.removeAllRanges();
+    }
+    setRange(selDrag.id, overId);
+  }else if(selDrag.mode === "block" && overId === selDrag.id){
+    setRange(selDrag.id, selDrag.id);
+  }
+}
+function onSelUp(e){
+  document.removeEventListener("mousemove", onSelMove);
+  document.removeEventListener("mouseup", onSelUp);
+  document.body.classList.remove("selecting");
+  const dr = selDrag; selDrag = null;
+  if(!dr) return;
+  if(dr.mode === "block") return;               // 블록 선택 상태 유지
+  clearSel();
+  const el = document.querySelector(`.block[data-id="${dr.id}"] > .block-row > .content`);
+  let endOff = dr.startOff;
+  if(el && G.blocks[dr.id])
+    endOff = renderedToRaw(G.blocks[dr.id].content, caretOffsetFromPoint(el, e.clientX, e.clientY));
+  enterEdit(dr.id, dr.startOff);
+  const ta = currentTA();
+  if(ta && endOff !== dr.startOff)
+    ta.setSelectionRange(Math.min(dr.startOff, endOff), Math.max(dr.startOff, endOff));
+}
+
+/* ---- 계층을 글로, 글을 계층으로 ---- */
+function treeOf(ids){
+  return ids.map(id => {
+    const b = G.blocks[id];
+    return { content: b.content, children: treeOf(b.children) };
+  });
+}
+function countTree(tree){ return tree.reduce((n, x) => n + 1 + countTree(x.children), 0); }
+function serializeTree(tree, depth){
+  const out = [];
+  tree.forEach(n => {
+    const pad = "  ".repeat(depth);
+    const lines = String(n.content).split("\n");
+    out.push(pad + "- " + lines[0]);
+    lines.slice(1).forEach(l => out.push(pad + "  " + l));
+    out.push.apply(out, serializeTree(n.children, depth + 1));
+  });
+  return out;
+}
+const serialize = tree => serializeTree(tree, 0).join("\n");
+/** 들여쓴 글줄을 계층으로 되돌린다. 글머리표(- * + 1.)가 하나라도 있으면 그것만 블록으로 본다. */
+function parseOutline(text){
+  const lines = String(text).replace(/\r/g, "").split("\n");
+  const hasBullet = lines.some(l => /^\s*(?:[-*+]|\d+\.)\s+/.test(l));
+  const indentOf = str => str.replace(/\t/g, "    ").length;
+  const roots = [], stack = [];
+  let last = null;
+  for(const raw of lines){
+    if(!raw.trim()) continue;
+    const m = /^(\s*)(?:([-*+]|\d+\.)\s+)?([\s\S]*)$/.exec(raw);
+    const ind = indentOf(m[1]), bullet = !!m[2], content = m[3];
+    if(hasBullet && !bullet && last){ last.content += "\n" + content; continue; }
+    const n = { content, children: [] };
+    while(stack.length && stack[stack.length - 1].indent >= ind) stack.pop();
+    if(stack.length) stack[stack.length - 1].node.children.push(n);
+    else roots.push(n);
+    stack.push({ indent: ind, node: n });
+    last = n;
+  }
+  return roots;
+}
+function insertTree(tree, parentId, index){
+  const made = [];
+  tree.forEach((n, i) => {
+    const b = newBlock(parentId, n.content, index < 0 ? -1 : index + i);
+    made.push(b.id);
+    if(n.children.length) insertTree(n.children, b.id, -1);
+  });
+  return made;
+}
+function lastDescendant(id){
+  const b = G.blocks[id];
+  if(!b || !b.children.length) return id;
+  return lastDescendant(b.children[b.children.length - 1]);
+}
+
+/* ---- 복사 / 잘라내기 / 삭제 / 붙여넣기 ---- */
+function copySel(){
+  const ids = selOrdered();
+  if(!ids.length) return null;
+  clip = treeOf(ids);
+  return serialize(clip);
+}
+function deleteSel(){
+  const ids = selOrdered();
+  if(!ids.length) return;
+  const marked = selWithDescendants();
+  const order = visibleOrder();
+  const before = order.slice(0, order.indexOf(ids[0])).reverse().find(id => !marked.has(id));
+  const n = marked.size;
+  ids.forEach(deleteBlockDeep);
+  sel.clear();
+  scheduleSave();
+  editing = null;
+  render();
+  if(before && G.blocks[before]) enterEdit(before);
+  toast(`블록 ${n}개를 지웠습니다`);
+}
+function onPaste(e){
+  const text = (e.clipboardData || window.clipboardData)?.getData("text/plain");
+  if(!text) return;
+  const norm = text.replace(/\r/g, "").replace(/\s+$/, "");
+  const tree = (clip && serialize(clip) === norm) ? clip : parseOutline(norm);
+  if(!tree.length) return;
+  const multi = tree.length > 1 || tree[0].children.length > 0;
+  if(!multi) return;                                  // 한 줄이면 그냥 기본 붙여넣기
+  e.preventDefault();
+  const id = editing, b = G.blocks[id];
+  if(!b) return;
+  commit();
+  let made;
+  if(!b.content.trim()){
+    b.content = tree[0].content; touch(id);
+    insertTree(tree[0].children, id, -1);
+    made = insertTree(tree.slice(1), b.parent, siblingsOf(id).indexOf(id) + 1);
+    made.unshift(id);
+  }else{
+    made = insertTree(tree, b.parent, siblingsOf(id).indexOf(id) + 1);
+  }
+  (function walk(list){ list.forEach(n => { ensureLinkedPages(n.content); walk(n.children); }); })(tree);
+  afterStructure(made.length ? lastDescendant(made[made.length - 1]) : id, null);
+  toast(`블록 ${countTree(tree)}개를 붙여넣었습니다`);
+}
+
 /* ---- 드래그앤드롭 ---- */
 let dragId = null;
 function clearDropMarks(){ $$(".block-row").forEach(r => r.classList.remove("drop-before","drop-after","drop-child")); }
@@ -1676,8 +2063,44 @@ document.addEventListener("click", e => {
     return;
   }
 });
+document.addEventListener("copy", e => {
+  if(!sel.size || editing) return;
+  const t = copySel();
+  if(!t) return;
+  e.preventDefault();
+  e.clipboardData.setData("text/plain", t);
+  toast(`블록 ${selWithDescendants().size}개를 복사했습니다`);
+});
+document.addEventListener("cut", e => {
+  if(!sel.size || editing) return;
+  const t = copySel();
+  if(!t) return;
+  e.preventDefault();
+  e.clipboardData.setData("text/plain", t);
+  deleteSel();
+});
+document.addEventListener("mousedown", e => {
+  if(!sel.size) return;
+  if(e.target.closest("#selbar, .content, .bullet")) return;
+  clearSel();
+});
 document.addEventListener("keydown", e => {
   const mod = e.metaKey || e.ctrlKey;
+  // 블록이 선택된 상태(편집 중이 아님)
+  if(sel.size && !editing){
+    if(e.key === "Escape"){ e.preventDefault(); clearSel(); return; }
+    if(e.key === "Backspace" || e.key === "Delete"){ e.preventDefault(); deleteSel(); return; }
+    if(mod && e.key.toLowerCase() === "a"){
+      e.preventDefault();
+      const pg = pageOf(selOrdered()[0])?.id;
+      const ids = visibleOrder().filter(id => pageOf(id)?.id === pg);
+      sel = new Set(topLevelOf(ids)); paintSel(); return;
+    }
+    if(e.key === "Enter"){
+      e.preventDefault();
+      const first = selOrdered()[0]; clearSel(); if(first) enterEdit(first); return;
+    }
+  }
   if(mod && e.key.toLowerCase() === "k"){ e.preventDefault(); searchState.open ? closeSearch() : openSearch(); return; }
   if(mod && e.key.toLowerCase() === "s"){ e.preventDefault(); commit(); doSave(); toast("저장했습니다"); return; }
   if(e.key === "Escape" && searchState.open){ closeSearch(); return; }
