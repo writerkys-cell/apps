@@ -942,6 +942,13 @@ function pageHeader(p, editableTitle = true){
   const h = document.createElement("div");
   h.className = "page-title";
   h.textContent = p.title;
+  h.title = "Shift+클릭하면 이 페이지를 오른쪽에 둡니다";
+  h.addEventListener("mousedown", e => {
+    if(!e.shiftKey) return;
+    e.preventDefault();                       // 제목 편집으로 들어가지 않게
+    h.blur();
+    sideAdd({ type:"page", id:p.id });
+  });
   if(editableTitle){
     h.contentEditable = "true"; h.spellcheck = false;
     h.addEventListener("keydown", e => {
@@ -981,9 +988,12 @@ function renderZoomView(bid){
   h.className = "page-title";
   h.innerHTML = renderInline(b.content, bid) || "빈 블록";
   h.style.fontSize = "24px";
+  h.title = "Shift+클릭: 이 블록을 오른쪽에 두기";
   h.addEventListener("mousedown", e => {
     if(e.target.closest(".page-link,.tag,a")) return;
-    e.preventDefault(); go({ type:"page", id: pageOf(bid)?.id });
+    e.preventDefault();
+    if(e.shiftKey) sideAdd({ type:"block", id: bid });
+    else go({ type:"page", id: pageOf(bid)?.id });
   });
   const meta = document.createElement("div");
   meta.className = "page-meta";
@@ -1009,7 +1019,8 @@ function renderDailyFeed(){
     t.className = "feed-title";
     t.style.fontSize = i === 0 ? "29px" : "19px";
     t.textContent = p.title;
-    t.onclick = () => openPage(p.id);
+    t.title = "Shift+클릭: 오른쪽에 두기";
+    t.onclick = e => e.shiftKey ? sideAdd({ type:"page", id:p.id }) : openPage(p.id);
     const s = document.createElement("div");
     s.className = "feed-sub";
     s.textContent = weekdayOf(p.title) + (i === 0 ? " · 오늘" : "");
@@ -1108,6 +1119,19 @@ function renderShuffleView(){
     ? `${all.length}편 · 이번 바퀴 ${Math.max(shuffleQueue.length, 0)}편 남음`
     : "아직 없음";
   const grow = document.createElement("span"); grow.className = "grow";
+  const keep = document.createElement("button");
+  keep.textContent = "옆에 두고 다음 →";
+  keep.title = "이 쪽글을 오른쪽에 남겨 두고 다음 편으로 넘어갑니다";
+  keep.onclick = () => {
+    if(G.pages[view.id]){
+      const list = sideItems();
+      const k = it => it.type + ":" + it.id;
+      const item = { type:"page", id: view.id };
+      G.meta.sidebar = [item].concat(list.filter(x => k(x) !== k(item))).slice(0, 8);
+      G.meta.sidebarOpen = true;
+    }
+    nextShuffle();
+  };
   const next = document.createElement("button");
   next.className = "primary"; next.textContent = "다음 쪽글 →";
   next.onclick = nextShuffle;
@@ -1120,7 +1144,7 @@ function renderShuffleView(){
     if(!v) return;
     G.meta.shuffleTag = v; shuffleQueue = []; scheduleSave(); nextShuffle();
   };
-  bar.append(label, meta, grow, chg, next);
+  bar.append(label, meta, grow, chg, keep, next);
   frag.appendChild(bar);
 
   if(!all.length){
@@ -1164,11 +1188,10 @@ function sideRemove(i){
   scheduleSave(); render();
 }
 function sideToggle(){
-  const list = sideItems();
-  if(!list.length){
-    const pid = (view.type === "page" || view.type === "shuffle") ? view.id : null;
-    if(pid && G.pages[pid]) return sideAdd({ type:"page", id:pid });
-    toast("링크나 글머리 점을 Shift+클릭하면 오른쪽에 쌓입니다");
+  const pid = (view.type === "page" || view.type === "shuffle") ? view.id : null;
+  if(pid && G.pages[pid]) return sideAdd({ type:"page", id:pid });
+  if(!sideItems().length){
+    toast("제목·링크·글머리 점을 Shift+클릭하면 오른쪽에 쌓입니다");
     return;
   }
   G.meta.sidebarOpen = !G.meta.sidebarOpen;
@@ -1346,7 +1369,14 @@ const HELP_HTML = [
 "<p><button data-toggle='brackets'></button></p>",
 
 "<h2>4-b. 오른쪽에 두기</h2>",
-"<p>글을 쓰면서 다른 페이지를 곁눈질해야 할 때가 있습니다. <b>링크나 글머리 점을 <code>Shift</code>+클릭</b>하면 그 페이지(또는 블록 하나)가 오른쪽에 쌓입니다. 위쪽 <b>옆에</b> 단추는 지금 보는 페이지를 오른쪽으로 보냅니다.</p>",
+"<p>글을 쓰면서 다른 페이지를 곁눈질해야 할 때가 있습니다. <code>Shift</code>+클릭하면 오른쪽에 쌓입니다. 누를 수 있는 자리는 네 군데입니다.</p>",
+"<ul>",
+"<li><b>페이지 제목</b> — 지금 보고 있는 페이지를 통째로. 쪽글을 넘기다 건진 글을 남겨 둘 때 씁니다.</li>",
+"<li><b>본문 속 <code>[[링크]]</code>와 <code>#태그</code></b> — 자리를 뜨지 않고 가리킨 페이지만 옆에 폅니다.</li>",
+"<li><b>글머리 점</b> — 페이지 전체가 아니라 그 블록 하나만.</li>",
+"<li><b>백링크의 출처 제목</b> — 참조가 온 페이지를 옆에.</li>",
+"</ul>",
+"<p>위쪽 <b>옆에</b> 단추도 지금 보는 페이지를 보냅니다. 왼쪽과 오른쪽에 같은 페이지가 겹쳐 떠도 괜찮습니다. 한쪽에서 고치면 편집을 마치는 순간 다른 쪽도 같이 바뀝니다.</p>",
 "<ul>",
 "<li>오른쪽에 놓인 글도 <b>그대로 고칠 수 있습니다.</b> 본문과 오른쪽에 같은 블록이 함께 떠 있으면, 편집을 마치는 순간 양쪽이 같이 갱신됩니다.</li>",
 "<li>카드 제목을 누르면 본문 자리로 옮겨 열립니다. <code>✕</code>로 하나씩 치우고, 머리의 <b>비우기</b>로 전부 내립니다.</li>",
@@ -1356,6 +1386,7 @@ const HELP_HTML = [
 
 "<h2>5. 쪽글</h2>",
 "<p>페이지 안 아무 블록에나 <code>#쪽글</code>을 적어 두면 그 페이지가 <span data-jump='shuffle' style='color:var(--indigo)'>쪽글</span> 목록에 들어갑니다. 누를 때마다 하나씩 무작위로 올라오되, <b>한 바퀴를 다 돌기 전에는 같은 글이 다시 나오지 않습니다.</b> 위쪽 띠에 남은 편수가 보입니다. '태그 바꾸기'로 <code>#초고</code>, <code>#버릴것</code> 같은 다른 묶음을 돌릴 수도 있습니다.</p>",
+"<p><b>옆에 두고 다음 →</b> 단추는 지금 쪽글을 오른쪽에 남긴 채 다음 편으로 넘어갑니다. 무작위로 넘기다 쓸 만한 조각이 걸리면 오른쪽에 쌓아 두고 계속 돌리다가, 다 고른 뒤 모아 놓은 것들을 한자리에서 보는 식으로 씁니다. 제목을 <code>Shift</code>+클릭해도 같습니다.</p>",
 "<p>짧은 글 하나에 페이지 하나씩 두고 태그를 달아 두는 쓰임을 생각하고 만들었습니다. 제목은 나중에 찾을 실마리만 되면 충분합니다.</p>",
 
 "<h2>6. 찾기</h2>",
@@ -1464,7 +1495,8 @@ function groupRefs(blockIds){
     g.className = "ref-group";
     const t = document.createElement("div");
     t.className = "ref-page"; t.textContent = G.pages[pid].title;
-    t.onclick = () => openPage(pid);
+    t.title = "Shift+클릭: 오른쪽에 두기";
+    t.onclick = e => e.shiftKey ? sideAdd({ type:"page", id:pid }) : openPage(pid);
     g.appendChild(t);
     ids.forEach(bid => {
       const b = G.blocks[bid];
