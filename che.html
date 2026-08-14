@@ -319,7 +319,7 @@ const TABS = [
 ];
 
 /* ═══════════════ 1. 저장소 (IndexedDB) ═══════════════ */
-let db=null, E=[], RULES={}, META={}, GRAVES={};
+let db=null, E=[], RULES={}, META={}, GRAVES={}, GRULES={};
 const MT=e=>e.mt||e.ts||0;
 const touch=e=>{ e.mt=Date.now(); return e; };
 function openDB(){
@@ -457,17 +457,23 @@ function schemeOf(u){
   return SCHEMES.find(s=>s.k===k)||null;
 }
 const SPEND_DICT = {
-  '식비':['밥','점심','저녁','아침','커피','카페','식당','배달','술','맥주','치킨','회식','간식','장보기','마트','편의점','반찬','빵'],
-  '교통':['택시','버스','지하철','기차','ktx','srt','주유','기름','톨게이트','주차','고속도로','항공','비행기'],
-  '도서':['책','서점','교보','알라딘','예스24','도서','전집','잡지','구독료'],
-  '의료':['병원','약국','치과','진료','약','검진','한의원','물리치료'],
-  '주거':['관리비','전기','가스','수도','월세','전세','인터넷','통신','휴대폰','보험료'],
-  '구독':['구독','넷플릭스','멤버십','요금제','유튜브','스포티파이','클로드','챗gpt'],
-  '집필':['원고','자료','취재','복사','인쇄','문구','노트','만년필','프린터'],
+  '식비':['밥','점심','저녁','아침','커피','카페','식당','배달','술','맥주','소주','막걸리','치킨','통닭','회식',
+         '간식','장보기','마트','편의점','반찬','빵','외식','국밥','분식','피자','족발','보쌈','국수','냉면',
+         '한식','중식','일식','양식','초밥','디저트','아이스크림','음료','포장','야식','도시락','정육','과일','떡'],
+  '교통':['택시','버스','지하철','기차','ktx','srt','주유','기름','톨게이트','주차','고속도로','항공','비행기','대리','렌터카','자전거'],
+  '도서':['책','서점','교보','알라딘','예스24','도서','전집','잡지','헌책','북','문고'],
+  '의료':['병원','약국','치과','진료','약값','검진','한의원','물리치료','안경','렌즈','영양제'],
+  '주거':['관리비','전기','가스','수도','월세','전세','인터넷','통신','휴대폰','보험료','생필품','세제','청소'],
+  '구독':['구독','넷플릭스','멤버십','요금제','유튜브','스포티파이','클로드','챗gpt','왓챠','앱스토어'],
+  '집필':['원고','자료','취재','복사','인쇄','문구','노트','만년필','프린터','스크리브너','토너'],
+  '옷':['옷','신발','바지','셔츠','외투','양말','세탁','수선'],
+  '살림':['가구','그릇','수건','전구','건전지','공구','철물'],
+  '선물':['선물','축의','부의','경조','조의','answer'],
 };
 const INCOME_DICT = {
-  '인세':['인세','선인세','판매'],'원고료':['원고료','고료','기고'],'강연':['강연','강의'],
-  '심사':['심사','자문','평론'],'상금':['상금','수상'],
+  '인세':['인세','선인세','판매','정산'],'원고료':['원고료','고료','기고','청탁'],
+  '강연':['강연','강의','특강','북토크'],'심사':['심사','자문','평론','추천사'],
+  '상금':['상금','수상','지원금','창작지원'],'환급':['환급','환불','돌려받'],
 };
 
 function tokens(t){ return (t.match(/[가-힣A-Za-z]{2,}/g)||[]); }
@@ -539,10 +545,14 @@ function parseMoney(t){
   if(m[3]==='억') v*=1e8; else if(m[3]==='만') v*=1e4; else if(m[3]==='천') v*=1e3;
   let flow = m[1]==='+' ? 'in' : (m[1]==='-' ? 'out' : (IN_KW.test(t)?'in':'out'));
   if(!m[1] && !IN_KW.test(t) && !OUT_KW.test(t)) flow='out';
-  const dict = flow==='in'?INCOME_DICT:SPEND_DICT;
-  let group='기타';
-  outer: for(const g in dict) for(const w of dict[g]) if(t.toLowerCase().includes(w)){group=g;break outer;}
-  return {amount:Math.round(v), flow, group};
+  const low=t.toLowerCase();
+  let group=null;
+  for(const tk of tokens(t)) if(GRULES[tk]){ group=GRULES[tk]; break; }
+  if(!group){
+    const dict = flow==='in'?INCOME_DICT:SPEND_DICT;
+    outer: for(const g in dict) for(const w of dict[g]) if(low.includes(w)){group=g;break outer;}
+  }
+  return {amount:Math.round(v), flow, group:group||'기타'};
 }
 function cycleKey(t){
   for(const w of CYCLE_KW) if(t.includes(w)) return w;
@@ -965,6 +975,8 @@ function itemHTML(e,opt={}){
       (pArrived?'<button data-act="pfin" data-id="'+e.id+'">실현</button>'+
                 '<button data-act="pagain" data-id="'+e.id+'">다시</button>':'')+
       (pray&&!e.date?'<button data-act="pseal" data-id="'+e.id+'">봉하기</button>':'')+
+      (e.cat==='money'?'<button data-act="grp" data-id="'+e.id+'">갈래</button>'+
+        '<button data-act="flip" data-id="'+e.id+'">'+(e.flow==='in'?'지출로':'수입으로')+'</button>':'')+
       (e.cat==='ref'?'<button data-act="star" data-id="'+e.id+'">'+(e.star?'풀기':'★ 고정')+'</button>':'')+
       (e.cat==='cycle'?'<button data-act="again" data-id="'+e.id+'">오늘 또</button>':'')+
       (dl&&pastPlan?'':'<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':'날짜 넣기')+'</button>')+
@@ -1777,11 +1789,16 @@ function vSet(){
      '<div class="set-row"><span class="lbl">전부 지우기 <small>되돌릴 수 없습니다. 먼저 내보내세요.</small></span>'+
        '<button class="btn danger" data-act="wipe">지우기</button></div>'+
      '</section>';
-  h+='<section><h2>익힌 규칙<span class="aside">'+rk.length+'</span></h2>';
-  if(!rk.length) h+='<div class="empty">분류를 고칠 때마다 그 말을 기억해 다음부터 같게 담습니다.</div>';
-  else rk.forEach(k=>{
+  const gk=Object.keys(GRULES);
+  h+='<section><h2>익힌 규칙<span class="aside">분류 '+rk.length+' · 갈래 '+gk.length+'</span></h2>';
+  if(!rk.length&&!gk.length) h+='<div class="empty">분류나 금전 갈래를 고칠 때마다 그 말을 기억해 다음부터 같게 담습니다.</div>';
+  rk.forEach(k=>{
     h+='<div class="rowline"><span class="g">'+esc(k)+' → '+CATS[RULES[k]].name+'</span>'+
        '<button class="n" data-act="rule-del" data-k="'+esc(k)+'">잊기</button></div>';
+  });
+  gk.forEach(k=>{
+    h+='<div class="rowline"><span class="g">'+esc(k)+' → ₩ '+esc(GRULES[k])+'</span>'+
+       '<button class="n" data-act="grule-del" data-k="'+esc(k)+'">잊기</button></div>';
   });
   h+='</section>';
   h+='<section><h2>적는 법</h2><div class="empty">'+
@@ -2429,6 +2446,7 @@ $view.addEventListener('click',async e=>{
   if(act==='askk'){ buildAsk(b.dataset.k); return; }
   if(act==='askm'){ buildAsk('money', monthRange(state.month)); return; }
   if(act==='rule-del'){ delete RULES[b.dataset.k]; await metaSet('rules',RULES); render(); return; }
+  if(act==='grule-del'){ delete GRULES[b.dataset.k]; await metaSet('grules',GRULES); render(); return; }
   if(act==='exp-json') return expJSON();
   if(act==='exp-md') return expMD();
   if(act==='exp-csv') return expCSV();
@@ -2463,6 +2481,13 @@ $view.addEventListener('click',async e=>{
                 : '마감을 풀었습니다');
     if(ent.dl&&!ent.date) dateSheet(ent);
     return;
+  }
+  if(act==='grp') return groupSheet(ent);
+  if(act==='flip'){
+    ent.flow = ent.flow==='in' ? 'out' : 'in';
+    ent.group='기타'; touch(ent); await put(ent); render();
+    toast(ent.flow==='in'?'수입으로 옮겼습니다 · 갈래를 골라 주세요':'지출로 옮겼습니다 · 갈래를 골라 주세요');
+    groupSheet(ent); return;
   }
   if(act==='star'){
     ent.star=!ent.star; touch(ent); await put(ent); render();
@@ -2499,7 +2524,10 @@ function editEntry(ent){
     // 새로 적은 것이 있을 때만 갈아끼운다. 없으면 원래 것을 지킨다.
     if(p.date){ ent.date=p.date; ent.time=p.time; }
     else if(p.time) ent.time=p.time;
-    if(p.amount!==null){ ent.amount=p.amount; ent.flow=p.flow; ent.group=p.group; }
+    if(p.amount!==null){
+      ent.amount=p.amount;
+      if(ent.cat!=='money'){ ent.flow=p.flow; ent.group=p.group; }
+    }
     if(p.num!==null){ ent.num=p.num; ent.unit=p.unit; if(p.key) ent.key=p.key; }
     if(p.forced) ent.cat=p.cat;            // /분류 로 지정했을 때만 분류를 옮긴다
     touch(ent); await put(ent); render(); toast('고쳤습니다');
@@ -2544,6 +2572,37 @@ function routineSheet(ent){
     const k=b.dataset.k; v.remove();
     if(k==='wd'){ if(!wd.length){ toast('요일을 하나 이상 고르세요'); return; } await save({mode:'wd',d:wd}); }
     else if(k==='off') await save(null);
+  });
+}
+function groupSheet(ent){
+  const inc=ent.flow==='in';
+  const base=Object.keys(inc?INCOME_DICT:SPEND_DICT);
+  const used=[...new Set(E.filter(x=>x.cat==='money'&&x.flow===ent.flow&&x.group).map(x=>x.group))];
+  const list=[...new Set([...base,...used,'기타'])];
+  const v=document.createElement('div'); v.className='veil';
+  v.innerHTML='<div class="sheet"><h3>'+(inc?'수입':'지출')+' 갈래</h3>'+
+    '<p>'+esc(ent.text||ent.raw)+'<br><span style="font-size:12px;color:var(--ink3)">지금 '+
+    esc(ent.group||'기타')+'</span></p>'+
+    '<div class="opts">'+list.map(g=>'<button data-g="'+esc(g)+'"'+
+      (g===ent.group?' aria-pressed="true"':'')+'>'+esc(g)+'</button>').join('')+'</div>'+
+    '<div class="dfield" style="margin-top:14px"><input type="text" class="gn" placeholder="새 갈래 이름"></div>'+
+    '<div class="opts"><button data-k="new">이 이름으로</button><button data-k="">닫기</button></div></div>';
+  document.body.appendChild(v);
+  const gn=v.querySelector('.gn');
+  const setG=async g=>{
+    ent.group=g; touch(ent); await put(ent);
+    const tk=tokens(ent.text||ent.raw)[0];
+    if(tk){ GRULES[tk]=g; await metaSet('grules',GRULES); }
+    render(); toast('「'+g+'」으로 옮겼습니다'+(tk?' · “'+tk+'”를 익혔습니다':''));
+  };
+  v.addEventListener('click',async ev=>{
+    if(ev.target===v){ v.remove(); return; }
+    const g=ev.target.closest('[data-g]');
+    if(g){ v.remove(); await setG(g.dataset.g); return; }
+    const b=ev.target.closest('[data-k]'); if(!b) return;
+    const k=b.dataset.k, nv=(gn.value||'').trim();
+    v.remove();
+    if(k==='new'&&nv) await setG(nv);
   });
 }
 function dateSheet(ent){
@@ -2637,7 +2696,7 @@ function expJSON(){
   pruneGraves();
   download('체_'+TODAY()+'.json',
     JSON.stringify({app:'che',v:2,exported:new Date().toISOString(),
-      rules:RULES, balance:META.balance||null, graves:GRAVES, entries:E},null,1),
+      rules:RULES, grules:GRULES, balance:META.balance||null, graves:GRAVES, entries:E},null,1),
     'application/json');
   toast('한 벌 내보냈습니다');
 }
@@ -2711,6 +2770,7 @@ function impFile(){
     try{
       const d=JSON.parse(await f.text());
       if(d.rules){ RULES={...d.rules,...RULES}; await metaSet('rules',RULES); }
+      if(d.grules){ GRULES={...d.grules,...GRULES}; await metaSet('grules',GRULES); }
       if(d.balance && (!META.balance || (d.balance.ts||0)>(META.balance.ts||0)))
         await metaSet('balance',d.balance);
       const r=await mergeIn(d);
@@ -2730,7 +2790,7 @@ function wipe(){
   sheet('전부 지울까요','담긴 '+E.length+'개가 모두 사라집니다. 되돌릴 수 없습니다.',
     [{k:'yes',label:'네, 지웁니다'}], async k=>{
       if(k!=='yes') return;
-      await clearAll(); E=[]; RULES={}; META={}; GRAVES={}; render(); toast('모두 지웠습니다');
+      await clearAll(); E=[]; RULES={}; META={}; GRAVES={}; GRULES={}; render(); toast('모두 지웠습니다');
     });
 }
 
@@ -2738,7 +2798,7 @@ function wipe(){
 (async function(){
   try{
     await openDB(); await metaLoad();
-    RULES=META.rules||{}; GRAVES=META.graves||{};
+    RULES=META.rules||{}; GRAVES=META.graves||{}; GRULES=META.grules||{};
     E=await loadAll();
   }catch(err){
     document.getElementById('view').innerHTML=
