@@ -1326,10 +1326,12 @@ const HELP_HTML = [
 
 "<h2>3. 여러 블록을 한꺼번에</h2>",
 "<p>블록 본문에서 <b>마우스를 눌러 다른 블록까지 끌면</b> 블록 단위 선택으로 바뀝니다. 한 블록 안에서만 끌면 예전처럼 글자 선택입니다. <code>Shift</code>를 누른 채 다른 블록을 클릭해도 그 사이가 잡힙니다.</p>",
+"<p><b>손을 자판에서 떼지 않고도 됩니다.</b> 글을 쓰다가 <code>Shift+↓</code>를 누르면 지금 블록과 그 아래 블록이 잡히고, 계속 누르면 아래로 번져 갑니다. <code>Shift+↑</code>는 위로, 반대 방향으로 누르면 도로 줄어듭니다. 여러 줄짜리 블록에서는 줄 끝에 닿았을 때에만 블록 선택으로 넘어가므로, 블록 안에서 글자를 고르는 일은 그대로 됩니다. 그렇게 잡은 뒤 <code>⌘C</code>·<code>⌘⇧C</code>·<code>⌘X</code>·<code>Tab</code>을 그대로 쓰면 됩니다. 선택 상태에서 <code>↑↓</code>를 <code>Shift</code> 없이 누르면 선택이 풀리며 그 블록 편집으로 돌아갑니다.</p>",
 "<table><tbody>",
 "<tr><td><code>⌘C</code></td><td>선택한 블록을 자식까지 통째로 복사합니다.</td></tr>",
 "<tr><td><code>⌘X</code></td><td>복사하고 지웁니다.</td></tr>",
 "<tr><td><code>Backspace</code></td><td>선택한 블록을 지웁니다.</td></tr>",
+"<tr><td><code>Shift+↑</code> / <code>Shift+↓</code></td><td>편집 중이든 아니든, 블록 선택을 위아래로 넓히고 좁힙니다.</td></tr>",
 "<tr><td><code>⌘⇧C</code></td><td>스크리브너용 플레인 텍스트로 복사합니다.</td></tr>",
 "<tr><td><code>Tab</code> / <code>Shift+Tab</code></td><td>선택한 블록을 한꺼번에 들여쓰기 / 내어쓰기.</td></tr>",
 "<tr><td><code>⌘A</code></td><td>그 페이지의 블록을 모두 선택합니다.</td></tr>",
@@ -1853,6 +1855,20 @@ function onKeydown(e){
   if(e.key === "Delete" && ta.selectionStart === ta.value.length && ta.selectionEnd === ta.value.length){
     e.preventDefault(); commit(); mergeForwards(id); return;
   }
+  if(e.shiftKey && !mod && (e.key === "ArrowDown" || e.key === "ArrowUp")){
+    const down = e.key === "ArrowDown";
+    // 여러 줄 블록이면 줄 끝에 닿았을 때만 블록 선택으로 넘어간다
+    const atEdge = down
+      ? ta.value.indexOf("\n", ta.selectionEnd) === -1
+      : ta.value.lastIndexOf("\n", ta.selectionStart - 1) === -1;
+    if(atEdge){
+      e.preventDefault();
+      e.stopPropagation();      // 편집기에서 처리한 키가 전역 선택 핸들러로 다시 올라가지 않게
+      commit();
+      extendSelBy(down ? 1 : -1);
+      return;
+    }
+  }
   if(e.key === "ArrowUp" && !mod){
     const upto = ta.value.lastIndexOf("\n", ta.selectionStart - 1);
     if(upto === -1){
@@ -1895,7 +1911,8 @@ function toggleTodo(id){
    ============================================================ */
 let sel = new Set();        // 선택된 "최상위" 블록 id (하위는 따라온다)
 let selDrag = null;         // 드래그 중 상태
-let selAnchor = null;       // shift+클릭 기준점
+let selAnchor = null;       // 범위의 붙박이 끝 (shift+클릭·shift+화살표의 기준점)
+let selFocus  = null;       // 범위의 움직이는 끝
 let clip = null;            // 앱 내부 클립보드 (계층 그대로)
 
 function selWithDescendants(){
@@ -1910,7 +1927,7 @@ function paintSel(){
   $$(".block").forEach(el => el.classList.toggle("is-sel", marked.has(el.dataset.id)));
   updateSelBar();
 }
-function clearSel(){ if(!sel.size) return; sel.clear(); paintSel(); }
+function clearSel(){ if(!sel.size) return; sel.clear(); selFocus = null; paintSel(); }
 /** 같은 페이지 안에서, 화면에 보이는 순서대로 두 블록 사이를 선택 */
 function setRange(aId, bId){
   const order = visibleOrder();
@@ -1957,14 +1974,42 @@ function updateSelBar(){
   });
 }
 
+/** Shift+↑↓ 로 범위를 넓히거나 좁힌다. 편집 중이었다면 그 블록을 기준점 삼아 선택으로 넘어간다. */
+function extendSelBy(dir){
+  if(!sel.size){
+    const start = editing || selAnchor;
+    if(!start || !G.blocks[start]) return false;
+    commit();
+    exitEdit();
+    selAnchor = start;
+    selFocus  = start;
+  }
+  const order = visibleOrder();
+  let i = order.indexOf(selFocus);
+  if(i < 0) i = order.indexOf(selAnchor);
+  if(i < 0) return false;
+  const j = i + dir;
+  if(j >= 0 && j < order.length && pageOf(order[j])?.id === pageOf(selAnchor)?.id)
+    selFocus = order[j];
+  else
+    selFocus = order[i];
+  setRange(selAnchor, selFocus);
+  scrollBlockIntoView(selFocus);
+  return true;
+}
+function scrollBlockIntoView(id){
+  const scope = (editRoot && document.contains(editRoot)) ? editRoot : document;
+  scope.querySelector(`.block[data-id="${id}"]`)?.scrollIntoView?.({ block:"nearest" });
+}
+
 /* ---- 마우스 드래그 ---- */
 function beginPointerSelect(id, startOff, ev){
   editRoot = paneOf(ev.target);
   if(ev.shiftKey && selAnchor && G.blocks[selAnchor]){
-    exitEdit(); setRange(selAnchor, id); return;
+    exitEdit(); selFocus = id; setRange(selAnchor, id); return;
   }
   clearSel();
-  selAnchor = id;
+  selAnchor = id; selFocus = id;
   selDrag = { id, startOff, x: ev.clientX, y: ev.clientY, mode: "text" };
   document.addEventListener("mousemove", onSelMove);
   document.addEventListener("mouseup", onSelUp);
@@ -1983,6 +2028,7 @@ function onSelMove(e){
       document.body.classList.add("selecting");
       window.getSelection()?.removeAllRanges();
     }
+    selFocus = overId;
     setRange(selDrag.id, overId);
   }else if(selDrag.mode === "block" && overId === selDrag.id){
     setRange(selDrag.id, selDrag.id);
@@ -2447,6 +2493,15 @@ document.addEventListener("keydown", e => {
       const pg = pageOf(selOrdered()[0])?.id;
       const ids = visibleOrder().filter(id => pageOf(id)?.id === pg);
       sel = new Set(topLevelOf(ids)); paintSel(); return;
+    }
+    if(e.key === "ArrowDown" || e.key === "ArrowUp"){
+      e.preventDefault();
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      if(e.shiftKey){ extendSelBy(dir); return; }
+      const go2 = selFocus && G.blocks[selFocus] ? selFocus : selOrdered()[dir > 0 ? sel.size - 1 : 0];
+      clearSel();
+      if(go2) enterEdit(go2);
+      return;
     }
     if(e.key === "Tab"){
       e.preventDefault();
