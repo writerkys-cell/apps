@@ -98,7 +98,7 @@ nav.tabs .cnt{font-size:11px;color:var(--ink-3);margin-left:6px;font-variant-num
 .tiny:hover{color:var(--seal);border-color:var(--seal)}
 
 /* 원고 창 + 판본 사다리 */
-.readbody{display:grid;grid-template-columns:60px 1fr;gap:0;flex:1;min-height:0;overflow:hidden}
+.readbody{display:grid;grid-template-columns:72px 1fr;gap:0;flex:1;min-height:0;overflow:hidden}
 .rail{
   border-right:1px solid var(--line-2);padding-right:12px;overflow-y:auto;min-height:0;
   display:flex;flex-direction:column;gap:0;
@@ -107,25 +107,38 @@ nav.tabs .cnt{font-size:11px;color:var(--ink-3);margin-left:6px;font-variant-num
   font-family:var(--sans);font-size:9px;letter-spacing:.2em;color:var(--ink-3);
   margin-bottom:8px;
 }
-.rail button{
+.rail .rgrp{margin-bottom:6px}
+.rail .rdate{
+  background:none;border:0;width:100%;text-align:left;padding:4px 0 4px 0;
+  font-family:var(--sans);font-size:10px;letter-spacing:.06em;color:var(--ink-3);
+  display:flex;align-items:baseline;gap:4px;white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.rail .rdate::before{content:"−";width:7px;display:inline-block;opacity:.7}
+.rail .rgrp.shut .rdate::before{content:"+"}
+.rail .rdate .k{font-size:8.5px;opacity:.6;margin-left:auto;padding-left:4px}
+.rail .rdate:hover{color:var(--seal)}
+.rail .rgrp.here .rdate{color:var(--ink-2)}
+.rail .ritems{display:flex;flex-direction:column;padding-bottom:2px}
+.rail .rgrp.shut .ritems{display:none}
+.rail .ritems button{
   background:none;border:0;text-align:left;padding:5px 0 5px 12px;position:relative;
   font-family:var(--sans);font-size:11.5px;color:var(--ink-3);line-height:1.35;
   font-variant-numeric:tabular-nums;width:100%;
 }
-.rail button::before{
+.rail .ritems button::before{
   content:"";position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;
   background:var(--paper);border:1px solid var(--ink-3);
 }
-.rail button::after{
+.rail .ritems button::after{
   content:"";position:absolute;left:2px;top:16px;bottom:-1px;width:1px;background:var(--line);
 }
-.rail button:last-child::after{display:none}
-.rail button .n{display:block;color:var(--ink-2)}
-.rail button .c{display:block;font-size:9.5px;opacity:.75}
-.rail button:hover .n{color:var(--seal)}
-.rail button.cur::before{background:var(--seal);border-color:var(--seal)}
-.rail button.cur .n{color:var(--seal)}
-.rail button.on{background:var(--seal-soft)}
+.rail .ritems button:last-child::after{display:none}
+.rail .ritems button .n{display:block;color:var(--ink-2)}
+.rail .ritems button .c{display:block;font-size:9.5px;opacity:.75}
+.rail .ritems button:hover .n{color:var(--seal)}
+.rail .ritems button.cur::before{background:var(--seal);border-color:var(--seal)}
+.rail .ritems button.cur .n{color:var(--seal)}
+.rail .ritems button.on{background:var(--seal-soft)}
 .rail .none{font-family:var(--sans);font-size:11px;color:var(--ink-3);padding-left:2px}
 
 #paper{
@@ -263,6 +276,7 @@ details.manual[open]{margin-bottom:34px}
 .gauge i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ink-3);transition:width .45s}
 .gauge.full i{background:var(--seal)}
 .gaugebar .pct.full{color:var(--seal)}
+.gaugebar .scale{color:var(--ink-3);font-size:11px;letter-spacing:.02em}
 .sep{color:var(--ink-3);opacity:.5}
 
 /* ─── 겹창 ─── */
@@ -307,7 +321,7 @@ details.manual[open]{margin-bottom:34px}
   .pane.read{padding-right:0;border-right:0;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:18px}
   .pane.write{padding-left:0}
   #paper{max-height:40vh;padding-left:14px}
-  .readbody{grid-template-columns:48px 1fr}
+  .readbody{grid-template-columns:62px 1fr}
   .mgrid{grid-template-columns:1fr;gap:16px}
   #editor{min-height:34vh}
 }
@@ -434,6 +448,7 @@ details.manual[open]{margin-bottom:34px}
     <span class="num" id="gSheets">0.0매</span>
     <span class="num pct" id="gPct">0%</span>
     <span class="gauge" id="gGauge"><i></i></span>
+    <span class="num scale" id="gScale"></span>
     <span class="grow"></span>
     <span class="num" id="gVer"></span>
     <button class="btn ghost" id="btnScriv">원고 복사</button>
@@ -624,6 +639,7 @@ function applyEdit(confirmed){
     text: r.text, chars: count(r.text), at: Date.now(), kind: MODE_NAME[m]
   });
   p.draft = '';
+  railState[p.id + '|' + dayKey(Date.now())] = true;
   sel = null;
   $('editor').value = '';
   $('chkAppend').checked = false;
@@ -729,6 +745,17 @@ function renderPaper(){
     : '고칠 문장을 끌어서 고르세요';
 }
 
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function dayKey(ts){
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+function dayLabel(ts){
+  const d = new Date(ts);
+  return String(d.getDate()).padStart(2,'0') + ' ' + MON[d.getMonth()];
+}
+let railState = {};   /* '프로젝트|날짜' → 펼침 여부 */
+
 function renderRail(){
   const p = cur(), r = $('rail');
   if(!p || !p.versions.length){
@@ -736,15 +763,46 @@ function renderRail(){
     return;
   }
   const last = p.versions.length - 1;
-  let h = '<div class="rl">판본</div>';
+
+  /* 최신 날짜가 위로 오도록 묶는다 */
+  const groups = [];
   for(let i = last; i >= 0; i--){
-    const e = p.versions[i];
-    const cls = (i === last ? ' cur' : '') + (preview === i ? ' on' : '');
-    h += '<button class="' + cls.trim() + '" data-i="' + i + '" title="' + esc(e.kind + ' · ' + stamp(e.at)) + '">' +
-         '<span class="n">' + e.v + '</span><span class="c">' + fmt(e.chars) + '</span></button>';
+    const k = dayKey(p.versions[i].at);
+    let g = groups[groups.length - 1];
+    if(!g || g.k !== k){ g = {k, at: p.versions[i].at, idx: []}; groups.push(g); }
+    g.idx.push(i);
   }
+
+  let h = '<div class="rl">판본</div>';
+  groups.forEach((g, gi) => {
+    const key = p.id + '|' + g.k;
+    const holds = preview !== null && g.idx.indexOf(preview) >= 0;
+    const open = holds || (key in railState ? railState[key] : gi === 0);
+    const here = g.idx.indexOf(last) >= 0;
+    h += '<div class="rgrp' + (open ? '' : ' shut') + (here ? ' here' : '') + '">' +
+         '<button class="rdate" data-k="' + esc(key) + '">' + dayLabel(g.at) +
+         '<span class="k">' + g.idx.length + '</span></button><div class="ritems">';
+    g.idx.forEach(i => {
+      const e = p.versions[i];
+      const cls = (i === last ? ' cur' : '') + (preview === i ? ' on' : '');
+      h += '<button class="' + cls.trim() + '" data-i="' + i + '" title="' + esc(e.kind + ' · ' + stamp(e.at)) + '">' +
+           '<span class="n">' + e.v + '</span><span class="c">' + fmt(e.chars) + '</span></button>';
+    });
+    h += '</div></div>';
+  });
   r.innerHTML = h;
-  r.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+
+  r.querySelectorAll('.rdate').forEach(b => b.addEventListener('click', () => {
+    const key = b.dataset.k;
+    const shut = b.parentNode.classList.contains('shut');
+    railState[key] = shut;                       /* 접혀 있었으면 편다 */
+    if(!shut && preview !== null){               /* 미리보던 판본을 접으면 현재 원고로 */
+      const grp = b.parentNode;
+      if(grp.querySelector('button.on')){ preview = null; renderPaper(); }
+    }
+    renderRail(); syncMode();
+  }));
+  r.querySelectorAll('.ritems button').forEach(b => b.addEventListener('click', () => {
     const i = +b.dataset.i;
     preview = (preview === i || i === p.versions.length - 1) ? null : i;
     sel = null;
@@ -802,14 +860,17 @@ function syncMode(){
 function renderGauge(){
   const p = cur();
   const n = p ? count(p.text) : 0;
-  const pct = Math.round(n / GOAL * 100);
+  const seed = !p || p.phase === 'seed';
+  const target = seed ? PROMO : GOAL;        /* 초고 전에는 1,000자, 그 뒤로는 2,667자 */
+  const pct = (n >= target) ? 100 : Math.min(99, Math.floor(n / target * 100));
   $('gTitle').textContent = p ? p.title : '—';
   $('gChars').textContent = fmt(n) + '자';
   $('gSheets').textContent = (n / SHEET).toFixed(1) + '매';
   $('gPct').textContent = pct + '%';
-  $('gPct').classList.toggle('full', n >= GOAL);
-  $('gGauge').classList.toggle('full', n >= GOAL);
-  $('gGauge').firstElementChild.style.width = Math.min(100, pct) + '%';
+  $('gPct').classList.toggle('full', n >= target);
+  $('gGauge').classList.toggle('full', n >= target);
+  $('gGauge').firstElementChild.style.width = pct + '%';
+  $('gScale').textContent = (seed ? '초고 1,000자까지' : '2,667자까지');
   $('gVer').textContent = p && p.versions.length ? vstr(p) + ' · ' + p.versions.length + '고' : '';
   const bs = $('btnScriv');
   bs.textContent = (p && p.link) ? '스크리브너로 보내기' : '원고 복사';
