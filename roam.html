@@ -1169,13 +1169,21 @@ function renderCalendar(){
   const mon = document.createElement("span");
   mon.className = "mon"; mon.textContent = `${y}년 ${m + 1}월`;
   const grow = document.createElement("span"); grow.className = "grow";
+  const copyMon = document.createElement("button");
+  copyMon.textContent = "이 달 복사";
+  copyMon.title = "이 달의 노트를 오래된 날짜부터 모아 플레인 텍스트로 클립보드에 담습니다";
+  copyMon.onclick = () => copyDailies(y, m, `${m + 1}월`);
+  const copyAll = document.createElement("button");
+  copyAll.textContent = "전체 복사";
+  copyAll.title = "지금까지의 모든 노트를 오래된 날짜부터 모아 담습니다";
+  copyAll.onclick = () => copyDailies(null, null, "전체");
   const nowBtn = document.createElement("button");
   nowBtn.textContent = "이번 달";
   nowBtn.onclick = () => { const d = new Date(); calCursor = { y:d.getFullYear(), m:d.getMonth() }; render(); };
   const todayBtn = document.createElement("button");
   todayBtn.textContent = "오늘 노트로";
   todayBtn.onclick = () => openPageByTitle(today);
-  bar.append(prev, mon, next, grow, nowBtn, todayBtn);
+  bar.append(prev, mon, next, grow, copyMon, copyAll, nowBtn, todayBtn);
   frag.appendChild(bar);
 
   const grid = document.createElement("div");
@@ -1236,6 +1244,34 @@ function renderCalendar(){
   frag.appendChild(foot);
   return frag;
 }
+/** 데일리 노트를 오래된 날짜부터 모은다. month가 null이면 전부. */
+function dailyPagesOf(year, month){
+  const prefix = month == null ? null : `${year}-${pad(month + 1)}-`;
+  return Object.values(G.pages)
+    .filter(p => isDailyTitle(p.title))
+    .filter(p => !prefix || p.title.indexOf(prefix) === 0)
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+/** 날짜 머리글 + 플레인 텍스트 본문. 빈 날은 건너뛴다. */
+function dailyPlainText(pages){
+  const out = [];
+  let days = 0, chars = 0;
+  pages.forEach(p => {
+    const body = serializePlain(treeOf(p.children)).trim();
+    if(!body) return;
+    days++; chars += body.replace(/\s/g, "").length;
+    const wd = (weekdayOf(p.title).split(" ").pop() || "");
+    out.push(p.title + (wd ? " " + wd : ""), "", body, "");
+  });
+  return { text: out.join("\n").replace(/\n+$/, "\n"), days, chars };
+}
+function copyDailies(year, month, label){
+  const r = dailyPlainText(dailyPagesOf(year, month));
+  if(!r.days){ toast(`${label}에는 옮길 글이 없습니다`); return; }
+  writeClipboard(r.text);
+  toast(`${label} ${r.days}일치 · ${r.chars.toLocaleString()}자를 복사했습니다`);
+}
+
 /** 그날 노트의 첫 줄을 짧게 미리 보여 준다 */
 function firstLineOf(page){
   for(const id of page.children){
@@ -1480,6 +1516,7 @@ const HELP_HTML = [
 "<ul>",
 "<li><b>오늘의 노트</b> — 앱을 열면 나오는 첫 화면. 오늘 날짜 페이지가 자동으로 만들어지고, 그 아래로 최근 데일리 노트 일곱 개가 이어집니다. 날짜를 누르면 그 하루만 따로 볼 수 있습니다.</li>",
 "<li><b>달력</b> — 한 달을 펼쳐 놓고 그날의 노트로 건너뜁니다. 글을 쓴 날은 바탕이 채워지고 첫 줄과 블록 수가 함께 보이므로, 어느 날 손을 놓았는지 한눈에 드러납니다. 오늘은 테두리로 표시됩니다. 날짜를 누르면 그날 노트가 열리고(없으면 그때 만들어집니다), <code>Shift</code>+클릭하면 오른쪽에 둡니다. <code>‹ ›</code>로 달을 넘기고 <b>이번 달</b>로 돌아옵니다. 아래에 그달에 쓴 날수와 블록 수가 적힙니다.</li>",
+"<li><b>이 달 복사 · 전체 복사</b> — 달력 위쪽 단추입니다. 데일리 노트를 <b>오래된 날짜부터</b> 차례로 모아 플레인 텍스트로 클립보드에 담습니다. 날짜와 요일이 머리글로 붙고, 그 아래에 그날 쓴 글이 문단으로 이어집니다. 글이 없는 날은 건너뜁니다. 스크리브너나 한글 문서로 한 달치를 통째로 옮길 때 씁니다. 복사가 끝나면 며칠치·몇 자인지 알려 줍니다. 본문 정리 방식은 <b>플레인 복사</b>와 같아서, 3절에서 켜 둔 계층 유지 여부를 그대로 따릅니다.</li>",
 "<li><b>쪽글</b> — <code>#쪽글</code> 태그가 붙은 페이지를 무작위로 하나씩 꺼내 줍니다.</li>",
 "<li><b>무작위 페이지</b> — 태그와 상관없이 아무 페이지나 엽니다. 내용이 있는 페이지를 먼저 고르고, 데일리 노트는 뺍니다.</li>",
 "<li><b>전체 페이지</b> — 제목·블록 수·피참조 수·수정 시각을 한 표로 봅니다. 여기서 지울 수도 있습니다.</li>",
