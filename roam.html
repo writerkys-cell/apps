@@ -297,6 +297,48 @@ html[data-theme="dark"] .content mark{background:#5C5326}
 .todo.done{color:var(--indigo-soft)}
 .done-text{color:var(--ink-3);text-decoration:line-through}
 
+/* ---------- 달력 ---------- */
+.cal-bar{display:flex;align-items:center;gap:8px;margin:6px 0 18px}
+.cal-bar .mon{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--ink);min-width:150px}
+.cal-bar .grow{flex:1}
+.cal-bar button{
+  border:1px solid var(--line);border-radius:99px;padding:3px 11px;font-size:12.5px;color:var(--ink-2);
+}
+.cal-bar button:hover{border-color:var(--indigo);color:var(--indigo)}
+.cal-bar .arrow-b{padding:3px 10px;font-size:13px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-wd{
+  text-align:center;font-size:10.5px;letter-spacing:.1em;color:var(--ink-3);
+  padding-bottom:4px;font-family:var(--mono);
+}
+.cal-wd.sun{color:var(--cinnabar)}
+.cal-cell{
+  position:relative;aspect-ratio:1/.82;border:1px solid var(--line-soft);border-radius:6px;
+  padding:6px 7px;display:flex;flex-direction:column;gap:3px;cursor:pointer;
+  background:transparent;text-align:left;transition:border-color .12s,background .12s;
+}
+.cal-cell:hover{border-color:var(--indigo);background:var(--paper-2)}
+.cal-cell.blank{border:none;cursor:default;background:none}
+.cal-cell.blank:hover{background:none}
+.cal-cell .n{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);line-height:1}
+.cal-cell.sun .n{color:var(--cinnabar)}
+.cal-cell.sat .n{color:var(--indigo-soft)}
+.cal-cell.has{background:var(--paper-2);border-color:var(--line)}
+.cal-cell.has .n{color:var(--ink);font-weight:600}
+.cal-cell.today{border-color:var(--indigo);box-shadow:inset 0 0 0 1px var(--indigo)}
+.cal-cell .peek{
+  font-size:10.5px;line-height:1.35;color:var(--ink-3);overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;
+}
+.cal-cell .cnt{
+  position:absolute;right:6px;bottom:5px;font-family:var(--mono);font-size:9.5px;color:var(--ink-3);
+}
+.cal-foot{margin-top:14px;font-size:12px;font-family:var(--mono);color:var(--ink-3)}
+@media (max-width:620px){
+  .cal-cell{aspect-ratio:1/1;padding:4px}
+  .cal-cell .peek{display:none}
+}
+
 /* ---------- 쪽글(태그 셔플) ---------- */
 .shuffle-bar{
   display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -444,6 +486,7 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
     <nav class="side-nav">
       <button class="nav-item" data-go="daily"><span class="ico">◷</span>오늘의 노트</button>
       <button class="nav-item" data-go="all"><span class="ico">▤</span>전체 페이지</button>
+      <button class="nav-item" data-go="calendar"><span class="ico">▦</span>달력</button>
       <button class="nav-item" data-go="shuffle"><span class="ico">✎</span>쪽글<span class="kbd" id="shuffle-n"></span></button>
       <button class="nav-item" id="btn-random"><span class="ico">⚄</span>무작위 페이지</button>
       <button class="nav-item" id="btn-search"><span class="ico">⌕</span>검색<span class="kbd">⌘K</span></button>
@@ -816,6 +859,7 @@ function render(){
   if(view.type === "daily") v.appendChild(renderDailyFeed());
   else if(view.type === "page") v.appendChild(renderPageView(view.id));
   else if(view.type === "zoom") v.appendChild(renderZoomView(view.id));
+  else if(view.type === "calendar") v.appendChild(renderCalendar());
   else if(view.type === "shuffle") v.appendChild(renderShuffleView());
   else if(view.type === "all")  v.appendChild(renderAllPages());
   else if(view.type === "help") v.appendChild(renderHelp());
@@ -871,6 +915,10 @@ function renderCrumb(){
   if(view.type === "daily") add("오늘의 노트", null, true);
   if(view.type === "all")   add("전체 페이지", null, true);
   if(view.type === "help")  add("도움말", null, true);
+  if(view.type === "calendar"){
+    add("달력", null, true); sep();
+    add(`${calCursor.y}년 ${calCursor.m + 1}월`, null, true);
+  }
   if(view.type === "shuffle"){
     add("쪽글", () => nextShuffle()); sep();
     add(G.pages[view.id] ? G.pages[view.id].title : "모으는 중", null, true);
@@ -1087,6 +1135,114 @@ function renderAllPages(){
   table.appendChild(tb);
   frag.appendChild(table);
   return frag;
+}
+
+/* ---- 달력 ---- */
+let calCursor = (function(){ const d = new Date(); return { y:d.getFullYear(), m:d.getMonth() }; })();
+function calShift(delta){
+  let y = calCursor.y, m = calCursor.m + delta;
+  while(m < 0){ m += 12; y--; }
+  while(m > 11){ m -= 12; y++; }
+  calCursor = { y, m };
+  render();
+}
+function renderCalendar(){
+  const frag = document.createDocumentFragment();
+  const { y, m } = calCursor;
+  const today = dateKey();
+
+  const h = document.createElement("div");
+  h.className = "page-title"; h.textContent = "달력";
+  const meta = document.createElement("div");
+  meta.className = "page-meta";
+  meta.innerHTML = "<span>날짜를 누르면 그날의 노트로 들어갑니다</span><span>Shift+클릭: 오른쪽에 두기</span>";
+  frag.append(h, meta);
+
+  const bar = document.createElement("div");
+  bar.className = "cal-bar";
+  const prev = document.createElement("button");
+  prev.className = "arrow-b"; prev.textContent = "‹"; prev.title = "지난달";
+  prev.onclick = () => calShift(-1);
+  const next = document.createElement("button");
+  next.className = "arrow-b"; next.textContent = "›"; next.title = "다음달";
+  next.onclick = () => calShift(1);
+  const mon = document.createElement("span");
+  mon.className = "mon"; mon.textContent = `${y}년 ${m + 1}월`;
+  const grow = document.createElement("span"); grow.className = "grow";
+  const nowBtn = document.createElement("button");
+  nowBtn.textContent = "이번 달";
+  nowBtn.onclick = () => { const d = new Date(); calCursor = { y:d.getFullYear(), m:d.getMonth() }; render(); };
+  const todayBtn = document.createElement("button");
+  todayBtn.textContent = "오늘 노트로";
+  todayBtn.onclick = () => openPageByTitle(today);
+  bar.append(prev, mon, next, grow, nowBtn, todayBtn);
+  frag.appendChild(bar);
+
+  const grid = document.createElement("div");
+  grid.className = "cal-grid";
+  WD.forEach((w, i) => {
+    const el = document.createElement("div");
+    el.className = "cal-wd" + (i === 0 ? " sun" : "");
+    el.textContent = w;
+    grid.appendChild(el);
+  });
+
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  for(let i = 0; i < first; i++){
+    const b = document.createElement("div");
+    b.className = "cal-cell blank";
+    grid.appendChild(b);
+  }
+  let written = 0, blocksSum = 0;
+  for(let d = 1; d <= days; d++){
+    const key = `${y}-${pad(m + 1)}-${pad(d)}`;
+    const page = findPageByTitle(key);
+    const cnt = page ? countBlocks(page.id) : 0;
+    const wd = new Date(y, m, d).getDay();
+    if(cnt){ written++; blocksSum += cnt; }
+
+    const cell = document.createElement("button");
+    cell.className = "cal-cell"
+      + (wd === 0 ? " sun" : wd === 6 ? " sat" : "")
+      + (cnt ? " has" : "")
+      + (key === today ? " today" : "");
+    const n = document.createElement("span");
+    n.className = "n"; n.textContent = d;
+    cell.appendChild(n);
+
+    if(page && cnt){
+      const peek = document.createElement("span");
+      peek.className = "peek";
+      peek.textContent = firstLineOf(page);
+      cell.appendChild(peek);
+      const c = document.createElement("span");
+      c.className = "cnt"; c.textContent = cnt;
+      cell.appendChild(c);
+    }
+    cell.title = key + (cnt ? ` · 블록 ${cnt}개` : " · 아직 빈 날");
+    cell.onclick = e => {
+      const p = getOrCreatePage(key);
+      if(e.shiftKey) sideAdd({ type:"page", id:p.id });
+      else { scheduleSave(); openPage(p.id); }
+    };
+    grid.appendChild(cell);
+  }
+  frag.appendChild(grid);
+
+  const foot = document.createElement("div");
+  foot.className = "cal-foot";
+  foot.textContent = `${m + 1}월에 쓴 날 ${written}일 · 블록 ${blocksSum}개`;
+  frag.appendChild(foot);
+  return frag;
+}
+/** 그날 노트의 첫 줄을 짧게 미리 보여 준다 */
+function firstLineOf(page){
+  for(const id of page.children){
+    const t = plainText(G.blocks[id]?.content || "").replace(/\s+/g, " ").trim();
+    if(t) return t.slice(0, 24);
+  }
+  return "";
 }
 
 /* ---- 쪽글: 특정 태그가 붙은 페이지를 무작위로 순회 ---- */
@@ -1323,6 +1479,7 @@ const HELP_HTML = [
 "<h2>1. 화면 구성</h2>",
 "<ul>",
 "<li><b>오늘의 노트</b> — 앱을 열면 나오는 첫 화면. 오늘 날짜 페이지가 자동으로 만들어지고, 그 아래로 최근 데일리 노트 일곱 개가 이어집니다. 날짜를 누르면 그 하루만 따로 볼 수 있습니다.</li>",
+"<li><b>달력</b> — 한 달을 펼쳐 놓고 그날의 노트로 건너뜁니다. 글을 쓴 날은 바탕이 채워지고 첫 줄과 블록 수가 함께 보이므로, 어느 날 손을 놓았는지 한눈에 드러납니다. 오늘은 테두리로 표시됩니다. 날짜를 누르면 그날 노트가 열리고(없으면 그때 만들어집니다), <code>Shift</code>+클릭하면 오른쪽에 둡니다. <code>‹ ›</code>로 달을 넘기고 <b>이번 달</b>로 돌아옵니다. 아래에 그달에 쓴 날수와 블록 수가 적힙니다.</li>",
 "<li><b>쪽글</b> — <code>#쪽글</code> 태그가 붙은 페이지를 무작위로 하나씩 꺼내 줍니다.</li>",
 "<li><b>무작위 페이지</b> — 태그와 상관없이 아무 페이지나 엽니다. 내용이 있는 페이지를 먼저 고르고, 데일리 노트는 뺍니다.</li>",
 "<li><b>전체 페이지</b> — 제목·블록 수·피참조 수·수정 시각을 한 표로 봅니다. 여기서 지울 수도 있습니다.</li>",
@@ -1624,6 +1781,7 @@ function groupRefs(blockIds, opts){
    ============================================================ */
 function go(v){
   if(v.type === "shuffle"){ nextShuffle(); return; }
+  if(v.type === "calendar" && !v.keep){ const d = new Date(); calCursor = { y:d.getFullYear(), m:d.getMonth() }; }
   exitEdit(); view = v; render(); $("#main").scrollTop = 0; closeSidebarMobile();
 }
 function openPage(id, focusBlock){
