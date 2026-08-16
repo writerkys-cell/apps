@@ -24,7 +24,7 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none !important}
-html,body{margin:0;padding:0;height:100%}
+html,body{margin:0;padding:0;min-height:100%}
 body{
   background:var(--paper);
   color:var(--ink);
@@ -32,7 +32,7 @@ body{
   font-size:16px;line-height:1.75;
   word-break:keep-all;overflow-wrap:break-word;
   -webkit-text-size-adjust:100%;
-  padding-bottom:56px;
+  padding-bottom:84px;
 }
 body.tab-box{padding-bottom:24px}
 button{font-family:var(--sans);font-size:inherit;color:inherit;cursor:pointer}
@@ -129,11 +129,15 @@ nav.tabs .cnt{font-size:11px;color:var(--ink-3);margin-left:6px;font-variant-num
 .rail .none{font-family:var(--sans);font-size:11px;color:var(--ink-3);padding-left:2px}
 
 #paper{
-  flex:1;overflow-y:auto;padding:2px 4px 40px 20px;margin:0;
-  white-space:pre-wrap;font-size:17px;line-height:2.0;
+  flex:1;overflow-y:auto;padding:2px 6px 40px 20px;margin:0;
+  font-size:17px;line-height:1.3;
+  text-align:justify;text-justify:inter-character;
+  word-break:break-all;overflow-wrap:break-word;
   scroll-behavior:smooth;
 }
-#paper .empty{color:var(--ink-3);font-size:14.5px;line-height:1.9;font-family:var(--sans);max-width:34em}
+#paper .pg{margin:0;text-indent:1.5em;white-space:pre-wrap}
+#paper .pg:empty{display:none}
+#paper .empty{color:var(--ink-3);font-size:14.5px;line-height:1.9;font-family:var(--sans);max-width:34em;white-space:pre-wrap;text-align:left;text-indent:0}
 .pvbar{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   border:1px solid var(--seal);background:var(--seal-soft);
@@ -144,9 +148,8 @@ nav.tabs .cnt{font-size:11px;color:var(--ink-3);margin-left:6px;font-variant-num
 /* 수정 창 */
 #editor{
   flex:1;width:100%;background:transparent;border:0;outline:none;resize:none;
-  font-size:16.5px;line-height:2.0;color:var(--ink);padding:0;min-height:150px;
-  background-image:linear-gradient(to bottom,transparent 0,transparent calc(2em - 1px),var(--line-2) calc(2em - 1px),var(--line-2) 2em);
-  background-size:100% 2em;background-attachment:local;
+  font-size:16.5px;line-height:1.3;color:var(--ink);padding:0;min-height:150px;
+  word-break:break-all;overflow-wrap:break-word;
 }
 #editor::placeholder{color:var(--ink-3);opacity:.75}
 .modes{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;font-family:var(--sans);font-size:12.5px}
@@ -194,7 +197,7 @@ nav.tabs .cnt{font-size:11px;color:var(--ink-3);margin-left:6px;font-variant-num
 .ask .grow{flex:1}
 
 /* ─── 규칙 ─── */
-details.manual{margin:22px 0 0}
+details.manual{margin:22px 0 0;padding-bottom:2px}
 details.manual summary{
   cursor:pointer;font-family:var(--sans);font-size:12px;color:var(--ink-2);letter-spacing:.06em;
   list-style:none;padding:8px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
@@ -203,6 +206,7 @@ details.manual summary::-webkit-details-marker{display:none}
 details.manual summary::before{content:"+ ";color:var(--ink-3)}
 details.manual[open] summary::before{content:"− "}
 .mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;padding:20px 0 6px}
+details.manual[open]{margin-bottom:34px}
 .mgrid .mt{font-family:var(--sans);font-size:11px;letter-spacing:.16em;color:var(--seal);margin-bottom:8px}
 .mgrid p{margin:0 0 6px;font-family:var(--sans);font-size:12.5px;line-height:1.8;color:var(--ink-2);padding-left:11px;position:relative}
 .mgrid p::before{content:"";position:absolute;left:0;top:11px;width:4px;height:1px;background:var(--ink-3)}
@@ -291,7 +295,7 @@ details.manual[open] summary::before{content:"− "}
 .toast.on{opacity:.96}
 
 @media (max-width:900px){
-  body{padding-bottom:104px}
+  body{padding-bottom:118px}
   body.tab-box{padding-bottom:24px}
   .gauge{width:96px}
   .wrap{padding:0 15px}
@@ -322,7 +326,6 @@ details.manual[open] summary::before{content:"− "}
       <select class="psel" id="psel" aria-label="프로젝트"></select>
       <span class="vbadge none" id="vbadge">—</span>
       <span class="grow"></span>
-      <button class="tiny" id="btnScriv">스크리브너 열기</button>
       <button class="tiny" id="btnEdit">프로젝트 고치기</button>
       <button class="tiny" id="btnNew">새 프로젝트</button>
     </div>
@@ -431,7 +434,7 @@ details.manual[open] summary::before{content:"− "}
     <span class="gauge" id="gGauge"><i></i></span>
     <span class="grow"></span>
     <span class="num" id="gVer"></span>
-    <button class="btn ghost" id="btnCopy">원고 복사</button>
+    <button class="btn ghost" id="btnScriv">원고 복사</button>
     <button class="btn ghost" id="btnDone">초고박스로</button>
   </div>
 </div>
@@ -668,10 +671,29 @@ function renderProjects(){
   const vb = $('vbadge');
   vb.textContent = p ? vstr(p) : '—';
   vb.classList.toggle('none', !p || !p.versions.length);
-  $('btnScriv').style.display = (p && p.link) ? '' : 'none';
   $('btnEdit').style.display = p ? '' : 'none';
   $('btnDone').style.display = p ? '' : 'none';
   $('boxCnt').textContent = doneProjects().length ? '(' + doneProjects().length + ')' : '';
+}
+
+/* 스크리브너처럼 문단마다 한 덩이로 짠다.
+   각 덩이에 원문 시작 위치(data-off)를 새겨 두어 선택 좌표를 잃지 않는다. */
+function paperHTML(text, s0e1){
+  const segs = text.split('\n');
+  let off = 0, h = '';
+  for(const seg of segs){
+    const a = off, b = off + seg.length;
+    if(seg.length){
+      let inner;
+      if(s0e1 && s0e1.end > s0e1.start && s0e1.start < b && s0e1.end > a){
+        const i = Math.max(s0e1.start, a) - a, j = Math.min(s0e1.end, b) - a;
+        inner = esc(seg.slice(0, i)) + '<mark>' + esc(seg.slice(i, j)) + '</mark>' + esc(seg.slice(j));
+      } else inner = esc(seg);
+      h += '<div class="pg" data-off="' + a + '">' + inner + '</div>';
+    }
+    off = b + 1;
+  }
+  return h || '<div class="pg" data-off="0"></div>';
 }
 
 function renderPaper(){
@@ -686,7 +708,7 @@ function renderPaper(){
     const e = p.versions[preview];
     $('pvLabel').textContent = e.v + ' 미리보기 · ' + fmt(e.chars) + '자 · ' + e.kind;
     $('pvLabel').title = stamp(e.at);
-    el.textContent = e.text;
+    el.innerHTML = paperHTML(e.text, null);
     $('btnClearSel').hidden = true;
     $('selHint').textContent = '지난 판본을 읽는 중입니다';
     return;
@@ -697,15 +719,12 @@ function renderPaper(){
     $('selHint').textContent = '첫 글을 쓰는 중';
     return;
   }
-  if(sel && sel.end > sel.start){
-    el.innerHTML = esc(p.text.slice(0, sel.start)) + '<mark>' + esc(p.text.slice(sel.start, sel.end)) + '</mark>' + esc(p.text.slice(sel.end));
-    $('btnClearSel').hidden = false;
-    $('selHint').textContent = fmt(count(p.text.slice(sel.start, sel.end))) + '자를 골랐습니다';
-  } else {
-    el.textContent = p.text;
-    $('btnClearSel').hidden = true;
-    $('selHint').textContent = '고칠 문장을 끌어서 고르세요';
-  }
+  const on = !!(sel && sel.end > sel.start);
+  el.innerHTML = paperHTML(p.text, on ? sel : null);
+  $('btnClearSel').hidden = !on;
+  $('selHint').textContent = on
+    ? fmt(count(p.text.slice(sel.start, sel.end))) + '자를 골랐습니다'
+    : '고칠 문장을 끌어서 고르세요';
 }
 
 function renderRail(){
@@ -790,31 +809,49 @@ function renderGauge(){
   $('gGauge').classList.toggle('full', n >= GOAL);
   $('gGauge').firstElementChild.style.width = Math.min(100, pct) + '%';
   $('gVer').textContent = p && p.versions.length ? vstr(p) + ' · ' + p.versions.length + '고' : '';
-  $('btnCopy').disabled = !(p && p.text);
+  const bs = $('btnScriv');
+  bs.textContent = (p && p.link) ? '스크리브너로 보내기' : '원고 복사';
+  bs.title = (p && p.link) ? '원고를 순수 텍스트로 복사하고 스크리브너 문서를 엽니다' : '원고를 순수 텍스트로 복사합니다';
+  bs.disabled = !(p && p.text);
   $('btnDone').disabled = !p;
 }
 
 /* ══════════ 선택 잡기 ══════════ */
+function absOffset(node, offset){
+  const paper = $('paper');
+  if(node === paper){
+    const kid = paper.children[Math.min(offset, paper.children.length - 1)];
+    if(!kid || kid.dataset.off === undefined) return null;
+    return (offset >= paper.children.length)
+      ? +kid.dataset.off + kid.textContent.length
+      : +kid.dataset.off;
+  }
+  let el = (node.nodeType === 3) ? node.parentNode : node;
+  while(el && el !== paper && !(el.dataset && el.dataset.off !== undefined)) el = el.parentNode;
+  if(!el || el === paper || el.dataset.off === undefined) return null;
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  try{ r.setEnd(node, offset); }catch(e){ return null; }
+  return +el.dataset.off + r.toString().length;
+}
+
 function grabSel(){
   const p = cur();
   if(!p || preview !== null || !p.text) return;
   const s = window.getSelection();
   if(!s || s.rangeCount === 0 || s.isCollapsed) return;
   const r = s.getRangeAt(0);
-  const paper = $('paper');
-  if(!paper.contains(r.commonAncestorContainer)) return;
-  const len = r.toString().length;
-  if(len < 1) return;
-  const pre = document.createRange();
-  pre.selectNodeContents(paper);
-  pre.setEnd(r.startContainer, r.startOffset);
-  const start = pre.toString().length;
-  sel = {start, end: start + len};
+  if(!$('paper').contains(r.commonAncestorContainer)) return;
+  const start = absOffset(r.startContainer, r.startOffset);
+  const end   = absOffset(r.endContainer, r.endOffset);
+  if(start === null || end === null || end <= start) return;
+  sel = {start, end};
   s.removeAllRanges();
   $('chkAppend').checked = false;
   renderPaper(); syncMode();
   $('editor').focus();
 }
+
 function clearSel(){
   if(!sel) return;
   sel = null;
@@ -844,8 +881,7 @@ function renderBox(){
       '</div>' +
       '<div class="bacts">' +
         '<button class="btn ghost" data-act="toggle">내력과 진화 리포트</button>' +
-        '<button class="btn ghost" data-act="copy">원고 복사</button>' +
-        '<button class="btn ghost" data-act="scriv"' + (p.link ? '' : ' hidden') + '>스크리브너 열기</button>' +
+        '<button class="btn ghost" data-act="send">' + (p.link ? '스크리브너로 보내기' : '원고 복사') + '</button>' +
         '<button class="btn ghost" data-act="back">집필로 다시 꺼내기</button>' +
         '<button class="btn ghost" data-act="del">지우기</button>' +
       '</div>' +
@@ -863,8 +899,7 @@ function renderBox(){
         b.textContent = on ? '접기' : '내력과 진화 리포트';
         if(on) renderDetail(p, d);
       }
-      else if(act === 'copy') copyText(p.text);
-      else if(act === 'scriv') openScriv(p.link);
+      else if(act === 'send') sendToScriv(p);
       else if(act === 'back'){
         p.done = false; p.doneAt = null; db.activeId = p.id; db.tab = 'write';
         preview = null; sel = null;
@@ -1048,9 +1083,16 @@ function downloadReport(p){
   toast('리포트를 내려받았습니다.');
 }
 
-function copyText(t){
+/* 원고를 순수 텍스트로 복사하고, 링크가 있으면 스크리브너까지 연다 */
+function sendToScriv(p){
+  if(!p || !p.text){ toast('복사할 원고가 없습니다.'); return; }
+  copyText(p.text, p.link ? '원고를 복사했습니다. 스크리브너에서 붙여 넣으세요.' : null);
+  if(p.link) setTimeout(() => openScriv(p.link), 120);
+}
+
+function copyText(t, msg){
   if(!t){ toast('복사할 원고가 없습니다.'); return; }
-  const done = () => toast('원고를 복사했습니다. 스크리브너에 그대로 붙여 넣으세요.');
+  const done = () => toast(msg || '원고를 복사했습니다. 스크리브너에 그대로 붙여 넣으세요.');
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(t).then(done).catch(() => fallbackCopy(t, done));
   } else fallbackCopy(t, done);
@@ -1145,7 +1187,6 @@ $('btnDelete').addEventListener('click', () => {
     save(); closeSheet(); renderAll(); loadDraft(); toast('지웠습니다.');
   }
 });
-$('btnScriv').addEventListener('click', () => { const p = cur(); if(p) openScriv(p.link); });
 
 $('tabWrite').addEventListener('click', () => setTab('write'));
 $('tabBox').addEventListener('click', () => { setTab('box'); renderBox(); });
@@ -1185,7 +1226,7 @@ $('btnApply').addEventListener('click', () => applyEdit(false));
 $('askYes').addEventListener('click', () => applyEdit(true));
 $('askNo').addEventListener('click', () => { $('askRewrite').hidden = true; ed.focus(); });
 
-$('btnCopy').addEventListener('click', () => { const p = cur(); if(p) copyText(p.text); });
+$('btnScriv').addEventListener('click', () => { const p = cur(); if(p) sendToScriv(p); });
 $('btnDone').addEventListener('click', () => {
   const p = cur(); if(!p) return;
   if(!p.versions.length && !confirm('아직 판본이 없는 원고입니다. 그래도 초고박스로 보낼까요?')) return;
