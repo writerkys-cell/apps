@@ -232,6 +232,8 @@ details.manual[open]{margin-bottom:34px}
 .vtable td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
 .vtable input[type=radio]{accent-color:var(--seal);margin:0 4px 0 0}
 .vtable .pick{white-space:nowrap;color:var(--ink-3);font-size:11px}
+.vtable td.acts{white-space:nowrap;text-align:right}
+.vtable td.acts .tiny{margin-left:12px}
 .diffwrap{border:1px solid var(--line);background:var(--paper-hi);padding:18px 20px;margin-bottom:14px;max-height:440px;overflow:auto}
 .diffwrap .dtext{white-space:pre-wrap;font-size:15.5px;line-height:1.95}
 .diffwrap ins{background:var(--seal-soft);color:var(--seal);text-decoration:none;box-shadow:inset 0 -1px 0 rgba(163,58,46,.4)}
@@ -367,7 +369,7 @@ details.manual[open]{margin-bottom:34px}
             <span class="mchip" id="mchip">이어쓰기</span>
           </div>
           <div class="modes">
-            <label class="sw"><input type="checkbox" id="chkAppend" checked><i></i><span>이어쓰기</span></label>
+            <label class="sw"><input type="checkbox" id="chkAppend"><i></i><span>이어쓰기</span></label>
             <span class="hint" id="modeHint" style="font-family:var(--sans);font-size:12px;color:var(--ink-3)"></span>
           </div>
           <textarea id="editor" placeholder="여기에 씁니다. 곧은 따옴표는 저절로 둥글어집니다." spellcheck="false"></textarea>
@@ -624,7 +626,7 @@ function applyEdit(confirmed){
   p.draft = '';
   sel = null;
   $('editor').value = '';
-  $('chkAppend').checked = true;
+  $('chkAppend').checked = false;
   save();
   renderAll();
   $('editor').focus();
@@ -755,7 +757,7 @@ function syncMode(){
   const hasText = !!(p && p.text.trim());
   const chk = $('chkAppend');
   chk.disabled = !hasText || preview !== null;
-  if(!hasText) chk.checked = true;
+  if(!hasText) chk.checked = true;   /* 첫 글은 이어쓰기밖에 없다 */
 
   const m = mode();
   $('mchip').textContent = MODE_NAME[m];
@@ -855,8 +857,6 @@ function grabSel(){
 function clearSel(){
   if(!sel) return;
   sel = null;
-  const p = cur();
-  if(p && p.text.trim()) $('chkAppend').checked = true;
   renderPaper(); syncMode();
 }
 
@@ -933,7 +933,8 @@ function renderDetail(p, host){
         '<label><input type="radio" name="a_' + p.id + '" value="' + i + '"' + (i === +host.dataset.a ? ' checked' : '') + '>앞</label> ' +
         '<label><input type="radio" name="b_' + p.id + '" value="' + i + '"' + (i === +host.dataset.b ? ' checked' : '') + '>뒤</label>' +
       '</td>' +
-      '<td><button class="tiny" data-roll="' + i + '">되돌리기</button></td></tr>'
+      '<td class="acts"><button class="tiny" data-copy="' + i + '">복사</button>' +
+      '<button class="tiny" data-roll="' + i + '">되돌리기</button></td></tr>'
     ).join('') + '</tbody></table>';
 
   host.innerHTML = table() +
@@ -958,6 +959,10 @@ function renderDetail(p, host){
   host.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', () => {
     if(r.name.startsWith('a_')) host.dataset.a = r.value; else host.dataset.b = r.value;
     draw();
+  }));
+  host.querySelectorAll('[data-copy]').forEach(btn => btn.addEventListener('click', () => {
+    const e = vs[+btn.dataset.copy];
+    copyText(e.text, e.v + ' 원고 ' + fmt(e.chars) + '자를 복사했습니다.');
   }));
   host.querySelectorAll('[data-roll]').forEach(btn => btn.addEventListener('click', () => {
     const i = +btn.dataset.roll;
@@ -1133,7 +1138,7 @@ function saveSheet(){
     newProject(t, l);
     preview = null; sel = null;
     $('editor').value = '';
-    $('chkAppend').checked = true;
+    $('chkAppend').checked = false;
     setTab('write');
     toast('‘' + t + '’을 열었습니다. ' + fmt(MIN) + '자부터 v0.01이 시작됩니다.');
   } else {
@@ -1168,7 +1173,7 @@ $('psel').addEventListener('change', e => {
   preview = null; sel = null;
   const p = cur();
   $('editor').value = p ? (p.draft || '') : '';
-  $('chkAppend').checked = true;
+  $('chkAppend').checked = false;
   save(); renderAll();
 });
 $('btnNew').addEventListener('click', () => openSheet('new'));
