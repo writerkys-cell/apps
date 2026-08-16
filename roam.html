@@ -270,6 +270,10 @@ body.has-selbar #toast{bottom:84px}
   color:var(--ink-2);margin:6px 0;
 }
 .doc button:hover{border-color:var(--indigo);color:var(--indigo)}
+.doc button.on{
+  border-color:var(--indigo);color:var(--indigo);background:var(--paper-2);font-weight:600;
+}
+.doc .choose{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
 .doc .todo-card .where{
   display:block;margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--ink-3);
 }
@@ -1292,7 +1296,23 @@ function dailyPagesOf(year, month){
     .filter(p => !prefix || p.title.indexOf(prefix) === 0)
     .sort((a, b) => a.title.localeCompare(b.title));
 }
-function expandLinksOn(){ return !(G.meta && G.meta.expandLinks === false); }
+/** 부른 페이지를 어떻게 다룰지 — footnote(하단 주석) · inline(본문 사이) · none(제목만) */
+function linkMode(){
+  const m = G.meta && G.meta.linkMode;
+  if(m === "footnote" || m === "inline" || m === "none") return m;
+  if(G.meta && G.meta.expandLinks === false) return "none";   // 예전 설정 이어받기
+  return "footnote";
+}
+function expandLinksOn(){ return linkMode() !== "none"; }
+const NOTE_RULE = "────────";
+/** [[제목]] 뒤에 주석 번호를 달아 준다. #[[..]] 꼴 태그는 건드리지 않는다. */
+function markLinks(content, assign){
+  return String(content).replace(/(#?)\[\[([^\[\]\n]+)\]\]/g, (m, hash, t) => {
+    if(hash) return m;
+    const n = assign(t.trim());
+    return n ? `[[${t}]][${n}]` : `[[${t}]]`;
+  });
+}
 /** 블록이 [[ ]]로 부른 페이지의 본문을 줄 배열로 돌려준다.
  *  · #태그로 부른 것은 인식용이므로 끌어오지 않는다
  *  · 데일리 노트는 그 자체로 따로 뽑히므로 건너뛴다
@@ -1312,23 +1332,36 @@ function linkedBodies(content, seen){
   });
   return out;
 }
-/** 하루치 본문을 줄 배열로. 부른 페이지의 글은 그 줄 바로 뒤에 이어 붙인다. */
+/** 하루치 본문을 줄 배열로. 주석 방식이면 번호를 달고 주석거리를 따로 모아 돌려준다. */
 function dailyBodyLines(page, seen){
-  const out = [];
+  const out = [], notes = [];
+  const mode = linkMode();
+  let no = 0;                                     // 번호는 하루마다 1번부터
+  const assign = title => {
+    const p = findPageByTitle(title);
+    if(!p || seen.has(p.id) || isDailyTitle(p.title)) return null;
+    seen.add(p.id);
+    const body = serializePlain(treeOf(p.children)).trim();
+    if(!body) return null;                        // 태그만 있는 페이지는 주석거리가 없다
+    no++;
+    notes.push({ n:no, title:p.title, body: body.split("\n") });
+    return no;
+  };
   const walk = (ids, depth) => {
     ids.forEach(id => {
       const b = G.blocks[id];
       if(!b) return;
-      const body = toPlain(b.content);
+      const raw = mode === "footnote" ? markLinks(b.content, assign) : b.content;
+      const body = toPlain(raw);
       const pad = plainIndentOn() ? "\t".repeat(depth) : "";
       if(body) body.split("\n").forEach(l => out.push(pad + l));
-      if(expandLinksOn())
+      if(mode === "inline")
         linkedBodies(b.content, seen).forEach(l => out.push(pad + l));
       walk(b.children, body ? depth + 1 : depth);
     });
   };
   walk(page.children, 0);
-  return out;
+  return { lines: out, notes };
 }
 /** 날짜 머리글 + 플레인 텍스트 본문. 빈 날은 건너뛴다. */
 function dailyPlainText(pages){
@@ -1337,13 +1370,25 @@ function dailyPlainText(pages){
   let days = 0, chars = 0, pulled = 0;
   pages.forEach(p => {
     const mark = seen.size;
-    const body = dailyBodyLines(p, seen).join("\n").trim();
-    if(!body){ return; }
+    const r = dailyBodyLines(p, seen);
+    const body = r.lines.join("\n").trim();
+    if(!body && !r.notes.length){ return; }
     days++;
-    chars += body.replace(/\s/g, "").length;
     pulled += seen.size - mark;
     const wd = (weekdayOf(p.title).split(" ").pop() || "");
-    out.push(p.title + (wd ? " " + wd : ""), "", body, "");
+    out.push(p.title + (wd ? " " + wd : ""), "", body);
+    chars += body.replace(/\s/g, "").length;
+    if(r.notes.length){
+      out.push("", NOTE_RULE);
+      r.notes.forEach(nt => {
+        out.push(`[${nt.n}] ${nt.title}`);
+        nt.body.forEach(l => out.push(l));
+        out.push("");
+        chars += nt.body.join("").replace(/\s/g, "").length;
+      });
+    }else{
+      out.push("");
+    }
   });
   return { text: out.join("\n").replace(/\n+$/, "\n"), days, chars, pulled };
 }
@@ -1570,16 +1615,15 @@ function renderHelp(){
   const doc = document.createElement("div");
   doc.className = "doc";
   doc.innerHTML = HELP_HTML;
-  doc.querySelectorAll("[data-toggle='expandlinks']").forEach(el => {
-    const sync = () => el.textContent = expandLinksOn()
-      ? "지금은 부른 페이지의 글까지 함께 뽑습니다 — 제목만 남기기"
-      : "지금은 제목만 남깁니다 — 본문까지 함께 뽑기";
-    sync();
-    el.onclick = () => {
-      G.meta.expandLinks = !expandLinksOn();
-      scheduleSave(); sync();
-      toast(expandLinksOn() ? "부른 페이지의 글까지 함께 뽑습니다" : "제목만 남깁니다");
-    };
+  const modeBtns = doc.querySelectorAll("[data-linkmode]");
+  const syncMode = () => modeBtns.forEach(b =>
+    b.classList.toggle("on", b.dataset.linkmode === linkMode()));
+  syncMode();
+  modeBtns.forEach(b => b.onclick = () => {
+    G.meta.linkMode = b.dataset.linkmode;
+    delete G.meta.expandLinks;
+    scheduleSave(); syncMode();
+    toast({ footnote:"하단 주석으로 모읍니다", inline:"본문 사이에 넣습니다", none:"제목만 남깁니다" }[linkMode()]);
   });
   doc.querySelectorAll("[data-toggle='plainindent']").forEach(el => {
     const sync = () => el.textContent = plainIndentOn()
@@ -1611,7 +1655,7 @@ const HELP_HTML = [
 "<ul>",
 "<li><b>오늘의 노트</b> — 앱을 열면 나오는 첫 화면. 오늘 날짜 페이지가 자동으로 만들어지고, 그 아래로 최근 데일리 노트 일곱 개가 이어집니다. 날짜를 누르면 그 하루만 따로 볼 수 있습니다.</li>",
 "<li><b>달력</b> — 한 달을 펼쳐 놓고 그날의 노트로 건너뜁니다. 글을 쓴 날은 바탕이 채워지고 첫 줄과 블록 수가 함께 보이므로, 어느 날 손을 놓았는지 한눈에 드러납니다. 오늘은 테두리로 표시됩니다. 날짜를 누르면 그날 노트가 열리고(없으면 그때 만들어집니다), <code>Shift</code>+클릭하면 오른쪽에 둡니다. <code>‹ ›</code>로 달을 넘기고 <b>이번 달</b>로 돌아옵니다. 아래에 그달에 쓴 날수와 블록 수가 적힙니다.</li>",
-"<li><b>이 달 복사 · 전체 복사</b> — 달력 위쪽 단추입니다. 데일리 노트를 <b>오래된 날짜부터</b> 차례로 모아 플레인 텍스트로 클립보드에 담습니다. 날짜와 요일이 머리글로 붙고, 그 아래에 그날 쓴 글이 문단으로 이어집니다. 글이 없는 날은 건너뜁니다. 복사가 끝나면 며칠치·부른 페이지 몇 편·몇 자인지 알려 줍니다. 본문 정리 방식은 <b>플레인 복사</b>와 같아서, 3절에서 켜 둔 계층 유지 여부를 그대로 따릅니다.</li>",
+"<li><b>이 달 복사 · 전체 복사</b> — 달력 위쪽 단추입니다. 데일리 노트를 <b>오래된 날짜부터</b> 차례로 모아 플레인 텍스트로 클립보드에 담습니다. 일기가 부른 페이지의 글은 그날 아래에 주석으로 붙습니다(4-c절). 날짜와 요일이 머리글로 붙고, 그 아래에 그날 쓴 글이 문단으로 이어집니다. 글이 없는 날은 건너뜁니다. 복사가 끝나면 며칠치·부른 페이지 몇 편·몇 자인지 알려 줍니다. 본문 정리 방식은 <b>플레인 복사</b>와 같아서, 3절에서 켜 둔 계층 유지 여부를 그대로 따릅니다.</li>",
 "<li><b>쪽글</b> — <code>#쪽글</code> 태그가 붙은 페이지를 무작위로 하나씩 꺼내 줍니다.</li>",
 "<li><b>무작위 페이지</b> — 태그와 상관없이 아무 페이지나 엽니다. 내용이 있는 페이지를 먼저 고르고, 데일리 노트는 뺍니다.</li>",
 "<li><b>전체 페이지</b> — 제목·블록 수·피참조 수·수정 시각을 한 표로 봅니다. 여기서 지울 수도 있습니다.</li>",
@@ -1698,16 +1742,21 @@ const HELP_HTML = [
 "<li>화면 너비가 1100px보다 좁으면 자리를 아끼려고 감춥니다.</li>",
 "</ul>",
 
-"<h3>부른 페이지의 글까지 함께</h3>",
+"<h3 id='linkmode'>부른 페이지의 글까지 함께</h3>",
 "<p>일기에 <code>[[뉴욕제과점 단편]]</code>처럼 실마리만 적고 정작 글은 그 페이지에 쓰셨다면, 제목만 옮겨 봐야 소용이 없습니다. 그래서 달력 복사는 <b>그날 노트가 <code>[[ ]]</code>로 부른 페이지의 본문을 그 줄 바로 뒤에 이어 붙입니다.</b> 규칙은 넷입니다.</p>",
 "<ul>",
-"<li><code>[[ ]]</code>로 부른 것만 끌어옵니다. <code>#쪽글</code> 같은 <b>태그로 부른 것은 인식표일 뿐이므로 건드리지 않습니다.</b></li>",
+"<li><code>[[ ]]</code>로 부른 것만 끌어옵니다. <code>#쪽글</code> 같은 <b>태그로 부른 것은 인식표일 뿐이므로 건드리지 않습니다.</b> <code>#[[두 낱말]]</code> 꼴도 태그로 봅니다.</li>",
 "<li>부른 페이지 안에서 <b>태그만 적힌 줄은 빠집니다.</b> 맨 위에 <code>#쪽글</code>만 달아 두는 표시줄이 원고에 섞여 들지 않습니다. 태그와 글이 한 줄에 같이 있으면 태그만 지우고 글은 남깁니다.</li>",
 "<li>같은 페이지를 여러 날에서 불렀다면 <b>처음 부른 날에만</b> 한 번 들어갑니다.</li>",
 "<li>부른 페이지가 또 다른 페이지를 부르더라도 <b>거기까지 따라가지는 않습니다.</b> 한 겹만 폅니다. 날짜 페이지를 불렀을 때도 그날은 따로 뽑히므로 겹쳐 넣지 않습니다.</li>",
 "</ul>",
-"<p>제목만 훑고 싶을 때는 아래에서 끕니다.</p>",
-"<p><button data-toggle='expandlinks'></button></p>",
+"<p><b>기본은 하단 주석입니다.</b> 본문에는 번호만 남고, 그날 일기가 끝난 자리에 가는 줄을 긋고 부른 글을 모읍니다. 번호는 하루마다 1번부터 다시 셉니다. 두 번째로 부른 날은 주석 짝이 없으므로 번호 없이 제목만 남습니다.</p>",
+"<pre style='font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--paper-2);border:1px solid var(--line-soft);border-radius:6px;padding:12px 14px;overflow-x:auto;white-space:pre'>2026-06-01 월요일\n\n아침에 한서린[1]을 만났다.\n뉴욕제과점 단편[2]\n\n────────\n[1] 한서린\n1974년생. 목소리가 낮다.\n\n[2] 뉴욕제과점 단편\n제과점 유리문에 김이 서려 있었다.</pre>",
+"<p>세 가지 중에서 고릅니다. <b>하단 주석</b>은 원고로 옮길 때, <b>본문 사이</b>는 자료를 한 흐름으로 읽을 때, <b>제목만</b>은 목차처럼 훑을 때 씁니다.</p>",
+"<p class='choose'>"
+  + "<button data-linkmode='footnote'>하단 주석</button>"
+  + "<button data-linkmode='inline'>본문 사이</button>"
+  + "<button data-linkmode='none'>제목만</button></p>",
 
 "<h2>5. 쪽글</h2>",
 "<p>페이지 안 아무 블록에나 <code>#쪽글</code>을 적어 두면 그 페이지가 <span data-jump='shuffle' style='color:var(--indigo)'>쪽글</span> 목록에 들어갑니다. 누를 때마다 하나씩 무작위로 올라오되, <b>한 바퀴를 다 돌기 전에는 같은 글이 다시 나오지 않습니다.</b> 위쪽 띠에 남은 편수가 보입니다. '태그 바꾸기'로 <code>#초고</code>, <code>#버릴것</code> 같은 다른 묶음을 돌릴 수도 있습니다.</p>",
