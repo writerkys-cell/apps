@@ -291,39 +291,30 @@ function checkPara() {
 }
 function nextPara() { paraIdx = (paraIdx + 1) % paraData.length; loadPara(); }
 
-// API 호출 헬퍼 (상세 에러 반환)
+// API 호출
 async function callGemini(prompt) {
-  if (!apiKey) throw new Error("API Key가 비어있습니다. 상단 ⚙️ 설정에서 입력해주세요.");
+  if (!apiKey) throw new Error("상단 ⚙️ 설정에서 API Key를 먼저 저장해주세요.");
 
-  const models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
-  let lastError = null;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
 
-  for (const model of models) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error?.message || `HTTP ${res.status}`);
-      }
-      return data.candidates[0].content.parts[0].text;
-    } catch(err) {
-      lastError = err;
-    }
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error?.message || `HTTP ${res.status}`);
   }
-  throw lastError;
+  return data.candidates[0].content.parts[0].text;
 }
 
 async function generateNewBricks(e) {
   const btn = e.target;
   btn.innerText = "생성 중...";
   
-  const prompt = `Create 5 ultra-simple daily/routine sentence pairs for an English beginner (CEFR A1).
-Return ONLY a valid JSON array string (no markdown, no backticks):
+  const prompt = `Create 5 ultra-simple daily/writing routine sentence pairs for an English beginner (CEFR A1).
+Return ONLY a valid JSON array (no markdown code blocks, just raw JSON text):
 [{"kr": "한국어 문장", "en": "Very simple English sentence"}]`;
 
   try {
@@ -346,8 +337,8 @@ async function generateNewParas(e) {
   const btn = e.target;
   btn.innerText = "생성 중...";
 
-  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing.
-Return ONLY a valid JSON array string (no markdown, no backticks):
+  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing routines.
+Return ONLY a valid JSON array (no markdown code blocks, just raw JSON text):
 [{"kr": "한국어 문장", "words": ["word1", "word2", "word3"], "sample": "Simple combined English sentence"}]`;
 
   try {
@@ -376,16 +367,16 @@ async function sendChat() {
   try {
     const prompt = `You are a friendly conversation partner for a beginner English learner.
 Rules:
-1. Ultra-simple English (CEFR A1 level).
+1. Ultra-simple English words only (CEFR A1).
 2. 1 or 2 short sentences.
 3. End with 1 very easy question.
-User: "${text}". Reply:`;
+User said: "${text}". Reply:`;
 
     const reply = (await callGemini(prompt)).trim();
     appendMsg(reply, 'ai');
     speakText(reply);
   } catch (err) {
-    const fallback = "I see. Tell me a little more with simple words.";
+    const fallback = "I see! What else did you do today?";
     appendMsg(fallback, 'ai');
     speakText(fallback);
   }
