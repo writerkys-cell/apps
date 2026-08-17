@@ -301,6 +301,7 @@ const CATS = {
   cycle:{name:'주기',  mk:'↻'},
   rec  :{name:'기록',  mk:'△'},
   note :{name:'메모',  mk:'·'},
+  proj :{name:'프로젝트', mk:'◈'},
   pray :{name:'기도',  mk:'◌'},
 };
 const TABS = [
@@ -599,9 +600,9 @@ function parse(raw){
   if(!text) return o;
 
   // 명시 지정: /할일 …  또는 //todo
-  const cmdMap={'할일':'todo','일정':'plan','금전':'money','참조':'ref','주기':'cycle','기록':'rec','메모':'note','기도':'pray',
-                t:'todo',s:'plan',m:'money',r:'ref',c:'cycle',g:'rec',n:'note',p:'pray'};
-  const cm=text.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s+([\s\S]+)/);
+  const cmdMap={'할일':'todo','일정':'plan','금전':'money','참조':'ref','주기':'cycle','기록':'rec','메모':'note','기도':'pray','프로젝트':'proj',
+                t:'todo',s:'plan',m:'money',r:'ref',c:'cycle',g:'rec',n:'note',p:'pray',j:'proj'};
+  const cm=text.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|프로젝트|[tsmrcgnpj])\s+([\s\S]+)/);
   if(cm){ o.cat=cmdMap[cm[1]]; o.forced=true; text=cm[2].trim(); o.text=text; }
 
   // 태그 / 사람
@@ -711,7 +712,8 @@ function hay(e){
   if(e.done) flags.push('완료');
   if(e.wasTodo) flags.push('완료 끝낸');
   if(e.star) flags.push('고정 별표');
-  if(e.dl) flags.push('마감');
+  if(e.cat==='proj') flags.push('프로젝트 '+(e.date?'마감':'대기'));
+  if(e.wasProj) flags.push('끝낸 프로젝트');
   if(e.rt) flags.push('루틴 '+rtLabel(e.rt));
   if(e.archived) flags.push('보관');
   if(e.url) flags.push('링크');
@@ -817,6 +819,7 @@ const CMDS=[
   {c:'주기', a:'c', cat:'cycle', ex:'이발'},
   {c:'기록', a:'g', cat:'rec',   ex:'달리기 4.8km'},
   {c:'메모', a:'n', cat:'note',  ex:'그냥 남겨둘 것'},
+  {c:'프로젝트', a:'j', cat:'proj', ex:'장편 초고'},
   {c:'기도', a:'p', cat:'pray',  ex:'봉해서 미래로 띄울 한 문장'},
 ];
 let menuOpen=false, menuIdx=0, menuList=[];
@@ -861,7 +864,7 @@ function preview(){
     $chips.innerHTML=pin+'<span class="chip hint">엔터로 담기 · ⇧엔터로 줄바꿈 · <b>/</b>로 분류 고르기 · <b>[[이름]]</b>으로 잇기</span>';
     return;
   }
-  const only=v.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s*$/);
+  const only=v.match(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|프로젝트|[tsmrcgnpj])\s*$/);
   if(only||menuOpen){
     const c=only? CMDS.find(x=>x.c===only[1]||x.a===only[1]) : null;
     $chips.innerHTML = pin + (c
@@ -886,7 +889,7 @@ function preview(){
 
 async function commit(){
   const v=$in.value.trim(); if(!v) return;
-  if(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|[tsmrcgnp])\s*$/.test(v)){
+  if(/^\/(할일|일정|금전|참조|주기|기록|메모|기도|프로젝트|[tsmrcgnpj])\s*$/.test(v)){
     toast('분류만 골랐습니다. 담을 내용을 이어 적으세요'); return;
   }
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -959,24 +962,26 @@ function itemHTML(e,opt={}){
     if(e.lineage&&e.lineage.length) mt.push('<span>'+(e.lineage.length+1)+'대째</span>');
   }
   if(e.wasPray) mt.push('<span>실현된 기도</span>');
-  const dl=isDL(e), pastPlan=e.cat==='plan'&&e.date&&dday(e.date)<=0;
-  let dlOpen=null;
-  if(dl){
-    mt.push('<span class="due">마감'+(e.date?'':' · 날짜 없음')+'</span>');
-    dlOpen=dlOpenTask(e);
-    if(dlOpen){
-      const od=dlOpen.date||iso(new Date(dlOpen.ts));
+  const pj=isProj(e), pastPlan=e.cat==='plan'&&e.date&&dday(e.date)<=0;
+  const pjDue = pj&&e.date&&dday(e.date)<=0;
+  let pjOpen=null;
+  if(pj){
+    pjOpen=projOpenTask(e);
+    if(pjOpen){
+      const od=pjOpen.date||iso(new Date(pjOpen.ts));
       mt.push('<span'+(od<TODAY()?' class="due"':'')+'>할일 있음 · '+fmtD(od)+
         (od<TODAY()?' 이월':'')+'</span>');
-    } else if(dlDoneToday(e)) mt.push('<span>오늘 몫 마침</span>');
+    } else if(projDoneToday(e)) mt.push('<span>오늘 몫 마침</span>');
+    else { const w=projWait(e); if(w>0) mt.push('<span'+(w>=14?' class="due"':'')+'>대기중 '+w+'일</span>'); }
     const n=(e.hist||[]).length;
     if(n) mt.push('<span>'+n+'번 손댐</span>');
   }
+  if(e.wasProj) mt.push('<span>끝낸 프로젝트</span>');
   if(e.archived) mt.push('<span>보관</span>');
 
   return '<div class="it'+(dn?' done':'')+'" data-id="'+e.id+'">'+
-    '<button class="mk'+(e.star||dl?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
-      (e.star? '★' : dl? '◈' : pArrived? '✧' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
+    '<button class="mk'+(e.star||pj?' star':'')+'" data-act="cat" data-id="'+e.id+'" title="분류 바꾸기">'+
+      (pj? (e.star?'★':'◈') : e.star? '★' : pArrived? '✧' : rt? (dn?'◉':'◎') : e.cat==='todo'? (dn?'●':'○') : c.mk)+'</button>'+
     '<div class="bd"><div class="tx">'+titleHTML(e)+'</div>'+
       (mt.length?'<div class="mt">'+mt.join('')+'</div>':'')+
       (pray?lineageHTML(e):'')+'</div>'+
@@ -985,11 +990,11 @@ function itemHTML(e,opt={}){
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
         (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
       (e.cat==='todo'?'<button data-act="rt" data-id="'+e.id+'">'+(rt?'루틴 고침':'루틴')+'</button>':'')+
-      (dl&&!pastPlan?'<button data-act="prog" data-id="'+e.id+'">오늘 할일'+(dlOpen||dlDoneToday(e)?' ✓':'')+'</button>':'')+
-      (dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">마감했다</button>'+
-                    '<button data-act="date" data-id="'+e.id+'">새 마감일</button>':'')+
-      (!dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">완료</button>':'')+
-      (e.cat==='plan'?'<button data-act="dl" data-id="'+e.id+'">'+(dl?'마감 풀기':'마감으로')+'</button>':'')+
+      (pj?'<button data-act="prog" data-id="'+e.id+'">오늘 할일'+(pjOpen||projDoneToday(e)?' ✓':'')+'</button>'+
+          '<button data-act="fin" data-id="'+e.id+'">끝내기</button>'+
+          (pjDue?'<button data-act="date" data-id="'+e.id+'">새 마감일</button>':'')+
+          '<button data-act="star" data-id="'+e.id+'">'+(e.star?'오늘에서 빼기':'★ 오늘에')+'</button>':'')+
+      (pastPlan?'<button data-act="fin" data-id="'+e.id+'">완료</button>':'')+
       (pArrived?'<button data-act="pfin" data-id="'+e.id+'">실현</button>'+
                 '<button data-act="pagain" data-id="'+e.id+'">다시</button>':'')+
       (pray&&!e.date?'<button data-act="pseal" data-id="'+e.id+'">봉하기</button>':'')+
@@ -997,7 +1002,7 @@ function itemHTML(e,opt={}){
         '<button data-act="flip" data-id="'+e.id+'">'+(e.flow==='in'?'지출로':'수입으로')+'</button>':'')+
       (e.cat==='ref'?'<button data-act="star" data-id="'+e.id+'">'+(e.star?'풀기':'★ 고정')+'</button>':'')+
       (e.cat==='cycle'?'<button data-act="again" data-id="'+e.id+'">오늘 또</button>':'')+
-      (dl&&pastPlan?'':'<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':'날짜 넣기')+'</button>')+
+      (pjDue?'':'<button data-act="date" data-id="'+e.id+'">'+(e.date?'날짜':(pj?'마감일':'날짜 넣기'))+'</button>')+
       '<button data-act="edit" data-id="'+e.id+'">고침</button>'+
       '<button data-act="del" data-id="'+e.id+'">지움</button>'+
     '</div></div>';
@@ -1118,57 +1123,46 @@ function routines(){ return visible().filter(isRt); }
 function rtDueToday(e){ return rtOn(e,TODAY()); }
 
 
-/* ═══════════════ 7-d. 마감 일정 ═══════════════ */
-const isDL=e=>e.cat==='plan'&&e.dl;
-function deadlines(){
-  return visible().filter(isDL).sort((a,b)=>{
+/* ═══════════════ 7-d. 프로젝트 ═══════════════ */
+const isProj=e=>e.cat==='proj';
+function projects(){
+  return visible().filter(isProj).sort((a,b)=>{
+    if(!!b.star!==!!a.star) return b.star?1:-1;
     const x=a.date||'9999-99-99', y=b.date||'9999-99-99';
     return x===y? a.ts-b.ts : (x<y?-1:1);
   });
 }
-function finishItem(ent){
-  const isPlan=ent.cat==='plan', wasDL=isDL(ent);
-  const day = isPlan? (ent.date||TODAY()) : TODAY();
-  sheet(wasDL?'마감을 마치고 적기':'마치고 적기', ent.raw, null, async v=>{
-    if(v===null) return;
-    const t=(v||'').trim(); if(!t) return;
-    const p=parse(t);
-    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people, links:p.links,
-      url:p.url, page:p.page, cat:'note', dl:false, date:day,
-      time:isPlan?ent.time:null, done:false, doneAt:Date.now()});
-    if(!isPlan) ent.wasTodo=true;
-    touch(ent); await put(ent); render();
-    toast(fmtD(day)+' 자취로 남겼습니다');
-  }, true,
-  (isPlan? '어떻게 되었는지 적으세요.' : '무엇을 했는지 적으세요.')+
-  ' 저장하면 '+fmtD(day,true)+' 날짜의 메모로 남습니다.');
-}
-function dlTitle(e){
+function projTitle(e){
   const raw=(e.text||e.raw||'');
   const wk=wikiNames(raw);
-  if(wk.length) return wk[0];                         // 이미 이음이 있으면 그 이름을 그대로
+  if(wk.length) return wk[0];
   const bare=raw.replace(LINK_G,' ').replace(/\s{2,}/g,' ').trim();
   if(bare) return bare;
-  const u=(raw.match(LINK_G)||[])[0];                 // 제목이 주소뿐이면
+  const u=(raw.match(LINK_G)||[])[0];
   if(u){ const sc=schemeOf(u); return (sc&&sc.n)? sc.n : hostOf(u); }
-  return '마감';
+  return '프로젝트';
 }
-function dlOpenTask(ent){
-  return E.find(x=>x.dlId===ent.id&&x.cat==='todo'&&!x.done&&!x.archived);
+function projOpenTask(ent){
+  return E.find(x=>x.pid===ent.id&&x.cat==='todo'&&!x.done&&!x.archived);
 }
-function dlDoneToday(ent){
+function projDoneToday(ent){
   const t=TODAY();
-  return E.find(x=>x.dlId===ent.id&&x.wasTodo&&!x.archived&&(x.date||iso(new Date(x.ts)))===t);
+  return E.find(x=>x.pid===ent.id&&x.wasTodo&&!x.archived&&(x.date||iso(new Date(x.ts)))===t);
 }
-function dlTaskSheet(ent){
-  const t=TODAY(), title=dlTitle(ent);
+function projWait(ent){
+  const h=(ent.hist||[]).slice().sort();
+  const last=h.length? h[h.length-1] : iso(new Date(ent.ts));
+  return Math.max(0, -dday(last));
+}
+function projTaskSheet(ent){
+  const t=TODAY(), title=projTitle(ent);
   sheet('오늘 할일', '', null, async v=>{
     if(v===null) return;
     const txt=(v||'').trim(); if(!txt) return;
     const raw='[['+title+']] '+txt;
     const p=parse(raw), now=Date.now();
     const it={id:uid(), ts:now, mt:now, ...p, cat:'todo', date:t, time:null,
-              dlId:ent.id, done:false, doneAt:null, archived:false};
+              pid:ent.id, done:false, doneAt:null, archived:false};
     E.push(it); await put(it);
     ent.hist=(ent.hist||[]).slice();
     if(ent.hist.indexOf(t)<0){ ent.hist.push(t); ent.hist.sort(); }
@@ -1178,7 +1172,23 @@ function dlTaskSheet(ent){
   '「'+title+'」을(를) 향해 오늘 무엇을 할지 적으세요. 할일로 담기고 앞에 [['+title+']]이 붙습니다. '+
   '완료를 누르지 않으면 내일도 남아 있습니다.');
 }
-
+function finishItem(ent){
+  const isPlan=ent.cat==='plan', isP=ent.cat==='proj';
+  const day = isPlan? (ent.date||TODAY()) : TODAY();
+  sheet(isP?'프로젝트 끝내기':'마치고 적기', ent.raw, null, async v=>{
+    if(v===null) return;
+    const t=(v||'').trim(); if(!t) return;
+    const p=parse(t);
+    Object.assign(ent,{raw:t, text:p.text, tags:p.tags, people:p.people, links:p.links,
+      url:p.url, page:p.page, cat:'note', date:day,
+      time:isPlan?ent.time:null, star:false, done:false, doneAt:Date.now()});
+    if(isP) ent.wasProj=true; else if(!isPlan) ent.wasTodo=true;
+    touch(ent); await put(ent); render();
+    toast(fmtD(day)+' 자취로 남겼습니다');
+  }, true,
+  (isP? '무엇으로 끝났는지 적으세요.' : isPlan? '어떻게 되었는지 적으세요.' : '무엇을 했는지 적으세요.')+
+  ' 저장하면 '+fmtD(day,true)+' 날짜의 메모로 남습니다.');
+}
 
 /* ═══════════════ 7-e. 기도 — 봉해서 띄우기 ═══════════════ */
 const TERMS=[['이레 뒤','d',7],['한 달 뒤','m',1],['석 달 뒤','m',3],
@@ -1255,7 +1265,6 @@ function lineageHTML(e){
   return '<div class="lineage">'+e.lineage.map((g,i)=>
     '<p><span class="gen">'+(i+1)+'대 · '+fmtD(g.sealed,true)+'</span>'+esc(g.text)+'</p>').join('')+'</div>';
 }
-
 
 /* ═══════════════ 7-b. 전체 잔액 ═══════════════ */
 function calcBalance(){
@@ -1361,12 +1370,12 @@ function vToday(){
   const late=todosAll.filter(e=>e.date&&dday(e.date)<0);
   const rtToday=routines().filter(e=>rtDueToday(e)&&match(e,q));
   const rtLeft=rtToday.filter(e=>!rtDone(e));
-  const planToday=visible().filter(e=>e.cat==='plan'&&!e.dl&&e.date===t&&match(e,q)).sort(byTime);
-  const planWeek=visible().filter(e=>e.cat==='plan'&&!e.dl&&e.date&&dday(e.date)>0&&dday(e.date)<=7&&match(e,q))
+  const planToday=visible().filter(e=>e.cat==='plan'&&e.date===t&&match(e,q)).sort(byTime);
+  const planWeek=visible().filter(e=>e.cat==='plan'&&e.date&&dday(e.date)>0&&dday(e.date)<=7&&match(e,q))
       .sort((a,b)=>a.date===b.date?byTime(a,b):(a.date<b.date?-1:1));
-  const dls=deadlines().filter(e=>match(e,q));
-  const dlDue=dls.filter(e=>!e.date||dday(e.date)<=0).length;
-  const dlLeft=dls.filter(e=>e.date&&dday(e.date)>0&&!dlOpenTask(e)&&!dlDoneToday(e)).length;
+  const pjs=projects().filter(e=>match(e,q)&&(e.star||(e.date&&dday(e.date)<=0)));
+  const pjDueN=pjs.filter(e=>e.date&&dday(e.date)<=0).length;
+  const pjLeft=pjs.filter(e=>!projOpenTask(e)&&!projDoneToday(e)).length;
   const cy=cycleGroups().filter(g=>g.next&&dday(g.next)<=14);
   const overdue=cy.filter(g=>dday(g.next)<=0).length;
 
@@ -1419,16 +1428,16 @@ function vToday(){
        (todosAll.length>dueNow.length? ' / 남은 '+todosAll.length:'')+'</span></h2>'+
        listHTML(dueNow,{})+'</section>';
   }
+  if(pjs.length){
+    shown++;
+    h+='<section><h2>프로젝트<span class="aside">'+
+       (pjDueN? '마감일 지난 '+pjDueN+' · ':'')+(pjLeft? '할일 안 세운 '+pjLeft:'오늘 몫 다 세웠습니다')+
+       '</span></h2>'+pjs.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+  }
   if(planToday.length){
     shown++;
     h+='<section><h2>오늘 일정<span class="aside">'+planToday.length+'</span></h2>'+
        listHTML(planToday,{hideStamp:true})+'</section>';
-  }
-  if(dls.length){
-    shown++;
-    h+='<section><h2>마감<span class="aside">'+
-       (dlDue? '오늘까지 '+dlDue+' · ':'')+(dlLeft? '할일 안 세운 '+dlLeft:'오늘 몫 다 세웠습니다')+
-       '</span></h2>'+dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
   }
   if(dayM.length||META.balance){
     shown++;
@@ -1478,7 +1487,7 @@ function vTodo(){
   const arr=all.filter(e=>!isRt(e));
   const un=arr.filter(e=>!e.done);
   const done=arr.filter(e=>e.done).concat(
-    visible().filter(e=>e.wasTodo&&e.cat==='note'&&match(e,q)&&Date.now()-(e.doneAt||e.ts)<60*86400000));
+    visible().filter(e=>(e.wasTodo||e.wasProj)&&e.cat==='note'&&match(e,q)&&Date.now()-(e.doneAt||e.ts)<60*86400000));
   un.sort((a,b)=>{
     const x=a.date||'9999-99-99', y=b.date||'9999-99-99';
     return x===y? b.ts-a.ts : (x<y?-1:1);
@@ -1497,6 +1506,13 @@ function vTodo(){
           restRt.map(e=>esc((e.text||e.raw).slice(0,12))+'('+rtLabel(e.rt)+')').join(' · ')+'</div>':'')+
        '</section>';
   }
+  const pjs=projects().filter(e=>match(e,q));
+  if(pjs.length){
+    const left=pjs.filter(e=>!projOpenTask(e)&&!projDoneToday(e)).length;
+    h+='<section><h2>프로젝트<span class="aside">◈ '+pjs.length+
+       (left? ' · 할일 안 세운 '+left:'')+'</span></h2>'+
+       pjs.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
+  }
   h+='<section><h2>남은 일<span class="aside">'+un.length+'</span></h2>'+
      listHTML(un,{empty:'남은 일이 없습니다.'})+'</section>';
   if(state.showDone)
@@ -1506,17 +1522,13 @@ function vTodo(){
 }
 function vPlan(){
   const q=state.q;
-  const pool=visible().filter(e=>((e.cat==='plan'&&!e.dl)||(e.cat==='todo'&&e.date&&!e.done))&&match(e,q));
+  const pool=visible().filter(e=>(e.cat==='plan'||(e.cat==='todo'&&e.date&&!e.done))&&match(e,q));
   const arr=pool.filter(e=>e.date);
   const undated=pool.filter(e=>!e.date&&e.cat==='plan');
   const byT=(a,b)=>((a.time||'99:99')<(b.time||'99:99')?-1:1);
   const up=arr.filter(e=>dday(e.date)>=0).sort((a,b)=>a.date===b.date?byT(a,b):(a.date<b.date?-1:1));
   const past=arr.filter(e=>dday(e.date)<0).sort((a,b)=>a.date===b.date?byT(a,b):(a.date>b.date?-1:1));
   let h='';
-  const dls=deadlines().filter(e=>match(e,q));
-  if(dls.length)
-    h+='<section><h2>마감<span class="aside">◈ '+dls.length+'</span></h2>'+
-       dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
   if(undated.length)
     h+='<section><h2>날짜를 기다리는 일정<span class="aside">'+undated.length+'</span></h2>'+
        listHTML(undated,{empty:''})+'</section>';
@@ -1673,7 +1685,7 @@ function applyPin(p){
 }
 function vCal(){
   const q=state.q;
-  const diary=e=>e.cat==='note'||e.cat==='plan';
+  const diary=e=>e.cat==='note'||e.cat==='plan'||(e.cat==='proj'&&e.date);
   const pool=visible().filter(diary);
   if(q){
     const hits=pool.filter(e=>match(e,q)).sort((a,b)=>eDate(a)<eDate(b)?1:-1);
@@ -1684,7 +1696,7 @@ function vCal(){
   const first=new Date(y,m-1,1), lastD=new Date(y,m,0).getDate(), lead=first.getDay();
   const cn={}, cp={}; let monN=0;
   pool.forEach(e=>{ const d=eDate(e); if(ym(d)!==mon) return;
-    if(e.cat==='plan') cp[d]=(cp[d]||0)+1; else cn[d]=(cn[d]||0)+1; monN++; });
+    if(e.cat==='plan'||e.cat==='proj') cp[d]=(cp[d]||0)+1; else cn[d]=(cn[d]||0)+1; monN++; });
 
   let h='<div class="cal"><div class="cal-h">'+
     '<button data-act="nmon" data-d="-1">←</button>'+
@@ -1850,11 +1862,19 @@ function vSet(){
      '200자를 한 매로 세고, 소수 한 자리에서 반올림합니다. [[이음]] 안의 숫자는 건드리지 않습니다.<br>'+
      '할일과 지나간 일정의 <b>완료</b>를 누르면 무엇을 했는지 적게 됩니다. 저장하면 그날의 메모로 남습니다. '+
      '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
-     '일정을 <b>마감으로</b> 삼으면 오늘 화면 일정 아래에 서서 마감일까지 매일 나타납니다. '+
-     '<b>오늘 할일</b>을 누르면 그날 할 몫을 적게 되고, 앞에 [[마감 제목]]이 붙은 <b>할일</b>로 담깁니다. '+
-     '오늘 탭과 할일 탭에 함께 서고, 완료를 누르지 않으면 내일도 남습니다. '+
-     '완료하면 그날의 자취가 되고, 마감 제목을 누르면 여태 쌓인 몫이 모두 모입니다. '+
-     '마감일이 되면 마쳤는지 새 날짜를 잡을지 고릅니다.'+
+     '오래 끌고 가는 일은 <b>/프로젝트</b>로 세우세요. 아래 「프로젝트」를 보십시오.'+
+     '</div></section>';
+  h+='<section><h2>프로젝트</h2><div class="empty">'+
+     '오래 끌고 가는 일은 <b>프로젝트</b>로 세웁니다. 할일 탭 위쪽에 모입니다. '+
+     '마감일은 있어도 되고 없어도 됩니다.<br><br>'+
+     '<b>오늘 할일</b>을 누르면 그날 할 몫을 적게 되고, 앞에 [[프로젝트 제목]]이 붙은 <b>할일</b>로 담깁니다. '+
+     '완료를 누르지 않으면 내일도 남습니다. 완료하면 그날의 자취가 되고, '+
+     '제목을 누르면 여태 쌓인 몫이 모두 모입니다.<br><br>'+
+     '<b>★ 오늘에</b>를 켜면 오늘 탭에도 섭니다. 지금 손대고 있는 것만 켜 두시면 됩니다. '+
+     '마감일이 지난 것은 켜지 않아도 오늘 탭에 올라옵니다.<br>'+
+     '<b>끝내기</b>는 언제든 누를 수 있습니다. 무엇으로 끝났는지 적으면 그날의 메모로 남습니다. '+
+     '마감일이 지났으면 <b>새 마감일</b>로 미룰 수도 있습니다.<br>'+
+     '한동안 할일을 세우지 않으면 <b>대기중 12일</b>처럼 표시되고, 두 주가 넘으면 붉어집니다.'+
      '</div></section>';
   h+='<section><h2>기도</h2><div class="empty">'+
      '바라는 것을 <b>이미 그렇게 된 것처럼</b> 한 문장으로 적고, 언제 열지 고릅니다. '+
@@ -1880,7 +1900,7 @@ function vSet(){
      '분류:할일 &nbsp;분류:금전 &nbsp;— 그 분류만<br>'+
      '2026-08 &nbsp;2026-08-13 &nbsp;— 그 달, 그 날<br>'+
      '&gt;100000 &nbsp;&lt;5000 &nbsp;— 금액이 그보다 크거나 작은 것<br>'+
-     '마감 &nbsp;루틴 &nbsp;완료 &nbsp;고정 &nbsp;보관 &nbsp;링크 &nbsp;— 표시로도 찾힘'+
+     '프로젝트 &nbsp;대기 &nbsp;루틴 &nbsp;완료 &nbsp;고정 &nbsp;보관 &nbsp;링크 &nbsp;— 표시로도 찾힘'+
      '</span><br><br>'+
      '섞어 쓸 수 있습니다. <b>분류:금전 2026-07 &gt;50000 -조정</b> 은 7월에 오간 5만원 넘는 돈에서 잔액 조정을 뺀 것입니다.<br>'+
      '본문·갈래·사람·날짜·수입지출 갈래·단위·분류 이름을 모두 훑습니다. 대소문자는 가리지 않습니다.'+
@@ -2073,12 +2093,23 @@ function bTodo(){
       s+=iso(new Date(e.ts))+' | '+iso(new Date(e.doneAt||e.ts))+' | '+
          Math.round(((e.doneAt||e.ts)-e.ts)/86400000)+'일 | '+e.raw.replace(/\n/g,' ')+'\n');
   }
+  const pjs=E.filter(e=>e.cat==='proj'&&!e.archived);
+  if(pjs.length){
+    s+='\n## 프로젝트\n제목 | 마감일 | 세운 몫 | 대기 | 지금 할일\n';
+    pjs.forEach(e=>{
+      const op=projOpenTask(e);
+      s+=projTitle(e)+' | '+(e.date||'없음')+' | '+((e.hist||[]).length)+'번 | '+
+         projWait(e)+'일 | '+(op? op.raw.replace(/\n/g,' ') : '없음')+'\n';
+    });
+  }
   s+='\n\n# 물음\n'+
     '1. 오래 묵은 일들을 골라 왜 안 되고 있는지 성질별로 묶어라. (남에게 달린 일 / 첫 걸음이 무거운 일 / 사실은 하기 싫은 일 / 이미 지나가버린 일)\n'+
     '2. 되풀이해 밀리는 종류가 있는지. 끝낸 일과 견주어 어떤 일은 빨리 끝나고 어떤 일은 늘 남는지 말해라.\n'+
     '3. 지금 지워도 되는 일을 골라라. 왜 그런지 한 줄씩.\n'+
     '4. 가장 무거워 보이는 셋을 골라, 각각 30분 안에 끝낼 수 있는 첫 조각으로 쪼개라.\n'+
-    '5. 목록 전체를 보고 내가 요즘 무엇에 매여 있는지 한 문단으로 말해라.'+TAIL;
+    '5. 목록 전체를 보고 내가 요즘 무엇에 매여 있는지 한 문단으로 말해라.\n'+
+    '6. 프로젝트가 적혀 있다면, 오래 대기 중인 것을 짚고 왜 멈춰 있는지 물어라. '+
+    '벌여 놓은 수가 감당할 만한지도 말해라.'+TAIL;
   return s;
 }
 
@@ -2198,7 +2229,7 @@ function bDiary(day){
   const byT=(a,b)=>((a.time||'zz')===(b.time||'zz')? a.ts-b.ts : ((a.time||'zz')<(b.time||'zz')?-1:1));
   const list=visible().filter(e=>eDate(e)===day).sort(byT);
   const rtd=visible().filter(e=>isRt(e)&&(e.hist||[]).indexOf(day)>=0);
-  const dld=visible().filter(e=>isDL(e)&&(e.hist||[]).indexOf(day)>=0);
+  const dld=visible().filter(e=>isProj(e)&&(e.hist||[]).indexOf(day)>=0);
   if(!list.length&&!rtd.length&&!dld.length) return null;
   const d=dObj(day);
   let s=HEAD+'# 자료 · '+d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+WDN[d.getDay()]+'요일\n\n';
@@ -2207,7 +2238,7 @@ function bDiary(day){
   list.forEach(e=>{
     let tag=CATS[e.cat].name;
     if(e.wasTodo) tag='끝낸 일';
-    else if(isDL(e)) tag='마감';
+    else if(isProj(e)) tag='프로젝트';
     s+=(e.time||'-')+' | '+tag+' | '+e.raw.replace(/\n/g,' ')+'\n';
   });
 
@@ -2225,7 +2256,7 @@ function bDiary(day){
   }
   if(rtd.length) s+='\n## 그날 해낸 루틴\n'+rtd.map(e=>(e.text||e.raw)+'('+rtLabel(e.rt)+')').join(' · ')+'\n';
   if(dld.length){
-    s+='\n## 그날 손댄 마감\n';
+    s+='\n## 그날 손댄 프로젝트\n';
     dld.forEach(e=>{ const n=e.date?dday(e.date):null;
       s+=(e.text||e.raw)+(e.date? ' — 마감 '+e.date+(n!==null?' ('+fmtDD(n)+')':''):'')+'\n'; });
   }
@@ -2514,15 +2545,7 @@ $view.addEventListener('click',async e=>{
   if(act==='pfin')   return prayFulfill(ent);
   if(act==='pagain') return prayAgain(ent);
   if(act==='pseal')  return sealSheet(ent);
-  if(act==='prog') return dlTaskSheet(ent);
-  if(act==='dl'){
-    ent.dl=!ent.dl; if(ent.dl) ent.hist=ent.hist||[];
-    touch(ent); await put(ent); render();
-    toast(ent.dl? (ent.date? '마감으로 삼았습니다':'마감으로 삼았습니다. 마감일을 정해 주세요')
-                : '마감을 풀었습니다');
-    if(ent.dl&&!ent.date) dateSheet(ent);
-    return;
-  }
+  if(act==='prog') return projTaskSheet(ent);
   if(act==='grp') return groupSheet(ent);
   if(act==='flip'){
     ent.flow = ent.flow==='in' ? 'out' : 'in';
@@ -2532,7 +2555,8 @@ $view.addEventListener('click',async e=>{
   }
   if(act==='star'){
     ent.star=!ent.star; touch(ent); await put(ent); render();
-    toast(ent.star?'위에 고정했습니다':'고정을 풀었습니다'); return;
+    toast(isProj(ent)? (ent.star?'오늘 탭에 세웁니다':'오늘 탭에서 뺐습니다')
+                     : (ent.star?'위에 고정했습니다':'고정을 풀었습니다')); return;
   }
   if(act==='rt') return routineSheet(ent);
   if(act==='again'){
@@ -2573,7 +2597,7 @@ function editEntry(ent){
     if(p.forced) ent.cat=p.cat;            // /분류 로 지정했을 때만 분류를 옮긴다
     touch(ent); await put(ent); render(); toast('고쳤습니다');
   }, true,
-  '분류와 날짜, 마감·루틴·별표는 그대로 둡니다. 새로 적은 날짜나 금액이 있으면 그것만 바뀝니다. '+
+  '분류와 날짜, 루틴·별표는 그대로 둡니다. 새로 적은 날짜나 금액이 있으면 그것만 바뀝니다. '+
   '분류를 옮기려면 왼쪽 기호를 누르거나 앞에 /분류를 붙이세요.');
 }
 function routineSheet(ent){
