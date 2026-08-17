@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple English 15</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --primary: #2b2d42;
+    --accent: #d90429;
+    --highlight: #edf2f4;
+    --text: #1a1a1a;
+    --sub-text: #6c757d;
+    --border: #e2e8f0;
+    --mic-active: #ef233c;
+  }
+  * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif; }
+  body { background: var(--bg); color: var(--text); margin: 0; padding: 20px; display: flex; justify-content: center; }
+  .container { max-width: 600px; width: 100%; background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); padding: 24px; }
+  header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--highlight); padding-bottom: 12px; margin-bottom: 20px; }
+  h1 { font-size: 1.25rem; margin: 0; color: var(--primary); }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab-btn { flex: 1; padding: 10px 4px; border: 1px solid var(--border); background: var(--highlight); border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--primary); }
+  .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  
+  .section { display: none; }
+  .section.active { display: block; }
+
+  .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .gen-btn { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+  .gen-btn:hover { background: #bae6fd; }
+
+  .flashcard { background: var(--highlight); border: 2px solid var(--border); border-radius: 12px; min-height: 180px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 20px; cursor: pointer; margin-bottom: 16px; }
+  .flashcard .kr { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+  .flashcard .en { font-size: 1.2rem; color: var(--accent); font-weight: bold; display: none; }
+  .flashcard.flipped .en { display: block; }
+  .flashcard.flipped .hint { display: none; }
+  .hint { font-size: 0.8rem; color: var(--sub-text); }
+  .voice-btn-mini { margin-top: 8px; background: transparent; border: 1px solid var(--primary); border-radius: 20px; padding: 4px 10px; font-size: 0.75rem; cursor: pointer; }
+
+  .paraphrase-box { background: var(--highlight); padding: 16px; border-radius: 10px; margin-bottom: 16px; }
+  .words-pool { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .word-tag { background: #fff; border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; }
+
+  .chat-box { height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px; background: #fafafa; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 80%; padding: 8px 12px; border-radius: 12px; font-size: 0.9rem; line-height: 1.4; }
+  .msg.ai { background: var(--highlight); align-self: flex-start; border-bottom-left-radius: 2px; }
+  .msg.user { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
+  
+  .chat-controls { display: flex; flex-direction: column; gap: 8px; }
+  .mic-button-wrapper { display: flex; justify-content: center; }
+  .mic-btn { width: 52px; height: 52px; border-radius: 50%; border: none; background: var(--primary); color: #fff; font-size: 1.4rem; cursor: pointer; }
+  .mic-btn.listening { background: var(--mic-active); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 35, 60, 0.4); } 70% { box-shadow: 0 0 0 12px rgba(239, 35, 60, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 35, 60, 0); } }
+
+  .chat-input-area { display: flex; gap: 8px; }
+  input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; outline: none; }
+  
+  .btn { padding: 10px 16px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+  .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+
+  .settings-panel { margin-bottom: 15px; padding: 12px; background: #fff3cd; border-radius: 8px; font-size: 0.8rem; display: none; }
+  .settings-toggle { font-size: 0.75rem; color: var(--sub-text); text-decoration: underline; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Simple English 15</h1>
+    <span class="settings-toggle" onclick="toggleSettings()">⚙️ 설정 (API Key / 음성)</span>
+  </header>
+
+  <div id="settingsPanel" class="settings-panel">
+    <strong>Gemini API Key:</strong>
+    <div style="display:flex; gap:6px; margin: 4px 0 10px 0;">
+      <input type="text" id="apiKeyInput" placeholder="API Key 입력">
+      <button class="btn" onclick="saveApiKey()">저장</button>
+    </div>
+    <strong>음성 선택:</strong>
+    <select id="voiceSelect" onchange="onVoiceChange()" style="width: 100%; padding: 6px; margin-top: 4px; border-radius: 6px; border: 1px solid #ccc;"></select>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('bricks', event)">1. 말벽돌 (5분)</button>
+    <button class="tab-btn" onclick="switchTab('paraphrase', event)">2. 쉬운 표현 (5분)</button>
+    <button class="tab-btn" onclick="switchTab('chat', event)">3. 음성 대화 (5분)</button>
+  </div>
+
+  <!-- 1. 말벽돌 플래시카드 -->
+  <div id="bricks" class="section active">
+    <div class="action-bar">
+      <span id="brickCounter" style="font-size: 0.85rem; color: var(--sub-text);">1 / 6</span>
+      <button class="gen-btn" onclick="generateNewBricks()">✨ AI로 새로운 표현 5개 가져오기</button>
+    </div>
+    <div class="flashcard" id="brickCard" onclick="flipCard()">
+      <div class="kr" id="brickKr">카드 로딩 중...</div>
+      <div class="hint">클릭해서 쉬운 영어 표현 보기</div>
+      <div class="en" id="brickEn">Loading...</div>
+      <button class="voice-btn-mini" onclick="event.stopPropagation(); speakText(bricksData[brickIdx].en)">🔊 소리 듣기</button>
+    </div>
+    <div style="display: flex; justify-content: space-between;">
+      <button class="btn btn-outline" onclick="prevBrick()">이전</button>
+      <button class="btn" onclick="nextBrick()">다음 표현</button>
+    </div>
+  </div>
+
+  <!-- 2. 바꿔 말하기 연습 -->
+  <div id="paraphrase" class="section">
+    <div class="action-bar">
+      <span id="paraCounter" style="font-size: 0.85rem; color: var(--sub-text);">1 / 3</span>
+      <button class="gen-btn" onclick="generateNewParas()">✨ AI로 새 퀴즈 3개 가져오기</button>
+    </div>
+    <div class="paraphrase-box">
+      <p style="margin: 0 0 8px 0; font-size: 0.85rem; color: var(--sub-text);">복잡한 생각을 쉬운 3~5단어로 말하기:</p>
+      <div id="paraTarget" style="font-size: 1.1rem; font-weight: 600;">...</div>
+      <div class="words-pool" id="paraWords"></div>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <input type="text" id="paraInput" placeholder="단어를 조합해 말해보거나 입력하세요...">
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn" style="flex:1;" onclick="checkPara()">예시 확인 & 듣기</button>
+      <button class="btn btn-outline" onclick="nextPara()">다음 문장</button>
+    </div>
+    <div id="paraAnswer" style="margin-top: 12px; font-size: 0.95rem; color: var(--accent); font-weight: 600; display: none;"></div>
+  </div>
+
+  <!-- 3. 음성 대화 -->
+  <div id="chat" class="section">
+    <div class="chat-box" id="chatBox">
+      <div class="msg ai">Hello! Let's talk. What did you do today?</div>
+    </div>
+    <div class="chat-controls">
+      <div class="mic-button-wrapper">
+        <button id="micBtn" class="mic-btn" onclick="toggleVoiceInput()" title="누르고 말하기">🎙️</button>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" id="chatInput" placeholder="마이크를 누르거나 입력..." onkeypress="if(event.key==='Enter') sendChat()">
+        <button class="btn" onclick="sendChat()">전송</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let defaultBricks = [
+  { kr: "매일 아침 책상에 앉아서 글을 씁니다.", en: "Every morning, I sit at my desk and write." },
+  { kr: "좋은 생각이 안 떠올라도 그냥 계속 씁니다.", en: "Even with no good ideas, I just keep writing." },
+  { kr: "작은 일상들이 저에게 이야기 소재를 줍니다.", en: "Small daily things give me ideas for stories." },
+  { kr: "다 쓴 다음 다시 읽고 고칩니다.", en: "After writing, I read it again and fix it." },
+  { kr: "생각이 막히면 밖으로 나가서 걷습니다.", en: "When my head is full, I go out and walk." },
+  { kr: "특별한 방법은 없고, 매일 조금씩 하는 게 전부입니다.", en: "No special way. I just do a little every day." }
+];
+
+let defaultPara = [
+  { kr: "영감이 떠오르지 않아서 그냥 노트북을 덮었다.", words: ["no idea", "so", "I closed", "laptop"], sample: "I had no idea, so I closed my laptop." },
+  { kr: "이야기 속 인물의 성격을 고민하고 있다.", words: ["think about", "character", "what kind of person"], sample: "I am thinking about my character." },
+  { kr: "문장이 마음에 들 때까지 여러 번 다시 쓴다.", words: ["write again", "until", "I like", "sentence"], sample: "I write it again until I like it." }
+];
+
+let bricksData = JSON.parse(localStorage.getItem('my_bricks')) || defaultBricks;
+let paraData = JSON.parse(localStorage.getItem('my_paras')) || defaultPara;
+
+let brickIdx = 0;
+let paraIdx = 0;
+let apiKey = localStorage.getItem("gemini_key") || "";
+
+// TTS 음성 엔진
+let voices = [];
+let selectedVoice = null;
+
+function loadVoices() {
+  voices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith('en'));
+  const select = document.getElementById('voiceSelect');
+  if (!select || voices.length === 0) return;
+  select.innerHTML = '';
+  voices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${v.name} (${v.lang})`;
+    select.appendChild(opt);
+  });
+  const best = voices.findIndex(v => v.name.includes("Google") || v.name.includes("Natural") || v.name.includes("Samantha"));
+  if (best !== -1) {
+    select.selectedIndex = best;
+    selectedVoice = voices[best];
+  } else {
+    selectedVoice = voices[0];
+  }
+}
+if ('speechSynthesis' in window) window.speechSynthesis.onvoiceschanged = loadVoices;
+
+function onVoiceChange() {
+  const select = document.getElementById('voiceSelect');
+  selectedVoice = voices[select.value];
+}
+
+function speakText(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en-US';
+  utt.rate = 0.88;
+  if (selectedVoice) utt.voice = selectedVoice;
+  window.speechSynthesis.speak(utt);
+}
+
+// 음성 인식 (STT)
+let recognition = null;
+let isListening = false;
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRec();
+  recognition.lang = 'en-US';
+  recognition.onresult = (e) => {
+    document.getElementById('chatInput').value = e.results[0][0].transcript;
+    stopListening();
+    sendChat();
+  };
+  recognition.onerror = stopListening;
+  recognition.onend = stopListening;
+}
+
+function toggleVoiceInput() {
+  if (!recognition) return alert("Chrome 브라우저를 권장합니다.");
+  if (isListening) {
+    recognition.stop();
+    stopListening();
+  } else {
+    recognition.start();
+    isListening = true;
+    document.getElementById('micBtn').classList.add('listening');
+  }
+}
+function stopListening() {
+  isListening = false;
+  document.getElementById('micBtn').classList.remove('listening');
+}
+
+// 탭 및 설정
+function switchTab(id, e) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  e.target.classList.add('active');
+}
+function toggleSettings() {
+  const p = document.getElementById('settingsPanel');
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+}
+function saveApiKey() {
+  apiKey = document.getElementById('apiKeyInput').value.trim();
+  localStorage.setItem("gemini_key", apiKey);
+  alert("API Key 저장 완료!");
+  document.getElementById('settingsPanel').style.display = 'none';
+}
+
+// 말벽돌 제어
+function loadBrick() {
+  const card = document.getElementById('brickCard');
+  card.classList.remove('flipped');
+  document.getElementById('brickKr').innerText = bricksData[brickIdx].kr;
+  document.getElementById('brickEn').innerText = bricksData[brickIdx].en;
+  document.getElementById('brickCounter').innerText = `${brickIdx + 1} / ${bricksData.length}`;
+}
+function flipCard() {
+  const card = document.getElementById('brickCard');
+  card.classList.toggle('flipped');
+  if (card.classList.contains('flipped')) speakText(bricksData[brickIdx].en);
+}
+function nextBrick() { brickIdx = (brickIdx + 1) % bricksData.length; loadBrick(); }
+function prevBrick() { brickIdx = (brickIdx - 1 + bricksData.length) % bricksData.length; loadBrick(); }
+
+// 바꿔 말하기 제어
+function loadPara() {
+  const item = paraData[paraIdx];
+  document.getElementById('paraTarget').innerText = `"${item.kr}"`;
+  document.getElementById('paraWords').innerHTML = item.words.map(w => `<span class="word-tag">${w}</span>`).join('');
+  document.getElementById('paraInput').value = '';
+  document.getElementById('paraAnswer').style.display = 'none';
+  document.getElementById('paraCounter').innerText = `${paraIdx + 1} / ${paraData.length}`;
+}
+function checkPara() {
+  const sample = paraData[paraIdx].sample;
+  const ans = document.getElementById('paraAnswer');
+  ans.innerText = `쉬운 표현 예시: "${sample}"`;
+  ans.style.display = 'block';
+  speakText(sample);
+}
+function nextPara() { paraIdx = (paraIdx + 1) % paraData.length; loadPara(); }
+
+// AI 실시간 데이터 생성 함수 (말벽돌)
+async function generateNewBricks() {
+  if (!apiKey) return alert("상단 ⚙️ 설정에서 Gemini API Key를 먼저 등록해주세요.");
+  const btn = event.target;
+  btn.innerText = "생성 중...";
+  
+  const prompt = `Create 5 ultra-simple daily/writing routine sentence pairs for an English beginner (CEFR A1).
+Return ONLY a valid JSON array matching this exact schema:
+[{"kr": "한국어 문장", "en": "Very simple English sentence with basic words"}]`;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+    });
+    const data = await res.json();
+    const newItems = JSON.parse(data.candidates[0].content.parts[0].text);
+    bricksData = newItems;
+    localStorage.setItem('my_bricks', JSON.stringify(bricksData));
+    brickIdx = 0;
+    loadBrick();
+    alert("새로운 말벽돌 5개가 로드되었습니다!");
+  } catch(e) {
+    alert("생성에 실패했습니다. API Key를 확인해주세요.");
+  } finally {
+    btn.innerText = "✨ AI로 새로운 표현 5개 가져오기";
+  }
+}
+
+// AI 실시간 데이터 생성 함수 (바꿔 말하기)
+async function generateNewParas() {
+  if (!apiKey) return alert("상단 ⚙️ 설정에서 Gemini API Key를 먼저 등록해주세요.");
+  const btn = event.target;
+  btn.innerText = "생성 중...";
+
+  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing.
+Return ONLY a valid JSON array matching this exact schema:
+[{"kr": "한국어 문장", "words": ["word1", "word2", "word3"], "sample": "Simple combined English sentence"}]`;
+
+  try {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
+    });
+    const data = await res.json();
+    const newItems = JSON.parse(data.candidates[0].content.parts[0].text);
+    paraData = newItems;
+    localStorage.setItem('my_paras', JSON.stringify(paraData));
+    paraIdx = 0;
+    loadPara();
+    alert("새로운 퀴즈 3개가 로드되었습니다!");
+  } catch(e) {
+    alert("생성에 실패했습니다. API Key를 확인해주세요.");
+  } finally {
+    btn.innerText = "✨ AI로 새 퀴즈 3개 가져오기";
+  }
+}
+
+// 대화 핑퐁
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  appendMsg(text, 'user');
+  input.value = '';
+
+  if (!apiKey) {
+    setTimeout(() => {
+      const rep = "I see. Tell me more simply.";
+      appendMsg(rep, 'ai');
+      speakText(rep);
+    }, 500);
+    return;
+  }
+
+  try {
+    const prompt = `You are a friendly friend talking to a person who knows only 300 basic English words.
+Rules:
+1. Ultra-simple English (CEFR A1 level words only).
+2. 1 or 2 short sentences.
+3. End with 1 very easy question.
+User: "${text}". Reply:`;
+
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    });
+    const data = await res.json();
+    const reply = data.candidates[0].content.parts[0].text.trim();
+    appendMsg(reply, 'ai');
+    speakText(reply);
+  } catch (err) {
+    const rep = "That is nice. What will you do next?";
+    appendMsg(rep, 'ai');
+    speakText(rep);
+  }
+}
+
+function appendMsg(t, s) {
+  const box = document.getElementById('chatBox');
+  const d = document.createElement('div');
+  d.className = `msg ${s}`;
+  d.innerText = t;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+window.onload = () => {
+  loadBrick();
+  loadPara();
+  if (apiKey) document.getElementById('apiKeyInput').value = apiKey;
+};
+</script>
+</body>
+</html>
