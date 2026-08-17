@@ -89,11 +89,11 @@
     <button class="tab-btn" onclick="switchTab('chat', event)">3. 음성 대화 (5분)</button>
   </div>
 
-  <!-- 1. 말벽돌 플래시카드 -->
+  <!-- 1. 말벽돌 -->
   <div id="bricks" class="section active">
     <div class="action-bar">
       <span id="brickCounter" style="font-size: 0.85rem; color: var(--sub-text);">1 / 6</span>
-      <button class="gen-btn" onclick="generateNewBricks()">✨ AI로 새로운 표현 5개 가져오기</button>
+      <button class="gen-btn" onclick="generateNewBricks(event)">✨ AI로 새로운 표현 5개 가져오기</button>
     </div>
     <div class="flashcard" id="brickCard" onclick="flipCard()">
       <div class="kr" id="brickKr">카드 로딩 중...</div>
@@ -107,14 +107,14 @@
     </div>
   </div>
 
-  <!-- 2. 바꿔 말하기 연습 -->
+  <!-- 2. 바꿔 말하기 -->
   <div id="paraphrase" class="section">
     <div class="action-bar">
       <span id="paraCounter" style="font-size: 0.85rem; color: var(--sub-text);">1 / 3</span>
-      <button class="gen-btn" onclick="generateNewParas()">✨ AI로 새 퀴즈 3개 가져오기</button>
+      <button class="gen-btn" onclick="generateNewParas(event)">✨ AI로 새 퀴즈 3개 가져오기</button>
     </div>
     <div class="paraphrase-box">
-      <p style="margin: 0 0 8px 0; font-size: 0.85rem; color: var(--sub-text);">복잡한 생각을 쉬운 3~5단어로 말하기:</p>
+      <p style="margin: 0 0 8px 0; font-size: 0.85rem; color: var(--sub-text);">복잡한 생각을 쉬운 단어로 말하기:</p>
       <div id="paraTarget" style="font-size: 1.1rem; font-weight: 600;">...</div>
       <div class="words-pool" id="paraWords"></div>
     </div>
@@ -128,10 +128,10 @@
     <div id="paraAnswer" style="margin-top: 12px; font-size: 0.95rem; color: var(--accent); font-weight: 600; display: none;"></div>
   </div>
 
-  <!-- 3. 음성 대화 -->
+  <!-- 3. 대화 -->
   <div id="chat" class="section">
     <div class="chat-box" id="chatBox">
-      <div class="msg ai">Hello! Let's talk. What did you do today?</div>
+      <div class="msg ai">Hello! Let's talk simply. What did you do today?</div>
     </div>
     <div class="chat-controls">
       <div class="mic-button-wrapper">
@@ -146,6 +146,8 @@
 </div>
 
 <script>
+const MODEL_NAME = "gemini-2.0-flash";
+
 let defaultBricks = [
   { kr: "매일 아침 책상에 앉아서 글을 씁니다.", en: "Every morning, I sit at my desk and write." },
   { kr: "좋은 생각이 안 떠올라도 그냥 계속 씁니다.", en: "Even with no good ideas, I just keep writing." },
@@ -168,7 +170,6 @@ let brickIdx = 0;
 let paraIdx = 0;
 let apiKey = localStorage.getItem("gemini_key") || "";
 
-// TTS 음성 엔진
 let voices = [];
 let selectedVoice = null;
 
@@ -208,7 +209,6 @@ function speakText(text) {
   window.speechSynthesis.speak(utt);
 }
 
-// 음성 인식 (STT)
 let recognition = null;
 let isListening = false;
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -230,9 +230,13 @@ function toggleVoiceInput() {
     recognition.stop();
     stopListening();
   } else {
-    recognition.start();
-    isListening = true;
-    document.getElementById('micBtn').classList.add('listening');
+    try {
+      recognition.start();
+      isListening = true;
+      document.getElementById('micBtn').classList.add('listening');
+    } catch(e) {
+      stopListening();
+    }
   }
 }
 function stopListening() {
@@ -240,7 +244,6 @@ function stopListening() {
   document.getElementById('micBtn').classList.remove('listening');
 }
 
-// 탭 및 설정
 function switchTab(id, e) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -254,11 +257,10 @@ function toggleSettings() {
 function saveApiKey() {
   apiKey = document.getElementById('apiKeyInput').value.trim();
   localStorage.setItem("gemini_key", apiKey);
-  alert("API Key 저장 완료!");
+  alert("API Key가 저장되었습니다.");
   document.getElementById('settingsPanel').style.display = 'none';
 }
 
-// 말벽돌 제어
 function loadBrick() {
   const card = document.getElementById('brickCard');
   card.classList.remove('flipped');
@@ -274,7 +276,6 @@ function flipCard() {
 function nextBrick() { brickIdx = (brickIdx + 1) % bricksData.length; loadBrick(); }
 function prevBrick() { brickIdx = (brickIdx - 1 + bricksData.length) % bricksData.length; loadBrick(); }
 
-// 바꿔 말하기 제어
 function loadPara() {
   const item = paraData[paraIdx];
   document.getElementById('paraTarget').innerText = `"${item.kr}"`;
@@ -292,67 +293,72 @@ function checkPara() {
 }
 function nextPara() { paraIdx = (paraIdx + 1) % paraData.length; loadPara(); }
 
-// AI 실시간 데이터 생성 함수 (말벽돌)
-async function generateNewBricks() {
-  if (!apiKey) return alert("상단 ⚙️ 설정에서 Gemini API Key를 먼저 등록해주세요.");
-  const btn = event.target;
+// API 호출 헬퍼
+async function callGemini(prompt, isJson = false) {
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }]
+  };
+  if (isJson) {
+    body.generationConfig = { responseMimeType: "application/json" };
+  }
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) throw new Error("API Call Failed");
+  const data = await res.json();
+  return data.candidates[0].content.parts[0].text;
+}
+
+async function generateNewBricks(e) {
+  if (!apiKey) return alert("상단 ⚙️ 설정에서 API Key를 먼저 저장해주세요.");
+  const btn = e.target;
   btn.innerText = "생성 중...";
   
-  const prompt = `Create 5 ultra-simple daily/writing routine sentence pairs for an English beginner (CEFR A1).
-Return ONLY a valid JSON array matching this exact schema:
-[{"kr": "한국어 문장", "en": "Very simple English sentence with basic words"}]`;
+  const prompt = `Create 5 very simple daily and writing routine sentence pairs for a beginner English learner (CEFR A1).
+Return ONLY a valid JSON array matching this exact format:
+[{"kr": "한국어 문장", "en": "Very simple English sentence"}]`;
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
-    });
-    const data = await res.json();
-    const newItems = JSON.parse(data.candidates[0].content.parts[0].text);
+    const text = await callGemini(prompt, true);
+    const newItems = JSON.parse(text);
     bricksData = newItems;
     localStorage.setItem('my_bricks', JSON.stringify(bricksData));
     brickIdx = 0;
     loadBrick();
-    alert("새로운 말벽돌 5개가 로드되었습니다!");
-  } catch(e) {
+    alert("새로운 말벽돌 5개가 준비되었습니다.");
+  } catch(err) {
     alert("생성에 실패했습니다. API Key를 확인해주세요.");
   } finally {
     btn.innerText = "✨ AI로 새로운 표현 5개 가져오기";
   }
 }
 
-// AI 실시간 데이터 생성 함수 (바꿔 말하기)
-async function generateNewParas() {
-  if (!apiKey) return alert("상단 ⚙️ 설정에서 Gemini API Key를 먼저 등록해주세요.");
-  const btn = event.target;
+async function generateNewParas(e) {
+  if (!apiKey) return alert("상단 ⚙️ 설정에서 API Key를 먼저 저장해주세요.");
+  const btn = e.target;
   btn.innerText = "생성 중...";
 
-  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing.
-Return ONLY a valid JSON array matching this exact schema:
+  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing routines.
+Return ONLY a valid JSON array matching this exact format:
 [{"kr": "한국어 문장", "words": ["word1", "word2", "word3"], "sample": "Simple combined English sentence"}]`;
 
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } })
-    });
-    const data = await res.json();
-    const newItems = JSON.parse(data.candidates[0].content.parts[0].text);
+    const text = await callGemini(prompt, true);
+    const newItems = JSON.parse(text);
     paraData = newItems;
     localStorage.setItem('my_paras', JSON.stringify(paraData));
     paraIdx = 0;
     loadPara();
-    alert("새로운 퀴즈 3개가 로드되었습니다!");
-  } catch(e) {
+    alert("새로운 퀴즈 3개가 준비되었습니다.");
+  } catch(err) {
     alert("생성에 실패했습니다. API Key를 확인해주세요.");
   } finally {
     btn.innerText = "✨ AI로 새 퀴즈 3개 가져오기";
   }
 }
 
-// 대화 핑퐁
 async function sendChat() {
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
@@ -370,20 +376,14 @@ async function sendChat() {
   }
 
   try {
-    const prompt = `You are a friendly friend talking to a person who knows only 300 basic English words.
+    const prompt = `You are a friendly friend talking to a person who uses only basic English (CEFR A1).
 Rules:
-1. Ultra-simple English (CEFR A1 level words only).
+1. Ultra-simple English words only.
 2. 1 or 2 short sentences.
 3. End with 1 very easy question.
 User: "${text}". Reply:`;
 
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    });
-    const data = await res.json();
-    const reply = data.candidates[0].content.parts[0].text.trim();
+    const reply = (await callGemini(prompt, false)).trim();
     appendMsg(reply, 'ai');
     speakText(reply);
   } catch (err) {
