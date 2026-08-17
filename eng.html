@@ -146,8 +146,6 @@
 </div>
 
 <script>
-const MODEL_NAME = "gemini-2.0-flash";
-
 let defaultBricks = [
   { kr: "매일 아침 책상에 앉아서 글을 씁니다.", en: "Every morning, I sit at my desk and write." },
   { kr: "좋은 생각이 안 떠올라도 그냥 계속 씁니다.", en: "Even with no good ideas, I just keep writing." },
@@ -168,7 +166,7 @@ let paraData = JSON.parse(localStorage.getItem('my_paras')) || defaultPara;
 
 let brickIdx = 0;
 let paraIdx = 0;
-let apiKey = localStorage.getItem("gemini_key") || "";
+let apiKey = (localStorage.getItem("gemini_key") || "").trim();
 
 let voices = [];
 let selectedVoice = null;
@@ -293,35 +291,44 @@ function checkPara() {
 }
 function nextPara() { paraIdx = (paraIdx + 1) % paraData.length; loadPara(); }
 
-// API 호출 헬퍼
-async function callGemini(prompt, isJson = false) {
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }]
-  };
-  if (isJson) {
-    body.generationConfig = { responseMimeType: "application/json" };
+// API 호출 헬퍼 (상세 에러 반환)
+async function callGemini(prompt) {
+  if (!apiKey) throw new Error("API Key가 비어있습니다. 상단 ⚙️ 설정에서 입력해주세요.");
+
+  const models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || `HTTP ${res.status}`);
+      }
+      return data.candidates[0].content.parts[0].text;
+    } catch(err) {
+      lastError = err;
+    }
   }
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) throw new Error("API Call Failed");
-  const data = await res.json();
-  return data.candidates[0].content.parts[0].text;
+  throw lastError;
 }
 
 async function generateNewBricks(e) {
-  if (!apiKey) return alert("상단 ⚙️ 설정에서 API Key를 먼저 저장해주세요.");
   const btn = e.target;
   btn.innerText = "생성 중...";
   
-  const prompt = `Create 5 very simple daily and writing routine sentence pairs for a beginner English learner (CEFR A1).
-Return ONLY a valid JSON array matching this exact format:
+  const prompt = `Create 5 ultra-simple daily/routine sentence pairs for an English beginner (CEFR A1).
+Return ONLY a valid JSON array string (no markdown, no backticks):
 [{"kr": "한국어 문장", "en": "Very simple English sentence"}]`;
 
   try {
-    const text = await callGemini(prompt, true);
+    let text = await callGemini(prompt);
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
     const newItems = JSON.parse(text);
     bricksData = newItems;
     localStorage.setItem('my_bricks', JSON.stringify(bricksData));
@@ -329,23 +336,23 @@ Return ONLY a valid JSON array matching this exact format:
     loadBrick();
     alert("새로운 말벽돌 5개가 준비되었습니다.");
   } catch(err) {
-    alert("생성에 실패했습니다. API Key를 확인해주세요.");
+    alert("오류 발생: " + err.message);
   } finally {
     btn.innerText = "✨ AI로 새로운 표현 5개 가져오기";
   }
 }
 
 async function generateNewParas(e) {
-  if (!apiKey) return alert("상단 ⚙️ 설정에서 API Key를 먼저 저장해주세요.");
   const btn = e.target;
   btn.innerText = "생성 중...";
 
-  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing routines.
-Return ONLY a valid JSON array matching this exact format:
+  const prompt = `Create 3 ultra-simple paraphrase practice items for daily thoughts/writing.
+Return ONLY a valid JSON array string (no markdown, no backticks):
 [{"kr": "한국어 문장", "words": ["word1", "word2", "word3"], "sample": "Simple combined English sentence"}]`;
 
   try {
-    const text = await callGemini(prompt, true);
+    let text = await callGemini(prompt);
+    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
     const newItems = JSON.parse(text);
     paraData = newItems;
     localStorage.setItem('my_paras', JSON.stringify(paraData));
@@ -353,7 +360,7 @@ Return ONLY a valid JSON array matching this exact format:
     loadPara();
     alert("새로운 퀴즈 3개가 준비되었습니다.");
   } catch(err) {
-    alert("생성에 실패했습니다. API Key를 확인해주세요.");
+    alert("오류 발생: " + err.message);
   } finally {
     btn.innerText = "✨ AI로 새 퀴즈 3개 가져오기";
   }
@@ -366,30 +373,21 @@ async function sendChat() {
   appendMsg(text, 'user');
   input.value = '';
 
-  if (!apiKey) {
-    setTimeout(() => {
-      const rep = "I see. Tell me more simply.";
-      appendMsg(rep, 'ai');
-      speakText(rep);
-    }, 500);
-    return;
-  }
-
   try {
-    const prompt = `You are a friendly friend talking to a person who uses only basic English (CEFR A1).
+    const prompt = `You are a friendly conversation partner for a beginner English learner.
 Rules:
-1. Ultra-simple English words only.
+1. Ultra-simple English (CEFR A1 level).
 2. 1 or 2 short sentences.
 3. End with 1 very easy question.
 User: "${text}". Reply:`;
 
-    const reply = (await callGemini(prompt, false)).trim();
+    const reply = (await callGemini(prompt)).trim();
     appendMsg(reply, 'ai');
     speakText(reply);
   } catch (err) {
-    const rep = "That is nice. What will you do next?";
-    appendMsg(rep, 'ai');
-    speakText(rep);
+    const fallback = "I see. Tell me a little more with simple words.";
+    appendMsg(fallback, 'ai');
+    speakText(fallback);
   }
 }
 
