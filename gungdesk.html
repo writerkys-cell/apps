@@ -309,7 +309,7 @@
    상수
    ============================================================ */
 const KEY = "gungri.v1";
-const NOCAT = " none";      // 미분류를 가리키는 내부 값
+const NOCAT = "—none—";      // 미분류를 가리키는 내부 값
 const NOCAT_LABEL = "미분류";
 const GENRES = {
   novel: {
@@ -408,6 +408,8 @@ function activeWork(){ return S.works.find(w=>w.id===S.activeId) || null; }
 /* ============================================================
    유틸
    ============================================================ */
+// 한글·일본어 등 조합 중인 글자가 있을 때는 Enter를 가로채면 안 된다
+function composing(e){ return e.isComposing || e.keyCode === 229; }
 function esc(s){
   return String(s).replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
@@ -581,9 +583,12 @@ function renderMain(){
 
   const t = pane.querySelector("#wTitle"); t.textContent = w.title;
   const sub = pane.querySelector("#wSub"); sub.textContent = w.sub;
-  t.addEventListener("blur", ()=>{ w.title = t.textContent.trim(); save(); renderSide(); });
-  sub.addEventListener("blur", ()=>{ w.sub = sub.textContent.trim(); save(); });
-  [t,sub].forEach(el=>el.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); }}));
+  const oneLine = el => el.textContent.replace(/\s+/g," ").trim();   // 줄바꿈이 섞여도 글자는 안 잃는다
+  t.addEventListener("blur", ()=>{ w.title = oneLine(t); t.textContent = w.title; save(); renderSide(); });
+  sub.addEventListener("blur", ()=>{ w.sub = oneLine(sub); sub.textContent = w.sub; save(); });
+  [t,sub].forEach(el=>el.addEventListener("keydown", e=>{
+    if(e.key==="Enter" && !composing(e)){ e.preventDefault(); el.blur(); }
+  }));
 
   // 입력 카테고리 칩
   const dc = pane.querySelector("#draftCats");
@@ -610,7 +615,7 @@ function renderMain(){
   const ta = pane.querySelector("#memoInput");
   ta.addEventListener("input", ()=>autoGrow(ta));
   ta.addEventListener("keydown", e=>{
-    if((e.metaKey||e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); addNote(); }
+    if((e.metaKey||e.ctrlKey) && e.key === "Enter" && !composing(e)){ e.preventDefault(); addNote(); }
   });
   pane.querySelector("#btnAdd").onclick = addNote;
   pane.querySelector("#btnPrompt").onclick = openPromptModal;
@@ -726,7 +731,7 @@ function bindNoteEvents(box, w){
   box.querySelectorAll("[data-cancel]").forEach(b=> b.onclick = ()=>{ UI.editing=null; renderNotes(); });
   box.querySelectorAll(".edit-area").forEach(ta=>{
     ta.addEventListener("keydown", e=>{
-      if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); box.querySelector(`[data-save="${ta.dataset.edit}"]`).click(); }
+      if((e.metaKey||e.ctrlKey)&&e.key==="Enter"&&!composing(e)){ e.preventDefault(); box.querySelector(`[data-save="${ta.dataset.edit}"]`).click(); }
       if(e.key==="Escape"){ if(document.querySelector(".ac")) return; UI.editing=null; renderNotes(); }
     });
   });
@@ -911,7 +916,9 @@ function openRenameLink(w, name){
     document.getElementById("rnOk").disabled = !v || /[\[\]\n]/.test(v);
   };
   inp.addEventListener("input", check); check();
-  inp.onkeydown = e=>{ if(e.key==="Enter" && !document.getElementById("rnOk").disabled) document.getElementById("rnOk").click(); };
+  inp.onkeydown = e=>{
+    if(e.key==="Enter" && !composing(e) && !document.getElementById("rnOk").disabled) document.getElementById("rnOk").click();
+  };
 
   document.getElementById("rnCancel").onclick = closeModal;
   document.getElementById("rnOk").onclick = ()=>{
@@ -999,7 +1006,7 @@ function attachAC(ta, w){
     sel = 0; refresh();
   });
   ta.addEventListener("keydown", e=>{
-    if(!box) return;
+    if(!box || composing(e)) return;   // 한글 조합 중인 Enter는 글자를 맺는 데 쓰인다
     if(e.key === "ArrowDown"){ e.preventDefault(); sel = (sel+1)%items.length; draw(); }
     else if(e.key === "ArrowUp"){ e.preventDefault(); sel = (sel-1+items.length)%items.length; draw(); }
     else if(e.key === "Enter" || e.key === "Tab"){
@@ -1069,7 +1076,7 @@ function openNewWork(){
       <button class="btn primary" id="nwOk">만들기</button></div>
   `, {narrow:true});
   const ti = document.getElementById("nwTitle"); ti.focus();
-  ti.onkeydown = e=>{ if(e.key==="Enter") document.getElementById("nwOk").click(); };
+  ti.onkeydown = e=>{ if(e.key==="Enter" && !composing(e)) document.getElementById("nwOk").click(); };
   document.getElementById("nwCancel").onclick = closeModal;
   document.getElementById("nwOk").onclick = ()=>{
     const g = document.querySelector('input[name="g"]:checked').value;
@@ -1176,7 +1183,7 @@ function openCatEditor(){
       if(w.cats.includes(v)){ toast("이미 있는 카테고리입니다"); return; }
       w.cats.push(v); save(); draw();
     };
-    document.getElementById("newCat").onkeydown = e=>{ if(e.key==="Enter") document.getElementById("addCat").onclick(); };
+    document.getElementById("newCat").onkeydown = e=>{ if(e.key==="Enter" && !composing(e)) document.getElementById("addCat").onclick(); };
     document.querySelectorAll("[data-rm]").forEach(b=> b.onclick = ()=>{
       commit();
       const i = +b.dataset.rm;
