@@ -297,6 +297,13 @@ body.hide-brackets .page-link{
 .content mark,.ref-body mark{background:#F2E3A8;color:var(--ink);padding:0 2px;border-radius:2px}
 html[data-theme="dark"] .content mark{background:#5C5326}
 .content a,.ref-body a{color:var(--indigo);text-decoration:underline;text-underline-offset:2px}
+.ext-link{cursor:pointer}
+.ext-link .ext-mark{
+  font-size:.72em;opacity:.55;margin-left:2px;text-decoration:none;display:inline-block;
+  vertical-align:.15em;
+}
+.ext-link.app{border-bottom:1px solid var(--indigo-soft);text-decoration:none}
+.ext-link.app:hover{text-decoration:underline}
 .todo{cursor:pointer;user-select:none;color:var(--ink-3);font-family:var(--mono)}
 .todo.done{color:var(--indigo-soft)}
 .done-text{color:var(--ink-3);text-decoration:line-through}
@@ -420,6 +427,34 @@ html[data-theme="dark"] .content mark{background:#5C5326}
 .del-btn{color:var(--ink-3);font-size:12px;padding:2px 6px;border-radius:3px}
 .del-btn:hover{color:var(--cinnabar);background:var(--paper-3)}
 
+/* ---------- 보관함 ---------- */
+.bk-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:6px 0 20px}
+.bk-card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--paper-2)}
+.bk-card .k{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.bk-card .v{font-family:var(--serif);font-size:19px;color:var(--ink);margin-top:3px;line-height:1.3}
+.bk-card .v.warn{color:var(--cinnabar)}
+.bk-card .sub{font-size:11.5px;font-family:var(--mono);color:var(--ink-3);margin-top:3px}
+.bk-acts{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.bk-acts button{
+  border:1px solid var(--line);border-radius:99px;padding:5px 13px;font-size:13px;color:var(--ink-2);
+}
+.bk-acts button:hover{border-color:var(--indigo);color:var(--indigo)}
+.bk-acts button.primary{border-color:var(--indigo);color:var(--indigo);font-weight:600}
+.bk-acts button.primary:hover{background:var(--indigo);color:var(--paper)}
+.bk-note{
+  border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:0 0 18px;
+  font-size:12.5px;line-height:1.7;color:var(--ink-3);
+}
+.bk-note b{color:var(--ink-2)}
+.bk-row-acts{display:flex;gap:4px;justify-content:flex-end}
+.bk-row-acts button{font-size:11.5px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-3)}
+.bk-row-acts button:hover{border-color:var(--indigo);color:var(--indigo)}
+.bk-row-acts button.danger:hover{border-color:var(--cinnabar);color:var(--cinnabar)}
+.kind-pill{
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-3);
+  border:1px solid var(--line);border-radius:99px;padding:1px 7px;white-space:nowrap;
+}
+
 /* ---------- 검색 모달 ---------- */
 .overlay{
   position:fixed;inset:0;background:rgba(20,20,20,.34);z-index:100;
@@ -530,6 +565,7 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
     <nav class="side-nav">
       <button class="nav-item" data-go="daily"><span class="ico">◷</span>오늘의 노트</button>
       <button class="nav-item" data-go="all"><span class="ico">▤</span>전체 페이지</button>
+      <button class="nav-item" data-go="backup"><span class="ico">⛁</span>보관함<span class="kbd" id="bk-n"></span></button>
       <button class="nav-item" data-go="calendar"><span class="ico">▦</span>달력</button>
       <button class="nav-item" data-go="shuffle"><span class="ico">✎</span>쪽글<span class="kbd" id="shuffle-n"></span></button>
       <button class="nav-item" id="btn-random"><span class="ico">⚄</span>무작위 페이지</button>
@@ -615,17 +651,38 @@ function toast(msg){
    2. 저장소 — IndexedDB (그래프 전체를 하나의 레코드로)
    ============================================================ */
 const DB_NAME = "jjokgeul-db", STORE = "graph", KEY = "main";
+const SNAPS = "snaps", DB_VER = 2, SNAP_KEEP = 14;
 const LEGACY_DB = "meoksil-db";        // 이전 이름으로 저장된 그래프를 한 번 옮겨온다
 let _db = null;
 
 function openDB(){
   return new Promise((res, rej) => {
-    const r = indexedDB.open(DB_NAME, 1);
-    r.onupgradeneeded = e => { e.target.result.createObjectStore(STORE); };
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+      if(!db.objectStoreNames.contains(SNAPS)) db.createObjectStore(SNAPS);
+    };
     r.onsuccess = e => res(e.target.result);
     r.onerror  = () => rej(r.error);
   });
 }
+/** 보관함(snaps) 저장소 다루기 */
+async function snapTx(mode, fn){
+  if(!_db) _db = await openDB();
+  return new Promise((res, rej) => {
+    let out;
+    const tx = _db.transaction(SNAPS, mode);
+    const rq = fn(tx.objectStore(SNAPS));
+    if(rq) rq.onsuccess = () => { out = rq.result; };
+    tx.oncomplete = () => res(out);
+    tx.onerror   = () => rej(tx.error);
+  });
+}
+const snapPut  = (k, v) => snapTx("readwrite", os => os.put(v, k));
+const snapGet  = k      => snapTx("readonly",  os => os.get(k));
+const snapDel  = k      => snapTx("readwrite", os => os.delete(k));
+const snapKeys = ()     => snapTx("readonly",  os => os.getAllKeys());
 async function dbGet(){
   if(!_db) _db = await openDB();
   return new Promise((res, rej) => {
@@ -757,6 +814,14 @@ function siblingsOf(id){ const b = G.blocks[id]; return b ? childrenOf(b.parent)
    [[페이지]] · #태그 · **굵게** · __기울임__ · ~~취소~~ · ^^형광^^ · `코드` · TODO/DONE · URL
    ============================================================ */
 const LINK_RE = /\[\[([^\[\]\n]+)\]\]/g;
+/** [보일 글자](주소) — 앞에 [ 가 붙은 [[페이지]] 와 헷갈리지 않도록 뒤돌아보기를 쓴다 */
+const EXT_RE  = /(?<!\[)\[([^\[\]\n]+)\]\(([^\s)]+)\)/g;
+/** 스크립트를 실어 나르는 스킴만 막고 나머지는 통과시킨다 */
+function safeHref(u){
+  const t = String(u).trim();
+  return /^(javascript|data|vbscript):/i.test(t) ? null : t;
+}
+function isWebUrl(u){ return /^https?:\/\//i.test(u); }
 const TAG_RE  = /(^|[\s(])#([^\s#\[\]()]+)/g;
 
 function esc(s){
@@ -787,6 +852,14 @@ function renderInline(text, blockId){
     prefix = `<span class="todo ${done?"done":""}" data-todo="${blockId||""}">[${done?"×":" "}]</span> `;
   }
   let h = esc(body);
+  h = h.replace(EXT_RE, (m, label, url) => {
+    const safe = safeHref(url);
+    if(!safe) return label;                       // 위험한 스킴이면 글자만 남긴다
+    const web = isWebUrl(safe);
+    return `<a class="ext-link${web ? "" : " app"}" href="${safe}" title="${safe}"`
+         + (web ? ` target="_blank" rel="noopener"` : ` data-app="1"`)
+         + `>${label}<span class="ext-mark">↗</span></a>`;
+  });
   h = h.replace(LINK_RE, (m, t) =>
     `<span class="page-link${findPageByTitle(t.trim())?"":" ghost"}" data-title="${t.trim()}"><span class="brk">[[</span>${t}<span class="brk">]]</span></span>`);
   h = h.replace(TAG_RE, (m, pre, t) => `${pre}<span class="tag" data-title="${t}">#${t}</span>`);
@@ -828,6 +901,7 @@ async function doSave(){
   try{
     G.meta.savedAt = now();
     await dbPut(G);
+    dailySnapshot();
     setStatus("saved", "저장됨 " + fmtTime(G.meta.savedAt).replace("오늘 ",""));
   }catch(e){
     console.error(e); setStatus("", "저장 실패");
@@ -851,6 +925,159 @@ function setStatus(cls, text){
   const d = $("#save-dot"); d.className = "dot " + cls;
   $("#save-text").textContent = text;
 }
+/* ============================================================
+   5-b. 보관함 — 하루 한 번 스냅숏 · 폴더로 자동 내보내기
+   ============================================================ */
+let snapBusy = false;
+let dirHandle = null;                 // 폴더를 연결해 둔 경우의 손잡이
+const KIND_LABEL = { daily:"하루 한 번", manual:"손으로", "pre-restore":"되돌리기 직전" };
+
+function snapList(){
+  if(!G.meta.snapshots) G.meta.snapshots = [];
+  return G.meta.snapshots;
+}
+/** 지금 그래프를 통째로 떠서 보관함에 넣는다. */
+async function takeSnapshot(kind){
+  const at = now(), key = "snap-" + at;
+  const clone = JSON.parse(JSON.stringify(G));
+  if(clone.meta) delete clone.meta.snapshots;        // 목록이 겹겹이 쌓이지 않게
+  const bytes = JSON.stringify(clone).length;
+  await snapPut(key, { at, kind, graph: clone });
+  snapList().unshift({
+    key, at, kind, bytes,
+    pages: Object.keys(G.pages).length,
+    blocks: Object.keys(G.blocks).length
+  });
+  while(snapList().length > SNAP_KEEP){
+    const old = snapList().pop();
+    try{ await snapDel(old.key); }catch{}
+  }
+  G.meta.lastSnapDate = dateKey();
+  await dbPut(G);
+  return key;
+}
+/** 하루가 바뀌었으면 한 번 뜬다. 앱을 열어 두기만 해도 걸린다. */
+async function dailySnapshot(){
+  if(snapBusy || !G || G.meta.lastSnapDate === dateKey()) return;
+  snapBusy = true;
+  try{
+    await takeSnapshot("daily");
+    await folderBackup();
+    if(view.type === "backup") render();
+  }catch(e){ console.warn("스냅숏 실패", e); }
+  finally{ snapBusy = false; }
+}
+async function restoreSnapshot(key){
+  const rec = await snapGet(key);
+  if(!rec || !rec.graph){ toast("그 스냅숏을 찾지 못했습니다"); return; }
+  const when = fmtStamp(rec.at);
+  if(!confirm(`${when} 상태로 되돌립니다.\n지금 글은 모두 그때 것으로 바뀝니다.\n`
+            + `되돌리기 직전 상태는 보관함에 따로 남겨 두니, 잘못되면 다시 돌아올 수 있습니다.\n\n계속할까요?`)) return;
+  await takeSnapshot("pre-restore");
+  const keepList = snapList().slice();
+  exitEdit();
+  G = rec.graph;
+  repair();
+  if(!G.meta) G.meta = {};
+  G.meta.snapshots = keepList;
+  G.meta.lastSnapDate = dateKey();
+  editing = null;
+  view = { type:"backup" };
+  render();
+  await dbPut(G);
+  toast(`${when} 상태로 되돌렸습니다`);
+}
+async function downloadSnapshot(key){
+  const rec = await snapGet(key);
+  if(!rec){ toast("그 스냅숏을 찾지 못했습니다"); return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(rec.graph, null, 2)], { type:"application/json" }));
+  a.download = `roam-${fmtStamp(rec.at).replace(/[^\d]/g, "").slice(0, 12)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+async function dropSnapshot(key){
+  const i = snapList().findIndex(x => x.key === key);
+  if(i < 0) return;
+  if(!confirm("이 스냅숏을 지웁니다. 계속할까요?")) return;
+  snapList().splice(i, 1);
+  try{ await snapDel(key); }catch{}
+  await dbPut(G);
+  render();
+}
+/** 목록과 실제 저장소가 어긋나면 맞춘다(수동으로 지웠거나 옮겨 온 경우) */
+async function reconcileSnaps(){
+  try{
+    const keys = new Set(await snapKeys());
+    const before = snapList().length;
+    G.meta.snapshots = snapList().filter(x => keys.has(x.key));
+    if(G.meta.snapshots.length !== before) await dbPut(G);
+  }catch{}
+}
+function fmtStamp(ts){
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fmtBytes(n){
+  if(n < 1024) return n + " B";
+  if(n < 1024 * 1024) return (n / 1024).toFixed(0) + " KB";
+  return (n / 1024 / 1024).toFixed(1) + " MB";
+}
+function daysSince(ts){ return ts ? Math.floor((now() - ts) / 86400000) : null; }
+
+/* ---- 폴더에 파일로 자동 내보내기 (지원하는 브라우저에서) ---- */
+const canFolder = () => typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
+async function loadDirHandle(){
+  if(!canFolder()) return;
+  try{ dirHandle = (await snapGet("dirHandle")) || null; }catch{ dirHandle = null; }
+}
+async function linkFolder(){
+  if(!canFolder()){ toast("이 브라우저는 폴더 연결을 지원하지 않습니다"); return; }
+  try{
+    const h = await window.showDirectoryPicker({ mode:"readwrite" });
+    dirHandle = h;
+    await snapPut("dirHandle", h);
+    G.meta.folderName = h.name;
+    await dbPut(G);
+    const okNow = await folderBackup(true);
+    render();
+    toast(okNow ? `‘${h.name}’ 폴더에 하루 한 번 내보냅니다` : `‘${h.name}’ 폴더를 연결했습니다`);
+  }catch(e){ /* 사용자가 취소 */ }
+}
+async function unlinkFolder(){
+  dirHandle = null;
+  try{ await snapDel("dirHandle"); }catch{}
+  delete G.meta.folderName;
+  delete G.meta.folderAt;
+  await dbPut(G);
+  render();
+  toast("폴더 연결을 풀었습니다");
+}
+async function folderPerm(request){
+  if(!dirHandle) return "none";
+  try{
+    const opts = { mode:"readwrite" };
+    let p = await dirHandle.queryPermission(opts);
+    if(p !== "granted" && request) p = await dirHandle.requestPermission(opts);
+    return p;
+  }catch{ return "denied"; }
+}
+/** 오늘 것이 아직 없으면 폴더에 roam-날짜.json 을 쓴다. */
+async function folderBackup(request){
+  if(!dirHandle) return false;
+  if((await folderPerm(request)) !== "granted") return false;
+  try{
+    const name = `roam-${dateKey()}.json`;
+    const fh = await dirHandle.getFileHandle(name, { create:true });
+    const wr = await fh.createWritable();
+    await wr.write(JSON.stringify(G, null, 2));
+    await wr.close();
+    G.meta.folderAt = now();
+    await dbPut(G);
+    return true;
+  }catch(e){ console.warn("폴더 내보내기 실패", e); return false; }
+}
+
 function exportJSON(){
   const blob = new Blob([JSON.stringify(G, null, 2)], { type:"application/json" });
   const a = document.createElement("a");
@@ -858,6 +1085,8 @@ function exportJSON(){
   a.download = `roam-${dateKey()}.json`;
   a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
+  G.meta.exportedAt = now();
+  scheduleSave();
   toast("JSON 파일을 내려받았습니다");
 }
 function importJSON(file){
@@ -870,8 +1099,12 @@ function importJSON(file){
       toast("pages / blocks 항목이 없는 파일입니다"); return;
     }
     const pc = Object.keys(data.pages).length, bc = Object.keys(data.blocks).length;
-    if(!confirm(`페이지 ${pc}개, 블록 ${bc}개를 불러옵니다.\n현재 그래프는 대체됩니다. 계속할까요?`)) return;
+    if(!confirm(`페이지 ${pc}개, 블록 ${bc}개를 불러옵니다.\n현재 그래프는 대체됩니다.\n`
+              + `직전 상태는 보관함에 사본으로 남겨 둡니다. 계속할까요?`)) return;
+    const keepList = snapList().slice();
+    takeSnapshot("pre-restore").catch(()=>{});
     G = { version:data.version||1, pages:data.pages, blocks:data.blocks, meta:data.meta||{} };
+    if(!G.meta.snapshots) G.meta.snapshots = keepList;
     repair();
     view = { type:"daily" };
     editing = null;
@@ -907,6 +1140,7 @@ function render(){
   else if(view.type === "shuffle") v.appendChild(renderShuffleView());
   else if(view.type === "all")  v.appendChild(renderAllPages());
   else if(view.type === "help") v.appendChild(renderHelp());
+  else if(view.type === "backup") v.appendChild(renderBackup());
   renderSide();
   syncDeleteBtn();
   paintSel();
@@ -942,6 +1176,11 @@ function renderSidebar(){
     el.classList.toggle("active", el.dataset.go === view.type));
   const n = pagesWithTag(shuffleTag()).length;
   $("#shuffle-n").textContent = n ? n : "";
+  const gap = daysSince(G.meta.exportedAt);
+  const bk = $("#bk-n");
+  bk.textContent = (gap === null || gap >= 7) ? "!" : "";
+  bk.style.color = bk.textContent ? "var(--cinnabar)" : "";
+  bk.title = bk.textContent ? "파일로 내보낸 지 오래됐습니다" : "";
 }
 function countBlocks(pid){
   let n = 0;
@@ -959,6 +1198,7 @@ function renderCrumb(){
   if(view.type === "daily") add("오늘의 노트", null, true);
   if(view.type === "all")   add("전체 페이지", null, true);
   if(view.type === "help")  add("도움말", null, true);
+  if(view.type === "backup") add("보관함", null, true);
   if(view.type === "calendar"){
     add("달력", null, true); sep();
     add(`${calCursor.y}년 ${calCursor.m + 1}월`, null, true);
@@ -1583,6 +1823,124 @@ function renderSide(){
   });
 }
 
+/* ---- 보관함 화면 ---- */
+function renderBackup(){
+  const frag = document.createDocumentFragment();
+  const h = document.createElement("div");
+  h.className = "page-title"; h.textContent = "보관함";
+  const meta = document.createElement("div");
+  meta.className = "page-meta";
+  meta.innerHTML = "<span>하루 한 번 자동으로 뜬 사본</span><span>최근 " + SNAP_KEEP + "개까지</span>";
+  frag.append(h, meta);
+
+  const list = snapList();
+  const todayDone = G.meta.lastSnapDate === dateKey();
+  const gap = daysSince(G.meta.exportedAt);
+
+  // 상태 카드
+  const cards = document.createElement("div");
+  cards.className = "bk-cards";
+  const card = (k, v, sub, warn) => {
+    const c = document.createElement("div");
+    c.className = "bk-card";
+    c.innerHTML = `<div class="k">${k}</div><div class="v${warn ? " warn" : ""}">${esc(v)}</div>`
+                + (sub ? `<div class="sub">${esc(sub)}</div>` : "");
+    return c;
+  };
+  cards.appendChild(card("오늘 사본", todayDone ? "떠 두었습니다" : "아직입니다",
+    todayDone ? "" : "글을 고치면 곧 뜹니다", !todayDone));
+  cards.appendChild(card("보관 중", list.length + "개",
+    list.length ? fmtStamp(list[0].at) + " 가 가장 최근" : "아직 없습니다"));
+  cards.appendChild(card("파일로 내보내기",
+    gap === null ? "한 번도 없음" : (gap === 0 ? "오늘" : gap + "일 전"),
+    gap === null || gap >= 7 ? "가끔 파일로도 빼 두세요" : "", gap === null || gap >= 7));
+  if(canFolder())
+    cards.appendChild(card("연결한 폴더", G.meta.folderName || "없음",
+      G.meta.folderAt ? fmtStamp(G.meta.folderAt) + " 에 씀" : "", !G.meta.folderName));
+  frag.appendChild(cards);
+
+  // 단추
+  const acts = document.createElement("div");
+  acts.className = "bk-acts";
+  const mk = (label, fn, cls) => {
+    const b = document.createElement("button");
+    if(cls) b.className = cls;
+    b.textContent = label; b.onclick = fn;
+    return b;
+  };
+  acts.appendChild(mk("지금 사본 뜨기", async () => {
+    commit();
+    await takeSnapshot("manual");
+    render();
+    toast("사본을 떠 두었습니다");
+  }, "primary"));
+  acts.appendChild(mk("JSON 파일로 내보내기", () => { commit(); exportJSON(); setTimeout(render, 50); }));
+  if(canFolder()){
+    if(G.meta.folderName){
+      acts.appendChild(mk("지금 폴더에 쓰기", async () => {
+        const ok = await folderBackup(true);
+        render();
+        toast(ok ? "폴더에 썼습니다" : "폴더에 쓰지 못했습니다. 권한을 다시 허용해 주세요");
+      }));
+      acts.appendChild(mk("폴더 연결 풀기", unlinkFolder));
+    }else{
+      acts.appendChild(mk("폴더 연결하기", linkFolder));
+    }
+  }
+  frag.appendChild(acts);
+
+  const note = document.createElement("div");
+  note.className = "bk-note";
+  note.innerHTML = canFolder()
+    ? "<b>사본은 이 브라우저 안에 있습니다.</b> 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 사본도 같이 사라집니다. "
+      + "폴더를 한 번 연결해 두면 하루 한 번 그 폴더에 <code>roam-날짜.json</code> 을 씁니다. "
+      + "브라우저가 세션마다 권한을 다시 물을 수 있는데, 그때는 위 <b>지금 폴더에 쓰기</b>를 한 번 눌러 주세요."
+    : "<b>사본은 이 브라우저 안에 있습니다.</b> 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 사본도 같이 사라집니다. "
+      + "이 브라우저는 폴더 자동 내보내기를 지원하지 않으니, 가끔 <b>JSON 파일로 내보내기</b>로 밖에 빼 두세요.";
+  frag.appendChild(note);
+
+  // 목록
+  const head = document.createElement("div");
+  head.className = "section-head";
+  head.innerHTML = `<span>사본 목록</span><span class="count-pill">${list.length}</span>`;
+  frag.appendChild(head);
+
+  if(!list.length){
+    const e = document.createElement("div");
+    e.className = "empty-note";
+    e.textContent = "아직 사본이 없습니다. 글을 고치면 오늘 것이 저절로 떠집니다.";
+    frag.appendChild(e);
+    return frag;
+  }
+  const table = document.createElement("table");
+  table.className = "table";
+  table.innerHTML = `<thead><tr><th>뜬 때</th><th>어떻게</th><th>페이지</th><th>블록</th><th>크기</th><th></th></tr></thead>`;
+  const tb = document.createElement("tbody");
+  list.forEach(it => {
+    const tr = document.createElement("tr");
+    const td = (html, cls) => { const x = document.createElement("td"); if(cls) x.className = cls; x.innerHTML = html; return x; };
+    tr.appendChild(td(esc(fmtStamp(it.at))));
+    tr.appendChild(td(`<span class="kind-pill">${KIND_LABEL[it.kind] || it.kind}</span>`));
+    tr.appendChild(td(String(it.pages), "num"));
+    tr.appendChild(td(String(it.blocks), "num"));
+    tr.appendChild(td(fmtBytes(it.bytes), "num"));
+    const acts2 = document.createElement("td");
+    const box = document.createElement("div");
+    box.className = "bk-row-acts";
+    box.appendChild(mk("내려받기", () => downloadSnapshot(it.key)));
+    box.appendChild(mk("되돌리기", () => restoreSnapshot(it.key)));
+    const del = mk("지우기", () => dropSnapshot(it.key));
+    del.className = "danger";
+    box.appendChild(del);
+    acts2.appendChild(box);
+    tr.appendChild(acts2);
+    tb.appendChild(tr);
+  });
+  table.appendChild(tb);
+  frag.appendChild(table);
+  return frag;
+}
+
 /* ---- 페이지 삭제 ---- */
 function deletePage(pid, after){
   const p = G.pages[pid];
@@ -1773,8 +2131,27 @@ const HELP_HTML = [
 "<tr><td><code>/시각</code></td><td>지금 시각을 <code>14:32</code>로 찍습니다.</td></tr>",
 "<tr><td><code>/옆에</code></td><td>쓰고 있던 블록을 오른쪽에 둡니다. 편집은 끝나고 그 블록이 오른쪽 카드로 올라갑니다.</td></tr>",
 "<tr><td><code>/쪽글</code></td><td>블록 끝에 <code>#쪽글</code>을 붙입니다. 이미 붙어 있으면 겹쳐 넣지 않습니다.</td></tr>",
+"<tr><td><code>/링크</code></td><td><code>[]()</code> 틀을 깔고 대괄호 안에 캐럿을 둡니다.</td></tr>",
 "</tbody></table>",
 "<p>한글로 명령을 칠 때 마지막 글자가 아직 조합 중이면 <code>↵</code>가 먼저 글자를 굳힙니다. 한 번 더 누르거나, <code>Tab</code>으로 고르거나, 영문 별칭(<code>/d</code> <code>/t</code> <code>/s</code> <code>/j</code>)을 쓰면 한 번에 끝납니다.</p>",
+
+"<h2>6-c. 글자에 주소 달기</h2>",
+"<p>글자 뒤에 주소를 숨겨 답니다. 문법은 마크다운과 같습니다.</p>",
+"<table><tbody>",
+"<tr><td><code>[유튜브](https://youtube.com)</code></td><td>웹 주소. 새 탭에서 열립니다.</td></tr>",
+"<tr><td><code>[그 장면](x-scrivener-item://…)</code></td><td>스크리브너의 그 문서로.</td></tr>",
+"<tr><td><code>[자료](x-devonthink-item://…)</code></td><td>데본씽크의 그 항목으로.</td></tr>",
+"<tr><td><code>[아침 루틴](shortcuts://run-shortcut?name=아침)</code></td><td>애플 단축어 실행.</td></tr>",
+"</tbody></table>",
+"<p>스킴을 미리 정해 두지 않았습니다. <code>mailto:</code> <code>obsidian://</code> <code>file:///</code> 무엇이든 그대로 넘깁니다. 다만 스크립트를 실어 나르는 <code>javascript:</code> <code>data:</code> <code>vbscript:</code>만은 막고 글자만 남깁니다.</p>",
+"<h3>손으로 치지 않는 두 가지 길</h3>",
+"<ul>",
+"<li><b>글자를 고른 채 주소를 붙여넣기</b> — 스크리브너나 데본씽크에서 링크를 복사해 와, 감쌀 글자를 끌어 고른 다음 <code>⌘V</code> 하면 저절로 <code>[고른 글자](주소)</code>가 됩니다. 실제로 가장 자주 쓰실 길입니다.</li>",
+"<li><code>/링크</code> — <code>[]()</code> 틀을 깔고 대괄호 안에 캐럿을 놓습니다.</li>",
+"</ul>",
+"<h3>어떻게 보이고 어떻게 열리나</h3>",
+"<p>페이지 링크와 구분되도록 작은 화살표 <code>↗</code>가 붙고, 마우스를 얹으면 실제 주소가 뜹니다. 웹 주소는 새 탭에서 열립니다. 다른 앱으로 넘어가는 스킴은 새 탭을 열면 빈 창만 남으므로 그대로 운영체제에 넘깁니다. 브라우저가 “이 앱을 여시겠습니까” 하고 한 번 묻는 것은 막을 수 없습니다. 그렇게 자리를 뜨기 전에 <b>쓰던 글을 먼저 저장합니다.</b></p>",
+"<p><b>플레인 텍스트로 뽑을 때는 주소를 괄호에 남깁니다.</b> <code>[유튜브](https://youtube.com)</code>는 <code>유튜브 (https://youtube.com)</code>가 됩니다. 달력 복사와 <code>⌘⇧C</code> 모두 같습니다.</p>",
 
 "<h2>7. 글자 꾸미기</h2>",
 "<table><tbody>",
@@ -1785,6 +2162,7 @@ const HELP_HTML = [
 "<tr><td><code>`코드`</code></td><td>고정폭</td></tr>",
 "<tr><td><code>{{TODO}}</code></td><td>할 일 체크칸</td></tr>",
 "<tr><td>http://…</td><td>저절로 링크가 됩니다</td></tr>",
+"<tr><td><code>[글자](주소)</code></td><td>글자에 주소 달기. 6-c절 참고</td></tr>",
 "</tbody></table>",
 
 "<h2>8. 데이터는 어디에 있나</h2>",
@@ -1792,6 +2170,9 @@ const HELP_HTML = [
 "<li>브라우저 안 IndexedDB(<code>jjokgeul-db</code>)에 그래프 전체가 한 덩어리로 들어갑니다. 손을 멈추고 0.45초 뒤 자동 저장되고, 탭을 가리거나 닫을 때도 한 번 더 씁니다. 왼쪽 아래 점이 붉으면 쓰는 중, 푸르면 끝난 것입니다.</li>",
 "<li><b>JSON 내보내기</b> — <code>roam-날짜.json</code>. 페이지·블록·계층·링크가 다 들어 있는 완전한 사본입니다.</li>",
 "<li><b>불러오기</b> — 개수를 확인시킨 뒤 현재 그래프를 갈아 끼웁니다. 깨진 참조는 자동으로 정리합니다.</li>",
+"<li><b>보관함</b> — 하루 한 번, 그날 처음 저장될 때 그래프를 통째로 떠서 따로 둡니다. 최근 <b>14개</b>까지 쌓이고 오래된 것부터 밀려납니다. 왼쪽 <b>보관함</b>에서 어느 때로든 되돌릴 수 있고, 되돌리기 직전 상태도 사본으로 남겨 두니 잘못 눌러도 다시 돌아옵니다. 사본 하나만 따로 내려받을 수도 있습니다. <b>불러오기</b>로 남의 파일을 덮어쓸 때도 직전 상태를 먼저 떠 둡니다.</li>",
+"<li><b>폴더에 자동 내보내기</b> — 보관함에서 폴더를 한 번 연결해 두면 하루 한 번 그 폴더에 <code>roam-날짜.json</code> 을 씁니다. 클라우드로 묶인 폴더를 고르면 그대로 딴 데에도 사본이 생깁니다. 크롬·엣지 계열에서만 되고, 브라우저가 세션마다 권한을 다시 물을 수 있습니다. 그럴 때는 보관함의 <b>지금 폴더에 쓰기</b>를 한 번 눌러 주세요. 사파리·파이어폭스에서는 이 단추가 나오지 않습니다.</li>",
+"<li><b>사본도 같은 브라우저 안에 있습니다.</b> 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 글과 사본이 한꺼번에 사라집니다. 보관함은 실수로 지웠거나 잘못 고쳤을 때를 위한 것이지, 기기가 잘못됐을 때를 막아 주지는 못합니다. <b>가끔은 반드시 파일로 빼 두세요.</b> 내보낸 지 이레가 넘으면 왼쪽 보관함 옆에 붉은 표가 뜹니다.</li>",
 "<li>서버가 없으니 이 파일을 연 브라우저에만 글이 있습니다. <b>다른 기기로 옮길 때는 반드시 JSON을 거쳐야 합니다.</b> 브라우저 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 사라지니, 주기적으로 내보내 두세요.</li>",
 "</ul>",
 
@@ -1808,7 +2189,7 @@ const HELP_HTML = [
 "<div class='todo-card'><h4>날짜 범위로 데일리 노트 훑기</h4><p>지난 7일 말고 임의 구간, 달력 보기.<span class='where'>renderDailyFeed</span></p></div>",
 "<div class='todo-card'><h4>검색 고도화</h4><p>지금은 단순 부분일치입니다. 여러 낱말 AND, 페이지 한정, 최근 항목 가중치 같은 것.<span class='where'>runSearch</span></p></div>",
 "<div class='todo-card'><h4>글자 수 세기</h4><p>페이지·선택 범위의 자 수를 띄우기. 2,667자 단위로 쓰신다면 목표 대비 막대까지.<span class='where'>pageHeader · updateSelBar</span></p></div>",
-"<div class='todo-card'><h4>자동 저장 기록(버전)</h4><p>하루 한 번 스냅숏을 따로 두고 되돌아갈 수 있게.<span class='where'>doSave</span></p></div>",
+
 "<div class='todo-card'><h4>모바일에서 들여쓰기 단추</h4><p>화면 키보드에는 <code>Tab</code>이 없어, 아래쪽에 들여쓰기·내어쓰기 단추가 필요합니다.<span class='where'>@media (max-width:760px)</span></p></div>"
 ].join("");
 
@@ -2591,6 +2972,7 @@ function lastDescendant(id){
 function toPlain(text){
   let t = String(text || "");
   t = t.replace(/\{\{(TODO|DONE)\}\}\s*/g, "");       // 줄 어디에 있든 지운다
+  t = t.replace(EXT_RE, "$1 ($2)");                     // [유튜브](주소) → 유튜브 (주소)
   t = t.replace(/(^|[\s(])#\[\[[^\]\n]+\]\]/g, "$1");   // #[[여러 낱말]] 꼴 태그는 통째로
   t = t.replace(LINK_RE, "$1");
   t = t.replace(TAG_RE, "$1");
@@ -2712,6 +3094,18 @@ function onPaste(e){
   const text = (e.clipboardData || window.clipboardData)?.getData("text/plain");
   if(!text) return;
   const norm = text.replace(/\r/g, "").replace(/\s+$/, "");
+
+  // 글자를 골라 둔 채 주소를 붙여넣으면 [고른 글자](주소) 로 감싼다
+  const ta0 = e.target;
+  if(ta0 && ta0.selectionEnd > ta0.selectionStart &&
+     /^[a-z][a-z0-9+.-]*:[^\s]+$/i.test(norm) && !/\s/.test(norm) && safeHref(norm)){
+    e.preventDefault();
+    const s0 = ta0.selectionStart, s1 = ta0.selectionEnd;
+    const label = ta0.value.slice(s0, s1);
+    replaceRange(ta0, s0, s1, `[${label}](${norm})`);
+    toast("고른 글자에 주소를 달았습니다");
+    return;
+  }
   const tree = (clip && serialize(clip) === norm) ? clip : parseOutline(norm);
   if(!tree.length) return;
   const multi = tree.length > 1 || tree[0].children.length > 0;
@@ -2772,7 +3166,9 @@ const SLASH = [
   { key:"side", name:"옆에 두기", hint:"이 블록을 오른쪽에",
     alias:["옆에","오른쪽","ㅇㅍ","side","s"] },
   { key:"jjok", name:"쪽글",      hint:"이 블록에 #쪽글 붙이기",
-    alias:["쪽글","ㅉㄱ","jjok","tag","태그","j"] }
+    alias:["쪽글","ㅉㄱ","jjok","tag","태그","j"] },
+  { key:"link", name:"링크",      hint:"[글자](주소) 틀 넣기",
+    alias:["링크","ㄹㅋ","link","url","l"] }
 ];
 function hhmm(){ const d = new Date(); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
 function slashMatch(q){
@@ -2879,6 +3275,11 @@ function replaceRange(ta, a, b, text){
 function runSlash(it, ta, a, b){
   if(it.key === "date"){ openDP(ta, a, b); return; }
   if(it.key === "time"){ replaceRange(ta, a, b, hhmm()); return; }
+  if(it.key === "link"){
+    replaceRange(ta, a, b, "[]()");
+    ta.setSelectionRange(a + 1, a + 1);            // 대괄호 안에 캐럿을 둔다
+    return;
+  }
   if(it.key === "jjok"){
     replaceRange(ta, a, b, "");
     let v = ta.value.replace(/\s+$/, "");
@@ -3087,6 +3488,9 @@ function pickResult(r){
    11. 전역 이벤트
    ============================================================ */
 document.addEventListener("click", e => {
+  // 다른 앱으로 넘어가는 링크는 자리를 뜨기 전에 한 번 저장해 둔다
+  const app = e.target.closest("a.ext-link[data-app]");
+  if(app){ commit(); doSave(); return; }
   const link = e.target.closest(".page-link, .tag");
   if(link){
     e.preventDefault();
@@ -3252,9 +3656,14 @@ async function boot(){
     await dbPut(G).catch(()=>{});
     setStatus("saved", "새 그래프");
   }
+  if(!G.meta.snapshots) G.meta.snapshots = [];
   render();
   const first = $$(".block")[0];
   if(first) enterEdit(first.dataset.id);
+  // 보관 일감은 화면을 띄운 뒤에 조용히
+  await loadDirHandle();
+  await reconcileSnaps();
+  dailySnapshot();
 }
 boot();
 </script>
