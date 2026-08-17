@@ -582,9 +582,19 @@ function wrapWiki(raw,name){
     from=k+ln.length;
   }
 }
+function expandMae(t){
+  if(!t||t.indexOf('자')<0) return t;
+  return String(t).split(/(\[\[[^\[\]\n]{1,60}\]\])/).map((chunk,i)=>
+    i%2 ? chunk : chunk.replace(/(\d[\d,]*)\s*자(?!\s*\()/g,(mm,num)=>{
+      const n=parseInt(num.replace(/,/g,''),10);
+      if(!n||n<100) return mm;
+      return mm+'('+(Math.round(n/200*10)/10)+'매)';
+    })
+  ).join('');
+}
 function parse(raw){
-  let text=raw.trim();
-  const o={raw:raw.trim(),text,cat:null,date:null,time:null,amount:null,flow:null,
+  let text=expandMae(String(raw).trim());
+  const o={raw:text,text,cat:null,date:null,time:null,amount:null,flow:null,
            group:null,url:null,page:null,num:null,unit:null,key:null,tags:[],people:[],links:[],forced:false};
   if(!text) return o;
 
@@ -1836,6 +1846,8 @@ function vSet(){
      '괄호가 경계를 잡아 주니 조사도 띄어쓰기도 상관없습니다 — <b>[[생활성서 연재]]</b>도 됩니다.<br>'+
      '여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
      '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.<br>'+
+     '<b>62536자</b>처럼 적으면 원고지 매수를 옆에 붙여 줍니다 — <b>62536자(312.7매)</b>. '+
+     '200자를 한 매로 세고, 소수 한 자리에서 반올림합니다. [[이음]] 안의 숫자는 건드리지 않습니다.<br>'+
      '할일과 지나간 일정의 <b>완료</b>를 누르면 무엇을 했는지 적게 됩니다. 저장하면 그날의 메모로 남습니다. '+
      '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
      '일정을 <b>마감으로</b> 삼으면 오늘 화면 일정 아래에 서서 마감일까지 매일 나타납니다. '+
