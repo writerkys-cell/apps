@@ -950,9 +950,17 @@ function itemHTML(e,opt={}){
   }
   if(e.wasPray) mt.push('<span>실현된 기도</span>');
   const dl=isDL(e), pastPlan=e.cat==='plan'&&e.date&&dday(e.date)<=0;
+  let dlOpen=null;
   if(dl){
     mt.push('<span class="due">마감'+(e.date?'':' · 날짜 없음')+'</span>');
-    if(dlProgToday(e)) mt.push('<span>오늘 몫 적음</span>');
+    dlOpen=dlOpenTask(e);
+    if(dlOpen){
+      const od=dlOpen.date||iso(new Date(dlOpen.ts));
+      mt.push('<span'+(od<TODAY()?' class="due"':'')+'>할일 있음 · '+fmtD(od)+
+        (od<TODAY()?' 이월':'')+'</span>');
+    } else if(dlDoneToday(e)) mt.push('<span>오늘 몫 마침</span>');
+    const n=(e.hist||[]).length;
+    if(n) mt.push('<span>'+n+'번 손댐</span>');
   }
   if(e.archived) mt.push('<span>보관</span>');
 
@@ -967,7 +975,7 @@ function itemHTML(e,opt={}){
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
         (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
       (e.cat==='todo'?'<button data-act="rt" data-id="'+e.id+'">'+(rt?'루틴 고침':'루틴')+'</button>':'')+
-      (dl&&!pastPlan?'<button data-act="prog" data-id="'+e.id+'">오늘 몫'+(dlProgToday(e)?' ✓':'')+'</button>':'')+
+      (dl&&!pastPlan?'<button data-act="prog" data-id="'+e.id+'">오늘 할일'+(dlOpen||dlDoneToday(e)?' ✓':'')+'</button>':'')+
       (dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">마감했다</button>'+
                     '<button data-act="date" data-id="'+e.id+'">새 마감일</button>':'')+
       (!dl&&pastPlan?'<button data-act="fin" data-id="'+e.id+'">완료</button>':'')+
@@ -1102,7 +1110,6 @@ function rtDueToday(e){ return rtOn(e,TODAY()); }
 
 /* ═══════════════ 7-d. 마감 일정 ═══════════════ */
 const isDL=e=>e.cat==='plan'&&e.dl;
-const dlProgToday=e=>(e.hist||[]).indexOf(TODAY())>=0;
 function deadlines(){
   return visible().filter(isDL).sort((a,b)=>{
     const x=a.date||'9999-99-99', y=b.date||'9999-99-99';
@@ -1126,21 +1133,31 @@ function finishItem(ent){
   (isPlan? '어떻게 되었는지 적으세요.' : '무엇을 했는지 적으세요.')+
   ' 저장하면 '+fmtD(day,true)+' 날짜의 메모로 남습니다.');
 }
-function progressSheet(ent){
+const dlTitle=e=>(e.text||e.raw||'').replace(WIKI_G,'$1').trim();
+function dlOpenTask(ent){
+  return E.find(x=>x.dlId===ent.id&&x.cat==='todo'&&!x.done&&!x.archived);
+}
+function dlDoneToday(ent){
   const t=TODAY();
-  sheet('오늘 몫 적기', '', null, async v=>{
+  return E.find(x=>x.dlId===ent.id&&x.wasTodo&&!x.archived&&(x.date||iso(new Date(x.ts)))===t);
+}
+function dlTaskSheet(ent){
+  const t=TODAY(), title=dlTitle(ent);
+  sheet('오늘 할일', '', null, async v=>{
     if(v===null) return;
     const txt=(v||'').trim(); if(!txt) return;
-    const p=parse(txt), now=Date.now();
-    const it={id:uid(), ts:now, mt:now, ...p, cat:'note', date:t, time:null,
-              done:false, doneAt:null, archived:false};
+    const raw='[['+title+']] '+txt;
+    const p=parse(raw), now=Date.now();
+    const it={id:uid(), ts:now, mt:now, ...p, cat:'todo', date:t, time:null,
+              dlId:ent.id, done:false, doneAt:null, archived:false};
     E.push(it); await put(it);
     ent.hist=(ent.hist||[]).slice();
     if(ent.hist.indexOf(t)<0){ ent.hist.push(t); ent.hist.sort(); }
     touch(ent); await put(ent);
-    render(); toast('오늘 몫을 메모로 남겼습니다');
+    render(); toast('오늘 할 일로 세웠습니다');
   }, true,
-  '「'+(ent.text||ent.raw)+'」을(를) 향해 오늘 무엇을 했는지 적으세요. 오늘 날짜의 메모로 남습니다.');
+  '「'+title+'」을(를) 향해 오늘 무엇을 할지 적으세요. 할일로 담기고 앞에 [['+title+']]이 붙습니다. '+
+  '완료를 누르지 않으면 내일도 남아 있습니다.');
 }
 
 
@@ -1330,7 +1347,7 @@ function vToday(){
       .sort((a,b)=>a.date===b.date?byTime(a,b):(a.date<b.date?-1:1));
   const dls=deadlines().filter(e=>match(e,q));
   const dlDue=dls.filter(e=>!e.date||dday(e.date)<=0).length;
-  const dlLeft=dls.filter(e=>e.date&&dday(e.date)>0&&!dlProgToday(e)).length;
+  const dlLeft=dls.filter(e=>e.date&&dday(e.date)>0&&!dlOpenTask(e)&&!dlDoneToday(e)).length;
   const cy=cycleGroups().filter(g=>g.next&&dday(g.next)<=14);
   const overdue=cy.filter(g=>dday(g.next)<=0).length;
 
@@ -1391,7 +1408,7 @@ function vToday(){
   if(dls.length){
     shown++;
     h+='<section><h2>마감<span class="aside">'+
-       (dlDue? '오늘까지 '+dlDue+' · ':'')+(dlLeft? '오늘 몫 남은 '+dlLeft:'오늘 몫 다 했습니다')+
+       (dlDue? '오늘까지 '+dlDue+' · ':'')+(dlLeft? '할일 안 세운 '+dlLeft:'오늘 몫 다 세웠습니다')+
        '</span></h2>'+dls.map(e=>itemHTML(e,{hideStamp:true})).join('')+'</section>';
   }
   if(dayM.length||META.balance){
@@ -1813,7 +1830,10 @@ function vSet(){
      '할일과 지나간 일정의 <b>완료</b>를 누르면 무엇을 했는지 적게 됩니다. 저장하면 그날의 메모로 남습니다. '+
      '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
      '일정을 <b>마감으로</b> 삼으면 오늘 화면 일정 아래에 서서 마감일까지 매일 나타납니다. '+
-     '<b>오늘 몫</b>으로 그날 한 일을 오늘 날짜의 메모로 남기고, 마감일이 되면 마쳤는지 새 날짜를 잡을지 고릅니다.'+
+     '<b>오늘 할일</b>을 누르면 그날 할 몫을 적게 되고, 앞에 [[마감 제목]]이 붙은 <b>할일</b>로 담깁니다. '+
+     '오늘 탭과 할일 탭에 함께 서고, 완료를 누르지 않으면 내일도 남습니다. '+
+     '완료하면 그날의 자취가 되고, 마감 제목을 누르면 여태 쌓인 몫이 모두 모입니다. '+
+     '마감일이 되면 마쳤는지 새 날짜를 잡을지 고릅니다.'+
      '</div></section>';
   h+='<section><h2>기도</h2><div class="empty">'+
      '바라는 것을 <b>이미 그렇게 된 것처럼</b> 한 문장으로 적고, 언제 열지 고릅니다. '+
@@ -2473,7 +2493,7 @@ $view.addEventListener('click',async e=>{
   if(act==='pfin')   return prayFulfill(ent);
   if(act==='pagain') return prayAgain(ent);
   if(act==='pseal')  return sealSheet(ent);
-  if(act==='prog') return progressSheet(ent);
+  if(act==='prog') return dlTaskSheet(ent);
   if(act==='dl'){
     ent.dl=!ent.dl; if(ent.dl) ent.hist=ent.hist||[];
     touch(ent); await put(ent); render();
