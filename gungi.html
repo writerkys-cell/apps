@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="궁리">
+<meta name="theme-color" content="#faf9f7">
+<title>궁리 · 담기</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%23faf9f7'/%3E%3Ctext x='90' y='118' font-size='84' font-family='-apple-system,sans-serif' font-weight='600' fill='%237a6a55' text-anchor='middle'%3E궁%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#faf9f7; --panel:#ffffff; --line:#e6e2dc; --line2:#f0ece6;
+    --text:#26231f; --dim:#8c857c; --dim2:#b5ada2;
+    --accent:#7a6a55; --accent-soft:#f2ede4; --star:#c9962e;
+    --safe-t:env(safe-area-inset-top); --safe-b:env(safe-area-inset-bottom);
+  }
+  html[data-theme="dark"]{
+    --bg:#191817; --panel:#211f1d; --line:#332f2b; --line2:#2a2724;
+    --text:#e8e3db; --dim:#918a80; --dim2:#6b645b;
+    --accent:#c3ac8a; --accent-soft:#2e2a24; --star:#d9ae4c;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; height:100%; overscroll-behavior-y:none;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
+    font-size:17px; line-height:1.6; -webkit-text-size-adjust:100%;
+    display:flex; flex-direction:column;
+  }
+  button{font-family:inherit; font-size:inherit; color:inherit; cursor:pointer;}
+  textarea,input,select{font-family:inherit; font-size:17px; color:inherit;}
+
+  /* ---------- 헤더 ---------- */
+  header{
+    position:sticky; top:0; z-index:20; background:var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:calc(var(--safe-t) + 8px) 14px 8px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .work-btn{
+    border:none; background:transparent; padding:4px 6px 4px 0; font-size:17px; font-weight:650;
+    letter-spacing:-.02em; display:flex; align-items:center; gap:5px; min-width:0; flex:1; text-align:left;
+  }
+  .work-btn .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .work-btn .ar{color:var(--dim2); font-size:12px; flex:0 0 auto;}
+  .gtag{
+    font-size:10.5px; padding:1px 6px; border-radius:20px; background:var(--accent-soft);
+    color:var(--accent); font-weight:700; flex:0 0 auto;
+  }
+  .hbtn{
+    border:1px solid var(--line); background:transparent; border-radius:8px;
+    padding:5px 10px; font-size:13px; flex:0 0 auto;
+  }
+  .hbtn.dot{padding:5px 11px; font-weight:700; letter-spacing:1px;}
+  .badge{
+    position:absolute; top:-4px; right:-4px; background:var(--star); color:#fff;
+    border-radius:20px; font-size:10px; font-weight:700; padding:1px 5px; line-height:1.5;
+  }
+
+  /* ---------- 담기 ---------- */
+  .compose{padding:12px 14px 0;}
+  #txt{
+    width:100%; border:1px solid var(--line); border-radius:12px; background:var(--panel);
+    padding:13px 14px; min-height:27vh; resize:none; outline:none; line-height:1.62;
+    -webkit-appearance:none;
+  }
+  #txt:focus{border-color:var(--dim2);}
+  .row{display:flex; gap:7px; align-items:center; margin-top:9px;}
+  .scroller{
+    display:flex; gap:6px; overflow-x:auto; padding:1px 14px 1px; margin:9px -14px 0;
+    scrollbar-width:none;
+  }
+  .scroller::-webkit-scrollbar{display:none;}
+  .chip{
+    border:1px solid var(--line); background:transparent; color:var(--dim);
+    padding:6px 13px; border-radius:20px; font-size:14px; white-space:nowrap; flex:0 0 auto;
+  }
+  .chip.on{background:var(--text); color:var(--bg); border-color:var(--text);}
+  .chip.sug{border-color:var(--accent); color:var(--accent); font-weight:600;}
+  .chip .cnt{opacity:.5; margin-left:5px; font-size:12px;}
+  .big{
+    flex:1; border:none; border-radius:12px; background:var(--text); color:var(--bg);
+    padding:13px; font-size:16px; font-weight:650;
+  }
+  .big:disabled{opacity:.35;}
+  .sq{
+    flex:0 0 auto; border:1px solid var(--line); background:transparent; border-radius:12px;
+    padding:13px 15px; font-size:16px;
+  }
+  .sq.on{color:var(--star); border-color:var(--star); background:var(--accent-soft);}
+  .hint{font-size:12.5px; color:var(--dim2); line-height:1.55;}
+
+  /* ---------- 목록 ---------- */
+  .list{flex:1; padding:18px 14px calc(var(--safe-b) + 40px);}
+  .list-head{
+    display:flex; align-items:baseline; gap:8px; padding:0 2px 6px;
+    border-bottom:1px solid var(--line2); margin-bottom:4px;
+  }
+  .list-head .t{font-size:12.5px; font-weight:700; color:var(--dim); letter-spacing:.02em;}
+  .list-head .s{font-size:12px; color:var(--dim2); margin-left:auto;}
+  .card{border-bottom:1px solid var(--line2); padding:13px 2px;}
+  .card .meta{font-size:11.5px; color:var(--dim2); display:flex; align-items:center; gap:7px; margin-bottom:4px;}
+  .card .meta .c{color:var(--accent); font-weight:650;}
+  .card .meta .c.none{color:var(--dim2); font-weight:500;}
+  .card .meta .w{margin-left:auto; color:var(--dim2);}
+  .card .tx{white-space:pre-wrap; word-break:break-word;}
+  .card .tx .wl{color:var(--accent); font-weight:600;}
+  .card .tx .tag{color:var(--accent);}
+  .card.unsent{border-left:2px solid var(--star); padding-left:10px; margin-left:-12px;}
+  .card.open{background:var(--accent-soft); border-radius:10px; padding:13px 12px; margin:0 -12px;}
+  .card .edit{
+    width:100%; border:1px solid var(--dim2); border-radius:10px; background:var(--panel);
+    padding:11px 12px; min-height:110px; outline:none; line-height:1.6; margin-top:6px;
+  }
+  .empty{padding:44px 10px; text-align:center; color:var(--dim2); font-size:14.5px; line-height:1.9;}
+
+  /* ---------- 시트 ---------- */
+  .veil{
+    position:fixed; inset:0; background:rgba(20,18,16,.45); z-index:60;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  .sheet{
+    background:var(--panel); width:100%; max-width:560px;
+    border-radius:18px 18px 0 0; max-height:88vh; display:flex; flex-direction:column;
+    padding-bottom:var(--safe-b); animation:up .2s ease;
+  }
+  @keyframes up{from{transform:translateY(18px); opacity:.6;} to{transform:none; opacity:1;}}
+  .sheet-head{
+    padding:14px 18px 10px; border-bottom:1px solid var(--line2);
+    display:flex; align-items:center; gap:10px;
+  }
+  .sheet-head h2{margin:0; font-size:16px; font-weight:700;}
+  .sheet-body{padding:10px 18px 18px; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+  .item{
+    width:100%; text-align:left; border:none; background:transparent; padding:13px 4px;
+    border-bottom:1px solid var(--line2); display:flex; align-items:center; gap:10px;
+  }
+  .item:last-child{border-bottom:none;}
+  .item .ic{width:22px; text-align:center; color:var(--dim); flex:0 0 auto;}
+  .item .tt{flex:1; min-width:0;}
+  .item .tt small{display:block; color:var(--dim2); font-size:12px; line-height:1.5;}
+  .item.on{color:var(--accent); font-weight:650;}
+  .item.danger{color:#b4402f;}
+  .fld{margin:14px 0;}
+  .fld label{display:block; font-size:12.5px; color:var(--dim); font-weight:650; margin-bottom:6px;}
+  .fld input[type=text], .fld textarea, .fld select{
+    width:100%; border:1px solid var(--line); border-radius:10px; background:var(--bg);
+    padding:11px 13px; outline:none; -webkit-appearance:none;
+  }
+  .fld textarea{min-height:110px; font-family:ui-monospace,Menlo,monospace; font-size:13px; line-height:1.5;}
+  .seg{display:flex; gap:7px;}
+  .seg button{flex:1; border:1px solid var(--line); background:transparent; border-radius:10px; padding:11px; font-size:14.5px;}
+  .seg button.on{background:var(--accent-soft); border-color:var(--text); font-weight:650;}
+  .go{
+    width:100%; border:none; border-radius:12px; background:var(--text); color:var(--bg);
+    padding:14px; font-size:16px; font-weight:650; margin-top:6px;
+  }
+  .go.ghost{background:transparent; color:var(--text); border:1px solid var(--line);}
+  .go:disabled{opacity:.35;}
+  .note-box{
+    background:var(--accent-soft); border-radius:10px; padding:12px 14px; font-size:13.5px;
+    line-height:1.75; color:var(--dim); margin:10px 0;
+  }
+  .toast{
+    position:fixed; left:50%; bottom:calc(var(--safe-b) + 26px); transform:translateX(-50%) translateY(10px);
+    background:var(--text); color:var(--bg); padding:11px 20px; border-radius:24px; font-size:14.5px;
+    opacity:0; pointer-events:none; transition:all .22s; z-index:99; max-width:86%; text-align:center;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%);}
+</style>
+</head>
+<body>
+
+<div id="warn" style="display:none;background:#fff3d6;color:#6b5310;padding:9px 14px;font-size:13px;line-height:1.55;text-align:center;">
+  이 화면에서는 담은 것이 저장되지 않습니다. 담고 나서 <b>바로 내보내기</b>를 하세요.
+</div>
+
+<header>
+  <button class="work-btn" id="workBtn">
+    <span class="gtag" id="gTag">소설</span>
+    <span class="nm" id="workName">작품</span>
+    <span class="ar">▼</span>
+  </button>
+  <div style="position:relative">
+    <button class="hbtn" id="btnOut">내보내기</button>
+    <span class="badge" id="unsentBadge" style="display:none">0</span>
+  </div>
+  <button class="hbtn dot" id="btnMenu">···</button>
+</header>
+
+<div class="compose">
+  <textarea id="txt" placeholder="떠오른 것을 그대로." enterkeyhint="enter"></textarea>
+  <div class="scroller" id="sug" style="display:none"></div>
+  <div class="scroller" id="cats"></div>
+  <div class="row">
+    <button class="sq" id="btnBr">[[ ]]</button>
+    <button class="sq" id="btnStar">☆</button>
+    <button class="big" id="btnAdd" disabled>담기</button>
+  </div>
+</div>
+
+<div class="list" id="list"></div>
+<div id="sheetRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+const KEY = "gungri.mobile.v1";
+const INBOX = "__inbox";
+const DEF_CATS = {
+  novel: ["캐릭터","플롯","복선","설정·세계관","장면","내러티브","자료","문장·톤","기타"],
+  essay: ["소재","경험","생각·통찰","인용·자료","구조","문장·톤","기타"]
+};
+
+/* ---------- 저장 ---------- */
+let mem = null, storeOK = true;
+function read(){
+  if(!storeOK) return mem;
+  try{ const r = localStorage.getItem(KEY); return r?JSON.parse(r):null; }catch(e){ storeOK=false; return mem; }
+}
+function write(v){
+  if(storeOK){ try{ localStorage.setItem(KEY, JSON.stringify(v)); return; }catch(e){ storeOK=false; showWarn(); } }
+  mem = v;
+}
+function showWarn(){ const w=document.getElementById("warn"); if(w) w.style.display="block"; }
+function probe(){
+  try{ localStorage.setItem(KEY+".t","1"); localStorage.removeItem(KEY+".t"); }
+  catch(e){ storeOK=false; showWarn(); }
+  // 사파리가 저장한 것을 함부로 지우지 않도록 요청
+  if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+}
+
+let S = null;
+let draftCat = null, draftStar = false, openId = null;
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function nowISO(){ return new Date().toISOString(); }
+
+function fresh(){
+  return {
+    v:1,
+    works:[{ id:INBOX, title:"아직 모름", genre:"novel", cats:[], links:[] }],
+    activeId: INBOX,
+    notes: [],
+    theme: "auto"
+  };
+}
+function load(){
+  const raw = read();
+  S = (raw && raw.works) ? raw : fresh();
+  if(!S.works.some(w=>w.id===INBOX)) S.works.unshift({ id:INBOX, title:"아직 모름", genre:"novel", cats:[], links:[] });
+  if(!Array.isArray(S.notes)) S.notes = [];
+  if(!S.works.some(w=>w.id===S.activeId)) S.activeId = S.works[0].id;
+  applyTheme();
+}
+function save(){ write(S); }
+function applyTheme(){
+  const t = S.theme==="auto"
+    ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+    : S.theme;
+  document.documentElement.setAttribute("data-theme", t);
+  document.querySelector('meta[name="theme-color"]').setAttribute("content", t==="dark"?"#211f1d":"#faf9f7");
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>{ if(S.theme==="auto") applyTheme(); });
+
+function work(){ return S.works.find(w=>w.id===S.activeId) || S.works[0]; }
+function notesOf(id){ return S.notes.filter(n=>n.workId===id); }
+function unsent(){ return S.notes.filter(n=>!n.sent); }
+
+/* ---------- 유틸 ---------- */
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function body(t){
+  const e = esc(t);
+  let out="", last=0, m; const re=/\[\[([^\[\]\n]+)\]\]/g;
+  while((m=re.exec(e))){
+    out += tagify(e.slice(last,m.index));
+    out += `<span class="wl">${m[1].trim()}</span>`;
+    last = m.index + m[0].length;
+  }
+  return out + tagify(e.slice(last));
+}
+function tagify(h){ return h.replace(/#([^\s#.,!?;:()\[\]{}"']+)/g,'<span class="tag">#$1</span>'); }
+function when(iso){
+  const d=new Date(iso), t=new Date();
+  const hm = String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+  const same = d.toDateString()===t.toDateString();
+  if(same) return "오늘 "+hm;
+  const y=new Date(t.getTime()-864e5);
+  if(d.toDateString()===y.toDateString()) return "어제 "+hm;
+  return `${d.getMonth()+1}.${d.getDate()} ${hm}`;
+}
+function toast(m){
+  const el=document.getElementById("toast");
+  el.textContent=m; el.classList.add("show");
+  clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove("show"),2000);
+}
+function grow(){
+  const t=document.getElementById("txt");
+  t.style.height="auto";
+  t.style.height = Math.max(window.innerHeight*0.27, Math.min(t.scrollHeight, window.innerHeight*0.46))+"px";
+}
+function linkNames(w){
+  const set = new Set(w.links || []);
+  notesOf(w.id).forEach(n=>{
+    let m; const re=/\[\[([^\[\]\n]+)\]\]/g;
+    while((m=re.exec(n.text))) set.add(m[1].trim());
+  });
+  return [...set];
+}
+
+/* ---------- 그리기 ---------- */
+function render(){
+  const w = work();
+  document.getElementById("workName").textContent = w.title;
+  const gt = document.getElementById("gTag");
+  gt.textContent = w.id===INBOX ? "미정" : (w.genre==="essay"?"에세이":"소설");
+
+  const u = unsent().length;
+  const b = document.getElementById("unsentBadge");
+  b.style.display = u ? "block" : "none"; b.textContent = u;
+
+  // 분류 칩
+  const cb = document.getElementById("cats");
+  if(draftCat && !w.cats.includes(draftCat)) draftCat = null;
+  cb.innerHTML = w.cats.length
+    ? w.cats.map(c=>`<button class="chip ${c===draftCat?"on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")
+    : `<span class="hint" style="padding:6px 0">분류 없이 담습니다 · 맥북에서 분류를 받아오면 여기에 나옵니다</span>`;
+  cb.querySelectorAll("[data-c]").forEach(x=> x.onclick = ()=>{
+    draftCat = (draftCat===x.dataset.c) ? null : x.dataset.c; render();
+  });
+
+  document.getElementById("btnStar").className = "sq" + (draftStar?" on":"");
+  document.getElementById("btnStar").textContent = draftStar ? "★" : "☆";
+
+  renderList();
+}
+
+function renderList(){
+  const box = document.getElementById("list");
+  const list = S.notes.slice().sort((a,b)=> a.createdAt<b.createdAt?1:-1);
+  const u = unsent().length;
+
+  if(!list.length){
+    box.innerHTML = `<div class="empty">아직 담은 것이 없습니다.<br>
+      <span style="font-size:13.5px">떠오르면 바로 적어두세요.<br>정리는 맥북에서 합니다.</span></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="list-head">
+      <span class="t">담은 것 ${list.length}</span>
+      <span class="s">${u ? "안 보낸 것 "+u+"개" : "모두 보냈습니다"}</span>
+    </div>` +
+    list.map(n=>{
+      const w = S.works.find(x=>x.id===n.workId);
+      const wn = w ? w.title : "?";
+      if(openId === n.id){
+        return `<div class="card open" data-n="${n.id}">
+          <div class="meta">
+            <span class="c ${n.cat?"":"none"}">${esc(n.cat||"미분류")}</span>
+            <span>${when(n.createdAt)}</span>
+            <span class="w">${esc(wn)}</span>
+          </div>
+          <textarea class="edit" data-edit="${n.id}">${esc(n.text)}</textarea>
+          <div class="row" style="margin-top:8px">
+            <button class="sq" data-del="${n.id}" style="color:#b4402f">삭제</button>
+            <button class="sq" data-star2="${n.id}">${n.star?"★":"☆"}</button>
+            <button class="big" data-ok="${n.id}">저장</button>
+          </div>
+          <div class="hint" style="margin-top:8px">분류를 바꾸려면 맥북에서 하세요.</div>
+        </div>`;
+      }
+      return `<div class="card ${n.sent?"":"unsent"}" data-open="${n.id}">
+        <div class="meta">
+          ${n.star?`<span style="color:var(--star)">★</span>`:""}
+          <span class="c ${n.cat?"":"none"}">${esc(n.cat||"미분류")}</span>
+          <span>${when(n.createdAt)}</span>
+          <span class="w">${esc(wn)}</span>
+        </div>
+        <div class="tx">${body(n.text)}</div>
+      </div>`;
+    }).join("");
+
+  box.querySelectorAll("[data-open]").forEach(c=> c.onclick = ()=>{ openId = c.dataset.open; renderList(); });
+  box.querySelectorAll("[data-ok]").forEach(b=> b.onclick = ()=>{
+    const n = S.notes.find(x=>x.id===b.dataset.ok);
+    const ta = box.querySelector(`[data-edit="${n.id}"]`);
+    const v = ta.value.trim();
+    if(!v){ toast("내용이 비었습니다"); return; }
+    if(v !== n.text){ n.text = v; n.sent = false; }
+    openId = null; save(); render();
+  });
+  box.querySelectorAll("[data-star2]").forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    const n = S.notes.find(x=>x.id===b.dataset.star2);
+    n.star = !n.star; n.sent = false; save(); renderList();
+  });
+  box.querySelectorAll("[data-del]").forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
+    S.notes = S.notes.filter(x=>x.id!==b.dataset.del);
+    openId = null; save(); render(); toast("지웠습니다");
+  });
+}
+
+/* ---------- 담기 ---------- */
+function add(){
+  const ta = document.getElementById("txt");
+  const v = ta.value.trim();
+  if(!v) return;
+  S.notes.push({
+    id: uid(), workId: work().id, cat: draftCat, text: v,
+    star: draftStar, createdAt: nowISO(), sent:false
+  });
+  ta.value = ""; draftStar = false;
+  save(); render(); grow(); syncAdd();
+  ta.focus();
+  toast("담았습니다");
+}
+function syncAdd(){
+  document.getElementById("btnAdd").disabled = !document.getElementById("txt").value.trim();
+}
+
+/* ---------- [[ 자동완성 ---------- */
+function sugRefresh(){
+  const ta = document.getElementById("txt");
+  const box = document.getElementById("sug");
+  const before = ta.value.slice(0, ta.selectionStart);
+  const m = /\[\[([^\[\]\n]*)$/.exec(before);
+  if(!m){ box.style.display="none"; return; }
+  const q = m[1].trim();
+  let names = linkNames(work()).filter(n=> !q || n.includes(q)).slice(0,12);
+  if(q && !names.includes(q)) names = names.concat([q]);
+  if(!names.length){ box.style.display="none"; return; }
+  box.innerHTML = names.map(n=>`<button class="chip sug" data-s="${esc(n)}">${esc(n)}</button>`).join("");
+  box.querySelectorAll("[data-s]").forEach(b=> b.onclick = ()=>{
+    const name = b.dataset.s;
+    const start = m.index;
+    let after = ta.value.slice(ta.selectionStart);
+    if(after.startsWith("]]")) after = after.slice(2);
+    const ins = "[["+name+"]]";
+    ta.value = ta.value.slice(0,start) + ins + after;
+    const p = start + ins.length;
+    ta.focus(); ta.setSelectionRange(p,p);
+    box.style.display="none"; grow(); syncAdd();
+  });
+  box.style.display = "flex";
+}
+
+/* ---------- 시트 ---------- */
+function closeSheet(){ document.getElementById("sheetRoot").innerHTML=""; }
+function sheet(title, inner){
+  document.getElementById("sheetRoot").innerHTML =
+    `<div class="veil"><div class="sheet">
+      <div class="sheet-head"><h2>${title}</h2><div style="flex:1"></div>
+        <button class="hbtn" id="shClose">닫기</button></div>
+      <div class="sheet-body">${inner}</div>
+    </div></div>`;
+  const veil = document.querySelector(".veil");
+  veil.onclick = e=>{ if(e.target===veil) closeSheet(); };
+  document.getElementById("shClose").onclick = closeSheet;
+}
+
+/* 작품 고르기 */
+function sheetWorks(){
+  sheet("어느 작품인가요", S.works.map(w=>{
+    const c = notesOf(w.id).length;
+    const g = w.id===INBOX ? "나중에 정합니다" : (w.genre==="essay"?"에세이":"소설");
+    return `<button class="item ${w.id===S.activeId?"on":""}" data-w="${w.id}">
+      <span class="ic">${w.id===S.activeId?"✓":""}</span>
+      <span class="tt">${esc(w.title)}<small>${g}${c?` · 담은 것 ${c}개`:""}</small></span>
+    </button>`;
+  }).join("") + `
+    <button class="item" id="wNew"><span class="ic">＋</span>
+      <span class="tt">여기서 새 작품 만들기<small>맥북에 없는 작품도 만들 수 있습니다. 나중에 합칠 때 만들어집니다.</small></span></button>`);
+  document.querySelectorAll("[data-w]").forEach(b=> b.onclick = ()=>{
+    S.activeId = b.dataset.w; draftCat=null; closeSheet(); save(); render();
+  });
+  document.getElementById("wNew").onclick = sheetNewWork;
+}
+function sheetNewWork(){
+  sheet("새 작품", `
+    <div class="fld"><label>장르</label>
+      <div class="seg"><button class="on" data-g="novel">소설</button><button data-g="essay">에세이</button></div></div>
+    <div class="fld"><label>제목</label><input type="text" id="nwT" placeholder="가제도 괜찮습니다"></div>
+    <div class="note-box">맥북에 같은 제목의 작품이 있으면 합칠 때 그 작품으로 들어갑니다. 없으면 새로 만들어집니다.</div>
+    <button class="go" id="nwOk">만들기</button>`);
+  let g="novel";
+  document.querySelectorAll("[data-g]").forEach(b=> b.onclick = ()=>{
+    g=b.dataset.g; document.querySelectorAll("[data-g]").forEach(x=>x.className = x===b?"on":"");
+  });
+  const t = document.getElementById("nwT"); t.focus();
+  document.getElementById("nwOk").onclick = ()=>{
+    const v = t.value.trim(); if(!v){ toast("제목을 적어주세요"); return; }
+    const w = { id:"m_"+uid(), title:v, genre:g, cats:DEF_CATS[g].slice(), links:[] };
+    S.works.push(w); S.activeId = w.id; draftCat=null;
+    closeSheet(); save(); render();
+  };
+}
+
+/* 메뉴 */
+function sheetMenu(){
+  const themeLabel = {auto:"기기 설정 따름", light:"밝게", dark:"어둡게"}[S.theme];
+  sheet("메뉴", `
+    <button class="item" id="mIn"><span class="ic">↓</span>
+      <span class="tt">맥북에서 작품·분류 받기<small>맥북 궁리에서 복사한 것을 붙여넣습니다</small></span></button>
+    <button class="item" id="mOut"><span class="ic">↑</span>
+      <span class="tt">맥북으로 보내기<small>안 보낸 메모 ${unsent().length}개</small></span></button>
+    <button class="item" id="mTheme"><span class="ic">◐</span>
+      <span class="tt">화면<small>${themeLabel}</small></span></button>
+    <button class="item" id="mHelp"><span class="ic">?</span>
+      <span class="tt">쓰는 법<small>홈 화면에 추가 · 데이터 지키기</small></span></button>
+    <button class="item danger" id="mClean"><span class="ic">⌫</span>
+      <span class="tt">보낸 메모 정리<small>맥북으로 보낸 ${S.notes.filter(n=>n.sent).length}개를 이 폰에서 지웁니다</small></span></button>`);
+  document.getElementById("mIn").onclick = sheetImport;
+  document.getElementById("mOut").onclick = sheetExport;
+  document.getElementById("mHelp").onclick = sheetHelp;
+  document.getElementById("mTheme").onclick = ()=>{
+    S.theme = S.theme==="auto" ? "light" : (S.theme==="light" ? "dark" : "auto");
+    save(); applyTheme(); sheetMenu();
+  };
+  document.getElementById("mClean").onclick = ()=>{
+    const n = S.notes.filter(x=>x.sent).length;
+    if(!n){ toast("정리할 것이 없습니다"); return; }
+    S.notes = S.notes.filter(x=>!x.sent);
+    closeSheet(); save(); render(); toast(`${n}개를 정리했습니다`);
+  };
+}
+
+/* 내보내기 */
+function buildExport(onlyNew){
+  const pick = onlyNew ? S.notes.filter(n=>!n.sent) : S.notes;
+  const byWork = new Map();
+  pick.forEach(n=>{
+    if(!byWork.has(n.workId)) byWork.set(n.workId, []);
+    byWork.get(n.workId).push({
+      id:n.id, cat:n.cat||null, text:n.text, star:!!n.star, createdAt:n.createdAt
+    });
+  });
+  const works = [...byWork.entries()].map(([id, notes])=>{
+    const w = S.works.find(x=>x.id===id) || {id, title:"아직 모름", genre:"novel"};
+    return { id:w.id, title:w.title, genre:w.genre, inbox: w.id===INBOX, notes };
+  });
+  return { type:"gungri-capture", v:1, from:"iPhone", exportedAt:nowISO(), count:pick.length, works };
+}
+function markSent(onlyNew){
+  S.notes.forEach(n=>{ if(!onlyNew || !n.sent) n.sent = true; });
+  save();
+}
+function sheetExport(){
+  const nNew = unsent().length, nAll = S.notes.length;
+  if(!nAll){ sheet("맥북으로 보내기", `<div class="empty">보낼 메모가 없습니다.</div>`); return; }
+  sheet("맥북으로 보내기", `
+    <div class="fld"><label>무엇을</label>
+      <div class="seg">
+        <button class="on" data-o="new">안 보낸 것 ${nNew}개</button>
+        <button data-o="all">전부 ${nAll}개</button>
+      </div></div>
+    <button class="go" id="eCopy">복사하기</button>
+    <div class="note-box">맥북과 같은 애플 계정이면 <b>복사하기</b>가 가장 빠릅니다. 아이폰에서 복사한 것이 맥북에 그대로 붙습니다 —
+      맥북 궁리에서 <b>아이폰 → 붙여넣어 합치기</b>를 누르세요.</div>
+    <button class="go ghost" id="eShare">공유 시트로 보내기</button>
+    <button class="go ghost" id="eFile">파일로 저장 (iCloud Drive)</button>
+    <div class="note-box">같은 메모를 두 번 합쳐도 맥북이 알아서 걸러냅니다. 안심하고 다시 보내도 됩니다.</div>`);
+  let only = true;
+  document.querySelectorAll("[data-o]").forEach(b=> b.onclick = ()=>{
+    only = b.dataset.o === "new";
+    document.querySelectorAll("[data-o]").forEach(x=> x.className = x===b?"on":"");
+  });
+  const payload = ()=> JSON.stringify(buildExport(only), null, 1);
+  const stamp = ()=> new Date().toISOString().slice(0,10).replace(/-/g,"");
+
+  document.getElementById("eCopy").onclick = async ()=>{
+    const t = payload();
+    try{
+      await navigator.clipboard.writeText(t);
+    }catch(e){
+      const ta=document.createElement("textarea");
+      ta.value=t; ta.style.position="fixed"; ta.style.opacity="0";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, t.length);
+      try{ document.execCommand("copy"); }catch(_){ toast("복사에 실패했습니다"); document.body.removeChild(ta); return; }
+      document.body.removeChild(ta);
+    }
+    markSent(only); closeSheet(); render();
+    toast("복사했습니다. 맥북에 붙여넣으세요.");
+  };
+  document.getElementById("eShare").onclick = async ()=>{
+    const t = payload();
+    const file = new File([t], `궁리-아이폰-${stamp()}.json`, {type:"application/json"});
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})) await navigator.share({files:[file], title:"궁리 메모"});
+      else await navigator.share({text:t, title:"궁리 메모"});
+      markSent(only); closeSheet(); render(); toast("보냈습니다");
+    }catch(e){ if(e && e.name!=="AbortError") toast("공유를 쓸 수 없습니다. 복사하기를 써주세요."); }
+  };
+  document.getElementById("eFile").onclick = ()=>{
+    const blob = new Blob([payload()], {type:"application/json;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `궁리-아이폰-${stamp()}.json`;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 600);
+    markSent(only); closeSheet(); render(); toast("저장했습니다");
+  };
+}
+
+/* 맥북에서 받기 */
+function sheetImport(){
+  sheet("맥북에서 작품·분류 받기", `
+    <div class="note-box">맥북 궁리 위쪽 <b>아이폰</b> 버튼 → <b>작품·분류 복사</b>를 누른 뒤,
+      아래 칸을 길게 눌러 붙여넣으세요.</div>
+    <div class="fld"><label>붙여넣기</label>
+      <textarea id="imT" placeholder='{"type":"gungri-config", ...}'></textarea></div>
+    <button class="go ghost" id="imPaste">클립보드에서 바로 붙이기</button>
+    <button class="go" id="imOk">받기</button>
+    <div class="note-box">여기서 담아둔 메모는 지워지지 않습니다. 작품 목록과 분류만 새로 맞춥니다.</div>`);
+  const ta = document.getElementById("imT");
+  document.getElementById("imPaste").onclick = async ()=>{
+    try{ ta.value = await navigator.clipboard.readText(); toast("붙였습니다"); }
+    catch(e){ toast("직접 길게 눌러 붙여넣어 주세요"); ta.focus(); }
+  };
+  document.getElementById("imOk").onclick = ()=>{
+    let d;
+    try{ d = JSON.parse(ta.value.trim()); }catch(e){ toast("읽을 수 없는 내용입니다"); return; }
+    const incoming = Array.isArray(d.works) ? d.works : null;
+    if(!incoming){ toast("궁리에서 복사한 것이 맞는지 확인해 주세요"); return; }
+    const keep = S.works.filter(w=> w.id===INBOX || w.id.startsWith("m_"));
+    const merged = keep.concat(
+      incoming.filter(w=>w && w.id && w.id!==INBOX).map(w=>({
+        id:w.id, title:w.title||"제목 없음", genre:w.genre==="essay"?"essay":"novel",
+        cats:Array.isArray(w.cats)?w.cats:[], links:Array.isArray(w.links)?w.links:[]
+      }))
+    );
+    // 폰에서 만든 작품 중 제목이 같은 게 오면 그쪽으로 갈아끼운다
+    merged.forEach(mw=>{
+      if(mw.id.startsWith("m_")){
+        const same = merged.find(x=>!x.id.startsWith("m_") && x.id!==INBOX && x.title===mw.title);
+        if(same){ S.notes.forEach(n=>{ if(n.workId===mw.id) n.workId = same.id; }); mw._drop = true; }
+      }
+    });
+    S.works = merged.filter(w=>!w._drop);
+    if(!S.works.some(w=>w.id===S.activeId)) S.activeId = S.works.length>1 ? S.works[1].id : INBOX;
+    draftCat = null;
+    closeSheet(); save(); render();
+    toast(`작품 ${S.works.length-1}편을 받았습니다`);
+  };
+}
+
+/* 도움말 */
+function sheetHelp(){
+  sheet("쓰는 법", `
+    <div class="fld"><label>어떻게 열어야 하나</label>
+      <div class="note-box">이 앱은 <b>웹 주소로 열었을 때</b>만 담은 것이 안전하게 남습니다.
+        파일 앱에서 바로 열면 껐다 켰을 때 사라질 수 있습니다 —
+        그때는 위에 노란 띠가 뜨니, 담고 나서 바로 내보내세요.<br><br>
+        주소로 연 다음 사파리 아래쪽 <b>공유</b> → <b>홈 화면에 추가</b>를 해두면
+        앱처럼 열리고 인터넷 없이도 씁니다.</div></div>
+    <div class="fld"><label>담는 순서</label>
+      <div class="note-box">위에서 작품을 고르고 → 적고 → <b>담기</b>.
+        분류는 안 골라도 됩니다. 어느 작품인지 모르겠으면 <b>아직 모름</b>에 담아두고 맥북에서 정하세요.</div></div>
+    <div class="fld"><label>[[ ]] 잇기</label>
+      <div class="note-box"><b>[[ ]]</b> 버튼을 누르면 대괄호가 들어갑니다.
+        맥북에서 쓰던 이름이 후보로 뜨니 골라 넣으세요. 같은 이름끼리 맥북에서 묶입니다.</div></div>
+    <div class="fld"><label>자주 보내기</label>
+      <div class="note-box">이 앱은 담아두는 곳이지 보관하는 곳이 아닙니다.
+        하루 한 번쯤 <b>내보내기</b>로 맥북에 넘겨두세요. 빨간 줄이 그어진 것이 아직 안 보낸 메모입니다.</div></div>`);
+}
+
+/* ---------- 시작 ---------- */
+probe(); load(); render(); grow();
+
+// 인터넷 없이도 열리도록 (주소로 열었을 때만 동작 · 없으면 그냥 넘어감)
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+
+const ta = document.getElementById("txt");
+ta.addEventListener("input", e=>{
+  if(e.inputType==="insertText" && e.data==="["){
+    const p = ta.selectionStart;
+    if(ta.value.slice(p-2,p)==="[[" && ta.value.slice(p,p+2)!=="]]"){
+      ta.value = ta.value.slice(0,p) + "]]" + ta.value.slice(p);
+      ta.setSelectionRange(p,p);
+    }
+  }
+  grow(); syncAdd(); sugRefresh();
+});
+ta.addEventListener("click", sugRefresh);
+ta.addEventListener("blur", ()=> setTimeout(()=>{ document.getElementById("sug").style.display="none"; }, 200));
+
+document.getElementById("btnAdd").onclick = add;
+document.getElementById("btnStar").onclick = ()=>{ draftStar = !draftStar; render(); };
+document.getElementById("btnBr").onclick = ()=>{
+  const p = ta.selectionStart;
+  ta.value = ta.value.slice(0,p) + "[[]]" + ta.value.slice(ta.selectionEnd);
+  ta.focus(); ta.setSelectionRange(p+2, p+2);
+  grow(); syncAdd(); sugRefresh();
+};
+document.getElementById("workBtn").onclick = sheetWorks;
+document.getElementById("btnOut").onclick = sheetExport;
+document.getElementById("btnMenu").onclick = sheetMenu;
+window.addEventListener("resize", grow);
+window.addEventListener("pagehide", ()=> write(S));
+document.addEventListener("visibilitychange", ()=>{ if(document.hidden) write(S); });
+
+if(!read()){ setTimeout(sheetHelp, 400); }
+
+})();
+</script>
+</body>
+</html>

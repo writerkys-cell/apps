@@ -1,0 +1,1678 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>궁리 — 소설·에세이 생각 보관함</title>
+<style>
+  :root{
+    --bg:#faf9f7; --panel:#ffffff; --line:#e6e2dc; --line2:#f0ece6;
+    --text:#26231f; --dim:#8c857c; --dim2:#b5ada2;
+    --accent:#7a6a55; --accent-soft:#f2ede4;
+    --star:#c9962e;
+    --radius:10px;
+    --font: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg:#191817; --panel:#211f1d; --line:#332f2b; --line2:#2a2724;
+    --text:#e8e3db; --dim:#918a80; --dim2:#6b645b;
+    --accent:#c3ac8a; --accent-soft:#2e2a24;
+    --star:#d9ae4c;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--font); font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit; font-size:inherit; cursor:pointer;}
+  input,textarea,select{font-family:inherit; font-size:inherit; color:inherit;}
+
+  /* ---------- layout ---------- */
+  #app{display:flex; flex-direction:column; height:100vh;}
+  header{
+    display:flex; align-items:center; gap:12px;
+    padding:0 18px; height:52px; flex:0 0 52px;
+    border-bottom:1px solid var(--line); background:var(--panel);
+  }
+  .brand{font-weight:600; letter-spacing:-.02em; font-size:16px;}
+  .brand small{font-weight:400; color:var(--dim2); font-size:12px; margin-left:8px; letter-spacing:0;}
+  .spacer{flex:1;}
+  .save-state{font-size:12px; color:var(--dim2); transition:opacity .3s; min-width:56px; text-align:right;}
+
+  .body{display:flex; flex:1; min-height:0;}
+  aside{
+    width:236px; flex:0 0 236px; border-right:1px solid var(--line);
+    background:var(--panel); display:flex; flex-direction:column; min-height:0;
+  }
+  main{flex:1; min-width:0; display:flex; flex-direction:column; min-height:0;}
+
+  /* ---------- buttons ---------- */
+  .btn{
+    border:1px solid var(--line); background:transparent; color:var(--text);
+    padding:5px 11px; border-radius:7px; font-size:13px; line-height:1.4;
+    transition:background .12s, border-color .12s;
+  }
+  .btn:hover{background:var(--accent-soft); border-color:var(--dim2);}
+  .btn.primary{background:var(--text); color:var(--bg); border-color:var(--text);}
+  .btn.primary:hover{opacity:.85; background:var(--text);}
+  .btn.ghost{border-color:transparent; color:var(--dim);}
+  .btn.ghost:hover{color:var(--text); background:var(--accent-soft);}
+  .btn.sm{padding:3px 8px; font-size:12px;}
+  .btn:disabled{opacity:.4; cursor:not-allowed;}
+
+  /* ---------- sidebar ---------- */
+  .side-head{padding:14px 14px 8px; display:flex; gap:6px;}
+  .side-head .btn{flex:1;}
+  .works{flex:1; overflow-y:auto; padding:4px 8px 16px;}
+  .grp-label{
+    font-size:11px; color:var(--dim2); letter-spacing:.08em; font-weight:600;
+    padding:14px 8px 5px; text-transform:uppercase;
+  }
+  .work-item{
+    padding:8px 10px; border-radius:8px; cursor:pointer; display:flex; align-items:baseline; gap:8px;
+    transition:background .1s;
+  }
+  .work-item:hover{background:var(--accent-soft);}
+  .work-item.active{background:var(--accent-soft);}
+  .work-item.active .w-title{font-weight:600;}
+  .w-title{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px;}
+  .w-count{font-size:11px; color:var(--dim2); font-variant-numeric:tabular-nums;}
+  .empty-side{padding:24px 14px; color:var(--dim2); font-size:13px; line-height:1.7;}
+
+  /* ---------- work header ---------- */
+  .work-head{
+    padding:18px 28px 14px; border-bottom:1px solid var(--line2);
+    display:flex; align-items:flex-start; gap:14px;
+  }
+  .work-head h1{
+    margin:0; font-size:21px; font-weight:650; letter-spacing:-.02em;
+    outline:none; line-height:1.35;
+  }
+  .work-head h1:empty:before{content:"제목 없음"; color:var(--dim2);}
+  .work-sub{
+    margin-top:3px; font-size:13px; color:var(--dim); outline:none;
+  }
+  .work-sub:empty:before{content:"한 줄 메모 (클릭해서 입력)"; color:var(--dim2);}
+  .genre-tag{
+    display:inline-block; font-size:11px; padding:1px 7px; border-radius:20px;
+    background:var(--accent-soft); color:var(--accent); margin-right:7px;
+    vertical-align:2px; font-weight:600; letter-spacing:.02em;
+  }
+
+  /* ---------- composer ---------- */
+  .composer{padding:14px 28px 0;}
+  .chips{display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; align-items:center;}
+  .chip{
+    border:1px solid var(--line); background:transparent; color:var(--dim);
+    padding:3px 10px; border-radius:20px; font-size:12.5px; transition:all .12s;
+  }
+  .chip:hover{border-color:var(--dim2); color:var(--text);}
+  .chip.on{background:var(--text); color:var(--bg); border-color:var(--text);}
+  .chip.filter.on{background:var(--accent); border-color:var(--accent); color:#fff;}
+  html[data-theme="dark"] .chip.filter.on{color:#1b1917;}
+  .chip .cnt{opacity:.55; margin-left:5px; font-size:11px;}
+  #memoInput{
+    width:100%; border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--panel); padding:12px 14px; resize:none; min-height:78px;
+    line-height:1.65; outline:none; transition:border-color .15s;
+  }
+  #memoInput:focus{border-color:var(--dim2);}
+  .composer-foot{
+    display:flex; align-items:center; gap:10px; margin-top:8px; padding-bottom:14px;
+    border-bottom:1px solid var(--line2);
+  }
+  .hint{font-size:12px; color:var(--dim2);}
+
+  /* ---------- filters ---------- */
+  .filters{padding:12px 28px 6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  #search{
+    border:1px solid var(--line); background:var(--panel); border-radius:7px;
+    padding:4px 10px; font-size:13px; outline:none; width:180px;
+  }
+  #search:focus{border-color:var(--dim2);}
+
+  /* ---------- notes ---------- */
+  .notes{flex:1; overflow-y:auto; padding:6px 28px 60px;}
+  .note{
+    border-bottom:1px solid var(--line2); padding:13px 2px 13px 0;
+    display:flex; gap:12px; align-items:flex-start;
+  }
+  .note:hover .note-actions{opacity:1;}
+  .note-body{flex:1; min-width:0;}
+  .note-meta{font-size:11.5px; color:var(--dim2); margin-bottom:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .cat-badge{color:var(--accent); font-weight:600;}
+  .cat-sel{
+    appearance:none; -webkit-appearance:none; border:none; background:transparent;
+    color:var(--accent); font-weight:600; font-size:11.5px; line-height:1.5;
+    padding:1px 5px; margin-left:-5px; border-radius:5px; cursor:pointer;
+    font-family:inherit; outline:none;
+  }
+  .cat-sel:hover{background:var(--accent-soft);}
+  .cat-sel.none{color:var(--dim2); font-weight:500;}
+  .cat-sel option{color:var(--text); background:var(--panel); font-weight:400;}
+  .note-text{white-space:pre-wrap; word-break:break-word; line-height:1.68;}
+  .note-text .tag{color:var(--accent); font-weight:500;}
+  .wl{
+    color:var(--accent); font-weight:600; cursor:pointer;
+    border-bottom:1px solid var(--line); padding-bottom:1px;
+  }
+  .wl:hover{background:var(--accent-soft); border-bottom-color:var(--accent);}
+
+  /* ---------- 링크 뷰 ---------- */
+  .link-bar{
+    padding:14px 28px 10px; border-bottom:1px solid var(--line2);
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .link-bar h2{margin:0; font-size:18px; font-weight:650; letter-spacing:-.01em;}
+  .link-bar h2 .br{color:var(--dim2); font-weight:400;}
+  .link-sec{margin:20px 0 6px; display:flex; align-items:center; gap:10px;}
+  .link-sec .t{font-size:12.5px; font-weight:700; letter-spacing:.02em; color:var(--dim);}
+  .link-sec .ln{flex:1; height:1px; background:var(--line2);}
+  .loose-note{
+    border-bottom:1px solid var(--line2); padding:12px 2px; display:flex; gap:12px; align-items:flex-start;
+  }
+  .loose-note .note-body{flex:1; min-width:0;}
+  .hl{background:rgba(201,150,46,.25); border-radius:2px; box-shadow:0 0 0 2px rgba(201,150,46,.25);}
+  .link-cloud{display:flex; flex-wrap:wrap; gap:5px; padding:2px 0 4px;}
+  .none-msg{color:var(--dim2); font-size:13.5px; padding:10px 2px 4px;}
+
+  /* ---------- 자동완성 ---------- */
+  .ac{
+    position:fixed; z-index:80; background:var(--panel); border:1px solid var(--line);
+    border-radius:9px; box-shadow:0 10px 28px rgba(0,0,0,.16); padding:4px; max-height:230px;
+    overflow-y:auto; min-width:180px;
+  }
+  .ac .ai{padding:5px 10px; border-radius:6px; font-size:13.5px; cursor:pointer; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .ac .ai.on{background:var(--accent-soft);}
+  .ac .ai .sub{color:var(--dim2); font-size:11.5px; margin-left:7px;}
+  .note-actions{display:flex; gap:2px; opacity:0; transition:opacity .15s; flex:0 0 auto;}
+  .icon-btn{
+    border:none; background:none; color:var(--dim2); padding:3px 5px; border-radius:5px; font-size:13px;
+  }
+  .icon-btn:hover{background:var(--accent-soft); color:var(--text);}
+  .icon-btn.starred{color:var(--star);}
+  .note.pinned .note-actions{opacity:1;}
+  .note.pinned .note-actions [data-editbtn],
+  .note.pinned .note-actions [data-del]{opacity:0; transition:opacity .15s;}
+  .note.pinned:hover .note-actions [data-editbtn],
+  .note.pinned:hover .note-actions [data-del]{opacity:1;}
+  .note.pinned{background:linear-gradient(90deg, var(--accent-soft) 0%, transparent 60%); border-radius:6px; padding-left:10px;}
+  .edit-area{
+    width:100%; border:1px solid var(--dim2); border-radius:8px; background:var(--panel);
+    padding:10px 12px; resize:vertical; min-height:80px; line-height:1.65; outline:none;
+  }
+  .empty-notes{padding:56px 8px; text-align:center; color:var(--dim2); font-size:14px; line-height:1.9;}
+
+  /* ---------- modal ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(20,18,16,.42); backdrop-filter:blur(2px);
+    display:flex; align-items:center; justify-content:center; z-index:50; padding:24px;
+  }
+  .modal{
+    background:var(--panel); border-radius:14px; border:1px solid var(--line);
+    width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column;
+    box-shadow:0 18px 50px rgba(0,0,0,.22);
+  }
+  .modal.narrow{max-width:420px;}
+  .modal-head{padding:16px 20px 12px; border-bottom:1px solid var(--line2); display:flex; align-items:center; gap:10px;}
+  .modal-head h2{margin:0; font-size:16px; font-weight:650;}
+  .modal-body{padding:16px 20px; overflow-y:auto; flex:1;}
+  .modal-foot{padding:12px 20px; border-top:1px solid var(--line2); display:flex; gap:8px; align-items:center;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:12px; color:var(--dim); margin-bottom:5px; font-weight:600;}
+  .field input[type=text], .field textarea, .field select{
+    width:100%; border:1px solid var(--line); border-radius:8px; background:var(--bg);
+    padding:8px 11px; outline:none;
+  }
+  .field input[type=text]:focus, .field textarea:focus{border-color:var(--dim2);}
+  .radio-row{display:flex; gap:8px;}
+  .radio-row label{
+    flex:1; border:1px solid var(--line); border-radius:9px; padding:11px 13px; cursor:pointer;
+    font-size:13.5px; display:block; transition:all .12s;
+  }
+  .radio-row label:hover{border-color:var(--dim2);}
+  .radio-row input{display:none;}
+  .radio-row input:checked + span{font-weight:650;}
+  .radio-row label:has(input:checked){border-color:var(--text); background:var(--accent-soft);}
+  .radio-row .desc{display:block; font-size:11.5px; color:var(--dim2); margin-top:3px; font-weight:400;}
+  .check-row{display:flex; gap:16px; flex-wrap:wrap; font-size:13.5px;}
+  .check-row label{display:flex; align-items:flex-start; gap:7px; cursor:pointer;}
+  .check-row input[type=checkbox]{margin-top:4px; flex:0 0 auto;}
+  .check-row .desc{display:block; font-size:11.5px; color:var(--dim2); margin-top:2px;}
+  #promptPreview{
+    width:100%; height:300px; border:1px solid var(--line); border-radius:9px; background:var(--bg);
+    padding:12px 14px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+    line-height:1.6; resize:vertical; outline:none; white-space:pre-wrap; overflow:auto;
+  }
+  .cat-editor-row{display:flex; gap:6px; align-items:center; margin-bottom:6px;}
+  .cat-editor-row input{flex:1; border:1px solid var(--line); border-radius:7px; background:var(--bg); padding:5px 9px; outline:none;}
+  .warn{
+    background:#fff3d6; color:#6b5310; padding:8px 14px; font-size:12.5px; text-align:center;
+    border-bottom:1px solid #eadfbe;
+  }
+  html[data-theme="dark"] .warn{background:#3a3118; color:#e0c98a; border-color:#4a3f22;}
+  .toast{
+    position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(10px);
+    background:var(--text); color:var(--bg); padding:9px 18px; border-radius:24px; font-size:13.5px;
+    opacity:0; pointer-events:none; transition:all .22s; z-index:99;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+  .stat{font-size:12px; color:var(--dim2);}
+  ::-webkit-scrollbar{width:9px; height:9px;}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:5px;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--dim2);}
+  ::-webkit-scrollbar-track{background:transparent;}
+  @media (max-width:760px){
+    aside{width:150px; flex-basis:150px;}
+    .work-head,.composer,.filters,.notes{padding-left:16px; padding-right:16px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="storageWarn" class="warn" style="display:none">
+    이 화면에서는 브라우저 저장이 막혀 있어 입력한 내용이 남지 않습니다. 파일을 컴퓨터에 내려받아 직접 열어주세요.
+  </div>
+  <header>
+    <div class="brand">궁리<small>소설·에세이 생각 보관함</small></div>
+    <div class="spacer"></div>
+    <div class="save-state" id="saveState"></div>
+    <button class="btn sm ghost" id="btnPhone" title="아이폰과 주고받기">아이폰</button>
+    <button class="btn sm ghost" id="btnExport" title="전체 데이터를 JSON 파일로 저장">내보내기</button>
+    <button class="btn sm ghost" id="btnImport" title="JSON 파일 불러오기">불러오기</button>
+    <button class="btn sm ghost" id="btnTheme" title="밝게 / 어둡게">어둡게</button>
+    <input type="file" id="fileInput" accept="application/json,.json" style="display:none">
+  </header>
+
+  <div class="body">
+    <aside>
+      <div class="side-head">
+        <button class="btn" id="btnNewWork">＋ 새 작품</button>
+      </div>
+      <div class="works" id="worksList"></div>
+    </aside>
+    <main id="mainPane"></main>
+  </div>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   상수
+   ============================================================ */
+const KEY = "gungri.v1";
+const NOCAT = " none";      // 미분류를 가리키는 내부 값
+const NOCAT_LABEL = "미분류";
+const GENRES = {
+  novel: {
+    label: "소설",
+    cats: ["캐릭터","플롯","복선","설정·세계관","장면","내러티브","자료","문장·톤","기타"]
+  },
+  essay: {
+    label: "에세이",
+    cats: ["소재","경험","생각·통찰","인용·자료","구조","문장·톤","기타"]
+  }
+};
+
+/* ============================================================
+   저장소 (localStorage 불가 시 메모리 폴백)
+   ============================================================ */
+let memFallback = null;
+const store = {
+  ok: true,
+  get(){
+    if(!this.ok) return memFallback;
+    try{ const r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; }
+    catch(e){ this.ok=false; return memFallback; }
+  },
+  set(v){
+    if(this.ok){
+      try{ localStorage.setItem(KEY, JSON.stringify(v)); return; }
+      catch(e){ this.ok=false; document.getElementById("storageWarn").style.display="block"; }
+    }
+    memFallback = v;
+  },
+  probe(){
+    try{ localStorage.setItem(KEY+".t","1"); localStorage.removeItem(KEY+".t"); }
+    catch(e){ this.ok=false; document.getElementById("storageWarn").style.display="block"; }
+  }
+};
+
+/* ============================================================
+   상태
+   ============================================================ */
+let S = null;              // {version, works:[], activeId, theme}
+let UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function now(){ return new Date().toISOString(); }
+
+function blankState(){
+  return { version:1, works:[], activeId:null, theme:"light" };
+}
+
+function load(){
+  const raw = store.get();
+  S = (raw && raw.works) ? raw : blankState();
+  if(!Array.isArray(S.works)) S.works = [];
+  S.works.forEach(normalizeWork);
+  document.documentElement.setAttribute("data-theme", S.theme === "dark" ? "dark" : "light");
+}
+
+function normalizeWork(w){
+  w.id = w.id || uid();
+  w.genre = (w.genre === "essay") ? "essay" : "novel";
+  w.title = w.title || "";
+  w.sub = w.sub || "";
+  if(!Array.isArray(w.cats) || !w.cats.length) w.cats = GENRES[w.genre].cats.slice();
+  if(!Array.isArray(w.notes)) w.notes = [];
+  w.notes.forEach(n=>{
+    n.id = n.id || uid();
+    n.cat = (n.cat && w.cats.includes(n.cat)) ? n.cat : null;   // null = 미분류
+    n.text = n.text || "";
+    n.createdAt = n.createdAt || now();
+    n.updatedAt = n.updatedAt || n.createdAt;
+    n.star = !!n.star;
+  });
+  w.createdAt = w.createdAt || now();
+  return w;
+}
+
+let saveTimer = null;
+function save(quiet){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{
+    store.set(S);
+    if(!quiet) flashSaved();
+  }, 180);
+}
+let flashTimer=null;
+function flashSaved(){
+  const el = document.getElementById("saveState");
+  el.textContent = "저장됨";
+  el.style.opacity = "1";
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(()=>{ el.style.opacity="0"; }, 1400);
+}
+
+function activeWork(){ return S.works.find(w=>w.id===S.activeId) || null; }
+
+/* ============================================================
+   유틸
+   ============================================================ */
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function linkTags(html){
+  return html.replace(/#([^\s#.,!?;:()\[\]{}"']+)/g, '<span class="tag">#$1</span>');
+}
+
+/* ---------- 위키링크 [[ ]] ---------- */
+function wlRe(){ return /\[\[([^\[\]\n]+)\]\]/g; }
+
+// 텍스트를 링크/일반 조각으로 나눈다
+function splitWL(t){
+  const out = []; let last = 0, m; const re = wlRe();
+  while((m = re.exec(t))){
+    if(m.index > last) out.push({type:"text", s:t.slice(last, m.index)});
+    out.push({type:"link", s:m[0], name:m[1].trim()});
+    last = m.index + m[0].length;
+  }
+  if(last < t.length) out.push({type:"text", s:t.slice(last)});
+  return out;
+}
+function linksIn(t){
+  const s = new Set();
+  splitWL(t).forEach(p=>{ if(p.type==="link" && p.name) s.add(p.name); });
+  return [...s];
+}
+function hasLink(t, name){ return splitWL(t).some(p=>p.type==="link" && p.name===name); }
+// 링크 밖에서 그 낱말이 그냥 쓰였는가
+function hasLoose(t, name){ return splitWL(t).some(p=>p.type==="text" && p.s.includes(name)); }
+// 링크 밖의 낱말을 모두 [[ ]]로 감싼다
+function linkifyText(t, name){
+  return splitWL(t).map(p=> p.type==="link" ? p.s : p.s.split(name).join("[["+name+"]]")).join("");
+}
+// 작품 안의 모든 링크 (많이 쓰인 순)
+function linkIndex(w){
+  const map = new Map();
+  w.notes.forEach(n=> linksIn(n.text).forEach(l=> map.set(l, (map.get(l)||0)+1)));
+  return [...map.entries()].sort((a,b)=> b[1]-a[1] || a[0].localeCompare(b[0],"ko"));
+}
+// 메모 본문 → HTML (위키링크 + 해시태그)
+function noteHTML(text){
+  const e = esc(text);
+  let out = "", last = 0, m; const re = wlRe();
+  while((m = re.exec(e))){
+    out += linkTags(e.slice(last, m.index));
+    const nm = m[1].trim();
+    out += `<a class="wl" data-wl="${nm}">${nm}</a>`;
+    last = m.index + m[0].length;
+  }
+  out += linkTags(e.slice(last));
+  return out;
+}
+// 링크 안 된 언급을 형광펜으로 표시
+function looseHTML(text, name){
+  return splitWL(text).map(p=>{
+    if(p.type==="link") return `<a class="wl" data-wl="${esc(p.name)}">${esc(p.name)}</a>`;
+    return linkTags(esc(p.s)).split(esc(name)).join(`<span class="hl">${esc(name)}</span>`);
+  }).join("");
+}
+function openLink(name){
+  UI.link = name; UI.editing = null;
+  renderMain();
+  const pane = document.getElementById("mainPane");
+  if(pane) pane.querySelector(".notes").scrollTop = 0;
+}
+function bindWL(box){
+  box.querySelectorAll(".wl").forEach(a=> a.onclick = e=>{ e.stopPropagation(); openLink(a.dataset.wl); });
+}
+function fmtDate(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return "";
+  const y=d.getFullYear(), m=d.getMonth()+1, dd=d.getDate();
+  return `${y}.${String(m).padStart(2,"0")}.${String(dd).padStart(2,"0")}`;
+}
+function fmtDateTime(iso){
+  const d = new Date(iso); if(isNaN(d)) return "";
+  return fmtDate(iso)+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");
+}
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove("show"), 1900);
+}
+function autoGrow(ta){
+  ta.style.height = "auto";
+  ta.style.height = Math.max(78, ta.scrollHeight) + "px";
+}
+
+/* ============================================================
+   렌더 — 사이드바
+   ============================================================ */
+function renderSide(){
+  const el = document.getElementById("worksList");
+  if(!S.works.length){
+    el.innerHTML = `<div class="empty-side">아직 작품이 없습니다.<br>‘＋ 새 작품’으로 시작하세요.</div>`;
+    return;
+  }
+  let html = "";
+  ["novel","essay"].forEach(g=>{
+    const list = S.works.filter(w=>w.genre===g);
+    if(!list.length) return;
+    html += `<div class="grp-label">${GENRES[g].label}</div>`;
+    list.forEach(w=>{
+      html += `<div class="work-item ${w.id===S.activeId?"active":""}" data-w="${w.id}">
+        <span class="w-title">${esc(w.title || "제목 없음")}</span>
+        <span class="w-count">${w.notes.length}</span>
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
+  el.querySelectorAll(".work-item").forEach(n=>{
+    n.onclick = ()=>{
+      S.activeId = n.dataset.w;
+      UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+      save(true); render();
+    };
+  });
+}
+
+/* ============================================================
+   렌더 — 메인
+   ============================================================ */
+function renderMain(){
+  const pane = document.getElementById("mainPane");
+  const w = activeWork();
+  if(!w){
+    pane.innerHTML = `<div class="empty-notes" style="margin:auto">
+      왼쪽에서 작품을 고르거나<br>새 작품을 만들어 주세요.
+    </div>`;
+    return;
+  }
+  const cats = w.cats;
+  if(UI.draftCat && !cats.includes(UI.draftCat)) UI.draftCat = null;
+
+  const catCount = {}; cats.forEach(c=>catCount[c]=0);
+  let noneCount = 0;
+  w.notes.forEach(n=>{ if(!n.cat) noneCount++; else if(catCount[n.cat]!=null) catCount[n.cat]++; });
+
+  pane.innerHTML = `
+    <div class="work-head">
+      <div style="flex:1;min-width:0">
+        <h1 contenteditable="plaintext-only" id="wTitle" spellcheck="false"></h1>
+        <div class="work-sub" contenteditable="plaintext-only" id="wSub" spellcheck="false"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex:0 0 auto">
+        <button class="btn primary" id="btnPrompt">정리 프롬프트 만들기</button>
+        <button class="btn ghost sm" id="btnWorkMenu" title="작품 설정">⋯</button>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="chips" id="draftCats"></div>
+      <textarea id="memoInput" placeholder="떠오른 것을 그대로 적어두세요. 정리하지 않아도 괜찮습니다."></textarea>
+      <div class="composer-foot">
+        <button class="btn primary" id="btnAdd">담기</button>
+        <span class="hint">⌘/Ctrl + Enter · 분류는 나중에 골라도 됩니다 · [[ ]] 잇기 · #태그</span>
+      </div>
+    </div>
+
+    <div class="filters" id="filterBar">
+      <input id="search" type="text" placeholder="검색" value="${esc(UI.q)}">
+      <div class="chips" style="margin:0" id="filterCats"></div>
+      <div class="spacer" style="flex:1"></div>
+      <button class="btn ghost sm" id="btnLinks">링크 ${linkIndex(w).length}</button>
+      <span class="stat" id="statLine"></span>
+    </div>
+    <div id="linkCloud" style="display:none;padding:0 28px 8px"></div>
+
+    <div class="notes" id="notesList"></div>
+  `;
+
+  const t = pane.querySelector("#wTitle"); t.textContent = w.title;
+  const sub = pane.querySelector("#wSub"); sub.textContent = w.sub;
+  t.addEventListener("blur", ()=>{ w.title = t.textContent.trim(); save(); renderSide(); });
+  sub.addEventListener("blur", ()=>{ w.sub = sub.textContent.trim(); save(); });
+  [t,sub].forEach(el=>el.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); el.blur(); }}));
+
+  // 입력 카테고리 칩
+  const dc = pane.querySelector("#draftCats");
+  dc.innerHTML = cats.map(c=>`<button class="chip ${c===UI.draftCat?"on":""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")
+    + `<button class="btn ghost sm" id="btnCats" style="margin-left:4px">카테고리 편집</button>`;
+  dc.querySelectorAll(".chip").forEach(b=> b.onclick = ()=>{
+    const draft = document.getElementById("memoInput").value;
+    UI.draftCat = (UI.draftCat === b.dataset.c) ? null : b.dataset.c;   // 다시 누르면 해제
+    renderMain();
+    const m = pane.querySelector("#memoInput"); m.value = draft; autoGrow(m); m.focus();
+  });
+  dc.querySelector("#btnCats").onclick = openCatEditor;
+
+  // 필터 칩
+  const fc = pane.querySelector("#filterCats");
+  fc.innerHTML =
+    `<button class="chip filter ${UI.cat===null?"on":""}" data-f="">전체<span class="cnt">${w.notes.length}</span></button>` +
+    cats.filter(c=>catCount[c]>0).map(c=>`<button class="chip filter ${UI.cat===c?"on":""}" data-f="${esc(c)}">${esc(c)}<span class="cnt">${catCount[c]}</span></button>`).join("") +
+    (noneCount?`<button class="chip filter ${UI.cat===NOCAT?"on":""}" data-f="${NOCAT}">미분류<span class="cnt">${noneCount}</span></button>`:"") +
+    `<button class="chip filter ${UI.starOnly?"on":""}" id="chipStar">★ 중요</button>`;
+  fc.querySelectorAll(".chip.filter[data-f]").forEach(b=> b.onclick = ()=>{ UI.cat = b.dataset.f || null; renderMain(); });
+  fc.querySelector("#chipStar").onclick = ()=>{ UI.starOnly = !UI.starOnly; renderMain(); };
+
+  const ta = pane.querySelector("#memoInput");
+  ta.addEventListener("input", ()=>autoGrow(ta));
+  ta.addEventListener("keydown", e=>{
+    if((e.metaKey||e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); addNote(); }
+  });
+  pane.querySelector("#btnAdd").onclick = addNote;
+  pane.querySelector("#btnPrompt").onclick = openPromptModal;
+  pane.querySelector("#btnWorkMenu").onclick = openWorkMenu;
+
+  const sc = pane.querySelector("#search");
+  sc.addEventListener("input", ()=>{ UI.q = sc.value; renderNotes(); });
+
+  // 링크 목록 펼치기
+  const cloud = pane.querySelector("#linkCloud");
+  pane.querySelector("#btnLinks").onclick = ()=>{
+    if(cloud.style.display !== "none"){ cloud.style.display="none"; return; }
+    const idx = linkIndex(w);
+    if(!idx.length){ toast("아직 [[링크]]가 없습니다"); return; }
+    cloud.innerHTML = `<div class="link-cloud">` +
+      idx.map(([n,c])=>`<button class="chip" data-wl="${esc(n)}">${esc(n)}<span class="cnt">${c}</span></button>`).join("") +
+      `</div>`;
+    cloud.querySelectorAll("[data-wl]").forEach(b=> b.onclick = ()=> openLink(b.dataset.wl));
+    cloud.style.display = "block";
+  };
+
+  // 링크 뷰일 땐 필터 줄을 숨긴다
+  if(UI.link){ pane.querySelector("#filterBar").style.display = "none"; }
+
+  attachAC(ta, w);
+  renderNotes();
+}
+
+function visibleNotes(){
+  const w = activeWork(); if(!w) return [];
+  const q = UI.q.trim().toLowerCase();
+  return w.notes
+    .filter(n => !UI.cat || (UI.cat===NOCAT ? !n.cat : n.cat === UI.cat))
+    .filter(n => !UI.starOnly || n.star)
+    .filter(n => !q || n.text.toLowerCase().includes(q) || (n.cat||"").toLowerCase().includes(q))
+    .slice().sort((a,b)=> (b.star?1:0)-(a.star?1:0) || (b.createdAt < a.createdAt ? -1 : 1));
+}
+
+// 메모 머리의 분류 — 그 자리에서 바로 고를 수 있는 선택기
+function catSelectHTML(n, w){
+  return `<select class="cat-sel ${n.cat?"":"none"}" data-setcat="${n.id}" title="분류 고르기">
+    <option value="" ${!n.cat?"selected":""}>${NOCAT_LABEL}</option>
+    ${w.cats.map(c=>`<option ${c===n.cat?"selected":""}>${esc(c)}</option>`).join("")}
+  </select>`;
+}
+
+function noteCardHTML(n, w){
+  if(UI.editing === n.id){
+    return `<div class="note" data-n="${n.id}">
+      <div class="note-body">
+        <textarea class="edit-area" data-edit="${n.id}">${esc(n.text)}</textarea>
+        <div style="margin-top:7px;display:flex;gap:6px;align-items:center">
+          <button class="btn sm primary" data-save="${n.id}">저장</button>
+          <button class="btn sm ghost" data-cancel="1">취소</button>
+          <select class="btn sm" data-recat="${n.id}" style="margin-left:auto">
+            <option value="" ${!n.cat?"selected":""}>${NOCAT_LABEL}</option>
+            ${w.cats.map(c=>`<option ${c===n.cat?"selected":""}>${esc(c)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `<div class="note ${n.star?"pinned":""}" data-n="${n.id}">
+    <div class="note-body">
+      <div class="note-meta">
+        ${catSelectHTML(n, w)}
+        <span>${fmtDateTime(n.createdAt)}</span>
+        ${n.updatedAt!==n.createdAt?`<span>· 수정 ${fmtDate(n.updatedAt)}</span>`:""}
+      </div>
+      <div class="note-text">${noteHTML(n.text)}</div>
+    </div>
+    <div class="note-actions">
+      <button class="icon-btn ${n.star?"starred":""}" data-star="${n.id}" title="중요 표시">${n.star?"★":"☆"}</button>
+      <button class="icon-btn" data-editbtn="${n.id}" title="수정">✎</button>
+      <button class="icon-btn" data-del="${n.id}" title="삭제">✕</button>
+    </div>
+  </div>`;
+}
+
+function bindNoteEvents(box, w){
+  bindWL(box);
+  box.querySelectorAll("[data-setcat]").forEach(s=>{
+    s.onchange = ()=>{
+      const n = w.notes.find(x=>x.id===s.dataset.setcat);
+      n.cat = s.value || null; n.updatedAt = now();
+      save(); renderMain();
+    };
+    s.onclick = e=> e.stopPropagation();
+  });
+  box.querySelectorAll("[data-star]").forEach(b=> b.onclick = ()=>{
+    const n = w.notes.find(x=>x.id===b.dataset.star); n.star = !n.star; save(); renderNotes();
+  });
+  box.querySelectorAll("[data-editbtn]").forEach(b=> b.onclick = ()=>{
+    UI.editing = b.dataset.editbtn; renderNotes();
+    const ta = box.querySelector("[data-edit]");
+    if(ta){ ta.focus(); ta.style.height=ta.scrollHeight+"px"; attachAC(ta, w); }
+  });
+  box.querySelectorAll("[data-del]").forEach(b=> b.onclick = ()=>{
+    confirmBox("이 메모를 삭제할까요?", ()=>{
+      w.notes = w.notes.filter(x=>x.id!==b.dataset.del); save(); renderMain(); renderSide();
+    });
+  });
+  box.querySelectorAll("[data-save]").forEach(b=> b.onclick = ()=>{
+    const id = b.dataset.save;
+    const n = w.notes.find(x=>x.id===id);
+    const ta = box.querySelector(`[data-edit="${id}"]`);
+    const sel = box.querySelector(`[data-recat="${id}"]`);
+    const v = ta.value.trim();
+    if(!v){ toast("내용이 비어 있습니다"); return; }
+    n.text = v; n.cat = sel.value || null; n.updatedAt = now();
+    UI.editing = null; save(); renderMain();
+  });
+  box.querySelectorAll("[data-cancel]").forEach(b=> b.onclick = ()=>{ UI.editing=null; renderNotes(); });
+  box.querySelectorAll(".edit-area").forEach(ta=>{
+    ta.addEventListener("keydown", e=>{
+      if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){ e.preventDefault(); box.querySelector(`[data-save="${ta.dataset.edit}"]`).click(); }
+      if(e.key==="Escape"){ if(document.querySelector(".ac")) return; UI.editing=null; renderNotes(); }
+    });
+  });
+}
+
+function renderNotes(){
+  const w = activeWork(); if(!w) return;
+  if(UI.link){ renderLinkView(w); return; }
+
+  const list = visibleNotes();
+  const box = document.getElementById("notesList");
+  const stat = document.getElementById("statLine");
+  if(stat) stat.textContent = `${list.length}개 보임 / 전체 ${w.notes.length}개`;
+
+  if(!list.length){
+    box.innerHTML = `<div class="empty-notes">${w.notes.length ? "조건에 맞는 메모가 없습니다." : "첫 생각을 담아보세요.<br><span style='font-size:13px'>모순되어도, 앞뒤가 안 맞아도 괜찮습니다.</span>"}</div>`;
+    return;
+  }
+  box.innerHTML = list.map(n=>noteCardHTML(n, w)).join("");
+  bindNoteEvents(box, w);
+}
+
+/* ============================================================
+   위키링크 뷰 — 이어진 것 / 이어지지 않은 것
+   ============================================================ */
+function renderLinkView(w){
+  const name = UI.link;
+  const box = document.getElementById("notesList");
+
+  const linked = w.notes.filter(n=> hasLink(n.text, name));
+  const loose  = w.notes.filter(n=> !hasLink(n.text, name) && hasLoose(n.text, name));
+  const partly = linked.filter(n=> hasLoose(n.text, name));   // 이어져 있지만 남은 언급이 있는 것
+
+  // 함께 등장하는 링크
+  const co = new Map();
+  linked.forEach(n=> linksIn(n.text).forEach(l=>{ if(l!==name) co.set(l,(co.get(l)||0)+1); }));
+  const coList = [...co.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12);
+
+  // 다른 작품에서의 언급
+  const elsewhere = S.works.filter(x=>x.id!==w.id)
+    .map(x=>({w:x, n:x.notes.filter(n=>n.text.includes(name)).length}))
+    .filter(x=>x.n>0);
+
+  const sortDesc = a=> a.slice().sort((x,y)=> (y.star?1:0)-(x.star?1:0) || (y.createdAt<x.createdAt?-1:1));
+
+  let html = `
+    <div class="link-bar">
+      <h2><span class="br">[[</span>${esc(name)}<span class="br">]]</span></h2>
+      <span class="stat">이어진 메모 ${linked.length}개${loose.length?` · 이어지지 않은 언급 ${loose.length}개`:""}</span>
+      <div style="flex:1"></div>
+      <button class="btn sm" id="lvRename">이름 바꾸기</button>
+      <button class="btn sm ghost" id="lvSearch">이 낱말로 검색</button>
+      <button class="btn sm ghost" id="lvUnlink">링크 풀기</button>
+      <button class="btn sm ghost" id="lvClose">✕ 닫기</button>
+    </div>`;
+
+  if(coList.length){
+    html += `<div class="link-sec"><span class="t">함께 나오는 링크</span><span class="ln"></span></div>
+      <div class="link-cloud">${coList.map(([n,c])=>`<button class="chip" data-wl="${esc(n)}">${esc(n)}<span class="cnt">${c}</span></button>`).join("")}</div>`;
+  }
+
+  html += `<div class="link-sec"><span class="t">이어진 메모 ${linked.length}</span><span class="ln"></span>
+    ${partly.length?`<button class="btn sm ghost" id="lvRest">남은 언급 ${partly.length}곳도 잇기</button>`:""}</div>`;
+  html += linked.length
+    ? sortDesc(linked).map(n=>noteCardHTML(n, w)).join("")
+    : `<div class="none-msg">아직 이 링크가 붙은 메모가 없습니다.</div>`;
+
+  html += `<div class="link-sec"><span class="t">이어지지 않았지만 이 낱말이 나오는 메모 ${loose.length}</span><span class="ln"></span>
+    ${loose.length?`<button class="btn sm" id="lvAll">모두 잇기</button>`:""}</div>`;
+  html += loose.length
+    ? sortDesc(loose).map(n=>`
+        <div class="loose-note" data-n="${n.id}">
+          <div class="note-body">
+            <div class="note-meta">
+              ${catSelectHTML(n, w)}
+              <span>${fmtDateTime(n.createdAt)}</span>
+            </div>
+            <div class="note-text">${looseHTML(n.text, name)}</div>
+          </div>
+          <button class="btn sm" data-join="${n.id}" style="flex:0 0 auto">잇기</button>
+        </div>`).join("")
+    : `<div class="none-msg">남은 언급이 없습니다.</div>`;
+
+  if(elsewhere.length){
+    html += `<div class="link-sec"><span class="t">다른 작품에서</span><span class="ln"></span></div>
+      <div class="none-msg">${elsewhere.map(x=>`「${esc(x.w.title||"제목 없음")}」에서 ${x.n}번`).join(" · ")}</div>`;
+  }
+
+  box.innerHTML = html;
+
+  const join = (n)=>{ n.text = linkifyText(n.text, name); n.updatedAt = now(); };
+
+  box.querySelector("#lvClose").onclick = ()=>{ UI.link = null; renderMain(); };
+  box.querySelector("#lvSearch").onclick = ()=>{ UI.link=null; UI.q=name; UI.cat=null; UI.starOnly=false; renderMain(); };
+  box.querySelector("#lvRename").onclick = ()=> openRenameLink(w, name);
+  box.querySelector("#lvUnlink").onclick = ()=>{
+    if(!linked.length){ toast("풀 링크가 없습니다"); return; }
+    confirmBox(`메모 ${linked.length}개에서 [[${name}]]의 대괄호를 벗겨 그냥 글자로 되돌립니다. 메모 내용은 그대로입니다.`, ()=>{
+      linked.forEach(n=>{
+        n.text = splitWL(n.text).map(p=> (p.type==="link" && p.name===name) ? p.name : p.s).join("");
+        n.updatedAt = now();
+      });
+      UI.link = null; save(); renderMain(); toast("링크를 풀었습니다");
+    });
+  };
+  box.querySelectorAll("[data-join]").forEach(b=> b.onclick = ()=>{
+    join(w.notes.find(x=>x.id===b.dataset.join));
+    save(); renderMain(); toast("이었습니다");
+  });
+  const all = box.querySelector("#lvAll");
+  if(all) all.onclick = ()=>{ loose.forEach(join); save(); renderMain(); toast(`${loose.length}개를 이었습니다`); };
+  const rest = box.querySelector("#lvRest");
+  if(rest) rest.onclick = ()=>{ partly.forEach(join); save(); renderMain(); toast("남은 언급을 이었습니다"); };
+  box.querySelectorAll(".chip[data-wl]").forEach(b=> b.onclick = ()=> openLink(b.dataset.wl));
+
+  bindNoteEvents(box, w);
+}
+
+/* ============================================================
+   링크 이름 일괄 바꾸기
+   ============================================================ */
+function applyRename(work, oldName, newName, alsoLoose){
+  let hit = 0;
+  work.notes.forEach(n=>{
+    const t = splitWL(n.text).map(p=>{
+      if(p.type === "link") return p.name === oldName ? "[["+newName+"]]" : p.s;
+      return alsoLoose ? p.s.split(oldName).join(newName) : p.s;
+    }).join("");
+    if(t !== n.text){ n.text = t; n.updatedAt = now(); hit++; }
+  });
+  return hit;
+}
+
+function openRenameLink(w, name){
+  const linkedN = w.notes.filter(n=>hasLink(n.text, name)).length;
+  const looseN  = w.notes.filter(n=>hasLoose(n.text, name)).length;
+  const others  = S.works.filter(x=>x.id!==w.id)
+    .map(x=>({w:x, n:x.notes.filter(n=>n.text.includes(name)).length}))
+    .filter(x=>x.n>0);
+  const otherTotal = others.reduce((a,x)=>a+x.n, 0);
+
+  modal(`
+    <div class="modal-head"><h2>이름 바꾸기</h2>
+      <span class="hint" style="margin-left:auto">[[${esc(name)}]]</span></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>새 이름</label>
+        <input type="text" id="rnNew" value="${esc(name)}" spellcheck="false">
+      </div>
+      <div class="field">
+        <label>어디까지 바꿀까요</label>
+        <div class="check-row" style="flex-direction:column;gap:9px;align-items:flex-start">
+          <label style="cursor:default"><input type="checkbox" checked disabled>
+            <span>이어진 메모 <b>${linkedN}개</b>의 [[${esc(name)}]]</span></label>
+          ${looseN?`<label><input type="checkbox" id="rnLoose" checked>
+            <span>링크 없이 ‘${esc(name)}’라고만 쓰인 메모 <b>${looseN}개</b>도 함께
+            <span class="desc">끄면 링크만 바뀌고 그냥 쓴 글자는 옛 이름으로 남습니다</span></span></label>`:""}
+          ${others.length?`<label><input type="checkbox" id="rnOthers">
+            <span>다른 작품 ${others.length}편에 나오는 <b>${otherTotal}곳</b>도 함께
+            <span class="desc">${others.map(x=>`「${esc(x.w.title||"제목 없음")}」 ${x.n}`).join(" · ")}</span></span></label>`:""}
+        </div>
+      </div>
+      <div class="hint" id="rnWarn"></div>
+    </div>
+    <div class="modal-foot"><div style="flex:1"></div>
+      <button class="btn" id="rnCancel">취소</button>
+      <button class="btn primary" id="rnOk">바꾸기</button></div>
+  `, {narrow:true});
+
+  const inp = document.getElementById("rnNew");
+  const warn = document.getElementById("rnWarn");
+  inp.focus(); inp.setSelectionRange(0, inp.value.length);
+
+  const check = ()=>{
+    const v = inp.value.trim();
+    let msg = "";
+    if(!v) msg = "이름을 비워둘 수 없습니다.";
+    else if(/[\[\]\n]/.test(v)) msg = "대괄호는 이름에 쓸 수 없습니다.";
+    else if(v !== name && linkIndex(w).some(([l])=> l===v))
+      msg = `「${v}」은(는) 이미 쓰고 있는 링크입니다. 바꾸면 두 링크가 하나로 합쳐집니다.`;
+    warn.textContent = msg;
+    document.getElementById("rnOk").disabled = !v || /[\[\]\n]/.test(v);
+  };
+  inp.addEventListener("input", check); check();
+  inp.onkeydown = e=>{ if(e.key==="Enter" && !document.getElementById("rnOk").disabled) document.getElementById("rnOk").click(); };
+
+  document.getElementById("rnCancel").onclick = closeModal;
+  document.getElementById("rnOk").onclick = ()=>{
+    const v = inp.value.trim();
+    if(v === name){ closeModal(); return; }
+    const alsoLoose = !!(document.getElementById("rnLoose") && document.getElementById("rnLoose").checked);
+    let hit = applyRename(w, name, v, alsoLoose);
+    if(document.getElementById("rnOthers") && document.getElementById("rnOthers").checked){
+      others.forEach(x=>{ hit += applyRename(x.w, name, v, true); });
+    }
+    UI.link = v;
+    closeModal(); save(); render();
+    toast(`메모 ${hit}개에서 「${v}」로 바꿨습니다`);
+  };
+}
+
+/* ============================================================
+   [[ 자동완성
+   ============================================================ */
+function attachAC(ta, w){
+  if(!ta || ta._ac) return;
+  ta._ac = true;
+  let box = null, items = [], sel = 0, start = -1;
+
+  const onScroll = ()=> close();
+  const close = ()=>{
+    if(box){ box.remove(); box = null; window.removeEventListener("scroll", onScroll, true); }
+    start = -1;
+  };
+
+  const accept = (name)=>{
+    const before = ta.value.slice(0, start);
+    let after = ta.value.slice(ta.selectionStart);
+    if(after.startsWith("]]")) after = after.slice(2);
+    const ins = "[[" + name + "]]";
+    ta.value = before + ins + after;
+    const pos = before.length + ins.length;
+    close();
+    ta.setSelectionRange(pos, pos); ta.focus();
+    if(ta.id === "memoInput") autoGrow(ta);
+  };
+
+  const draw = ()=>{
+    if(!box){
+      box = document.createElement("div");
+      box.className = "ac";
+      document.body.appendChild(box);
+      window.addEventListener("scroll", onScroll, true);
+    }
+    const r = ta.getBoundingClientRect();
+    box.style.left = r.left + "px";
+    box.style.top  = Math.min(r.bottom + 4, window.innerHeight - 250) + "px";
+    box.style.maxWidth = Math.max(200, r.width) + "px";
+    box.innerHTML = items.map((it,i)=>
+      `<div class="ai ${i===sel?"on":""}" data-i="${i}">${esc(it.name)}${it.n?`<span class="sub">${it.n}</span>`:`<span class="sub">새 링크</span>`}</div>`
+    ).join("");
+    box.querySelectorAll(".ai").forEach(el=>{
+      el.onmousedown = e=>{ e.preventDefault(); accept(items[+el.dataset.i].name); };
+    });
+  };
+
+  const refresh = ()=>{
+    const v = ta.value.slice(0, ta.selectionStart);
+    const m = /\[\[([^\[\]\n]*)$/.exec(v);
+    if(!m){ close(); return; }
+    start = m.index;
+    const q = m[1].trim();
+    const idx = linkIndex(w);
+    items = idx.filter(([n])=> !q || n.includes(q)).slice(0, 8).map(([n,c])=>({name:n, n:c}));
+    if(q && !idx.some(([n])=> n===q)) items.push({name:q, n:0});
+    if(!items.length){ close(); return; }
+    if(sel >= items.length) sel = 0;
+    draw();
+  };
+
+  ta.addEventListener("input", e=>{
+    // [[ 를 치면 ]] 를 자동으로 닫아준다
+    if(e.inputType === "insertText" && e.data === "["){
+      const p = ta.selectionStart;
+      if(ta.value.slice(p-2, p) === "[[" && ta.value.slice(p, p+2) !== "]]"){
+        ta.value = ta.value.slice(0,p) + "]]" + ta.value.slice(p);
+        ta.setSelectionRange(p, p);
+      }
+    }
+    sel = 0; refresh();
+  });
+  ta.addEventListener("keydown", e=>{
+    if(!box) return;
+    if(e.key === "ArrowDown"){ e.preventDefault(); sel = (sel+1)%items.length; draw(); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); sel = (sel-1+items.length)%items.length; draw(); }
+    else if(e.key === "Enter" || e.key === "Tab"){
+      if(e.metaKey || e.ctrlKey) return;
+      e.preventDefault(); e.stopPropagation(); accept(items[sel].name);
+    }
+    else if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); close(); }
+  }, true);
+  ta.addEventListener("blur", ()=> setTimeout(close, 120));
+  ta.addEventListener("click", ()=> refresh());
+}
+
+function addNote(){
+  const w = activeWork(); if(!w) return;
+  const ta = document.getElementById("memoInput");
+  const v = ta.value.trim();
+  if(!v){ ta.focus(); return; }
+  w.notes.unshift({ id:uid(), cat:UI.draftCat, text:v, createdAt:now(), updatedAt:now(), star:false });
+  ta.value = ""; autoGrow(ta);
+  save(); renderMain(); renderSide();
+  document.getElementById("memoInput").focus();
+}
+
+/* ============================================================
+   모달 헬퍼
+   ============================================================ */
+function closeModal(){ document.getElementById("modalRoot").innerHTML = ""; }
+function modal(html, opts){
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `<div class="overlay"><div class="modal ${opts&&opts.narrow?"narrow":""}">${html}</div></div>`;
+  const ov = root.querySelector(".overlay");
+  ov.onclick = e=>{ if(e.target===ov) closeModal(); };
+  document.onkeydown = e=>{ if(e.key==="Escape") closeModal(); };
+  return root;
+}
+function confirmBox(msg, onYes){
+  modal(`<div class="modal-head"><h2>확인</h2></div>
+    <div class="modal-body">${esc(msg)}</div>
+    <div class="modal-foot"><div style="flex:1"></div>
+      <button class="btn" id="cNo">취소</button>
+      <button class="btn primary" id="cYes">확인</button></div>`, {narrow:true});
+  document.getElementById("cNo").onclick = closeModal;
+  document.getElementById("cYes").onclick = ()=>{ closeModal(); onYes(); };
+}
+
+/* ============================================================
+   새 작품 / 작품 설정
+   ============================================================ */
+function openNewWork(){
+  modal(`
+    <div class="modal-head"><h2>새 작품</h2></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>장르</label>
+        <div class="radio-row">
+          <label><input type="radio" name="g" value="novel" checked><span>소설<span class="desc">캐릭터 · 플롯 · 복선 · 설정 …</span></span></label>
+          <label><input type="radio" name="g" value="essay"><span>에세이<span class="desc">소재 · 경험 · 생각 · 인용 …</span></span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label>제목 (나중에 바꿔도 됩니다)</label>
+        <input type="text" id="nwTitle" placeholder="가제도 괜찮습니다">
+      </div>
+    </div>
+    <div class="modal-foot"><div style="flex:1"></div>
+      <button class="btn" id="nwCancel">취소</button>
+      <button class="btn primary" id="nwOk">만들기</button></div>
+  `, {narrow:true});
+  const ti = document.getElementById("nwTitle"); ti.focus();
+  ti.onkeydown = e=>{ if(e.key==="Enter") document.getElementById("nwOk").click(); };
+  document.getElementById("nwCancel").onclick = closeModal;
+  document.getElementById("nwOk").onclick = ()=>{
+    const g = document.querySelector('input[name="g"]:checked').value;
+    const w = normalizeWork({ id:uid(), genre:g, title:ti.value.trim(), sub:"", cats:GENRES[g].cats.slice(), notes:[], createdAt:now() });
+    S.works.push(w); S.activeId = w.id;
+    UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+    closeModal(); save(); render();
+    const m = document.getElementById("memoInput"); if(m) m.focus();
+  };
+}
+
+function openWorkMenu(){
+  const w = activeWork();
+  modal(`
+    <div class="modal-head"><h2>작품 설정</h2></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>장르</label>
+        <select id="wmGenre">
+          <option value="novel" ${w.genre==="novel"?"selected":""}>소설</option>
+          <option value="essay" ${w.genre==="essay"?"selected":""}>에세이</option>
+        </select>
+        <div class="hint" style="margin-top:5px">장르를 바꿔도 기존 메모와 카테고리는 그대로 유지됩니다.</div>
+      </div>
+      <div class="field">
+        <label>이 작품만 파일로 저장</label>
+        <button class="btn" id="wmExport">이 작품 내보내기 (.json)</button>
+        <button class="btn" id="wmTxt">메모 전체 텍스트로 저장 (.md)</button>
+      </div>
+      <div class="field">
+        <label>위험 구역</label>
+        <button class="btn" id="wmDup">작품 복제</button>
+        <button class="btn" id="wmDel" style="color:#b4402f">작품 삭제</button>
+      </div>
+    </div>
+    <div class="modal-foot"><div style="flex:1"></div><button class="btn primary" id="wmClose">닫기</button></div>
+  `, {narrow:true});
+  document.getElementById("wmClose").onclick = closeModal;
+  document.getElementById("wmGenre").onchange = e=>{ w.genre = e.target.value; save(); renderSide(); };
+  document.getElementById("wmExport").onclick = ()=>{
+    download(`${safeName(w.title||"작품")}.json`, JSON.stringify({version:1, works:[w]}, null, 2), "application/json");
+  };
+  document.getElementById("wmTxt").onclick = ()=>{
+    download(`${safeName(w.title||"작품")}-메모.md`, notesMarkdown(w), "text/markdown");
+  };
+  document.getElementById("wmDup").onclick = ()=>{
+    const c = JSON.parse(JSON.stringify(w));
+    c.id = uid(); c.title = (w.title||"제목 없음")+" (사본)";
+    c.notes.forEach(n=>n.id=uid());
+    S.works.push(c); S.activeId=c.id; closeModal(); save(); render(); toast("복제했습니다");
+  };
+  document.getElementById("wmDel").onclick = ()=>{
+    closeModal();
+    confirmBox(`「${w.title||"제목 없음"}」과 메모 ${w.notes.length}개를 모두 삭제합니다. 되돌릴 수 없습니다.`, ()=>{
+      S.works = S.works.filter(x=>x.id!==w.id);
+      S.activeId = S.works.length ? S.works[0].id : null;
+      save(); render();
+    });
+  };
+}
+
+/* ============================================================
+   카테고리 편집
+   ============================================================ */
+function openCatEditor(){
+  const w = activeWork();
+  const rows = ()=> w.cats.map((c,i)=>`
+    <div class="cat-editor-row">
+      <input type="text" value="${esc(c)}" data-ci="${i}">
+      <button class="btn sm ghost" data-up="${i}" ${i===0?"disabled":""}>↑</button>
+      <button class="btn sm ghost" data-down="${i}" ${i===w.cats.length-1?"disabled":""}>↓</button>
+      <button class="btn sm ghost" data-rm="${i}">✕</button>
+    </div>`).join("");
+  const draw = ()=>{
+    modal(`
+      <div class="modal-head"><h2>카테고리 편집</h2></div>
+      <div class="modal-body">
+        <div id="catRows">${rows()}</div>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <input type="text" id="newCat" placeholder="새 카테고리 이름" style="flex:1;border:1px solid var(--line);border-radius:7px;background:var(--bg);padding:6px 10px;outline:none">
+          <button class="btn" id="addCat">추가</button>
+        </div>
+        <div class="hint" style="margin-top:12px">카테고리를 지워도 메모는 남습니다 — 미분류로 돌아갈 뿐입니다. 이름을 바꾸면 메모도 함께 따라갑니다.</div>
+      </div>
+      <div class="modal-foot"><div style="flex:1"></div>
+        <button class="btn" id="catReset">기본값으로</button>
+        <button class="btn primary" id="catDone">완료</button></div>
+    `, {narrow:true});
+
+    const commit = ()=>{
+      document.querySelectorAll("[data-ci]").forEach(inp=>{
+        const i = +inp.dataset.ci, nv = inp.value.trim();
+        if(nv && nv !== w.cats[i]){
+          const old = w.cats[i];
+          w.notes.forEach(n=>{ if(n.cat===old) n.cat=nv; });
+          w.cats[i] = nv;
+        }
+      });
+    };
+    document.getElementById("addCat").onclick = ()=>{
+      commit();
+      const v = document.getElementById("newCat").value.trim();
+      if(!v) return;
+      if(w.cats.includes(v)){ toast("이미 있는 카테고리입니다"); return; }
+      w.cats.push(v); save(); draw();
+    };
+    document.getElementById("newCat").onkeydown = e=>{ if(e.key==="Enter") document.getElementById("addCat").onclick(); };
+    document.querySelectorAll("[data-rm]").forEach(b=> b.onclick = ()=>{
+      commit();
+      const i = +b.dataset.rm;
+      const gone = w.cats[i];
+      w.cats.splice(i,1);
+      w.notes.forEach(n=>{ if(n.cat===gone) n.cat=null; });
+      save(); draw();
+    });
+    const move=(i,j)=>{ commit(); const a=w.cats; [a[i],a[j]]=[a[j],a[i]]; save(); draw(); };
+    document.querySelectorAll("[data-up]").forEach(b=> b.onclick = ()=> move(+b.dataset.up, +b.dataset.up-1));
+    document.querySelectorAll("[data-down]").forEach(b=> b.onclick = ()=> move(+b.dataset.down, +b.dataset.down+1));
+    document.getElementById("catReset").onclick = ()=>{
+      const def = GENRES[w.genre].cats.slice();
+      w.notes.forEach(n=>{ if(n.cat && !def.includes(n.cat)) n.cat = null; });
+      w.cats = def; save(); draw();
+    };
+    document.getElementById("catDone").onclick = ()=>{ commit(); save(); closeModal(); renderMain(); };
+  };
+  draw();
+}
+
+/* ============================================================
+   프롬프트 생성
+   ============================================================ */
+const PROMPT_HEAD = {
+  novel: (title)=>
+`아래는 내가 소설 「${title}」을 궁리하면서 그때그때 적어둔 메모 모음이야.
+순서 없이 쌓인 것이라 서로 모순되거나 앞뒤가 안 맞는 것도 섞여 있어.
+
+정교한 시놉시스나 완성된 플롯을 만들어달라는 게 아니야.
+내가 떠올린 것들을 하나도 빠뜨리지 않고 소설에 반영할 수 있도록, 옆에 두고 볼 **집필 가이드**를 만들어줘.
+무엇을 넣고 뺄지는 쓰면서 내가 결정할 거야.
+
+이렇게 정리해줘.
+
+1. **핵심 씨앗** — 메모 전체에서 반복되거나 중심에 놓인 것 3~5개. 이 소설이 결국 무엇에 관한 이야기인지.
+2. **인물** — 인물별로 흩어진 메모를 모아줘. 이름이 없으면 임시 호칭을 붙이고, 인물의 욕망·결핍·관계에 대한 언급이 있으면 그대로 옮겨줘.
+3. **사건과 플롯 조각** — 시간 순으로 억지로 배열하지 말고, 붙어 있는 것끼리 덩어리로 묶어줘. 아직 어디에 놓일지 모르는 장면은 '미배치'로 따로.
+4. **복선과 회수** — 심어야 할 것 / 회수처가 아직 정해지지 않은 것을 나눠서.
+5. **설정·세계관** — 작품 안에서 지켜야 할 규칙과 배경.
+6. **분위기·문장·톤** — 어떤 결의 문장으로 쓰고 싶다고 적어둔 것들.
+7. **자료와 참고** — 조사한 것, 확인이 더 필요한 것.
+8. **남은 조각들** — 위 어디에도 안 들어가는 메모. 버리지 말고 원문 그대로 남겨줘.
+9. **부딪히는 것들** — 서로 모순되는 메모는 임의로 하나를 고르지 말고 "A와 B가 충돌한다"로 나란히 보여줘. 선택은 내가 해.
+10. **쓰기 시작하려면 정해야 할 것** — 아직 비어 있는 자리를 질문 목록으로. 답을 대신 만들지는 마.`,
+
+  essay: (title)=>
+`아래는 내가 에세이 「${title}」을 궁리하면서 그때그때 적어둔 메모 모음이야.
+순서 없이 쌓인 것이라 서로 모순되거나 앞뒤가 안 맞는 것도 섞여 있어.
+
+완성된 개요를 짜달라는 게 아니야.
+내가 떠올린 것들을 하나도 빠뜨리지 않고 글에 반영할 수 있도록, 옆에 두고 볼 **집필 가이드**를 만들어줘.
+무엇을 넣고 뺄지는 쓰면서 내가 결정할 거야.
+
+이렇게 정리해줘.
+
+1. **중심에 있는 것** — 이 글이 붙들고 있는 질문이나 충동. 메모 전체에서 반복되는 것 3~5개.
+2. **경험과 장면** — 실제로 겪은 일, 본 것, 들은 것. 감각적인 세부가 적혀 있으면 그대로 살려줘.
+3. **생각과 통찰** — 판단, 해석, 결론에 해당하는 메모들. 비슷한 것끼리 묶어줘.
+4. **인용과 자료** — 인용문, 참고한 책·기사, 사실 확인이 필요한 것.
+5. **진입점 후보** — 첫 문장이나 첫 장면으로 쓸 만한 메모가 있으면 후보로 뽑아줘.
+6. **가능한 구조** — 메모들을 어떤 순서로 놓을 수 있을지 2~3가지 다른 배열을 제안해줘. 하나로 확정하지 말고.
+7. **톤과 문장** — 어떤 목소리로 쓰고 싶다고 적어둔 것들.
+8. **남은 조각들** — 위 어디에도 안 들어가는 메모. 버리지 말고 원문 그대로 남겨줘.
+9. **부딪히는 것들** — 서로 모순되는 생각은 임의로 정리하지 말고 "A와 B가 충돌한다"로 나란히 보여줘.
+10. **더 필요한 것** — 이 글이 서려면 아직 채워야 할 자리를 질문 목록으로. 답을 대신 만들지는 마.`
+};
+
+function promptTail(hasLinks){
+  const lines = [
+    "지켜줬으면 하는 것:",
+    "- 내 표현을 최대한 살려줘. 요약해서 뭉개거나 매끄러운 문장으로 바꾸지 말고, 필요하면 그대로 인용해.",
+    "- 메모에 없는 내용을 지어내서 채우지 마. 빈 곳은 빈 채로 두고 질문으로 남겨줘.",
+    "- 각 항목에서 근거가 된 메모는 번호(#12)로 표시해줘. 나중에 내가 찾아볼 수 있게."
+  ];
+  if(hasLinks) lines.push('- 메모 안의 [[대괄호]]는 내가 "이건 같은 것"이라고 이어둔 표시야. 정리할 때 이 묶음을 기준으로 삼되, 묶이지 않은 메모도 관련이 있어 보이면 알려줘.');
+  lines.push("- 어느 메모도 빠뜨리지 마. 정리 끝에, 어느 항목에도 인용되지 않은 메모 번호가 있으면 목록으로 알려줘.");
+  lines.push("- 한국어로, 마크다운으로 써줘.");
+  return lines.join("\n");
+}
+
+function buildPrompt(w, opts){
+  let notes = w.notes.slice();
+  if(opts.starOnly) notes = notes.filter(n=>n.star);
+  if(opts.cats && opts.cats.length) notes = notes.filter(n=>opts.cats.includes(n.cat || NOCAT));
+  const rank = n => n.cat ? w.cats.indexOf(n.cat) : 9999;   // 미분류는 맨 뒤
+  notes.sort((a,b)=> rank(a) - rank(b) || (a.createdAt<b.createdAt?-1:1));
+
+  const title = w.title || "제목 없음";
+  let out = PROMPT_HEAD[w.genre](title) + "\n\n";
+  if(opts.extra && opts.extra.trim()){
+    out += "추가로 부탁하고 싶은 것:\n" + opts.extra.trim() + "\n\n";
+  }
+  out += "---\n\n";
+  out += `# 「${title}」 메모 (${GENRES[w.genre].label})\n`;
+  if(w.sub) out += `${w.sub}\n`;
+  out += `총 ${notes.length}개${opts.starOnly?" · 중요 표시만":""}\n\n`;
+
+  let i = 0, lastCat = null;
+  const linkMap = new Map();
+  notes.forEach(n=>{
+    i++;
+    if(n.cat !== lastCat){ out += `\n## ${n.cat || "아직 분류하지 않은 것"}\n\n`; lastCat = n.cat; }
+    out += `**#${i}**${n.star?" ★":""}${opts.dates?`  ·  ${fmtDate(n.createdAt)}`:""}\n${n.text}\n\n`;
+    linksIn(n.text).forEach(l=>{
+      if(!linkMap.has(l)) linkMap.set(l, []);
+      linkMap.get(l).push(i);
+    });
+  });
+
+  if(opts.links !== false && linkMap.size){
+    const sorted = [...linkMap.entries()].sort((a,b)=> b[1].length-a[1].length || a[0].localeCompare(b[0],"ko"));
+    out += `\n## 내가 이어둔 것들\n\n`;
+    out += `메모 안의 [[대괄호]]는 내가 직접 이어둔 항목이야. 같은 항목이 나오는 메모 번호를 모아뒀어.\n\n`;
+    sorted.forEach(([l, ns])=>{ out += `- **${l}** (${ns.length}) — ${ns.map(x=>"#"+x).join(", ")}\n`; });
+    out += "\n";
+  }
+
+  out += "\n---\n\n" + promptTail(linkMap.size > 0) + "\n";
+  return out;
+}
+
+function openPromptModal(){
+  const w = activeWork();
+  if(!w.notes.length){ toast("메모가 아직 없습니다"); return; }
+  modal(`
+    <div class="modal-head"><h2>정리 프롬프트 만들기</h2>
+      <span class="hint" style="margin-left:auto">클로드 대화창에 붙여넣으세요</span></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>포함할 카테고리</label>
+        <div class="chips" id="pmCats"></div>
+      </div>
+      <div class="field">
+        <label>옵션</label>
+        <div class="check-row">
+          <label><input type="checkbox" id="pmStar"> 중요(★) 표시한 메모만</label>
+          <label><input type="checkbox" id="pmDates" checked> 메모에 날짜 붙이기</label>
+          <label><input type="checkbox" id="pmLinks" checked> 이어둔 항목 목록 넣기</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>추가로 부탁할 말 (선택)</label>
+        <input type="text" id="pmExtra" placeholder="예) 3인칭 시점으로 갈지 판단할 재료를 모아줘">
+      </div>
+      <div class="field" style="margin-bottom:4px">
+        <label>미리보기 <span id="pmLen" class="hint"></span></label>
+        <textarea id="promptPreview" spellcheck="false"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="pmDl">.md로 저장</button>
+      <div style="flex:1"></div>
+      <button class="btn" id="pmClose">닫기</button>
+      <button class="btn primary" id="pmCopy">전체 복사</button>
+    </div>
+  `);
+
+  const availCats = ()=> w.cats.filter(c=> w.notes.some(n=>n.cat===c))
+    .concat(w.notes.some(n=>!n.cat) ? [NOCAT] : []);
+  const catLabel = c => c===NOCAT ? NOCAT_LABEL : c;
+  let sel = availCats();
+  const catBox = document.getElementById("pmCats");
+  const drawCats = ()=>{
+    const avail = availCats();
+    catBox.innerHTML = `<button class="chip ${sel.length===avail.length?"on":""}" data-all="1">전체</button>` +
+      avail.map(c=>`<button class="chip ${sel.includes(c)?"on":""}" data-c="${esc(c)}">${esc(catLabel(c))}</button>`).join("");
+    catBox.querySelector("[data-all]").onclick = ()=>{ sel = sel.length===avail.length ? [] : availCats(); drawCats(); refresh(); };
+    catBox.querySelectorAll("[data-c]").forEach(b=> b.onclick = ()=>{
+      const c=b.dataset.c;
+      sel = sel.includes(c) ? sel.filter(x=>x!==c) : sel.concat([c]);
+      drawCats(); refresh();
+    });
+  };
+
+  const pv = document.getElementById("promptPreview");
+  const opts = ()=>({
+    cats: sel,
+    starOnly: document.getElementById("pmStar").checked,
+    dates: document.getElementById("pmDates").checked,
+    links: document.getElementById("pmLinks").checked,
+    extra: document.getElementById("pmExtra").value
+  });
+  const refresh = ()=>{
+    const txt = buildPrompt(w, opts());
+    pv.value = txt;
+    document.getElementById("pmLen").textContent = `— ${txt.length.toLocaleString()}자`;
+  };
+  drawCats(); refresh();
+
+  ["pmStar","pmDates","pmLinks"].forEach(id=> document.getElementById(id).onchange = refresh);
+  document.getElementById("pmExtra").addEventListener("input", refresh);
+  document.getElementById("pmClose").onclick = closeModal;
+  document.getElementById("pmCopy").onclick = ()=>{
+    copyText(pv.value);
+  };
+  document.getElementById("pmDl").onclick = ()=>{
+    download(`${safeName(w.title||"작품")}-프롬프트.md`, pv.value, "text/markdown");
+  };
+}
+
+function copyText(txt, msg){
+  const done = ()=> toast(msg || "복사했습니다. 클로드에 붙여넣으세요.");
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>fallbackCopy(txt,done));
+  } else fallbackCopy(txt, done);
+}
+function fallbackCopy(txt, done){
+  const ta = document.createElement("textarea");
+  ta.value = txt; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); done(); }
+  catch(e){ toast("복사에 실패했습니다. 미리보기에서 직접 선택해 주세요."); }
+  document.body.removeChild(ta);
+}
+
+/* ============================================================
+   백업 / 복원
+   ============================================================ */
+function safeName(s){ return String(s).replace(/[\\/:*?"<>|]/g,"_").slice(0,60) || "무제"; }
+function download(name, text, mime){
+  const blob = new Blob([text], {type:(mime||"text/plain")+";charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  toast("저장했습니다");
+}
+function notesMarkdown(w){
+  let out = `# ${w.title||"제목 없음"}\n\n${w.sub?w.sub+"\n\n":""}`;
+  w.cats.concat([NOCAT]).forEach(c=>{
+    const list = c===NOCAT ? w.notes.filter(n=>!n.cat) : w.notes.filter(n=>n.cat===c);
+    if(!list.length) return;
+    out += `## ${c===NOCAT ? NOCAT_LABEL : c}\n\n`;
+    list.slice().sort((a,b)=>a.createdAt<b.createdAt?-1:1).forEach(n=>{
+      out += `- ${n.star?"★ ":""}(${fmtDate(n.createdAt)}) ${n.text.replace(/\n/g,"\n  ")}\n`;
+    });
+    out += "\n";
+  });
+  return out;
+}
+/* ============================================================
+   아이폰과 주고받기
+   ============================================================ */
+function makeWork(title, genre, id){
+  const g = (genre === "essay") ? "essay" : "novel";
+  const w = normalizeWork({
+    id: (id && !S.works.some(x=>x.id===id)) ? id : uid(),
+    genre:g, title:title||"제목 없음", sub:"", cats:GENRES[g].cats.slice(), notes:[], createdAt:now()
+  });
+  S.works.push(w);
+  return w;
+}
+function buildConfig(ids){
+  return {
+    type:"gungri-config", v:1, from:"Mac", exportedAt: now(),
+    works: S.works.filter(w=>ids.includes(w.id)).map(w=>({
+      id:w.id, title:w.title||"제목 없음", genre:w.genre,
+      cats:w.cats.slice(), links: linkIndex(w).map(e=>e[0]).slice(0,300)
+    }))
+  };
+}
+function matchWork(cw){
+  return S.works.find(x=>x.id===cw.id)
+      || S.works.find(x=> (x.title||"") === (cw.title||"") && x.genre === cw.genre)
+      || null;
+}
+function capturePlan(data){
+  const have = new Set();
+  S.works.forEach(w=>w.notes.forEach(n=>have.add(n.id)));
+  const rows = []; let inbox = null, skipped = 0;
+  (data.works||[]).forEach(cw=>{
+    const fresh = (cw.notes||[]).filter(n=>{
+      if(have.has(n.id)){ skipped++; return false; }
+      return true;
+    });
+    if(cw.inbox || cw.id === "__inbox"){ inbox = { cw, fresh }; return; }
+    if(!fresh.length) return;
+    rows.push({ cw, fresh, target: matchWork(cw) });
+  });
+  return { rows, inbox, skipped, total:(data.works||[]).reduce((a,w)=>a+(w.notes||[]).length,0) };
+}
+function applyCapture(plan, inboxTargetId){
+  let added = 0, newCats = 0, newWorks = 0;
+  const put = (w, list)=>{
+    list.forEach(n=>{
+      let cat = n.cat || null;
+      if(cat && !w.cats.includes(cat)){ w.cats.push(cat); newCats++; }
+      w.notes.push({
+        id:n.id, cat, text:n.text, star:!!n.star,
+        createdAt:n.createdAt || now(), updatedAt:n.createdAt || now()
+      });
+      added++;
+    });
+    w.notes.sort((a,b)=> a.createdAt < b.createdAt ? 1 : -1);
+  };
+  plan.rows.forEach(r=>{
+    let w = r.target;
+    if(!w){ w = makeWork(r.cw.title, r.cw.genre, r.cw.id); newWorks++; }
+    put(w, r.fresh);
+  });
+  if(plan.inbox && plan.inbox.fresh.length){
+    let w = inboxTargetId === "__new" ? null : S.works.find(x=>x.id===inboxTargetId);
+    if(!w){ w = makeWork("아직 모름", "novel"); newWorks++; }
+    put(w, plan.inbox.fresh);
+  }
+  return { added, newCats, newWorks };
+}
+
+function openPhone(tab){
+  const ids = S.works.map(w=>w.id);
+  let sel = ids.slice();
+  modal(`
+    <div class="modal-head"><h2>아이폰</h2>
+      <span class="hint" style="margin-left:auto">담기는 아이폰에서, 정리는 여기에서</span></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>1 · 아이폰으로 작품과 분류 보내기</label>
+        <div class="chips" id="phCats" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn primary" id="phCopy">작품·분류 복사</button>
+          <button class="btn" id="phFile">.json으로 저장</button>
+        </div>
+        <div class="hint" style="margin-top:6px">복사한 뒤 아이폰 궁리에서 <b>··· → 맥북에서 작품·분류 받기</b>에 붙여넣으세요.
+          같은 애플 계정이면 복사한 것이 아이폰에 그대로 붙습니다.</div>
+      </div>
+
+      <div class="field" style="border-top:1px solid var(--line2);padding-top:16px">
+        <label>2 · 아이폰에서 담아온 메모 합치기</label>
+        <textarea id="phIn" placeholder='아이폰에서 복사한 내용을 여기에 붙여넣으세요' style="min-height:96px;font-family:ui-monospace,Menlo,monospace;font-size:12px"></textarea>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn primary" id="phMerge">붙여넣은 것 합치기</button>
+          <button class="btn" id="phPick">파일에서 합치기</button>
+        </div>
+        <div class="hint" style="margin-top:6px">이미 합친 메모는 자동으로 걸러집니다. 같은 것을 두 번 합쳐도 안전합니다.</div>
+      </div>
+    </div>
+    <div class="modal-foot"><div style="flex:1"></div><button class="btn primary" id="phClose">닫기</button></div>
+  `);
+
+  const cbox = document.getElementById("phCats");
+  const drawSel = ()=>{
+    cbox.innerHTML = `<button class="chip ${sel.length===ids.length?"on":""}" data-all="1">전체 ${ids.length}편</button>` +
+      S.works.map(w=>`<button class="chip ${sel.includes(w.id)?"on":""}" data-w="${w.id}">${esc(w.title||"제목 없음")}</button>`).join("");
+    cbox.querySelector("[data-all]").onclick = ()=>{ sel = sel.length===ids.length ? [] : ids.slice(); drawSel(); };
+    cbox.querySelectorAll("[data-w]").forEach(b=> b.onclick = ()=>{
+      const id=b.dataset.w; sel = sel.includes(id) ? sel.filter(x=>x!==id) : sel.concat([id]); drawSel();
+    });
+  };
+  drawSel();
+
+  document.getElementById("phClose").onclick = closeModal;
+  document.getElementById("phCopy").onclick = ()=>{
+    if(!sel.length){ toast("보낼 작품을 골라주세요"); return; }
+    copyText(JSON.stringify(buildConfig(sel)), "복사했습니다. 아이폰 궁리에 붙여넣으세요.");
+  };
+  document.getElementById("phFile").onclick = ()=>{
+    if(!sel.length){ toast("보낼 작품을 골라주세요"); return; }
+    download("궁리-작품분류.json", JSON.stringify(buildConfig(sel), null, 1), "application/json");
+  };
+  document.getElementById("phMerge").onclick = ()=>{
+    const raw = document.getElementById("phIn").value.trim();
+    if(!raw){ toast("붙여넣은 내용이 없습니다"); return; }
+    let d; try{ d = JSON.parse(raw); }catch(e){ toast("읽을 수 없는 내용입니다"); return; }
+    if(!d || !Array.isArray(d.works)){ toast("아이폰에서 복사한 것이 맞는지 확인해 주세요"); return; }
+    openMerge(d);
+  };
+  document.getElementById("phPick").onclick = ()=>{
+    closeModal(); document.getElementById("fileInput").click();
+  };
+  if(tab === "merge") document.getElementById("phIn").focus();
+}
+
+function openMerge(data){
+  const plan = capturePlan(data);
+  const fresh = plan.rows.reduce((a,r)=>a+r.fresh.length, 0) + (plan.inbox?plan.inbox.fresh.length:0);
+  if(!fresh){
+    modal(`<div class="modal-head"><h2>합치기</h2></div>
+      <div class="modal-body"><p style="margin-top:0">새로 들어올 메모가 없습니다.
+      아이폰에서 온 ${plan.total}개는 이미 모두 여기 있습니다.</p></div>
+      <div class="modal-foot"><div style="flex:1"></div><button class="btn primary" id="mgNo">닫기</button></div>`, {narrow:true});
+    document.getElementById("mgNo").onclick = closeModal;
+    return;
+  }
+  const lines = plan.rows.map(r=>
+    `<li><b>「${esc(r.cw.title||"제목 없음")}」</b> ${r.fresh.length}개 — ${r.target?`「${esc(r.target.title||"제목 없음")}」에 들어갑니다`:`<span style="color:var(--accent)">새 작품으로 만들어집니다</span>`}</li>`
+  ).join("");
+
+  modal(`
+    <div class="modal-head"><h2>아이폰에서 온 메모 합치기</h2>
+      <span class="hint" style="margin-left:auto">${data.exportedAt?fmtDateTime(data.exportedAt)+" 내보냄":""}</span></div>
+    <div class="modal-body">
+      <p style="margin-top:0">새로 들어올 메모 <b>${fresh}개</b>${plan.skipped?` · 이미 있어서 건너뛸 것 ${plan.skipped}개`:""}</p>
+      ${lines?`<ul style="margin:10px 0 4px;padding-left:20px;line-height:1.9">${lines}</ul>`:""}
+      ${plan.inbox && plan.inbox.fresh.length ? `
+        <div class="field" style="margin-top:16px">
+          <label>‘아직 모름’으로 담아온 ${plan.inbox.fresh.length}개는 어디에</label>
+          <select id="mgInbox">
+            <option value="__new">새 작품 「아직 모름」 만들기</option>
+            ${S.works.map(w=>`<option value="${w.id}">${esc(w.title||"제목 없음")}</option>`).join("")}
+          </select>
+        </div>` : ""}
+    </div>
+    <div class="modal-foot"><div style="flex:1"></div>
+      <button class="btn" id="mgNo">취소</button>
+      <button class="btn primary" id="mgYes">합치기</button></div>
+  `, {narrow:true});
+  document.getElementById("mgNo").onclick = closeModal;
+  document.getElementById("mgYes").onclick = ()=>{
+    const t = document.getElementById("mgInbox");
+    const res = applyCapture(plan, t ? t.value : "__new");
+    closeModal(); save(); render();
+    toast(`메모 ${res.added}개를 합쳤습니다${res.newWorks?` · 새 작품 ${res.newWorks}편`:""}${res.newCats?` · 분류 ${res.newCats}개 복구`:""}`);
+  };
+}
+
+function exportAll(){
+  const stamp = new Date().toISOString().slice(0,10).replace(/-/g,"");
+  download(`궁리-백업-${stamp}.json`, JSON.stringify(S, null, 2), "application/json");
+}
+function importFile(file){
+  const r = new FileReader();
+  r.onload = ()=>{
+    let data;
+    try{ data = JSON.parse(r.result); }
+    catch(e){ toast("읽을 수 없는 파일입니다"); return; }
+    if(data && data.type === "gungri-capture"){ openMerge(data); return; }   // 아이폰에서 온 것
+    if(data && data.type === "gungri-config"){ toast("이건 아이폰으로 보내는 파일입니다"); return; }
+    const incoming = Array.isArray(data.works) ? data.works : (Array.isArray(data) ? data : null);
+    if(!incoming){ toast("궁리 백업 파일이 아닙니다"); return; }
+    modal(`<div class="modal-head"><h2>불러오기</h2></div>
+      <div class="modal-body">
+        <p style="margin-top:0">파일에 작품 <b>${incoming.length}개</b>가 들어 있습니다.</p>
+        <div class="radio-row" style="flex-direction:column;gap:8px">
+          <label><input type="radio" name="imp" value="merge" checked><span>지금 것에 더하기<span class="desc">현재 작품은 그대로 두고 뒤에 추가합니다. (권장)</span></span></label>
+          <label><input type="radio" name="imp" value="replace"><span>전부 바꾸기<span class="desc">현재 작품 ${S.works.length}개를 지우고 파일 내용으로 교체합니다.</span></span></label>
+        </div>
+      </div>
+      <div class="modal-foot"><div style="flex:1"></div>
+        <button class="btn" id="impNo">취소</button>
+        <button class="btn primary" id="impYes">불러오기</button></div>`, {narrow:true});
+    document.getElementById("impNo").onclick = closeModal;
+    document.getElementById("impYes").onclick = ()=>{
+      const mode = document.querySelector('input[name="imp"]:checked').value;
+      const clean = incoming.map(w=>{ const c=JSON.parse(JSON.stringify(w)); return normalizeWork(c); });
+      if(mode==="replace"){ S.works = clean; }
+      else {
+        const have = new Set(S.works.map(w=>w.id));
+        clean.forEach(w=>{ if(have.has(w.id)){ w.id=uid(); w.notes.forEach(n=>n.id=uid()); } S.works.push(w); });
+      }
+      S.activeId = S.works.length ? S.works[S.works.length-1].id : null;
+      UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+      closeModal(); save(); render(); toast(`작품 ${clean.length}개를 불러왔습니다`);
+    };
+  };
+  r.readAsText(file);
+}
+
+/* ============================================================
+   부팅
+   ============================================================ */
+function render(){ renderSide(); renderMain(); }
+
+store.probe();
+load();
+render();
+
+document.getElementById("btnNewWork").onclick = openNewWork;
+document.getElementById("btnPhone").onclick = ()=> openPhone();
+document.getElementById("btnExport").onclick = exportAll;
+document.getElementById("btnImport").onclick = ()=> document.getElementById("fileInput").click();
+document.getElementById("fileInput").onchange = e=>{
+  const f = e.target.files[0]; if(f) importFile(f);
+  e.target.value = "";
+};
+function syncThemeBtn(){
+  document.getElementById("btnTheme").textContent = (S.theme==="dark") ? "밝게" : "어둡게";
+}
+syncThemeBtn();
+document.getElementById("btnTheme").onclick = ()=>{
+  S.theme = (S.theme==="dark") ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", S.theme);
+  syncThemeBtn(); save(true);
+};
+
+window.addEventListener("keydown", e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="k"){
+    e.preventDefault(); const s=document.getElementById("search"); if(s) s.focus();
+  }
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="s"){
+    e.preventDefault(); exportAll();
+  }
+});
+window.addEventListener("beforeunload", ()=>{ clearTimeout(saveTimer); store.set(S); });
+
+})();
+</script>
+</body>
+</html>
