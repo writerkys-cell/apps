@@ -127,6 +127,7 @@
 
   /* ---------- filters ---------- */
   .filters{padding:12px 28px 6px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .fright{margin-left:auto; display:flex; align-items:center; gap:9px; flex:0 0 auto;}
   #search{
     border:1px solid var(--line); background:var(--panel); border-radius:7px;
     padding:4px 10px; font-size:13px; outline:none; width:180px;
@@ -135,13 +136,44 @@
 
   /* ---------- notes ---------- */
   .notes{flex:1; overflow-y:auto; padding:6px 28px 60px;}
-  .note{
-    border-bottom:1px solid var(--line2); padding:13px 2px 13px 0;
-    display:flex; gap:12px; align-items:flex-start;
+  .note{border-bottom:1px solid var(--line2);}
+  .nrow{
+    display:flex; align-items:flex-start; gap:10px; padding:9px 2px 9px 0;
+    cursor:pointer;
   }
+  .note.open .nrow{cursor:default; padding-bottom:4px;}
+  .note:hover{background:var(--line2);}
+  .note.open, .note.open:hover, .note.editing, .note.editing:hover{background:transparent;}
+  .note.editing{padding:10px 2px 14px 0;}
+  .n-star{
+    flex:0 0 auto; opacity:0; transition:opacity .15s; margin-top:1px;
+    border:none; background:none; padding:1px 2px; font-size:13px; color:var(--dim2); border-radius:4px;
+  }
+  .note:hover .n-star, .n-star.starred{opacity:1;}
+  .n-star.starred{color:var(--star);}
+  .nrow .cat-sel{flex:0 0 96px; width:96px; margin-top:1px; overflow:hidden; text-overflow:ellipsis;}
+  .nrow .note-text{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .note.open .nrow .note-text{white-space:pre-wrap; overflow:visible; word-break:break-word;}
+  .n-dt{flex:0 0 auto; font-size:11.5px; color:var(--dim2); margin-top:2px; font-variant-numeric:tabular-nums;}
+  .nfoot{font-size:11.5px; color:var(--dim2); padding:0 2px 10px 108px; display:flex; gap:9px;}
   .note:hover .note-actions{opacity:1;}
   .note-body{flex:1; min-width:0;}
   .note-meta{font-size:11.5px; color:var(--dim2); margin-bottom:4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+
+  /* ---------- 쪽 넘기기 ---------- */
+  .pager{display:flex; gap:4px; justify-content:center; align-items:center; padding:20px 0 10px; flex-wrap:wrap;}
+  .pg{
+    min-width:30px; height:30px; padding:0 8px; border:1px solid transparent; background:transparent;
+    color:var(--dim); border-radius:7px; font-size:13px; font-variant-numeric:tabular-nums;
+  }
+  .pg:hover:not(:disabled):not(.gap){background:var(--accent-soft); color:var(--text);}
+  .pg.on{background:var(--text); color:var(--bg); font-weight:650;}
+  .pg:disabled{opacity:.25;}
+  .pg.gap{color:var(--dim2); pointer-events:none; min-width:16px; padding:0;}
+  #pageSize{
+    border:1px solid var(--line); background:var(--panel); border-radius:7px;
+    padding:3px 6px; font-size:12px; color:var(--dim); outline:none; cursor:pointer;
+  }
   .cat-badge{color:var(--accent); font-weight:600;}
   .cat-sel{
     appearance:none; -webkit-appearance:none; border:none; background:transparent;
@@ -194,12 +226,7 @@
   }
   .icon-btn:hover{background:var(--accent-soft); color:var(--text);}
   .icon-btn.starred{color:var(--star);}
-  .note.pinned .note-actions{opacity:1;}
-  .note.pinned .note-actions [data-editbtn],
-  .note.pinned .note-actions [data-del]{opacity:0; transition:opacity .15s;}
-  .note.pinned:hover .note-actions [data-editbtn],
-  .note.pinned:hover .note-actions [data-del]{opacity:1;}
-  .note.pinned{background:linear-gradient(90deg, var(--accent-soft) 0%, transparent 60%); border-radius:6px; padding-left:10px;}
+  .note.pinned .nrow{background:linear-gradient(90deg, var(--accent-soft) 0%, transparent 70%);}
   .edit-area{
     width:100%; border:1px solid var(--dim2); border-radius:8px; background:var(--panel);
     padding:10px 12px; resize:vertical; min-height:80px; line-height:1.65; outline:none;
@@ -350,19 +377,20 @@ const store = {
    상태
    ============================================================ */
 let S = null;              // {version, works:[], activeId, theme}
-let UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+let UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null, page:1, open:{} };
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function now(){ return new Date().toISOString(); }
 
 function blankState(){
-  return { version:1, works:[], activeId:null, theme:"light" };
+  return { version:1, works:[], activeId:null, theme:"light", pageSize:30 };
 }
 
 function load(){
   const raw = store.get();
   S = (raw && raw.works) ? raw : blankState();
   if(!Array.isArray(S.works)) S.works = [];
+  if(!S.pageSize) S.pageSize = 30;
   S.works.forEach(normalizeWork);
   document.documentElement.setAttribute("data-theme", S.theme === "dark" ? "dark" : "light");
 }
@@ -523,7 +551,7 @@ function renderSide(){
   el.querySelectorAll(".work-item").forEach(n=>{
     n.onclick = ()=>{
       S.activeId = n.dataset.w;
-      UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+      UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null, page:1, open:{} };
       save(true); render();
     };
   });
@@ -572,9 +600,13 @@ function renderMain(){
     <div class="filters" id="filterBar">
       <input id="search" type="text" placeholder="검색" value="${esc(UI.q)}">
       <div class="chips" style="margin:0" id="filterCats"></div>
-      <div class="spacer" style="flex:1"></div>
-      <button class="btn ghost sm" id="btnLinks">링크 ${linkIndex(w).length}</button>
-      <span class="stat" id="statLine"></span>
+      <div class="fright">
+        <button class="btn ghost sm" id="btnLinks">링크 ${linkIndex(w).length}</button>
+        <select id="pageSize" title="한 쪽에 몇 개씩">
+          ${[20,30,50,100,300].map(v=>`<option value="${v}" ${(S.pageSize||30)===v?"selected":""}>${v}개씩</option>`).join("")}
+        </select>
+        <span class="stat" id="statLine"></span>
+      </div>
     </div>
     <div id="linkCloud" style="display:none;padding:0 28px 8px"></div>
 
@@ -609,8 +641,8 @@ function renderMain(){
     cats.filter(c=>catCount[c]>0).map(c=>`<button class="chip filter ${UI.cat===c?"on":""}" data-f="${esc(c)}">${esc(c)}<span class="cnt">${catCount[c]}</span></button>`).join("") +
     (noneCount?`<button class="chip filter ${UI.cat===NOCAT?"on":""}" data-f="${NOCAT}">미분류<span class="cnt">${noneCount}</span></button>`:"") +
     `<button class="chip filter ${UI.starOnly?"on":""}" id="chipStar">★ 중요</button>`;
-  fc.querySelectorAll(".chip.filter[data-f]").forEach(b=> b.onclick = ()=>{ UI.cat = b.dataset.f || null; renderMain(); });
-  fc.querySelector("#chipStar").onclick = ()=>{ UI.starOnly = !UI.starOnly; renderMain(); };
+  fc.querySelectorAll(".chip.filter[data-f]").forEach(b=> b.onclick = ()=>{ UI.cat = b.dataset.f || null; UI.page = 1; renderMain(); });
+  fc.querySelector("#chipStar").onclick = ()=>{ UI.starOnly = !UI.starOnly; UI.page = 1; renderMain(); };
 
   const ta = pane.querySelector("#memoInput");
   ta.addEventListener("input", ()=>autoGrow(ta));
@@ -622,7 +654,10 @@ function renderMain(){
   pane.querySelector("#btnWorkMenu").onclick = openWorkMenu;
 
   const sc = pane.querySelector("#search");
-  sc.addEventListener("input", ()=>{ UI.q = sc.value; renderNotes(); });
+  sc.addEventListener("input", ()=>{ UI.q = sc.value; UI.page = 1; renderNotes(); });
+  pane.querySelector("#pageSize").onchange = e=>{
+    S.pageSize = +e.target.value; UI.page = 1; save(true); renderNotes();
+  };
 
   // 링크 목록 펼치기
   const cloud = pane.querySelector("#linkCloud");
@@ -664,7 +699,7 @@ function catSelectHTML(n, w){
 
 function noteCardHTML(n, w){
   if(UI.editing === n.id){
-    return `<div class="note" data-n="${n.id}">
+    return `<div class="note editing" data-n="${n.id}">
       <div class="note-body">
         <textarea class="edit-area" data-edit="${n.id}">${esc(n.text)}</textarea>
         <div style="margin-top:7px;display:flex;gap:6px;align-items:center">
@@ -678,20 +713,22 @@ function noteCardHTML(n, w){
       </div>
     </div>`;
   }
-  return `<div class="note ${n.star?"pinned":""}" data-n="${n.id}">
-    <div class="note-body">
-      <div class="note-meta">
-        ${catSelectHTML(n, w)}
-        <span>${fmtDateTime(n.createdAt)}</span>
-        ${n.updatedAt!==n.createdAt?`<span>· 수정 ${fmtDate(n.updatedAt)}</span>`:""}
-      </div>
+  const open = !!UI.open[n.id];
+  const d = new Date(n.createdAt);
+  const md = `${String(d.getMonth()+1).padStart(2,"0")}.${String(d.getDate()).padStart(2,"0")}`;
+  return `<div class="note ${n.star?"pinned":""} ${open?"open":""}" data-n="${n.id}">
+    <div class="nrow" data-row="${n.id}">
+      <button class="n-star ${n.star?"starred":""}" data-star="${n.id}" title="중요 표시">${n.star?"★":"☆"}</button>
+      ${catSelectHTML(n, w)}
       <div class="note-text">${noteHTML(n.text)}</div>
+      <span class="n-dt">${md}</span>
+      <div class="note-actions">
+        <button class="icon-btn" data-editbtn="${n.id}" title="수정">✎</button>
+        <button class="icon-btn" data-del="${n.id}" title="삭제">✕</button>
+      </div>
     </div>
-    <div class="note-actions">
-      <button class="icon-btn ${n.star?"starred":""}" data-star="${n.id}" title="중요 표시">${n.star?"★":"☆"}</button>
-      <button class="icon-btn" data-editbtn="${n.id}" title="수정">✎</button>
-      <button class="icon-btn" data-del="${n.id}" title="삭제">✕</button>
-    </div>
+    ${open?`<div class="nfoot"><span>${fmtDateTime(n.createdAt)}</span>${
+      n.updatedAt!==n.createdAt?`<span>· 수정 ${fmtDate(n.updatedAt)}</span>`:""}</div>`:""}
   </div>`;
 }
 
@@ -705,15 +742,24 @@ function bindNoteEvents(box, w){
     };
     s.onclick = e=> e.stopPropagation();
   });
-  box.querySelectorAll("[data-star]").forEach(b=> b.onclick = ()=>{
+  box.querySelectorAll("[data-row]").forEach(r=> r.onclick = e=>{
+    if(e.target.closest("select,button,a")) return;      // 분류·별표·수정·링크는 그대로
+    const id = r.dataset.row;
+    if(UI.open[id]) delete UI.open[id]; else UI.open[id] = 1;
+    renderNotes();
+  });
+  box.querySelectorAll("[data-star]").forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
     const n = w.notes.find(x=>x.id===b.dataset.star); n.star = !n.star; save(); renderNotes();
   });
-  box.querySelectorAll("[data-editbtn]").forEach(b=> b.onclick = ()=>{
+  box.querySelectorAll("[data-editbtn]").forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
     UI.editing = b.dataset.editbtn; renderNotes();
     const ta = box.querySelector("[data-edit]");
     if(ta){ ta.focus(); ta.style.height=ta.scrollHeight+"px"; attachAC(ta, w); }
   });
-  box.querySelectorAll("[data-del]").forEach(b=> b.onclick = ()=>{
+  box.querySelectorAll("[data-del]").forEach(b=> b.onclick = e=>{
+    e.stopPropagation();
     confirmBox("이 메모를 삭제할까요?", ()=>{
       w.notes = w.notes.filter(x=>x.id!==b.dataset.del); save(); renderMain(); renderSide();
     });
@@ -741,17 +787,59 @@ function renderNotes(){
   const w = activeWork(); if(!w) return;
   if(UI.link){ renderLinkView(w); return; }
 
-  const list = visibleNotes();
+  const all = visibleNotes();
   const box = document.getElementById("notesList");
-  const stat = document.getElementById("statLine");
-  if(stat) stat.textContent = `${list.length}개 보임 / 전체 ${w.notes.length}개`;
+  const size = S.pageSize || 30;
+  const pages = Math.max(1, Math.ceil(all.length / size));
+  if(UI.page > pages) UI.page = pages;
+  if(UI.page < 1) UI.page = 1;
+  const list = all.slice((UI.page-1)*size, UI.page*size);
 
-  if(!list.length){
+  const stat = document.getElementById("statLine");
+  if(stat) stat.textContent = pages>1
+    ? `${all.length}개 · ${UI.page}/${pages}쪽`
+    : `${all.length}개 보임 / 전체 ${w.notes.length}개`;
+
+  if(!all.length){
     box.innerHTML = `<div class="empty-notes">${w.notes.length ? "조건에 맞는 메모가 없습니다." : "첫 생각을 담아보세요.<br><span style='font-size:13px'>모순되어도, 앞뒤가 안 맞아도 괜찮습니다.</span>"}</div>`;
     return;
   }
-  box.innerHTML = list.map(n=>noteCardHTML(n, w)).join("");
+  box.innerHTML = list.map(n=>noteCardHTML(n, w)).join("") + pagerHTML(UI.page, pages);
   bindNoteEvents(box, w);
+  bindPager(box, pages);
+}
+
+/* ---------- 쪽 넘기기 ---------- */
+function pageNums(cur, total){
+  if(total <= 7) return Array.from({length:total}, (_,i)=>i+1);
+  const out = [1];
+  const s = Math.max(2, cur-2), e = Math.min(total-1, cur+2);
+  if(s > 2) out.push("…");
+  for(let i=s; i<=e; i++) out.push(i);
+  if(e < total-1) out.push("…");
+  out.push(total);
+  return out;
+}
+function pagerHTML(cur, total){
+  if(total <= 1) return "";
+  return `<div class="pager">
+    <button class="pg" data-go="1" ${cur===1?"disabled":""} title="첫 쪽">«</button>
+    <button class="pg" data-go="${cur-1}" ${cur===1?"disabled":""}>‹ 이전</button>
+    ${pageNums(cur,total).map(p=> p==="…"
+      ? `<span class="pg gap">…</span>`
+      : `<button class="pg ${p===cur?"on":""}" data-go="${p}">${p}</button>`).join("")}
+    <button class="pg" data-go="${cur+1}" ${cur===total?"disabled":""}>다음 ›</button>
+    <button class="pg" data-go="${total}" ${cur===total?"disabled":""} title="끝 쪽">»</button>
+  </div>`;
+}
+function bindPager(box, pages){
+  box.querySelectorAll("[data-go]").forEach(b=> b.onclick = ()=>{
+    const p = +b.dataset.go;
+    if(p < 1 || p > pages || p === UI.page) return;
+    UI.page = p; renderNotes();
+    const n = document.getElementById("notesList");
+    if(n) n.scrollTop = 0;
+  });
 }
 
 /* ============================================================
@@ -825,7 +913,7 @@ function renderLinkView(w){
   const join = (n)=>{ n.text = linkifyText(n.text, name); n.updatedAt = now(); };
 
   box.querySelector("#lvClose").onclick = ()=>{ UI.link = null; renderMain(); };
-  box.querySelector("#lvSearch").onclick = ()=>{ UI.link=null; UI.q=name; UI.cat=null; UI.starOnly=false; renderMain(); };
+  box.querySelector("#lvSearch").onclick = ()=>{ UI.link=null; UI.q=name; UI.cat=null; UI.starOnly=false; UI.page=1; renderMain(); };
   box.querySelector("#lvRename").onclick = ()=> openRenameLink(w, name);
   box.querySelector("#lvUnlink").onclick = ()=>{
     if(!linked.length){ toast("풀 링크가 없습니다"); return; }
@@ -1026,6 +1114,7 @@ function addNote(){
   if(!v){ ta.focus(); return; }
   w.notes.unshift({ id:uid(), cat:UI.draftCat, text:v, createdAt:now(), updatedAt:now(), star:false });
   ta.value = ""; autoGrow(ta);
+  UI.page = 1;                       // 새 메모는 첫 쪽에 있으니
   save(); renderMain(); renderSide();
   document.getElementById("memoInput").focus();
 }
@@ -1082,7 +1171,7 @@ function openNewWork(){
     const g = document.querySelector('input[name="g"]:checked').value;
     const w = normalizeWork({ id:uid(), genre:g, title:ti.value.trim(), sub:"", cats:GENRES[g].cats.slice(), notes:[], createdAt:now() });
     S.works.push(w); S.activeId = w.id;
-    UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+    UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null, page:1, open:{} };
     closeModal(); save(); render();
     const m = document.getElementById("memoInput"); if(m) m.focus();
   };
@@ -1635,7 +1724,7 @@ function importFile(file){
         clean.forEach(w=>{ if(have.has(w.id)){ w.id=uid(); w.notes.forEach(n=>n.id=uid()); } S.works.push(w); });
       }
       S.activeId = S.works.length ? S.works[S.works.length-1].id : null;
-      UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null };
+      UI = { cat:null, q:"", starOnly:false, draftCat:null, editing:null, link:null, page:1, open:{} };
       closeModal(); save(); render(); toast(`작품 ${clean.length}개를 불러왔습니다`);
     };
   };
