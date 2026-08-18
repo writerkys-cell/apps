@@ -427,6 +427,33 @@ html[data-theme="dark"] .content mark{background:#5C5326}
 .del-btn{color:var(--ink-3);font-size:12px;padding:2px 6px;border-radius:3px}
 .del-btn:hover{color:var(--cinnabar);background:var(--paper-3)}
 
+/* ---------- 조각 받기 ---------- */
+#drop{
+  width:100%;min-height:120px;border:1px dashed var(--line);border-radius:9px;
+  background:var(--paper-2);color:var(--ink);font-family:var(--mono);font-size:12.5px;
+  line-height:1.6;padding:12px 14px;resize:vertical;outline:none;
+}
+#drop:focus{border-color:var(--indigo);border-style:solid;background:var(--paper)}
+#drop::placeholder{color:var(--ink-3)}
+.in-acts{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+.in-acts button{
+  border:1px solid var(--line);border-radius:99px;padding:5px 14px;font-size:13px;color:var(--ink-2);
+}
+.in-acts button:hover{border-color:var(--indigo);color:var(--indigo)}
+.in-acts button.primary{border-color:var(--indigo);color:var(--indigo);font-weight:600}
+.in-acts button.primary:hover{background:var(--indigo);color:var(--paper)}
+.in-acts button:disabled{opacity:.4;cursor:default}
+.in-acts button:disabled:hover{border-color:var(--line);color:var(--ink-2);background:none}
+.frag{
+  display:flex;gap:10px;align-items:baseline;padding:6px 2px;border-bottom:1px solid var(--line-soft);
+  font-size:14px;
+}
+.frag .when{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);flex:0 0 118px;white-space:nowrap}
+.frag .body{flex:1;min-width:0;word-break:break-word}
+.frag.dup{opacity:.45}
+.frag.dup .body{text-decoration:line-through;text-decoration-thickness:1px}
+.frag .mark{font-size:10.5px;font-family:var(--mono);color:var(--ink-3)}
+
 /* ---------- 보관함 ---------- */
 .bk-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:6px 0 20px}
 .bk-card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--paper-2)}
@@ -551,6 +578,23 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
   font-size:10.5px;font-family:var(--mono);color:var(--ink-3);text-align:center;
 }
 
+/* ---------- 저장 실패 띠 ---------- */
+#savealert{
+  position:fixed;left:0;right:0;top:0;z-index:400;background:var(--cinnabar);color:#fff;
+  padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  font-size:13.5px;line-height:1.5;box-shadow:0 3px 14px rgba(0,0,0,.25);
+}
+#savealert b{font-weight:700}
+#savealert .grow{flex:1;min-width:180px}
+#savealert button{
+  border:1px solid rgba(255,255,255,.6);border-radius:99px;padding:3px 12px;
+  font-size:12.5px;color:#fff;white-space:nowrap;
+}
+#savealert button:hover{background:rgba(255,255,255,.18)}
+body.save-alert #app{padding-top:44px}
+.dot.fail{background:var(--cinnabar);animation:blip 1.1s ease-in-out infinite}
+@keyframes blip{0%,100%{opacity:1}50%{opacity:.25}}
+
 /* ---------- 토스트 ---------- */
 #toast{
   position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
@@ -581,6 +625,7 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
       <button class="nav-item" data-go="all"><span class="ico">▤</span>전체 페이지</button>
       <button class="nav-item" data-go="backup"><span class="ico">⛁</span>보관함<span class="kbd" id="bk-n"></span></button>
       <button class="nav-item" data-go="calendar"><span class="ico">▦</span>달력</button>
+      <button class="nav-item" data-go="inbox"><span class="ico">⇥</span>조각 받기</button>
       <button class="nav-item" data-go="shuffle"><span class="ico">✎</span>쪽글<span class="kbd" id="shuffle-n"></span></button>
       <button class="nav-item" id="btn-random"><span class="ico">⚄</span>무작위 페이지</button>
       <button class="nav-item" id="btn-search"><span class="ico">⌕</span>검색<span class="kbd">⌘K</span></button>
@@ -627,6 +672,7 @@ html[data-theme="dark"] .overlay{background:rgba(0,0,0,.55)}
 </div>
 
 <input type="file" id="file-input" accept="application/json,.json" style="display:none">
+<input type="file" id="frag-input" accept="application/json,.json,text/plain,.txt" style="display:none">
 <div id="toast"></div>
 
 <script>
@@ -748,6 +794,22 @@ let saveTimer = null;
 
 function emptyGraph(){ return { version:1, pages:{}, blocks:{}, meta:{ createdAt: now() } }; }
 
+/* ---- 색인 ----
+   제목 찾기·참조 세기·블록 수는 예전에 부를 때마다 전체를 훑었다.
+   글이 쌓이면 그 값이 곱해져 무거워지므로, 그래프가 바뀐 횟수(rev)를 세어
+   바뀌지 않았으면 앞서 만든 것을 그대로 쓴다. */
+let rev = 0;
+const cache = { rev:-1, titles:null, refs:null, counts:null };
+function bumpRev(){ rev++; }
+function cacheFor(kind, build){
+  if(cache.rev !== rev){
+    cache.rev = rev;
+    cache.titles = null; cache.refs = null; cache.counts = null;
+  }
+  if(!cache[kind]) cache[kind] = build();
+  return cache[kind];
+}
+
 function isPage(id){ return !!(G.pages[id]); }
 function node(id){ return G.pages[id] || G.blocks[id]; }
 function childrenOf(id){ const n = node(id); return n ? n.children : []; }
@@ -780,20 +842,30 @@ function isAncestorOf(a, b){                       // a가 b의 조상인가
   return false;
 }
 function touch(id){
+  bumpRev();
   const n = node(id); if(!n) return;
   n.updatedAt = now();
   if(G.blocks[id]){ const pg = pageOf(id); if(pg) pg.updatedAt = now(); }
 }
 
+function titleIndex(){
+  return cacheFor("titles", () => {
+    const m = new Map();
+    for(const p of Object.values(G.pages)){
+      const k = p.title.trim().toLowerCase();
+      if(!m.has(k)) m.set(k, p);          // 같은 제목이 둘이면 먼저 것을 쓴다(예전과 같음)
+    }
+    return m;
+  });
+}
 function findPageByTitle(title){
-  const k = title.trim().toLowerCase();
-  for(const p of Object.values(G.pages)) if(p.title.trim().toLowerCase() === k) return p;
-  return null;
+  return titleIndex().get(String(title).trim().toLowerCase()) || null;
 }
 function createPage(title, withBlock = true){
   const id = uid("p-");
   const p = { id, title: title.trim(), children: [], createdAt: now(), updatedAt: now() };
   G.pages[id] = p;
+  bumpRev();
   if(withBlock) newBlock(id, "");
   scheduleSave();
   return p;
@@ -811,11 +883,13 @@ function newBlock(parentId, content = "", index = -1){
   return b;
 }
 function detach(id){
+  bumpRev();
   const b = G.blocks[id]; if(!b) return;
   const arr = childrenOf(b.parent);
   const i = arr.indexOf(id); if(i >= 0) arr.splice(i, 1);
 }
 function deleteBlockDeep(id){
+  bumpRev();
   const b = G.blocks[id]; if(!b) return;
   b.children.slice().forEach(deleteBlockDeep);
   detach(id);
@@ -911,15 +985,83 @@ function scheduleSave(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(doSave, 450);
 }
+let saveFail = 0, lastOkSave = 0;
+function isQuotaError(e){
+  const n = String((e && e.name) || ""), m = String((e && e.message) || "");
+  return /Quota|QUOTA/.test(n) || /quota|storage|공간/i.test(m);
+}
 async function doSave(){
+  const stamp = now();
   try{
-    G.meta.savedAt = now();
+    G.meta.savedAt = stamp;
     await dbPut(G);
+    saveFail = 0; lastOkSave = stamp;
+    hideSaveAlert();
     dailySnapshot();
-    setStatus("saved", "저장됨 " + fmtTime(G.meta.savedAt).replace("오늘 ",""));
+    setStatus("saved", "저장됨 " + fmtTime(stamp).replace("오늘 ",""));
+    return true;
   }catch(e){
-    console.error(e); setStatus("", "저장 실패");
+    // 자리가 모자란 것이면 오래된 사본을 몇 개 비우고 한 번 더 해 본다
+    if(isQuotaError(e)){
+      const freed = await pruneSnapshots(4);
+      if(freed){
+        try{
+          await dbPut(G);
+          saveFail = 0; lastOkSave = stamp;
+          hideSaveAlert();
+          setStatus("saved", "저장됨(오래된 사본 정리)");
+          toast(`저장 공간이 모자라 오래된 사본 ${freed}개를 비웠습니다`);
+          return true;
+        }catch(e2){ e = e2; }
+      }
+    }
+    saveFail++;
+    console.error("저장 실패", e);
+    setStatus("fail", "저장 못 함");
+    showSaveAlert(e);
+    return false;
   }
+}
+/** 오래된 사본을 n개 비운다. 비운 개수를 돌려준다. */
+async function pruneSnapshots(n){
+  let freed = 0;
+  const list = snapList();
+  for(let i = 0; i < n && list.length > 1; i++){
+    const old = list.pop();
+    try{ await snapDel(old.key); freed++; }catch{ break; }
+  }
+  return freed;
+}
+function showSaveAlert(err){
+  document.body.classList.add("save-alert");
+  let el = $("#savealert");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "savealert";
+    document.body.appendChild(el);
+  }
+  const quota = isQuotaError(err);
+  const since = lastOkSave ? `마지막으로 저장된 때는 ${fmtStamp(lastOkSave)} 입니다.`
+                           : "이번에 고친 것이 아직 한 번도 저장되지 않았습니다.";
+  el.innerHTML = `<b>저장하지 못했습니다.</b>`
+    + `<span class="grow">${quota
+        ? "브라우저에 남은 자리가 모자랍니다. 보관함에서 사본을 지우거나, 지금 파일로 내보내 두세요."
+        : "브라우저 저장소에 쓰지 못했습니다. 창을 닫으면 고친 것이 사라질 수 있습니다."}`
+    + ` ${since} <span style="opacity:.85">(${esc(String((err && err.name) || err || "오류"))})</span></span>`;
+  const retry = document.createElement("button");
+  retry.textContent = "다시 저장";
+  retry.onclick = async () => { commit(); if(await doSave()) toast("저장했습니다"); };
+  const out = document.createElement("button");
+  out.textContent = "지금 파일로 내보내기";
+  out.onclick = () => { commit(); exportJSON(); };
+  const bk = document.createElement("button");
+  bk.textContent = "보관함 열기";
+  bk.onclick = () => go({ type:"backup" });
+  el.append(retry, out, bk);
+}
+function hideSaveAlert(){
+  document.body.classList.remove("save-alert");
+  $("#savealert")?.remove();
 }
 /** [[ ]] 괄호를 화면에 드러낼지 여부. 기본값은 감추기. */
 function bracketsShown(){ return !!(G && G.meta && G.meta.showBrackets); }
@@ -943,6 +1085,15 @@ function setStatus(cls, text){
    5-b. 보관함 — 하루 한 번 스냅숏 · 폴더로 자동 내보내기
    ============================================================ */
 let snapBusy = false;
+let storageInfo = null;                       // { usage, quota }
+async function refreshStorage(){
+  try{
+    if(!navigator.storage || !navigator.storage.estimate) return null;
+    const e = await navigator.storage.estimate();
+    storageInfo = { usage: e.usage || 0, quota: e.quota || 0 };
+  }catch{ storageInfo = null; }
+  return storageInfo;
+}
 let dirHandle = null;                 // 폴더를 연결해 둔 경우의 손잡이
 const KIND_LABEL = { daily:"하루 한 번", manual:"손으로", "pre-restore":"되돌리기 직전" };
 
@@ -1129,6 +1280,7 @@ function importJSON(file){
 }
 /** 깨진 참조 정리 (외부 파일 대비) */
 function repair(){
+  bumpRev();
   for(const b of Object.values(G.blocks)){
     b.children = (b.children||[]).filter(c => G.blocks[c]);
     if(typeof b.content !== "string") b.content = "";
@@ -1154,7 +1306,11 @@ function render(){
   else if(view.type === "shuffle") v.appendChild(renderShuffleView());
   else if(view.type === "all")  v.appendChild(renderAllPages());
   else if(view.type === "help") v.appendChild(renderHelp());
-  else if(view.type === "backup") v.appendChild(renderBackup());
+  else if(view.type === "inbox") v.appendChild(renderInbox());
+  else if(view.type === "backup"){
+    v.appendChild(renderBackup());
+    if(!storageInfo) refreshStorage().then(x => { if(x && view.type === "backup") render(); });
+  }
   renderSide();
   syncDeleteBtn();
   paintSel();
@@ -1197,9 +1353,12 @@ function renderSidebar(){
   bk.title = bk.textContent ? "파일로 내보낸 지 오래됐습니다" : "";
 }
 function countBlocks(pid){
+  const counts = cacheFor("counts", () => new Map());
+  if(counts.has(pid)) return counts.get(pid);
   let n = 0;
   const walk = ids => ids.forEach(id => { const b=G.blocks[id]; if(!b) return; if(b.content.trim()) n++; walk(b.children); });
   walk(childrenOf(pid));
+  counts.set(pid, n);
   return n;
 }
 function renderCrumb(){
@@ -1213,6 +1372,7 @@ function renderCrumb(){
   if(view.type === "all")   add("전체 페이지", null, true);
   if(view.type === "help")  add("도움말", null, true);
   if(view.type === "backup") add("보관함", null, true);
+  if(view.type === "inbox")  add("조각 받기", null, true);
   if(view.type === "calendar"){
     add("달력", null, true); sep();
     add(`${calCursor.y}년 ${calCursor.m + 1}월`, null, true);
@@ -1398,6 +1558,8 @@ function renderDailyFeed(){
   });
   return frag;
 }
+const ALL_PAGES_STEP = 200;
+let allPagesLimit = ALL_PAGES_STEP;
 function renderAllPages(){
   const frag = document.createDocumentFragment();
   const h = document.createElement("div");
@@ -1412,7 +1574,9 @@ function renderAllPages(){
   table.innerHTML = `<thead><tr><th>제목</th><th>블록</th><th>피참조</th><th>수정</th><th></th></tr></thead>`;
   const tb = document.createElement("tbody");
   const refCount = buildRefIndex();
-  Object.values(G.pages).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0)).forEach(p => {
+  const all = Object.values(G.pages).sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const shown = all.slice(0, allPagesLimit);       // 수천 줄을 한꺼번에 그리면 화면이 멎는다
+  shown.forEach(p => {
     const tr = document.createElement("tr");
     const td1 = document.createElement("td");
     const a = document.createElement("span");
@@ -1432,6 +1596,14 @@ function renderAllPages(){
   });
   table.appendChild(tb);
   frag.appendChild(table);
+  if(all.length > shown.length){
+    const more = document.createElement("button");
+    more.className = "link-all";
+    more.style.margin = "14px 0";
+    more.textContent = `더 보기 · ${shown.length} / ${all.length}`;
+    more.onclick = () => { allPagesLimit += ALL_PAGES_STEP; render(); };
+    frag.appendChild(more);
+  }
   return frag;
 }
 
@@ -1672,11 +1844,11 @@ function pagesWithTag(tag){
   const key = String(tag || "").trim().toLowerCase();
   if(!key) return [];
   const set = new Set();
-  for(const b of Object.values(G.blocks)){
-    if(!linksIn(b.content).has(key)) continue;
-    const pg = pageOf(b.id);
+  (buildRefIndex().get(key) || []).forEach(bid => {
+    if(!G.blocks[bid]) return;
+    const pg = pageOf(bid);
     if(pg && pg.title.trim().toLowerCase() !== key) set.add(pg.id);
-  }
+  });
   return Array.from(set);
 }
 function nextShuffle(){
@@ -1837,6 +2009,178 @@ function renderSide(){
   });
 }
 
+/* ============================================================
+   조각 받기 — 아이폰에서 주워 온 것을 그날 노트에 시각과 함께 놓는다
+   ============================================================ */
+let inboxText = "";
+/** 붙여 넣은 글에서 조각을 읽어 낸다. JSON 도, 줄글도 받는다. */
+function parseFragments(text){
+  const out = [], seen = new Set();
+  const t = String(text || "").trim();
+  if(!t) return out;
+  const push = (at, body, id) => {
+    body = String(body || "").replace(/\s+$/, "");
+    if(!body.trim() || !at || isNaN(at)) return;
+    const key = id || `f-${at}-${body.slice(0, 12)}`;
+    if(seen.has(key)) return;
+    seen.add(key);
+    out.push({ id:key, at, text:body });
+  };
+  if(t[0] === "{" || t[0] === "["){
+    try{
+      const j = JSON.parse(t);
+      const arr = Array.isArray(j) ? j : (j.items || []);
+      arr.forEach(it => {
+        if(!it) return;
+        const at = typeof it.at === "number" ? it.at : Date.parse(it.at || "");
+        push(at, it.text, it.id);
+      });
+      if(out.length) return out;
+    }catch{ /* 줄글로 다시 해 본다 */ }
+  }
+  // "2026-08-18 08:14 낱말" 꼴
+  t.split("\n").forEach(line => {
+    const m = /^\s*(\d{4})-(\d{2})-(\d{2})[ T]+(\d{2}):(\d{2})(?::\d{2})?\s+(.+)$/.exec(line);
+    if(!m) return;
+    const at = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+    push(at, m[6]);
+  });
+  return out;
+}
+function gotSet(){
+  if(!Array.isArray(G.meta.gotFragments)) G.meta.gotFragments = [];
+  return new Set(G.meta.gotFragments);
+}
+/** 조각을 날짜별 노트에 시각과 함께 놓는다. 이미 받은 것은 건너뛴다. */
+function fileFragments(list){
+  const got = gotSet();
+  const fresh = list.filter(x => !got.has(x.id)).sort((a, b) => a.at - b.at);
+  const days = new Set();
+  fresh.forEach(x => {
+    const d = new Date(x.at);
+    const p = getOrCreatePage(dateKey(d));
+    days.add(p.title);
+    const line = `${pad(d.getHours())}:${pad(d.getMinutes())} ${x.text}`;
+    const kids = p.children;
+    const last = kids.length ? G.blocks[kids[kids.length - 1]] : null;
+    if(last && !last.content.trim()){            // 비어 있는 마지막 줄이 있으면 그 자리에
+      last.content = line;
+      touch(last.id);
+    }else{
+      newBlock(p.id, line);
+    }
+    ensureLinkedPages(x.text);
+    got.add(x.id);
+  });
+  G.meta.gotFragments = Array.from(got).slice(-8000);
+  G.meta.gotAt = now();
+  scheduleSave();
+  return { added: fresh.length, skipped: list.length - fresh.length, days: Array.from(days).sort() };
+}
+function renderInbox(){
+  const frag = document.createDocumentFragment();
+  const h = document.createElement("div");
+  h.className = "page-title"; h.textContent = "조각 받기";
+  const meta = document.createElement("div");
+  meta.className = "page-meta";
+  meta.innerHTML = "<span>아이폰에서 주워 온 것을 그날 노트로</span>"
+    + (G.meta.gotAt ? `<span>마지막 ${fmtStamp(G.meta.gotAt)}</span>` : "");
+  frag.append(h, meta);
+
+  const ta = document.createElement("textarea");
+  ta.id = "drop";
+  ta.placeholder = "아이폰 조각 앱에서 «복사»를 누른 뒤 여기에 붙여 넣으세요 (⌘V).\n"
+                 + "AirDrop 으로 받은 파일은 아래 «파일 고르기»로 열면 됩니다.";
+  ta.value = inboxText;
+  frag.appendChild(ta);
+
+  const acts = document.createElement("div");
+  acts.className = "in-acts";
+  const mk = (label, fn, cls) => {
+    const b = document.createElement("button");
+    if(cls) b.className = cls;
+    b.textContent = label; b.onclick = fn;
+    return b;
+  };
+  const parsed = parseFragments(inboxText);
+  const got = gotSet();
+  const fresh = parsed.filter(x => !got.has(x.id));
+
+  const take = mk(fresh.length ? `${fresh.length}개 받기` : "받기", () => {
+    const r = fileFragments(parseFragments(inboxText));
+    inboxText = "";
+    if(!r.added){
+      render();
+      toast("새로 받을 조각이 없습니다");
+      return;
+    }
+    const many = r.days.length > 1;
+    toast(`조각 ${r.added}개를 ${many ? r.days.length + "일치 노트에" : r.days[0] + " 노트에"} 놓았습니다`
+        + (r.skipped ? ` · 이미 받은 ${r.skipped}개는 건너뜀` : ""));
+    // 하루치뿐이면 그 노트를 열어 준다
+    if(!many){
+      const p = findPageByTitle(r.days[0]);
+      if(p) return openPage(p.id);
+    }
+    go({ type:"daily" });
+  }, "primary");
+  take.disabled = !fresh.length;
+  acts.appendChild(take);
+  acts.appendChild(mk("파일 고르기", () => $("#frag-input").click()));
+  acts.appendChild(mk("붙여 넣기", async () => {
+    try{
+      const t = await navigator.clipboard.readText();
+      inboxText = t || "";
+      render();
+      if(!parseFragments(inboxText).length) toast("조각을 알아보지 못했습니다");
+    }catch{ toast("붙여넣기 권한이 없습니다. 위 칸에 직접 ⌘V 하세요"); }
+  }));
+  if(inboxText) acts.appendChild(mk("비우기", () => { inboxText = ""; render(); }));
+  frag.appendChild(acts);
+
+  const head = document.createElement("div");
+  head.className = "section-head";
+  head.innerHTML = `<span>훑어보기</span><span class="count-pill">${parsed.length}</span>`;
+  frag.appendChild(head);
+
+  if(!parsed.length){
+    const e = document.createElement("div");
+    e.className = "empty-note";
+    e.textContent = inboxText.trim()
+      ? "조각을 알아보지 못했습니다. 조각 앱에서 «복사»한 그대로 붙여 넣어 보세요."
+      : "아직 붙여 넣은 것이 없습니다.";
+    frag.appendChild(e);
+  }else{
+    const box = document.createElement("div");
+    parsed.slice(0, 200).forEach(x => {
+      const d = new Date(x.at);
+      const row = document.createElement("div");
+      const dup = got.has(x.id);
+      row.className = "frag" + (dup ? " dup" : "");
+      row.innerHTML = `<span class="when">${dateKey(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}</span>`
+                    + `<span class="body">${esc(x.text)}</span>`
+                    + (dup ? `<span class="mark">이미 받음</span>` : "");
+      box.appendChild(row);
+    });
+    frag.appendChild(box);
+    if(parsed.length > 200){
+      const more = document.createElement("div");
+      more.className = "empty-note";
+      more.textContent = `그 밖에 ${parsed.length - 200}개 더 있습니다. 받기를 누르면 모두 들어갑니다.`;
+      frag.appendChild(more);
+    }
+  }
+  setTimeout(() => {
+    const el = $("#drop");
+    if(!el) return;
+    el.oninput = () => { inboxText = el.value; };
+    el.onchange = () => { inboxText = el.value; render(); };
+    el.onblur   = () => { if(el.value !== inboxText || parseFragments(el.value).length !== parsed.length){ inboxText = el.value; render(); } };
+    el.onpaste  = () => setTimeout(() => { inboxText = el.value; render(); }, 0);
+  }, 0);
+  return frag;
+}
+
 /* ---- 보관함 화면 ---- */
 function renderBackup(){
   const frag = document.createDocumentFragment();
@@ -1871,6 +2215,15 @@ function renderBackup(){
   if(canFolder())
     cards.appendChild(card("연결한 폴더", G.meta.folderName || "없음",
       G.meta.folderAt ? fmtStamp(G.meta.folderAt) + " 에 씀" : "", !G.meta.folderName));
+  const snapBytes = list.reduce((n, x) => n + (x.bytes || 0), 0);
+  if(storageInfo && storageInfo.quota){
+    const pct = Math.round(storageInfo.usage / storageInfo.quota * 100);
+    cards.appendChild(card("저장 공간", `${pct}%`,
+      `${fmtBytes(storageInfo.usage)} / ${fmtBytes(storageInfo.quota)} · 사본 ${fmtBytes(snapBytes)}`,
+      pct >= 80));
+  }else if(snapBytes){
+    cards.appendChild(card("사본이 차지한 자리", fmtBytes(snapBytes), `${list.length}개 합계`));
+  }
   frag.appendChild(cards);
 
   // 단추
@@ -1966,6 +2319,7 @@ function deletePage(pid, after){
   exitEdit();
   p.children.slice().forEach(deleteBlockDeep);
   delete G.pages[pid];
+  bumpRev();
   shuffleQueue = shuffleQueue.filter(x => x !== pid);
   scheduleSave();
   toast(`"${p.title}" 페이지를 지웠습니다`);
@@ -2028,6 +2382,7 @@ const HELP_HTML = [
 "<li><b>오늘의 노트</b> — 앱을 열면 나오는 첫 화면. 오늘 날짜 페이지가 자동으로 만들어지고, 그 아래로 최근 데일리 노트 일곱 개가 이어집니다. 날짜를 누르면 그 하루만 따로 볼 수 있습니다.</li>",
 "<li><b>달력</b> — 한 달을 펼쳐 놓고 그날의 노트로 건너뜁니다. 글을 쓴 날은 바탕이 채워지고 첫 줄과 블록 수가 함께 보이므로, 어느 날 손을 놓았는지 한눈에 드러납니다. 오늘은 테두리로 표시됩니다. 날짜를 누르면 그날 노트가 열리고(없으면 그때 만들어집니다), <code>Shift</code>+클릭하면 오른쪽에 둡니다. <code>‹ ›</code>로 달을 넘기고 <b>이번 달</b>로 돌아옵니다. 아래에 그달에 쓴 날수와 블록 수가 적힙니다.</li>",
 "<li><b>이 달 복사 · 전체 복사</b> — 달력 위쪽 단추입니다. 데일리 노트를 <b>오래된 날짜부터</b> 차례로 모아 플레인 텍스트로 클립보드에 담습니다. 일기가 부른 페이지의 글은 그날 아래에 주석으로 붙습니다(4-c절). 날짜와 요일이 머리글로 붙고, 그 아래에 그날 쓴 글이 문단으로 이어집니다. 글이 없는 날은 건너뜁니다. 복사가 끝나면 며칠치·부른 페이지 몇 편·몇 자인지 알려 줍니다. 본문 정리 방식은 <b>플레인 복사</b>와 같아서, 3절에서 켜 둔 계층 유지 여부를 그대로 따릅니다.</li>",
+"<li><b>조각 받기</b> — 아이폰에서 주워 온 짧은 것들을 그날 노트에 시각과 함께 놓습니다. 4-d절 참고.</li>",
 "<li><b>쪽글</b> — <code>#쪽글</code> 태그가 붙은 페이지를 무작위로 하나씩 꺼내 줍니다.</li>",
 "<li><b>무작위 페이지</b> — 태그와 상관없이 아무 페이지나 엽니다. 내용이 있는 페이지를 먼저 고르고, 데일리 노트는 뺍니다.</li>",
 "<li><b>전체 페이지</b> — 제목·블록 수·피참조 수·수정 시각을 한 표로 봅니다. 여기서 지울 수도 있습니다.</li>",
@@ -2131,6 +2486,28 @@ const HELP_HTML = [
   + "<button data-linkmode='inline'>본문 사이</button>"
   + "<button data-linkmode='none'>제목만</button></p>",
 
+"<h2>4-d. 아이폰에서 주워 온 조각</h2>",
+"<p>따로 있는 <code>jogak.html</code> 은 아이폰용입니다. 길에서든 자리에서든 떠오른 것을 <b>한 낱말로</b> 담아 두는 도구입니다. 담을 때 시각이 함께 붙습니다. 그것을 이쪽으로 옮기면 <b>그날 노트에 시각과 함께</b> 놓입니다. 아이폰으로 조각을 줍고 맥북에서 펴는 셈입니다.</p>",
+"<h3>아이폰 쪽 채비</h3>",
+"<ul>",
+"<li><code>jogak.html</code> 을 아이폰에서 열고 공유 → <b>홈 화면에 추가</b>. 그러면 주소창 없는 앱처럼 열리고, 인터넷이 없어도 됩니다.</li>",
+"<li>적고 <b>담기</b>. 한글은 마지막 글자가 조합 중이면 <code>↵</code> 가 먼저 글자를 굳히니, 한 번 더 누르거나 <b>담기</b> 를 누르면 됩니다.</li>",
+"<li>조각은 그 아이폰 안에만 있습니다. 옮기기 전까지는 다른 데 없습니다.</li>",
+"</ul>",
+"<h3>옮기는 두 갈래</h3>",
+"<ul>",
+"<li><b>복사</b> — 아이폰에서 <b>복사</b>를 누르고, 맥북에서 이 화면(<b>조각 받기</b>)의 칸에 <code>⌘V</code>. 같은 애플 계정이면 유니버설 클립보드로 그냥 건너옵니다. 가장 빠른 길입니다.</li>",
+"<li><b>보내기</b> — 공유 시트가 열립니다. <b>AirDrop</b> 으로 맥북에 보내고, 받은 파일을 <b>파일 고르기</b>로 엽니다. 여러 날치가 쌓였거나 클립보드가 말을 안 들을 때 씁니다.</li>",
+"</ul>",
+"<h3>받을 때 일어나는 일</h3>",
+"<ul>",
+"<li>붙여 넣으면 먼저 <b>훑어보기</b>에 목록이 뜹니다. 무엇이 들어갈지 보고 나서 <b>받기</b>를 누릅니다.</li>",
+"<li>조각마다 <code>08:14 낱말</code> 꼴로 그날 노트 맨 아래에 붙습니다. 시각순으로 놓이고, 여러 날치가 섞여 있어도 날짜별로 알아서 갈라집니다. 없는 날짜 노트는 그때 만들어집니다.</li>",
+"<li><b>이미 받은 조각은 다시 들어가지 않습니다.</b> 조각마다 고유한 표가 있어서, 같은 것을 두 번 붙여 넣어도 겹치지 않습니다. 훑어보기에서 <i>이미 받음</i> 으로 흐리게 보입니다. 그러니 아이폰 쪽에서 지우는 걸 서두르지 않아도 됩니다.</li>",
+"<li>조각 안에 <code>[[제목]]</code> 이 들어 있으면 그 페이지도 함께 만들어집니다.</li>",
+"</ul>",
+"<p>받고 나면 그날 노트가 열립니다. 거기서부터 <code>Tab</code> 으로 아래에 붙이며 자세히 풀어 쓰시면 됩니다. 조각 줄을 그대로 두고 그 밑에 딸린 블록으로 이어 쓰면, 나중에 달력에서 한 달치를 뽑을 때 시각과 본문이 함께 따라 나옵니다.</p>",
+
 "<h2>5. 쪽글</h2>",
 "<p>페이지 안 아무 블록에나 <code>#쪽글</code>을 적어 두면 그 페이지가 <span data-jump='shuffle' style='color:var(--indigo)'>쪽글</span> 목록에 들어갑니다. 누를 때마다 하나씩 무작위로 올라오되, <b>한 바퀴를 다 돌기 전에는 같은 글이 다시 나오지 않습니다.</b> 위쪽 띠에 남은 편수가 보입니다. '태그 바꾸기'로 <code>#초고</code>, <code>#버릴것</code> 같은 다른 묶음을 돌릴 수도 있습니다.</p>",
 "<p><b>옆에 두고 다음 →</b> 단추는 지금 쪽글을 오른쪽에 남긴 채 다음 편으로 넘어갑니다. 무작위로 넘기다 쓸 만한 조각이 걸리면 오른쪽에 쌓아 두고 계속 돌리다가, 다 고른 뒤 모아 놓은 것들을 한자리에서 보는 식으로 씁니다. 제목을 <code>Shift</code>+클릭해도 같습니다.</p>",
@@ -2199,6 +2576,7 @@ const HELP_HTML = [
 "<li><b>불러오기</b> — 개수를 확인시킨 뒤 현재 그래프를 갈아 끼웁니다. 깨진 참조는 자동으로 정리합니다.</li>",
 "<li><b>보관함</b> — 하루 한 번, 그날 처음 저장될 때 그래프를 통째로 떠서 따로 둡니다. 최근 <b>14개</b>까지 쌓이고 오래된 것부터 밀려납니다. 왼쪽 <b>보관함</b>에서 어느 때로든 되돌릴 수 있고, 되돌리기 직전 상태도 사본으로 남겨 두니 잘못 눌러도 다시 돌아옵니다. 사본 하나만 따로 내려받을 수도 있습니다. <b>불러오기</b>로 남의 파일을 덮어쓸 때도 직전 상태를 먼저 떠 둡니다.</li>",
 "<li><b>폴더에 자동 내보내기</b> — 보관함에서 폴더를 한 번 연결해 두면 하루 한 번 그 폴더에 <code>roam-날짜.json</code> 을 씁니다. 클라우드로 묶인 폴더를 고르면 그대로 딴 데에도 사본이 생깁니다. 크롬·엣지 계열에서만 되고, 브라우저가 세션마다 권한을 다시 물을 수 있습니다. 그럴 때는 보관함의 <b>지금 폴더에 쓰기</b>를 한 번 눌러 주세요. 사파리·파이어폭스에서는 이 단추가 나오지 않습니다.</li>",
+"<li><b>저장이 실패하면 화면 맨 위에 붉은 띠가 뜹니다.</b> 조용히 넘어가지 않습니다. 자리가 모자란 것이면 오래된 사본을 몇 개 비우고 한 번 더 시도해 보고, 그래도 안 되면 <b>다시 저장 · 지금 파일로 내보내기 · 보관함 열기</b>를 띠에서 바로 누를 수 있게 해 둡니다. 저장이 안 된 채 창을 닫으려 하면 브라우저가 한 번 더 묻습니다. 보관함의 <b>저장 공간</b> 카드에서 얼마나 썼는지도 볼 수 있습니다.</li>",
 "<li><b>사본도 같은 브라우저 안에 있습니다.</b> 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 글과 사본이 한꺼번에 사라집니다. 보관함은 실수로 지웠거나 잘못 고쳤을 때를 위한 것이지, 기기가 잘못됐을 때를 막아 주지는 못합니다. <b>가끔은 반드시 파일로 빼 두세요.</b> 내보낸 지 이레가 넘으면 왼쪽 보관함 옆에 붉은 표가 뜹니다.</li>",
 "<li>서버가 없으니 이 파일을 연 브라우저에만 글이 있습니다. <b>다른 기기로 옮길 때는 반드시 JSON을 거쳐야 합니다.</b> 브라우저 방문 기록을 지우면서 사이트 데이터까지 함께 지우면 사라지니, 주기적으로 내보내 두세요.</li>",
 "</ul>",
@@ -2222,14 +2600,16 @@ const HELP_HTML = [
 
 /* ---- 백링크 ---- */
 function buildRefIndex(){
-  const idx = new Map();                       // 소문자제목 -> [blockId]
-  for(const b of Object.values(G.blocks)){
-    linksIn(b.content).forEach(t => {
-      if(!idx.has(t)) idx.set(t, []);
-      idx.get(t).push(b.id);
-    });
-  }
-  return idx;
+  return cacheFor("refs", () => {
+    const idx = new Map();                     // 소문자제목 -> [blockId]
+    for(const b of Object.values(G.blocks)){
+      linksIn(b.content).forEach(t => {
+        if(!idx.has(t)) idx.set(t, []);
+        idx.get(t).push(b.id);
+      });
+    }
+    return idx;
+  });
 }
 function refFold(key){
   if(!G.meta.refFold) G.meta.refFold = { linked:false, unlinked:true };
@@ -2392,6 +2772,7 @@ function groupRefs(blockIds, opts){
    ============================================================ */
 function go(v){
   if(v.type === "shuffle"){ nextShuffle(); return; }
+  if(v.type === "all") allPagesLimit = ALL_PAGES_STEP;   // 다시 들어오면 처음부터
   if(v.type === "calendar" && !v.keep){ const d = new Date(); calCursor = { y:d.getFullYear(), m:d.getMonth() }; }
   exitEdit(); view = v; render(); $("#main").scrollTop = 0; closeSidebarMobile();
 }
@@ -2412,11 +2793,12 @@ function openPageByTitle(title){
 function renamePage(pid, newTitle){
   const old = G.pages[pid].title;
   G.pages[pid].title = newTitle;
+  bumpRev();
   G.pages[pid].updatedAt = now();
   const re = new RegExp(`\\[\\[\\s*${old.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\s*\\]\\]`, "gi");
   let n = 0;
   for(const b of Object.values(G.blocks)){
-    if(re.test(b.content)){ b.content = b.content.replace(re, `[[${newTitle}]]`); b.updatedAt = now(); n++; }
+    if(re.test(b.content)){ b.content = b.content.replace(re, `[[${newTitle}]]`); b.updatedAt = now(); n++; bumpRev(); }
     re.lastIndex = 0;
   }
   scheduleSave(); render();
@@ -3704,7 +4086,15 @@ document.addEventListener("keydown", e => {
   if(e.key === "Escape" && searchState.open){ closeSearch(); return; }
   if(mod && e.shiftKey && e.key.toLowerCase() === "d"){ e.preventDefault(); go({type:"daily"}); }
 });
-window.addEventListener("beforeunload", () => { commit(); if(G) dbPut(G); });
+window.addEventListener("beforeunload", e => {
+  commit();
+  if(G) dbPut(G).catch(()=>{});
+  if(saveFail > 0){                       // 저장이 안 된 채 닫으려 하면 붙든다
+    e.preventDefault();
+    e.returnValue = "";
+    return "";
+  }
+});
 document.addEventListener("visibilitychange", () => { if(document.hidden){ commit(); doSave(); } });
 
 $("#btn-random").onclick  = randomPage;
@@ -3719,6 +4109,20 @@ $("#btn-new").onclick = () => {
 $("#btn-export").onclick = () => { commit(); exportJSON(); };
 $("#btn-import").onclick = () => $("#file-input").click();
 $("#file-input").onchange = e => { if(e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ""; };
+$("#frag-input").onchange = e => {
+  const f = e.target.files[0];
+  e.target.value = "";
+  if(!f) return;
+  const fr = new FileReader();
+  fr.onload = () => {
+    inboxText = String(fr.result || "");
+    view = { type:"inbox" };
+    render();
+    const n = parseFragments(inboxText).length;
+    toast(n ? `조각 ${n}개를 읽었습니다` : "조각을 알아보지 못했습니다");
+  };
+  fr.readAsText(f);
+};
 $("#btn-theme").onclick = () => {
   const cur = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   document.documentElement.dataset.theme = cur;
@@ -3745,7 +4149,7 @@ function seed(){
     ["Tab 으로 들여쓰고, Shift+Tab 으로 내어씁니다.", 0],
     ["Enter 는 아래에 새 블록을 만들고, 빈 블록에서 Backspace 를 누르면 위와 합쳐집니다.", 1],
     ["글머리 점을 끌어다 놓으면 순서와 계층이 바뀝니다. ⌘⇧↑ / ⌘⇧↓ 로도 옮길 수 있습니다.", 1],
-    ["대괄호 두 개로 페이지를 잇습니다 → [[먹실 사용법]]", 0],
+    ["대괄호 두 개로 페이지를 잇습니다 → [[쪽글 사용법]]", 0],
     ["#태그 도 같은 페이지 링크로 취급합니다.", 1],
     ["⌘K 를 눌러 페이지와 블록을 한꺼번에 찾아보세요.", 0],
     ["블록에 `#쪽글` 을 달아 두면, 왼쪽 ‘쪽글’ 메뉴에서 그 페이지들을 무작위로 다시 만납니다.", 0],
