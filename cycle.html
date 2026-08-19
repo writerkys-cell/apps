@@ -73,6 +73,8 @@ select.proj{
   font-family:var(--mono);font-size:10px;letter-spacing:.02em;
   transition:background .4s ease;
 }
+.gwrap.solo .gseg{display:none}
+.gwrap.solo .gbar{margin-top:0;height:16px}
 .gbar{margin-top:4px;height:9px;background:var(--line);overflow:hidden}
 .gbar i{display:block;height:100%;transition:width .5s ease}
 .qtick{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--s3);opacity:.55;pointer-events:none}
@@ -165,6 +167,7 @@ textarea:focus,input:focus{border-color:var(--sc,var(--s2));outline:none}
 .today dt{font-size:11px;color:var(--muted);letter-spacing:.02em}
 .today dd{margin:3px 0 0;font-family:var(--mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .today dd small{font-size:11px;font-weight:400;color:var(--faint);margin-left:1px}
+.today dd em{font-style:normal;font-size:13px;font-weight:500;color:var(--faint);margin-left:3px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{
   text-align:left;font-size:11px;letter-spacing:.06em;color:var(--faint);font-weight:600;
@@ -194,6 +197,8 @@ h3{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:600;margin
 .pitem button{font-size:12px;color:var(--muted)}
 .pitem button:hover{color:var(--ink)}
 .hint{font-family:var(--serif);font-size:13.5px;color:var(--muted);line-height:1.75;margin:9px 0 0}
+label.sw{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:14px;font-weight:600}
+label.sw input{width:16px;height:16px;accent-color:var(--s2);margin:0;cursor:pointer}
 
 /* 토스트 */
 #toast{
@@ -224,7 +229,7 @@ h3{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:600;margin
       <div class="cycle" id="cycleNo"></div>
       <div class="cyclemeta" id="cycleMeta"></div>
     </div>
-    <div class="gwrap">
+    <div class="gwrap" id="gWrap">
       <div class="gseg" id="gSeg"></div>
       <div class="gbar"><i id="gFill"></i></div>
       <div class="qtick" style="left:25%"><b>¼</b></div>
@@ -256,7 +261,7 @@ const SC = ["", "var(--s1)", "var(--s2)", "var(--s3)"];
 const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
 const blankDraft = () => ({ summary:"", chars:"", tags:[], note:"", hint:"" });
 const newProject = (name) => ({
-  id: uid(), name: name || "새 원고", goalPages: 80, scrivenerUrl: "", startChars: 0,
+  id: uid(), name: name || "새 원고", goalPages: 80, scrivenerUrl: "", startChars: 0, use2667: true,
   cycle: 1, stage: 1, carryHint: "", draft: blankDraft(), entries: []
 });
 
@@ -275,6 +280,7 @@ function migrate(r){
     x.draft = x.draft || blankDraft(); x.entries = x.entries || [];
     x.stage = x.stage || 1; x.cycle = x.cycle || 1;
     x.startChars = Math.max(0, parseInt(x.startChars, 10) || 0);
+    x.use2667 = x.use2667 !== false;
   });
   if (!r.projects.some(x => x.id === r.activeId)) r.activeId = r.projects[0].id;
   return r;
@@ -341,12 +347,13 @@ function renderHead(){
     `<b>${pgs.toFixed(1)}매</b> / ${goal}매<br>${fmt(c)}자 · ${p.entries.length}회 완주`
     + (start ? `<br>이 순환으로 ${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)}매` : "");
 
-  const UNIT = 2667, goalChars = goal * 200;
+  const UNIT = 2667, goalChars = goal * 200, on2667 = p.use2667 !== false;
   const n = Math.max(1, Math.ceil(goalChars / UNIT));
   const cur = Math.max(1, Math.min(n, Math.floor(c / UNIT) + 1));
   const inSeg = Math.max(0, c - (cur - 1) * UNIT);
 
-  document.getElementById("gSeg").innerHTML =
+  document.getElementById("gWrap").className = "gwrap" + (on2667 ? "" : " solo");
+  document.getElementById("gSeg").innerHTML = !on2667 ? "" :
     Array.from({length:n}, (_,i) => {
       const w = Math.min(UNIT, goalChars - i * UNIT);
       const on = (i + 1) === cur;
@@ -361,9 +368,11 @@ function renderHead(){
   document.getElementById("gFill").style.cssText =
     `width:${pct.toFixed(2)}%;background:linear-gradient(to right,var(--carry) 0 ${rel}%,var(--ink) ${rel}% 100%)`;
 
-  document.getElementById("gaugeCap").innerHTML =
-    `<span>${cur}구간 · 이 구간에서 ${fmt(Math.min(inSeg, UNIT))}자 / ${fmt(UNIT)}자</span>`
-    + `<span>${Math.round(pgs / goal * 100)}% · 전체 ${n}구간</span>`;
+  const q = Math.max(1, Math.min(4, Math.floor(pct / 25) + 1));
+  document.getElementById("gaugeCap").innerHTML = on2667
+    ? `<span>${cur}구간 · 이 구간에서 ${fmt(Math.min(inSeg, UNIT))}자 / ${fmt(UNIT)}자</span>`
+      + `<span>${Math.round(pgs / goal * 100)}% · 전체 ${n}구간</span>`
+    : `<span>${q}/4 구간</span><span>${Math.round(pgs / goal * 100)}% · 목표 ${goal}매</span>`;
 }
 
 /* ── 순환 탭 ── */
@@ -465,6 +474,22 @@ function next(){
 }
 function focus(id){ const e = document.getElementById(id); if (e){ e.focus(); e.scrollIntoView({block:"center",behavior:"smooth"}); } }
 
+function allEntries(){
+  const out = [];
+  S.projects.forEach(p => rows(p).forEach(e => out.push({ ...e, proj: p.name })));
+  return out.sort((a,b) => a.ts - b.ts);
+}
+function todayAll(){
+  const now = Date.now();
+  const t = allEntries().filter(e => sameDay(e.ts, now));
+  return { cycles: t.length, chars: t.reduce((a,b) => a + b.delta, 0) };
+}
+const DOW = ["일","월","화","수","목","금","토"];
+function dayKey(ts){
+  const d = new Date(ts), p = n => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
 /* ── 로그 탭 ── */
 function renderLog(){
   const p = P(), r = rows(p), now = Date.now();
@@ -472,13 +497,19 @@ function renderLog(){
   const tChars = today.reduce((a,b) => a + b.delta, 0);
   const total = totalChars(p);
 
-  const head = `
+  const head = (() => {
+    const ta = todayAll(), multi = S.projects.length > 1;
+    const par = v => multi ? ` <em>(${v})</em>` : "";
+    const sign = v => (v >= 0 ? "" : "−") + fmt(Math.abs(v));
+    return `
     <dl class="today">
-      <div><dt>오늘 마친 회차</dt><dd>${today.length}<small>회</small></dd></div>
-      <div><dt>오늘 순증</dt><dd${tChars<0?' style="color:var(--s3)"':''}>${tChars>=0?"":"−"}${fmt(Math.abs(tChars))}<small>자</small></dd></div>
-      <div><dt>오늘 매수</dt><dd${tChars<0?' style="color:var(--s3)"':''}>${tChars>=0?"":"−"}${(Math.abs(tChars)/200).toFixed(1)}<small>매</small></dd></div>
+      <div><dt>오늘 마친 회차</dt><dd>${today.length}<small>회</small>${par(ta.cycles)}</dd></div>
+      <div><dt>오늘 순증</dt><dd${tChars<0?' style="color:var(--s3)"':''}>${sign(tChars)}<small>자</small>${par(sign(ta.chars))}</dd></div>
+      <div><dt>오늘 매수</dt><dd${tChars<0?' style="color:var(--s3)"':''}>${tChars>=0?"":"−"}${(Math.abs(tChars)/200).toFixed(1)}<small>매</small>${par((ta.chars>=0?"":"−")+(Math.abs(ta.chars)/200).toFixed(1))}</dd></div>
       <div><dt>목표까지</dt><dd>${Math.max(0, p.goalPages - pagesOf(total)).toFixed(1)}<small>매</small></dd></div>
-    </dl>`;
+    </dl>
+    ${multi ? '<p class="hint" style="margin:-18px 0 24px">괄호 안은 오늘 모든 원고를 합한 수치입니다.</p>' : ""}`;
+  })();
 
   const table = r.length ? `
     <table>
@@ -499,10 +530,86 @@ function renderLog(){
   document.getElementById("view").innerHTML = head + table + `
     <div class="sec" style="margin-top:26px">
       <h3>AI 분석 프롬프트</h3>
-      <p class="hint" style="margin:0 0 12px">회차 기록을 표로 정리하고 분석 질문을 붙여 만듭니다. 복사해서 대화창에 붙여 넣으면 됩니다.</p>
-      <button class="ghost" data-act="prompt">분석 프롬프트 만들기</button>
+      <p class="hint" style="margin:0 0 12px">기록을 표로 정리하고 분석 질문을 붙여 만듭니다. 복사해서 대화창에 붙여 넣으면 됩니다.</p>
+      <div class="row">
+        <button class="ghost" data-act="prompt">이 원고의 회차 분석</button>
+        <button class="ghost" data-act="promptAll">매일의 글쓰기 평가 · 전체 원고</button>
+      </div>
       <div id="promptBox"></div>
     </div>`;
+}
+
+let lastPrompt = "";
+function showPrompt(text){
+  lastPrompt = text;
+  document.getElementById("promptBox").innerHTML =
+    `<textarea rows="10" readonly style="margin-top:12px;font-size:13px">${esc(text)}</textarea>
+     <button class="ghost" data-act="pcopy" style="margin-top:8px">프롬프트 복사</button>`;
+}
+
+function buildPromptAll(){
+  const all = allEntries();
+  if (!all.length) return null;
+
+  const days = new Map();
+  all.forEach(e => {
+    const k = dayKey(e.ts);
+    if (!days.has(k)) days.set(k, []);
+    days.get(k).push(e);
+  });
+  let keys = [...days.keys()].sort();
+  const cut = keys.length > 60;
+  if (cut) keys = keys.slice(-60);
+
+  const body = keys.map(k => {
+    const list = days.get(k).sort((a,b) => a.ts - b.ts);
+    const sum = list.reduce((a,b) => a + b.delta, 0);
+    const d = new Date(list[0].ts);
+    const head = `${k} (${DOW[d.getDay()]}) | ${list.length}회차 | ${sum>=0?"+":"−"}${Math.abs(sum)}자 (${(Math.abs(sum)/200).toFixed(1)}매)`;
+    const rows = list.map(e => {
+      const t = new Date(e.ts), p = n => String(n).padStart(2,"0");
+      return `  · ${e.proj} ${e.cycle}회차 ${p(t.getHours())}:${p(t.getMinutes())} `
+        + `${e.delta>=0?"+":"−"}${Math.abs(e.delta)}자 / 멈춘 이유: ${e.tags.join(", ")||"-"}`
+        + (e.note ? ` — ${e.note}` : "");
+    });
+    return [head, ...rows].join("\n");
+  }).join("\n");
+
+  const first = new Date(days.get(keys[0])[0].ts), last = new Date();
+  const span = Math.max(1, Math.round((last - first) / 86400000) + 1);
+  const ta = todayAll();
+  const todayKey = dayKey(Date.now());
+  const wroteToday = days.has(todayKey);
+
+  return [
+    "나는 소설을 쓰는 사람입니다. '손글씨 2매 → 스크리브너 타이핑 → 프린트 교정'을 한 회차로 삼아 반복합니다.",
+    "여러 원고를 동시에 굴리기도 합니다. 아래는 모든 원고의 기록을 날짜별로 묶은 것입니다.",
+    "",
+    "[원고 현황]",
+    ...S.projects.map(p =>
+      `- ${p.name}: ${pg(totalChars(p))}매 / 목표 ${p.goalPages}매, ${p.cycle}회차 진행 중`),
+    "",
+    `[기간] ${keys[0]} ~ ${todayKey} · ${keys.length}일 기록 / 달력상 ${span}일${cut ? " (최근 60일만 실었습니다)" : ""}`,
+    "",
+    "[오늘]",
+    wroteToday
+      ? `오늘 ${ta.cycles}회차, 순증 ${ta.chars>=0?"+":"−"}${Math.abs(ta.chars)}자 (${(Math.abs(ta.chars)/200).toFixed(1)}매).`
+      : "오늘은 아직 마친 회차가 없습니다.",
+    "",
+    "[날짜별 기록]",
+    "순증이 음수인 회차는 새로 쓴 분량보다 교정으로 덜어낸 분량이 많았던 회차입니다. 실패가 아니라 원고를 조인 회차로 읽어 주세요.",
+    "",
+    body,
+    "",
+    "[요청] 매일의 글쓰기를 평가해 주세요.",
+    "1. 오늘 하루에 대한 평가. 내 평소 리듬에 견주어 오늘이 어떤 날이었는지, 수치와 멈춘 이유를 함께 근거로.",
+    "2. 꾸준함. 쓴 날과 쉰 날의 분포, 연속으로 이어간 구간과 끊긴 구간. 쉬는 간격에 규칙이 있는지.",
+    "3. 하루 분량의 편차. 평균과 중앙값이 얼마나 벌어지는지, 몰아 쓰는 편인지 고르게 쓰는 편인지.",
+    "4. 여러 원고를 같은 날 건드린 날과 하나만 붙든 날의 차이. 병행이 총량에 도움이 되는지 해가 되는지.",
+    "5. 요일과 시각의 패턴. 잘 되는 날과 시간대, 무너지는 날과 시간대.",
+    "6. 멈춘 이유가 날마다 어떻게 달라지는지. 특정 요일이나 지친 날에 몰리는 이유가 있는지.",
+    "7. 내일 하루를 위한 조정 한두 가지. 격려도 훈계도 말고, 이 기록에서 읽히는 것만."
+  ].join("\n");
 }
 
 function buildPrompt(){
@@ -515,6 +622,9 @@ function buildPrompt(){
     "",
     `원고: ${p.name}`,
     `목표: ${p.goalPages}매 / 현재: ${pg(total)}매 (${Math.round(pagesOf(total)/p.goalPages*100)}%)`,
+    p.use2667 !== false
+      ? `나는 2,667자를 한 구간으로 삼습니다. 전체 ${Math.max(1, Math.ceil(p.goalPages*200/2667))}구간 가운데 지금 ${Math.max(1, Math.floor(total/2667)+1)}구간에 있습니다.`
+      : null,
     start
       ? `시작 시점에 이미 쓰여 있던 분량: ${start}자 (${pg(start)}매). 이 순환으로 새로 쓴 분량은 ${total - start}자 (${pg(total - start)}매)입니다. 아래 '누적'은 기존 분량을 포함한 수치이고, '순증'은 직전 회차 대비 증가분입니다. 1회차의 순증은 기존 분량 위에 얹은 양입니다.`
       : "처음부터 쓰기 시작한 원고입니다. 누적은 0자에서 출발합니다.",
@@ -534,7 +644,7 @@ function buildPrompt(){
     "5. 시각 기록으로 볼 때 생산성이 좋은 시간대나 리듬.",
     `6. 지금 속도라면 목표 ${p.goalPages}매까지 몇 회차가 더 필요한지. 회차당 순증의 평균과 중앙값을 각각 근거로.`,
     "7. 다음 회차에 시도해 볼 구체적인 처방 두세 가지. 일반론 말고 이 기록에 근거해서."
-  ].join("\n");
+  ].filter(x => x !== null).join("\n");
 }
 
 /* ── 설정 탭 ── */
@@ -565,6 +675,10 @@ function renderSet(){
         <label class="f" for="i-start">시작할 때 이미 쓰여 있던 글자수 (공백 포함)</label>
         <input type="number" id="i-start" min="0" step="1" value="${p.startChars || 0}">
         <p class="hint">이어쓰는 원고라면 첫 회차를 시작하기 전 분량을 넣습니다. 지금 <b>${pg(p.startChars||0)}매</b>에서 출발합니다. 게이지에서 이 분량은 옅은 색으로 채워지고, 순증은 이 숫자 위에서부터 계산됩니다.</p>
+      </div>
+      <div class="field">
+        <label class="sw"><input type="checkbox" id="i-2667"${p.use2667 !== false ? " checked" : ""}><span>2667자 구간으로 나누기</span></label>
+        <p class="hint">켜면 목표 글자수를 2,667자 단위로 잘라 안내 막대에 구간을 세웁니다. 지금 목표라면 <b>${Math.max(1, Math.ceil(p.goalPages*200/2667))}구간</b>입니다. 끄면 막대 하나에 4분의 1 눈금만 남습니다.</p>
       </div>
       <div class="field">
         <label class="f" for="i-scriv">스크리브너 바로가기 주소</label>
@@ -623,12 +737,13 @@ document.addEventListener("click", e => {
     if (isNaN(v) || v < 0){ toast("숫자를 입력해 주세요"); return; }
     x.chars = v; save(); render(); toast("고쳤습니다");
   }
-  else if (a === "prompt"){
-    const box = document.getElementById("promptBox");
-    box.innerHTML = `<textarea rows="10" readonly style="margin-top:12px;font-size:13px">${esc(buildPrompt())}</textarea>
-      <button class="ghost" data-act="pcopy" style="margin-top:8px">프롬프트 복사</button>`;
+  else if (a === "prompt") showPrompt(buildPrompt());
+  else if (a === "promptAll"){
+    const t = buildPromptAll();
+    if (!t){ toast("아직 기록이 없습니다"); return; }
+    showPrompt(t);
   }
-  else if (a === "pcopy") copy(buildPrompt(), "프롬프트를 복사했습니다");
+  else if (a === "pcopy") copy(lastPrompt, "프롬프트를 복사했습니다");
   else if (a === "pick"){ S.activeId = b.dataset.id; save(); render(); }
   else if (a === "padd"){
     const el = document.getElementById("i-newproj"), n = el.value.trim();
@@ -663,7 +778,12 @@ document.addEventListener("input", e => {
   else if (id === "i-note") p.draft.note = v;
   else if (id === "i-hint") p.draft.hint = v;
   else if (id === "i-chars"){ p.draft.chars = v; calc(); }
-  else if (id === "i-goal"){ p.goalPages = Math.max(1, parseInt(v,10) || 80); renderHead(); }
+  else if (id === "i-goal"){
+    p.goalPages = Math.max(1, parseInt(v,10) || 80); renderHead();
+    const box = document.getElementById("i-2667");
+    const b = box && box.closest(".field").querySelector(".hint b");
+    if (b) b.textContent = Math.max(1, Math.ceil(p.goalPages*200/2667)) + "구간";
+  }
   else if (id === "i-start"){
     p.startChars = Math.max(0, parseInt(v,10) || 0);
     renderHead();
@@ -676,6 +796,7 @@ document.addEventListener("input", e => {
 });
 
 document.addEventListener("change", e => {
+  if (e.target.id === "i-2667"){ P().use2667 = e.target.checked; save(); renderHead(); return; }
   if (e.target.id === "projSel"){ S.activeId = e.target.value; save(); render(); return; }
   if (e.target.id === "i-file"){
     const f = e.target.files[0]; if (!f) return;
