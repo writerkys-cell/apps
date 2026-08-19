@@ -469,6 +469,7 @@ dialog::backdrop{background:#0000004d;backdrop-filter:blur(2px)}
       <dt><kbd>⌘O</kbd></dt><dd>파일 열기</dd>
       <dt><kbd>⌘E</kbd></dt><dd>원문 편집기 전환</dd>
       <dt><kbd>⌘F</kbd></dt><dd>검색창으로</dd>
+      <dt><kbd>↩</kbd></dt><dd>원문 편집기 — 앞 줄의 들여쓰기를 그대로 물려받음</dd>
       <dt><kbd>⌘↩</kbd></dt><dd>문장을 할 일로 — 앞에 <code>- </code> 붙이기, 다시 누르면 떼기</dd>
       <dt><kbd>⌥↑</kbd> / <kbd>⌥↓</kbd></dt><dd>줄을 위아래로 옮기기 (여러 줄 선택 가능)</dd>
       <dt><kbd>더블클릭</kbd></dt><dd>그 줄만 인라인 편집</dd>
@@ -1265,6 +1266,45 @@ function refreshEditor() {
 }
 
 /* ── 줄 단위 조작 ──────────────────────────── */
+/* 텍스트에어리어를 고칠 때는 항상 이 함수를 거친다.
+   execCommand 로 넣어야 ⌘Z 되돌리기 기록이 끊기지 않는다. */
+function replaceRange(ta, s, e, text, selA, selB) {
+  ta.focus();
+  ta.setSelectionRange(s, e);
+  let ok = false;
+  try { ok = document.execCommand("insertText", false, text); } catch (err) { ok = false; }
+  if (!ok) ta.setRangeText(text, s, e, "end");
+  if (selA !== undefined) ta.setSelectionRange(selA, selB === undefined ? selA : selB);
+}
+
+/* 커서가 놓인 줄의 앞 공백. 커서가 그 공백 안에 있으면 커서 앞까지만 센다 */
+function leadAtCaret(v, caret) {
+  const ls = v.lastIndexOf("\n", caret - 1) + 1;
+  const lead = (/^[\t ]*/.exec(v.slice(ls)) || [""])[0];
+  return lead.slice(0, Math.max(0, caret - ls));
+}
+
+/* 엔터로 줄을 바꿔도 들여쓰기를 그대로 물려준다 (탭 몇 단이든) */
+function breakWithIndent(ta) {
+  const lead = leadAtCaret(ta.value, ta.selectionStart);
+  if (!lead) return false;
+  const a = ta.selectionStart, b = ta.selectionEnd;
+  replaceRange(ta, a, b, "\n" + lead, a + 1 + lead.length);
+  markDirty();
+  refreshEditor();
+  return true;
+}
+
+/* 조합 중(한글 입력)에는 브라우저가 줄바꿈을 먼저 넣는다 — 그 뒤를 이어받는다 */
+function indentAfterBreak(ta) {
+  const v = ta.value, c = ta.selectionStart;
+  if (c === 0 || ta.selectionEnd !== c || v[c - 1] !== "\n") return;
+  const ps = v.lastIndexOf("\n", c - 2) + 1;
+  const lead = (/^[\t ]*/.exec(v.slice(ps, c - 1)) || [""])[0];
+  if (!lead) return;
+  replaceRange(ta, c, c, lead, c + lead.length);
+}
+
 function lineBlock(ta) {
   const v = ta.value;
   const s = v.lastIndexOf("\n", ta.selectionStart - 1) + 1;
@@ -1291,13 +1331,12 @@ function toggleTaskInEditor(ta) {
     return l.replace(/^([\t ]*)/, "$1- ");
   }).join("\n");
 
-  ta.setRangeText(out, s, e, "end");
   if (selA === selB) {
     const shift = out.length - block.length;
     const c = Math.max(s, Math.min(selA + shift, s + out.length));
-    ta.setSelectionRange(c, c);
+    replaceRange(ta, s, e, out, c, c);
   } else {
-    ta.setSelectionRange(s, s + out.length);
+    replaceRange(ta, s, e, out, s, s + out.length);
   }
   markDirty();
   refreshEditor();
@@ -1312,16 +1351,14 @@ function moveLinesInEditor(ta, dir) {
     if (s === 0) return;
     const ps = v.lastIndexOf("\n", s - 2) + 1;
     const prev = v.slice(ps, s - 1);
-    ta.setRangeText(block + "\n" + prev, ps, e, "end");
-    ta.setSelectionRange(ps + a, ps + b);
+    replaceRange(ta, ps, e, block + "\n" + prev, ps + a, ps + b);
   } else {
     if (e >= v.length) return;
     let ne = v.indexOf("\n", e + 1);
     if (ne === -1) ne = v.length;
     const next = v.slice(e + 1, ne);
-    ta.setRangeText(next + "\n" + block, s, ne, "end");
     const start = s + next.length + 1;
-    ta.setSelectionRange(start + a, start + b);
+    replaceRange(ta, s, ne, next + "\n" + block, start + a, start + b);
   }
   markDirty();
   refreshEditor();
@@ -1348,7 +1385,13 @@ function setMode(mode) {
   }
 }
 
-$("#editor").addEventListener("input", () => { markDirty(); refreshEditor(); });
+$("#editor").addEventListener("input", (e) => {
+  if (e.inputType === "insertLineBreak" || e.inputType === "insertParagraph") {
+    indentAfterBreak($("#editor"));
+  }
+  markDirty();
+  refreshEditor();
+});
 $("#editor").addEventListener("scroll", () => { $("#guides").scrollTop = $("#editor").scrollTop; });
 
 $("#editor").addEventListener("keydown", (e) => {
@@ -1367,11 +1410,16 @@ $("#editor").addEventListener("keydown", (e) => {
     moveLinesInEditor(ta, e.key === "ArrowUp" ? -1 : 1);
     return;
   }
+  // 엔터: 앞 공백을 그대로 물려준다
+  if (e.key === "Enter" && !e.isComposing && !mod && !e.altKey) {
+    if (breakWithIndent(ta)) e.preventDefault();
+    return;
+  }
   if (e.key === "Tab") {
     e.preventDefault();
     const s = ta.selectionStart, t = ta.selectionEnd;
     if (s === t && !e.shiftKey) {
-      ta.setRangeText(state.indentStr, s, t, "end");
+      replaceRange(ta, s, t, state.indentStr, s + state.indentStr.length);
     } else {
       const val = ta.value;
       const from = val.lastIndexOf("\n", s - 1) + 1;
@@ -1379,7 +1427,7 @@ $("#editor").addEventListener("keydown", (e) => {
       const next = e.shiftKey
         ? block.replace(/^(\t| {1,4})/gm, "")
         : block.replace(/^/gm, state.indentStr);
-      ta.setRangeText(next, from, t, "select");
+      replaceRange(ta, from, t, next, from, from + next.length);
     }
     markDirty();
     refreshEditor();
