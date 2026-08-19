@@ -105,8 +105,11 @@ h2 .aside{margin-left:auto;font-family:var(--mono);font-size:11px;letter-spacing
 .mt .amt.in{color:var(--moss)}
 .act{display:flex;gap:8px;flex:none;flex-wrap:wrap;justify-content:flex-end;opacity:0;transition:opacity .15s}
 .it:hover .act,.it:focus-within .act{opacity:1}
-.act button{font-family:var(--mono);font-size:11px;color:var(--ink3);padding:2px 4px}
-.act button:hover{color:var(--seal)}
+.act button,.act a{font-family:var(--mono);font-size:11px;color:var(--ink3);padding:2px 4px;
+  border:none;background:none;cursor:pointer;text-decoration:none;line-height:1.7}
+.act button:hover,.act a:hover{color:var(--seal)}
+.act a.tmr{border-bottom:1px dotted var(--line2)}
+.act a.tmr:hover{border-bottom-color:var(--seal)}
 @media (hover:none){.act{opacity:.55}}
 
 /* ── 카드/집계 ── */
@@ -822,28 +825,86 @@ const CMDS=[
   {c:'프로젝트', a:'j', cat:'proj', ex:'장편 초고'},
   {c:'기도', a:'p', cat:'pray',  ex:'봉해서 미래로 띄울 한 문장'},
 ];
-let menuOpen=false, menuIdx=0, menuList=[];
+let menuOpen=false, menuIdx=0, menuList=[], menuMode=null, wikiStart=-1;
 function menuQuery(){
   const m=$in.value.match(/^\/([^\s]*)$/);
   return m? m[1] : null;
 }
-function closeMenu(){ $menu.hidden=true; menuOpen=false; menuIdx=0; menuList=[]; fitBar(); }
+function caret(){ const c=$in.selectionStart; return (c===null||c===undefined)? $in.value.length : c; }
+function wikiCtx(){
+  const v=$in.value, c=caret(), before=v.slice(0,c);
+  const k=before.lastIndexOf('[[');
+  if(k<0) return null;
+  const seg=before.slice(k+2);
+  if(seg.indexOf(']]')>=0||seg.indexOf('\n')>=0||seg.length>60) return null;
+  return {start:k, q:seg};
+}
+function linkIndex(){
+  const m=new Map();
+  E.forEach(e=>{
+    if(e.archived||sealedP(e)) return;
+    (e.links||[]).forEach(n=>{
+      const k=n.toLowerCase(), c=m.get(k);
+      if(c){ c.n++; if(e.ts>c.ts){ c.ts=e.ts; c.name=n; } }
+      else m.set(k,{name:n,n:1,ts:e.ts});
+    });
+  });
+  return [...m.values()].sort((a,b)=>b.ts-a.ts);
+}
+function agoLabel(ts){
+  const d=Math.round((dObj(TODAY())-dObj(iso(new Date(ts))))/86400000);
+  if(d<=0) return '오늘'; if(d===1) return '어제';
+  if(d<7) return d+'일 전'; if(d<30) return Math.floor(d/7)+'주 전';
+  if(d<365) return Math.floor(d/30)+'달 전'; return Math.floor(d/365)+'해 전';
+}
+function closeMenu(){ $menu.hidden=true; menuOpen=false; menuIdx=0; menuList=[]; menuMode=null; fitBar(); }
+function showMenu(html){
+  $menu.innerHTML=html; $menu.hidden=false; menuOpen=true; fitBar();
+}
 function renderMenu(){
+  const w=wikiCtx();
+  if(w){
+    const s=w.q.trim().toLowerCase();
+    let list=linkIndex();
+    if(s) list=list.filter(x=>x.name.toLowerCase().indexOf(s)>=0);
+    list=list.slice(0,12).map(x=>({kind:'wiki',name:x.name,n:x.n,ts:x.ts}));
+    if(s && !list.length) list.push({kind:'new',name:w.q.trim()});
+    if(!list.length){ closeMenu(); return; }
+    menuMode='wiki'; wikiStart=w.start; menuList=list;
+    if(menuIdx>=list.length) menuIdx=0;
+    showMenu(list.map((x,i)=>
+      '<button data-i="'+i+'" aria-selected="'+(i===menuIdx)+'">'+
+        '<span class="cm">'+(x.kind==='new'?'＋':'[[')+'</span>'+
+        '<span class="cn">'+esc(x.name)+'</span>'+
+        '<span class="ce">'+(x.kind==='new'?'새 이름으로 잇기':x.n+'번 · '+agoLabel(x.ts))+'</span>'+
+      '</button>').join(''));
+    return;
+  }
   const q=menuQuery();
   if(q===null){ closeMenu(); return; }
   const s=q.toLowerCase();
   menuList = s? CMDS.filter(c=>c.c.startsWith(s)||c.a===s||c.cat.startsWith(s)) : CMDS.slice();
   if(!menuList.length){ closeMenu(); return; }
+  menuMode='cmd';
   if(menuIdx>=menuList.length) menuIdx=0;
-  $menu.innerHTML=menuList.map((c,i)=>
+  showMenu(menuList.map((c,i)=>
     '<button data-i="'+i+'" aria-selected="'+(i===menuIdx)+'">'+
       '<span class="cm">'+CATS[c.cat].mk+'</span><span class="cn">'+c.c+'</span>'+
-      '<span class="ce">/'+c.a+' · '+esc(c.ex)+'</span></button>').join('');
-  $menu.hidden=false; menuOpen=true; fitBar();
+      '<span class="ce">/'+c.a+' · '+esc(c.ex)+'</span></button>').join(''));
 }
 function pickCmd(i){
-  const c=menuList[i]; if(!c) return;
-  closeMenu(); $in.value='/'+c.c+' '; $in.focus();
+  const x=menuList[i]; if(!x) return;
+  if(menuMode==='wiki'){
+    const v=$in.value, c=caret();
+    const before=v.slice(0,wikiStart), after=v.slice(c);
+    const head=before+'[['+x.name;
+    const closed=after.slice(0,2)===']]';
+    $in.value=head+(closed?'':']]')+after;
+    const pos=head.length+2;
+    closeMenu(); $in.focus(); $in.setSelectionRange(pos,pos);
+    autosize(); preview(); return;
+  }
+  closeMenu(); $in.value='/'+x.c+' '; $in.focus();
   $in.setSelectionRange($in.value.length,$in.value.length);
   autosize(); preview();
 }
@@ -870,6 +931,10 @@ function preview(){
     $chips.innerHTML = pin + (c
       ? '<span class="chip cat">'+CATS[c.cat].mk+' '+c.c+' 지정</span><span class="chip hint">무엇을 담을까요</span>'
       : '<span class="chip hint">↑↓로 고르고 엔터 · 그냥 이어 적어도 됩니다</span>');
+    return;
+  }
+  if(menuOpen&&menuMode==='wiki'){
+    $chips.innerHTML=pin+'<span class="chip hint">↑↓로 고르고 엔터 · 없는 이름은 「새 이름으로 잇기」</span>';
     return;
   }
   const lines=v.split('\n').map(s=>s.trim()).filter(Boolean);
@@ -909,6 +974,7 @@ async function commit(){
 }
 
 $in.addEventListener('input',()=>{autosize();renderMenu();preview()});
+$in.addEventListener('click',()=>{renderMenu();preview()});
 $in.addEventListener('keydown',e=>{
   if(menuOpen){
     if(e.key==='ArrowDown'){e.preventDefault();menuIdx=(menuIdx+1)%menuList.length;renderMenu();return;}
@@ -977,6 +1043,11 @@ function itemHTML(e,opt={}){
     if(n) mt.push('<span>'+n+'번 손댐</span>');
   }
   if(e.wasProj) mt.push('<span>끝낸 프로젝트</span>');
+  if(e.foc&&e.foc.length){
+    const fd=focusOf(e); const all=e.foc.reduce((a,b)=>a+(b.m||0),0);
+    if(fd) mt.push('<span>오늘 집중 '+hm(fd)+'</span>');
+    else if(all) mt.push('<span>집중 '+hm(all)+'</span>');
+  }
   if(e.archived) mt.push('<span>보관</span>');
 
   return '<div class="it'+(dn?' done':'')+'" data-id="'+e.id+'">'+
@@ -987,6 +1058,13 @@ function itemHTML(e,opt={}){
       (pray?lineageHTML(e):'')+'</div>'+
     '<div class="act">'+
       (opt.linkAs?'<button data-act="lk" data-id="'+e.id+'" data-q="'+esc(opt.linkAs)+'">잇기</button>':'')+
+      (e.cat==='todo'?(function(){
+        const fm=focusMin(e);
+        return '<a class="tmr" data-act="tmr" data-id="'+e.id+'" data-m="'+fm+'" '+
+          'href="shortcuts://run-shortcut?name='+encodeURIComponent('알람')+
+          (fm?'&input=text&text='+fm:'')+'" title="단축어 「알람」'+(fm?' · '+fm+'분':'')+'">'+
+          '타이머'+(fm?' '+fm:'')+'</a>';
+      })():'')+
       (e.cat==='todo'?'<button data-act="done" data-id="'+e.id+'">'+
         (rt? (dn?'되돌리기':'오늘 함') : (e.done?'되돌리기':'완료'))+'</button>':'')+
       (e.cat==='todo'?'<button data-act="rt" data-id="'+e.id+'">'+(rt?'루틴 고침':'루틴')+'</button>':'')+
@@ -1056,6 +1134,36 @@ function recGroups(){
       latest:nums.length?nums[nums.length-1].num:null,
       sum30:last30.reduce((a,b)=>a+b.num,0), n30:last30.length};
   }).sort((a,b)=>b.list[b.list.length-1].ts-a.list[a.list.length-1].ts);
+}
+
+/* ═══════════════ 7-f. 집중 ═══════════════ */
+function focusMin(e){
+  const t=(e.text||e.raw||'');
+  let m=0;
+  const hh=t.match(/(\d{1,2})(?:\.(\d))?\s*시간/);
+  if(hh) m += (+hh[1])*60 + (hh[2]? Math.round(+hh[2]*6) : 0);
+  const mm=hh
+    ? t.slice(t.indexOf(hh[0])+hh[0].length).match(/^\s*(\d{1,2})\s*분/)
+    : t.match(/(\d{1,3})\s*분/);
+  if(mm) m += +mm[1];
+  else if(hh){
+    const any=t.match(/(\d{1,2})\s*분/);
+    if(any) m += +any[1];
+  }
+  const half=/(\d{1,2})\s*시간\s*반/.test(t);
+  if(half && !mm) m += 30;
+  return Math.min(600, m);
+}
+function focusOf(e,d){
+  return (e.foc||[]).filter(f=>f.d===(d||TODAY())).reduce((a,b)=>a+(b.m||0),0);
+}
+function focusDay(d){
+  let m=0; E.forEach(e=>{ m+=focusOf(e,d); }); return m;
+}
+function hm(m){
+  if(!m) return '0분';
+  const h=Math.floor(m/60), r=m%60;
+  return (h? h+'시간'+(r?' ':'') : '')+(r? r+'분' : (h?'':'0분'));
 }
 
 /* ═══════════════ 7-c. 루틴 ═══════════════ */
@@ -1401,7 +1509,8 @@ function vToday(){
       (overdue?' · 돌아온 것 '+overdue:'')+'<br>'+
       (dOut||dIn? (dOut?'오늘 지출 '+nf(dOut):'')+(dOut&&dIn?' · ':'')+(dIn?'오늘 수입 '+nf(dIn):'')
                 : '오늘 오간 돈 없음')+
-      ' · 담은 것 '+filed.length+'</span></div>';
+      ' · 담은 것 '+filed.length+
+      (focusDay()? ' · <b>집중 '+hm(focusDay())+'</b>':'')+'</span></div>';
 
   if(E.length===0){
     h+='<div class="empty">체는 적은 것을 알아서 갈라 담습니다. 아래 칸에 그냥 적으세요.<br>'+
@@ -1856,6 +1965,8 @@ function vSet(){
      '이름을 <b>[[대괄호 둘]]</b>로 감싸면 이음이 됩니다. <b>[[김편집]]과 만났다</b>처럼 적으면 '+
      '「김편집」에 줄이 그어지고, 누르면 그 이름이 이어진 것이 모두 모입니다. '+
      '괄호가 경계를 잡아 주니 조사도 띄어쓰기도 상관없습니다 — <b>[[생활성서 연재]]</b>도 됩니다.<br>'+
+     '<b>[[</b> 를 치면 여태 쓴 이름이 최근순으로 뜹니다. ↑↓로 고르고 엔터. '+
+     '몇 자 치면 좁혀지고, 걸리는 것이 없으면 맨 아래 「새 이름으로 잇기」가 남습니다.<br>'+
      '여러 줄을 붙여 넣으면 줄마다 따로 담깁니다.<br>'+
      '날짜는 내일·모레·다음 주 화요일·3월 5일·15일, 돈은 4,800원·3만원·+30만원처럼.<br>'+
      '<b>62536자</b>처럼 적으면 원고지 매수를 옆에 붙여 줍니다 — <b>62536자(312.7매)</b>. '+
@@ -1863,6 +1974,14 @@ function vSet(){
      '할일과 지나간 일정의 <b>완료</b>를 누르면 무엇을 했는지 적게 됩니다. 저장하면 그날의 메모로 남습니다. '+
      '할일은 <b>끝낸 날</b>, 일정은 <b>그 일정의 날</b>로 갑니다.<br>'+
      '오래 끌고 가는 일은 <b>/프로젝트</b>로 세우세요. 아래 「프로젝트」를 보십시오.'+
+     '</div></section>';
+  h+='<section><h2>타이머와 집중</h2><div class="empty">'+
+     '할일 제목에 <b>25분</b> <b>1시간 30분</b> <b>2시간 반</b> <b>1.5시간</b>처럼 적어 두면, '+
+     '<b>타이머</b> 단추가 그것을 분으로 셈해 애플 단축어 「알람」에 넘깁니다. '+
+     '단추에도 <b>타이머 90</b>으로 보입니다.<br><br>'+
+     '누를 때마다 그 분수가 오늘 몫으로 쌓이고, 오늘 탭 날짜 머리에 <b>집중 1시간 25분</b>으로 나옵니다. '+
+     '항목 아래에도 <b>오늘 집중 50분</b>이 붙습니다. 하루가 지나면 다시 0에서 셉니다.<br>'+
+     '분을 적지 않은 할일은 단축어만 부르고 셈에는 들어가지 않습니다. 그날의 집중은 일기 물음에도 실립니다.'+
      '</div></section>';
   h+='<section><h2>프로젝트</h2><div class="empty">'+
      '오래 끌고 가는 일은 <b>프로젝트</b>로 세웁니다. 할일 탭 위쪽에 모입니다. '+
@@ -1914,6 +2033,7 @@ function vSet(){
      'Things &nbsp; things:///show?id=…<br>'+
      'Bear &nbsp; bear://x-callback-url/open-note?id=…<br>'+
      '단축어 &nbsp; shortcuts://run-shortcut?name=이름<br>'+
+     '할일의 <b>타이머</b> &nbsp; 단축어 「알람」을 부릅니다<br>'+
      '그 밖에 Obsidian · Ulysses · Craft · Drafts · Day One · Zotero · MarginNote ·<br>'+
      '메모 · 캘린더 · 지도 · 메일 · 메시지 · 전화 · 파일'+
      '</span><br><br>'+
@@ -2254,6 +2374,8 @@ function bDiary(day){
     s+='\n## 그날의 수치\n';
     rec.forEach(e=>s+=(e.key||'')+' '+(e.num!==null&&e.num!==undefined?e.num+(e.unit||''):'')+' | '+e.raw.replace(/\n/g,' ')+'\n');
   }
+  const fm=focusDay(day);
+  if(fm) s+='\n## 그날의 집중\n타이머로 잰 시간 '+hm(fm)+'\n';
   if(rtd.length) s+='\n## 그날 해낸 루틴\n'+rtd.map(e=>(e.text||e.raw)+'('+rtLabel(e.rt)+')').join(' · ')+'\n';
   if(dld.length){
     s+='\n## 그날 손댄 프로젝트\n';
@@ -2545,6 +2667,15 @@ $view.addEventListener('click',async e=>{
   if(act==='pfin')   return prayFulfill(ent);
   if(act==='pagain') return prayAgain(ent);
   if(act==='pseal')  return sealSheet(ent);
+  if(act==='tmr'){
+    const m=+b.dataset.m||0;
+    if(m){
+      ent.foc=(ent.foc||[]).concat([{d:TODAY(),m}]);
+      touch(ent); await put(ent); render();
+      toast('집중 '+m+'분 · 오늘 '+hm(focusDay()));
+    }
+    return;
+  }
   if(act==='prog') return projTaskSheet(ent);
   if(act==='grp') return groupSheet(ent);
   if(act==='flip'){
