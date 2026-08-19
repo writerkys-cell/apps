@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TaskPaper</title>
+<style>
+/* ─────────────────────────────────────────────
+   토큰
+   ───────────────────────────────────────────── */
+:root{
+  --paper:      #f2f1ed;
+  --paper-2:    #eceae5;
+  --ink:        #1c1d20;
+  --ink-soft:   #4a4d53;
+  --muted:      #8d9096;
+  --faint:      #c3c4c2;
+  --rule:       #dcdad4;
+  --accent:     #3e4c6d;
+  --accent-bg:  #3e4c6d14;
+  --sel:        #3e4c6d1f;
+  --shadow:     0 1px 0 #ffffff80, 0 1px 3px #1c1d200d;
+
+  --mono: "SFMono-Regular", ui-monospace, "SF Mono", Menlo, Consolas,
+          "D2Coding", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo",
+          "Malgun Gothic", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+          "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
+
+  --indent: 1.6rem;
+  --row: 1.85;
+}
+html[data-theme="dark"]{
+  --paper:      #17181a;
+  --paper-2:    #1e1f22;
+  --ink:        #e6e5e1;
+  --ink-soft:   #b9b8b4;
+  --muted:      #7d8087;
+  --faint:      #4b4d51;
+  --rule:       #2c2e32;
+  --accent:     #93a6cf;
+  --accent-bg:  #93a6cf1a;
+  --sel:        #93a6cf24;
+  --shadow:     0 1px 3px #0006;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  background-color:var(--paper);
+  /* 종이 결: 인라인 SVG 노이즈 (외부 의존 없음) */
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23n)' opacity='0.035'/></svg>");
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:15px;
+  line-height:var(--row);
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+
+/* ─────────────────────────────────────────────
+   툴바
+   ───────────────────────────────────────────── */
+.bar{
+  position:sticky;top:0;z-index:20;
+  display:flex;align-items:center;gap:.5rem;
+  padding:.55rem max(1rem, env(safe-area-inset-left)) .55rem 1rem;
+  background:color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter:saturate(180%) blur(12px);
+  -webkit-backdrop-filter:saturate(180%) blur(12px);
+  border-bottom:1px solid var(--rule);
+  font-family:var(--sans);
+}
+.bar .grp{display:flex;align-items:center;gap:.15rem}
+.btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  padding:.3rem .6rem;border-radius:5px;
+  font-size:.8125rem;letter-spacing:-.01em;color:var(--ink-soft);
+  white-space:nowrap;
+}
+.btn:hover{background:var(--paper-2);color:var(--ink)}
+.btn[aria-pressed="true"]{background:var(--accent-bg);color:var(--accent)}
+.btn svg{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+.file{
+  display:flex;align-items:baseline;gap:.4rem;min-width:0;margin-left:.35rem;
+}
+.file .name{
+  font-size:.8125rem;color:var(--ink);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;max-width:min(34vw,320px);
+}
+.file .dot{
+  width:6px;height:6px;border-radius:50%;background:var(--accent);
+  flex:none;opacity:0;transition:opacity .15s;align-self:center;
+}
+.file.dirty .dot{opacity:1}
+
+.spacer{flex:1 1 auto}
+
+.search{
+  position:relative;display:flex;align-items:center;
+  flex:0 1 260px;min-width:120px;
+}
+.search svg{
+  position:absolute;left:.5rem;width:14px;height:14px;pointer-events:none;
+  stroke:var(--muted);fill:none;stroke-width:1.7;stroke-linecap:round;
+}
+#q{
+  width:100%;padding:.33rem .5rem .33rem 1.75rem;
+  font-family:var(--mono);font-size:.8125rem;color:var(--ink);
+  background:var(--paper-2);border:1px solid transparent;border-radius:5px;
+}
+#q::placeholder{color:var(--muted)}
+#q:focus{outline:none;border-color:var(--accent);background:var(--paper)}
+.search .clear{
+  position:absolute;right:.3rem;padding:.15rem .3rem;color:var(--muted);
+  font-size:.75rem;border-radius:4px;display:none;
+}
+.search.has .clear{display:block}
+.search .clear:hover{color:var(--ink);background:var(--paper)}
+
+/* ─────────────────────────────────────────────
+   본문
+   ───────────────────────────────────────────── */
+main{
+  max-width:78ch;margin:0 auto;
+  padding:2.5rem 1rem 40vh;
+}
+#doc{position:relative}
+
+/* 행 */
+.line{
+  position:relative;display:flex;align-items:flex-start;
+  padding-left:calc(var(--lvl) * var(--indent));
+  scroll-margin:6rem;
+}
+/* 들여쓰기 괘선 — 상위 항목의 표시에서 아래로 내려오는 실선 */
+.line::before{
+  content:"";position:absolute;top:0;bottom:0;
+  left:calc(var(--lvl) * var(--indent) - .5rem);
+  border-left:1px solid var(--rule);
+}
+.line[style*="--lvl:0"]::before{display:none}
+.line.t-blank{height:.9rem;cursor:text}
+.line.t-blank::before{display:none}
+
+.gutter{
+  flex:none;width:1.5rem;height:calc(var(--row) * 1em);
+  display:flex;align-items:center;justify-content:flex-start;
+}
+.content{
+  flex:1 1 auto;min-width:0;
+  white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;
+  padding:0 .1rem;border-radius:3px;cursor:text;
+}
+.content:hover{background:var(--paper-2)}
+
+/* 프로젝트 */
+.t-project{margin-top:1.35rem}
+.t-project:first-child{margin-top:0}
+.t-project .content{
+  font-size:1.0625rem;font-weight:700;letter-spacing:-.015em;
+  padding-bottom:.1rem;
+}
+.t-project .pname{border-bottom:1px solid var(--faint);padding-bottom:.12rem}
+.fold{
+  width:1.1rem;height:1.1rem;display:grid;place-items:center;
+  color:var(--faint);font-size:.62rem;border-radius:3px;transition:color .12s;
+}
+.fold:hover{color:var(--ink)}
+.t-project:hover .fold{color:var(--muted)}
+
+/* 태스크 */
+.check{
+  width:1.05rem;height:1.05rem;border-radius:3px;
+  border:1.5px solid var(--faint);
+  display:grid;place-items:center;transition:border-color .12s, background .12s;
+}
+.check:hover{border-color:var(--accent)}
+.check::after{
+  content:"";width:.42rem;height:.42rem;border-radius:1px;
+  background:var(--accent);transform:scale(0);transition:transform .13s ease-out;
+}
+.done .check{border-color:var(--faint);background:transparent}
+.done .check::after{transform:scale(1);background:var(--muted)}
+
+/* 메모 */
+.t-note .content{color:var(--muted);font-size:.9375rem}
+
+/* 완료 */
+.done .content{color:var(--muted);text-decoration:line-through;
+  text-decoration-color:var(--faint);text-decoration-thickness:1px}
+.done .tag{opacity:.55}
+
+/* 태그 */
+.tag{
+  color:var(--accent);background:var(--accent-bg);
+  padding:.02em .3em;border-radius:3px;cursor:pointer;
+  text-decoration:none;display:inline;
+}
+.tag:hover{background:var(--sel);text-decoration:underline}
+.tagval{opacity:.72}
+.tag-active{outline:1px solid var(--accent)}
+
+/* 링크 */
+.link{
+  color:var(--accent);text-decoration:none;
+  border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  cursor:pointer;
+}
+.link:hover{border-bottom-color:var(--accent);background:var(--accent-bg)}
+.link .app{opacity:.72}
+.link.web::after{
+  content:"↗";font-size:.72em;vertical-align:.28em;margin-left:.1em;opacity:.6;
+}
+.link.run::before{
+  content:"▸";font-size:.78em;margin-right:.18em;opacity:.55;
+}
+.link.plain{border-bottom-style:dotted}
+.done .link{color:var(--muted);border-bottom-color:var(--faint)}
+
+mark{background:var(--sel);color:inherit;border-radius:2px;padding:.02em 0}
+
+/* 인라인 편집 */
+.edit-input{
+  display:block;width:100%;flex:1 1 auto;min-width:0;resize:none;overflow:hidden;
+  font:inherit;line-height:inherit;color:var(--ink);
+  background:var(--paper);border:0;border-left:2px solid var(--accent);
+  padding:0 .1rem 0 .45rem;margin-left:-.45rem;border-radius:0;
+}
+.edit-input:focus{outline:none}
+
+/* 전문 편집기 */
+#editWrap{display:none;position:relative}
+#guides,#editor{
+  font-family:var(--mono);font-size:1em;line-height:var(--row);
+  letter-spacing:inherit;tab-size:4;-moz-tab-size:4;
+  padding:0;margin:0;border:0;
+  white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;
+}
+#guides{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  color:transparent;pointer-events:none;overflow:hidden;
+  user-select:none;-webkit-user-select:none;
+}
+/* 들여쓰기 한 단마다 세로 괘선. 배경으로 그리므로 글자 위치를 밀지 않는다 */
+#guides .g{
+  background-image:linear-gradient(to right, var(--rule) 1px, transparent 1px);
+  background-repeat:no-repeat;
+}
+#editor{
+  position:relative;display:block;width:100%;min-height:70vh;
+  color:var(--ink);background:transparent;resize:none;overflow:hidden;
+}
+#editor:focus{outline:none}
+#editor::selection{background:var(--sel)}
+body.mode-edit #doc{display:none}
+body.mode-edit #editWrap{display:block}
+body.mode-edit .view-only{opacity:.35;pointer-events:none}
+
+/* 빈 화면 */
+.empty{color:var(--muted);padding:3rem 0;text-align:center;font-size:.875rem}
+.empty b{display:block;color:var(--ink-soft);font-weight:600;margin-bottom:.4rem;font-size:.9375rem}
+.empty kbd{font-size:.8em}
+
+/* 하단 상태줄 */
+.status{
+  position:fixed;left:0;right:0;bottom:0;z-index:15;
+  display:flex;align-items:center;gap:1rem;
+  padding:.4rem 1rem calc(.4rem + env(safe-area-inset-bottom));
+  font-family:var(--sans);font-size:.75rem;color:var(--muted);
+  background:color-mix(in srgb, var(--paper) 90%, transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-top:1px solid var(--rule);
+}
+.status .meter{
+  flex:none;display:flex;gap:2px;align-items:center;
+}
+.status .meter i{width:3px;height:9px;background:var(--faint);border-radius:1px}
+.status .meter i.on{background:var(--accent)}
+.status .right{margin-left:auto;display:flex;gap:.9rem;align-items:center}
+kbd{
+  font-family:var(--mono);font-size:.9em;color:var(--ink-soft);
+  background:var(--paper-2);border:1px solid var(--rule);border-bottom-width:2px;
+  border-radius:4px;padding:.05em .35em;
+}
+
+/* 토스트 */
+#toast{
+  position:fixed;left:50%;bottom:3.2rem;transform:translate(-50%,.6rem);
+  z-index:50;pointer-events:none;opacity:0;transition:opacity .18s, transform .18s;
+  background:var(--ink);color:var(--paper);
+  font-family:var(--sans);font-size:.8125rem;
+  padding:.45rem .85rem;border-radius:6px;box-shadow:0 6px 20px #0003;
+  max-width:min(90vw,420px);
+}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* 도움말 */
+dialog{
+  border:1px solid var(--rule);border-radius:10px;padding:0;
+  background:var(--paper);color:var(--ink);box-shadow:0 24px 60px #0000002e;
+  max-width:min(94vw,540px);width:100%;
+}
+dialog::backdrop{background:#0000004d;backdrop-filter:blur(2px)}
+.sheet{padding:1.4rem 1.5rem 1.5rem}
+.sheet h2{margin:0 0 1rem;font-size:1rem;letter-spacing:-.02em}
+.sheet h3{margin:1.3rem 0 .5rem;font-size:.75rem;font-family:var(--sans);
+  text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.sheet dl{display:grid;grid-template-columns:auto 1fr;gap:.35rem .9rem;margin:0;font-size:.8125rem}
+.sheet dt{white-space:nowrap}
+.sheet dd{margin:0;color:var(--ink-soft)}
+.sheet code{background:var(--paper-2);padding:.05em .3em;border-radius:3px}
+.sheet .close{position:absolute;top:.8rem;right:1rem;color:var(--muted);font-size:1.1rem;line-height:1}
+.sheet .close:hover{color:var(--ink)}
+
+@media (max-width:640px){
+  body{font-size:14.5px}
+  main{padding:1.5rem .85rem 45vh}
+  .bar{flex-wrap:wrap;gap:.35rem .25rem}
+  .search{flex:1 1 100%;order:5}
+  .btn span{display:none}
+  .btn{padding:.35rem .45rem}
+  .file .name{max-width:40vw}
+  .status .hide-sm{display:none}
+  :root{--indent:1.15rem}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="grp">
+    <button class="btn" id="btnOpen" title="파일 열기 (⌘O)">
+      <svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span>열기</span>
+    </button>
+    <button class="btn" id="btnSave" title="저장 (⌘S)">
+      <svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7M8 20v-6h8v6"/></svg>
+      <span>저장</span>
+    </button>
+    <button class="btn" id="btnNew" title="새 파일">
+      <svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      <span>새 파일</span>
+    </button>
+  </div>
+
+  <div class="file" id="fileBadge">
+    <span class="dot"></span>
+    <span class="name" id="fileName">이름 없음.taskpaper</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="search" id="searchWrap">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="검색 · @태그" autocomplete="off" spellcheck="false">
+    <button class="clear" id="btnClear" title="검색 지우기 (Esc)">✕</button>
+  </div>
+
+  <div class="grp">
+    <button class="btn view-only" id="btnHideDone" aria-pressed="false" title="완료 항목 숨기기">
+      <svg viewBox="0 0 24 24"><path d="M4 12.5 9 17.5 20 6.5"/></svg>
+      <span>완료 숨김</span>
+    </button>
+    <button class="btn" id="btnMode" aria-pressed="false" title="텍스트 편집기 (⌘E)">
+      <svg viewBox="0 0 24 24"><path d="m4 20 4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/></svg>
+      <span>원문</span>
+    </button>
+    <button class="btn" id="btnTheme" title="밝기 전환">
+      <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+    </button>
+    <button class="btn" id="btnHelp" title="도움말 (?)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 1 1 3.2 2.5c-.6.2-.7.7-.7 1.3M12 16.6h.01"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div id="doc"></div>
+  <div id="editWrap">
+    <div id="guides" aria-hidden="true"></div>
+    <textarea id="editor" spellcheck="false" aria-label="원문 편집기"></textarea>
+  </div>
+</main>
+
+<footer class="status">
+  <span class="meter" id="meter" title="완료 비율"></span>
+  <span id="statCount">항목 0</span>
+  <span id="statFilter"></span>
+  <span class="right">
+    <span class="hide-sm"><kbd>⌘↩</kbd> 할 일로</span>
+    <span class="hide-sm"><kbd>⌥↑↓</kbd> 줄 이동</span>
+    <span class="hide-sm"><kbd>⌘S</kbd> 저장</span>
+    <span id="fsNote"></span>
+  </span>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<input type="file" id="filePicker" accept=".taskpaper,.txt,.md,text/plain" hidden>
+
+<dialog id="help">
+  <div class="sheet">
+    <button class="close" id="helpClose" aria-label="닫기">✕</button>
+    <h2>TaskPaper 사용법</h2>
+
+    <h3>문법</h3>
+    <dl>
+      <dt><code>글감 정리:</code></dt><dd>콜론으로 끝나면 프로젝트</dd>
+      <dt><code>- 3매 쓰기</code></dt><dd>대시로 시작하면 할 일</dd>
+      <dt>그 밖의 줄</dt><dd>메모</dd>
+      <dt><code>@today</code> <code>@due(2026-09-01)</code></dt><dd>태그, 값은 괄호 안에</dd>
+      <dt><code>@done(날짜)</code></dt><dd>완료 표시</dd>
+      <dt>탭 들여쓰기</dt><dd>상위 항목에 딸린 하위 항목</dd>
+    </dl>
+
+    <h3>링크</h3>
+    <p style="margin:.2rem 0 .6rem;font-size:.8125rem;color:var(--ink-soft)">
+      원문에서 빠져나오면 주소가 눌리는 링크가 됩니다. 원문 편집기에서는 그대로 텍스트입니다.
+    </p>
+    <dl>
+      <dt><code>https://…</code></dt><dd>새 탭에서 열기</dd>
+      <dt><code>scrivener://open?projectpath=…</code></dt><dd>Scrivener — 프로젝트 이름을 뽑아 표시</dd>
+      <dt><code>x-devonthink-item://UUID</code></dt><dd>DEVONthink 항목</dd>
+      <dt><code>things:///show?id=…</code></dt><dd>Things</dd>
+      <dt><code>shortcuts://run-shortcut?name=…</code></dt><dd>단축어 실행 — 이름을 뽑아 표시</dd>
+      <dt><code>mailto:</code> <code>tel:</code> <code>message:</code></dt><dd>메일 · 전화</dd>
+      <dt>그 밖의 <code>앱스킴://</code></dt><dd>Obsidian, Bear, OmniFocus, Craft, Drafts 등 그대로 전달</dd>
+      <dt><code>[라벨](주소)</code></dt><dd>긴 주소를 짧은 이름으로</dd>
+    </dl>
+
+    <h3>검색</h3>
+    <dl>
+      <dt><code>@today</code></dt><dd>해당 태그가 붙은 항목만</dd>
+      <dt><code>@due(09)</code></dt><dd>태그 값으로 좁히기</dd>
+      <dt><code>!@done</code></dt><dd>앞에 <code>!</code>를 붙이면 제외</dd>
+      <dt><code>초고 @today</code></dt><dd>여러 조건은 모두 만족(AND)</dd>
+    </dl>
+
+    <h3>단축키</h3>
+    <dl>
+      <dt><kbd>⌘S</kbd></dt><dd>원본 파일에 덮어쓰기</dd>
+      <dt><kbd>⌘O</kbd></dt><dd>파일 열기</dd>
+      <dt><kbd>⌘E</kbd></dt><dd>원문 편집기 전환</dd>
+      <dt><kbd>⌘F</kbd></dt><dd>검색창으로</dd>
+      <dt><kbd>⌘↩</kbd></dt><dd>문장을 할 일로 — 앞에 <code>- </code> 붙이기, 다시 누르면 떼기</dd>
+      <dt><kbd>⌥↑</kbd> / <kbd>⌥↓</kbd></dt><dd>줄을 위아래로 옮기기 (여러 줄 선택 가능)</dd>
+      <dt><kbd>더블클릭</kbd></dt><dd>그 줄만 인라인 편집</dd>
+      <dt><kbd>Enter</kbd></dt><dd>편집 중 — 아래에 새 줄</dd>
+      <dt><kbd>Tab</kbd> / <kbd>⇧Tab</kbd></dt><dd>편집 중 — 들여쓰기 조절</dd>
+      <dt><kbd>Esc</kbd></dt><dd>편집 취소 · 검색 지우기</dd>
+    </dl>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+/* ══════════════════════════════════════════════
+   0. 유틸
+   ══════════════════════════════════════════════ */
+const $ = (s) => document.querySelector(s);
+const TAGCH = "\\w\\u3130-\\u318F\\uAC00-\\uD7A3\\u4E00-\\u9FFF./\\-";
+const TAG_RE = new RegExp("(^|[\\s(])@([" + TAGCH + "]+)(\\(([^)]*)\\))?", "g");
+// 렌더링용: 검색 하이라이트 표시자(\u0001,\u0002)가 태그 이름 안에 섞여도 인식한다
+const TAG_RE_R = new RegExp("(^|[\\s(])@([" + TAGCH + "\\u0001\\u0002]+)(\\(([^)]*)\\))?", "g");
+const TRAIL_TAGS_RE = new RegExp("(\\s+@[" + TAGCH + "]+(\\([^)]*\\))?)+\\s*$");
+/* 링크: [라벨](주소) · scheme://… · mailto: 계열 · www. 로 시작하는 주소 */
+const LINK_RE = new RegExp(
+  "\\[([^\\]\\n]{1,80})\\]\\(([^\\s()]+)\\)" +
+  "|([a-zA-Z][a-zA-Z0-9+.\\-]{0,31}:\\/\\/[^\\s<>\"'`]+)" +
+  "|((?:mailto|tel|sms|message|facetime|things|shortcuts|x-callback-url):[^\\s<>\"'`]+)" +
+  "|(www\\.[^\\s<>\"'`]+)", "g");
+const BAD_SCHEME = /^(javascript|data|vbscript|blob|about|filesystem|view-source)$/;
+
+const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const HAS_FS = typeof window.showOpenFilePicker === "function";
+const LS_KEY = "taskpaper.buffer.v1";
+
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const today = () => {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+};
+
+let toastTimer;
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("on"), 2200);
+}
+
+/* ══════════════════════════════════════════════
+   1. 상태
+   ══════════════════════════════════════════════ */
+const SAMPLE = [
+  "오늘:",
+  "\t- 3매 쓰기 @today",
+  "\t- 아침 페이지 shortcuts://run-shortcut?name=%EC%95%84%EC%B9%A8%20%ED%8E%98%EC%9D%B4%EC%A7%80 @today",
+  "\t- 산책 다녀오기 @today @due(오후)",
+  "\t\t호수공원 한 바퀴, 4.8km",
+  "\t- 교정지 넘기기 @done(" + today() + ")",
+  "",
+  "장편 초고:",
+  "\t- 2장 장면 배열 다시 짜기 @next",
+  "\t\tscrivener://open?projectpath=/Users/me/%EC%9A%B4%EB%AA%85%EC%9D%98%20%ED%88%AC%EA%B5%AC.scriv",
+  "\t- 취재 메모 다시 읽기 [1981년 자료](x-devonthink-item://8F3A21C4-1E77-4A0B-9C55-0D2B7E6A9F10)",
+  "\t- 인물 이름 확정",
+  "\t\t결정을 미루지 말 것. 이름이 정해져야 말투가 정해진다.",
+  "",
+  "언젠가:",
+  "\t- 서재 책장 정리 @someday",
+].join("\n");
+
+const state = {
+  lines: SAMPLE.split("\n"),
+  items: [],
+  handle: null,
+  name: "예시.taskpaper",
+  dirty: false,
+  mode: "view",
+  query: "",
+  hideDone: false,
+  folded: new Set(),
+  editing: null,
+  indentStr: "\t",
+};
+
+/* ══════════════════════════════════════════════
+   2. 파싱
+   ══════════════════════════════════════════════ */
+function detectIndent(lines) {
+  if (lines.some((l) => /^\t/.test(l))) return { unit: null, str: "\t" };
+  let min = Infinity;
+  for (const l of lines) {
+    if (!l.trim()) continue;
+    const m = /^ +/.exec(l);
+    if (m) min = Math.min(min, m[0].length);
+  }
+  const unit = Number.isFinite(min) ? min : 4;
+  return { unit, str: " ".repeat(unit) };
+}
+
+function levelOf(raw, unit) {
+  const lead = /^[\t ]*/.exec(raw)[0];
+  if (unit === null) {
+    const tabs = (lead.match(/\t/g) || []).length;
+    const sp = (lead.match(/ /g) || []).length;
+    return tabs + Math.floor(sp / 4);
+  }
+  return Math.round(lead.replace(/\t/g, " ".repeat(unit)).length / unit);
+}
+
+function tagsOf(body) {
+  const out = [];
+  TAG_RE.lastIndex = 0;
+  let m;
+  while ((m = TAG_RE.exec(body)) !== null) {
+    out.push({ name: m[2], value: m[4] === undefined ? null : m[4] });
+  }
+  return out;
+}
+
+function parseDoc() {
+  const { unit, str } = detectIndent(state.lines);
+  state.indentStr = str;
+  state.items = state.lines.map((raw, i) => {
+    const level = levelOf(raw, unit);
+    const body = raw.replace(/^[\t ]+/, "");
+    const tags = tagsOf(body);
+    let type = "note", text = body;
+
+    if (body.trim() === "") {
+      type = "blank"; text = "";
+    } else if (/^-(\s|$)/.test(body)) {
+      type = "task"; text = body.replace(/^-\s?/, "");
+    } else if (/:$/.test(body.replace(TRAIL_TAGS_RE, "").trimEnd())) {
+      type = "project"; text = body;
+    }
+
+    return {
+      i, raw, level, type, body, text, tags,
+      done: tags.some((t) => t.name.toLowerCase() === "done"),
+    };
+  });
+}
+
+/* ══════════════════════════════════════════════
+   3. 검색 / 필터
+   ══════════════════════════════════════════════ */
+function parseQuery(q) {
+  const toks = q.match(new RegExp("!?@[" + TAGCH + "]+(\\([^)]*\\))?|\\S+", "g")) || [];
+  return toks.map((t) => {
+    let neg = false, s = t;
+    if (s.startsWith("!")) { neg = true; s = s.slice(1); }
+    if (s.startsWith("@")) {
+      const m = new RegExp("^@([" + TAGCH + "]+)(?:\\(([^)]*)\\))?$").exec(s);
+      if (m) return { kind: "tag", neg, name: m[1].toLowerCase(), value: (m[2] || "").toLowerCase() };
+    }
+    return { kind: "text", neg, s: s.toLowerCase() };
+  });
+}
+
+function hitToken(item, t) {
+  let hit;
+  if (t.kind === "tag") {
+    hit = item.tags.some((tag) =>
+      tag.name.toLowerCase().startsWith(t.name) &&
+      (t.value === "" || String(tag.value || "").toLowerCase().includes(t.value))
+    );
+  } else {
+    hit = item.body.toLowerCase().includes(t.s);
+  }
+  return t.neg ? !hit : hit;
+}
+
+function computeVisible() {
+  const items = state.items, n = items.length;
+  const show = new Array(n).fill(false);
+  const q = state.query.trim();
+  const filtering = q !== "" || state.hideDone;
+
+  if (!filtering) {
+    show.fill(true);
+    for (const p of state.folded) {
+      const it = items[p];
+      if (!it) continue;
+      for (let j = p + 1; j < n; j++) {
+        if (items[j].type !== "blank" && items[j].level <= it.level) break;
+        show[j] = false;
+      }
+    }
+    return { show, filtering, matchCount: null };
+  }
+
+  const toks = parseQuery(q);
+  const neg = toks.filter((t) => t.neg);
+
+  // allowed: 제외 조건에 걸리지 않은 줄. 조상을 문맥으로 보여줄 때도,
+  // 일치한 프로젝트의 하위를 펼칠 때도 이 조건은 계속 지켜져야 한다.
+  const allowed = new Array(n).fill(false);
+  const matched = new Array(n).fill(false);
+  for (let i = 0; i < n; i++) {
+    const it = items[i];
+    if (it.type === "blank") continue;
+    if (state.hideDone && it.done) continue;
+    allowed[i] = neg.every((t) => hitToken(it, t));
+    if (!allowed[i]) continue;
+    matched[i] = toks.length === 0 || toks.every((t) => hitToken(it, t));
+  }
+
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    if (!matched[i]) continue;
+    count++;
+    show[i] = true;
+    let lvl = items[i].level;
+    for (let j = i - 1; j >= 0 && lvl > 0; j--) {
+      const it = items[j];
+      if (it.type === "blank") continue;
+      if (it.level < lvl) {
+        if (allowed[j]) show[j] = true;
+        lvl = it.level;
+      }
+    }
+    if (items[i].type === "project") {
+      for (let j = i + 1; j < n; j++) {
+        const it = items[j];
+        if (it.type !== "blank" && it.level <= items[i].level) break;
+        if (allowed[j]) show[j] = true;
+      }
+    }
+  }
+  return { show, filtering, matchCount: count };
+}
+
+/* ══════════════════════════════════════════════
+   4. 렌더링
+   ══════════════════════════════════════════════ */
+function activeTagNames() {
+  return parseQuery(state.query).filter((t) => t.kind === "tag" && !t.neg).map((t) => t.name);
+}
+function textTerms() {
+  return parseQuery(state.query).filter((t) => t.kind === "text" && !t.neg).map((t) => t.s).filter(Boolean);
+}
+
+/* ── 링크 ─────────────────────────────────── */
+function decodeSafe(s) {
+  try { return decodeURIComponent(s.replace(/\+/g, " ")); } catch (e) { return s; }
+}
+function param(href, names) {
+  for (const n of names) {
+    const m = new RegExp("[?&/]" + n + "=([^&]+)", "i").exec(href);
+    if (m) return decodeSafe(m[1]);
+  }
+  return null;
+}
+function basename(p) {
+  const seg = decodeSafe(p).split(/[\\/]/).filter(Boolean).pop() || "";
+  return seg.replace(/\.(scriv|md|txt|taskpaper|pdf)$/i, "");
+}
+function clip(s, n) {
+  s = String(s).trim();
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+const APPS = [
+  { re: /^scrivener$/, name: "Scrivener",
+    detail: (h) => { const p = param(h, ["projectpath", "project"]); return p ? basename(p) : null; } },
+  { re: /^x-devonthink(-item)?$/, name: "DEVONthink",
+    detail: (h) => param(h, ["title", "name"]) },
+  { re: /^things$/, name: "Things",
+    detail: (h) => param(h, ["title", "list"]) },
+  { re: /^shortcuts$/, name: "단축어",
+    detail: (h) => param(h, ["name", "shortcut"]) },
+  { re: /^omnifocus$/, name: "OmniFocus", detail: () => null },
+  { re: /^bear$/, name: "Bear", detail: (h) => param(h, ["title"]) },
+  { re: /^obsidian$/, name: "Obsidian", detail: (h) => param(h, ["file", "vault"]) },
+  { re: /^craftdocs$/, name: "Craft", detail: () => null },
+  { re: /^ulysses$/, name: "Ulysses", detail: () => null },
+  { re: /^drafts$/, name: "Drafts", detail: (h) => param(h, ["text"]) },
+  { re: /^notion$/, name: "Notion", detail: () => null },
+  { re: /^raycast$/, name: "Raycast", detail: () => null },
+  { re: /^message$/, name: "메일", detail: () => null },
+  { re: /^(mailto|tel|sms|facetime)$/, name: null,
+    detail: (h) => decodeSafe(h.replace(/^[a-z]+:/i, "")) },
+  { re: /^file$/, name: "파일", detail: (h) => basename(h.replace(/^file:\/\//i, "")) },
+  { re: /^x-apple-/, name: "Apple", detail: () => null },
+];
+
+function trimUrl(u) {
+  let t = u.replace(/[.,;:!?'"\u2026]+$/, "");
+  while (t.endsWith(")") && (t.split(")").length - 1) > (t.split("(").length - 1)) t = t.slice(0, -1);
+  return t;
+}
+
+function shortenWeb(href) {
+  const t = decodeSafe(href).replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
+  return clip(t, 40);
+}
+
+function anchorHTML(href, labelRaw, hl) {
+  const bare = /^www\./i.test(href);
+  const scheme = bare ? "https" : ((/^([a-zA-Z][a-zA-Z0-9+.\-]*):/.exec(href) || [, ""])[1] || "").toLowerCase();
+  if (!scheme || BAD_SCHEME.test(scheme)) return hl(href); // 실행 가능한 스킴만 링크로
+
+  const real = bare ? "https://" + href : href;
+  const web = scheme === "http" || scheme === "https";
+  const mail = /^(mailto|tel|sms|facetime)$/.test(scheme);
+  const app = APPS.find((a) => a.re.test(scheme));
+
+  let inner = "";
+  if (labelRaw != null) {
+    inner = hl(labelRaw);
+  } else if (app) {
+    const d = app.detail(href);
+    inner = (app.name ? '<span class="app">' + hl(app.name) + "</span>" : "") +
+      (app.name && d ? " · " : "") + (d ? hl(clip(d, 30)) : "");
+  } else if (web) {
+    inner = hl(shortenWeb(href));
+  }
+  if (!inner) inner = hl(clip(decodeSafe(href), 40));
+
+  const kind = web ? "web" : mail ? "plain" : "run";
+  return '<a class="link ' + kind + '" data-act="link" href="' + esc(real) + '"' +
+    (web ? ' target="_blank" rel="noopener noreferrer"' : "") +
+    ' title="' + esc(decodeSafe(href)) + '">' + inner + "</a>";
+}
+
+/* ── 태그 ─────────────────────────────────── */
+function applyTags(escaped, actives) {
+  TAG_RE_R.lastIndex = 0;
+  return escaped.replace(TAG_RE_R, (m, pre, name, paren) => {
+    const plain = name.replace(/[\u0001\u0002]/g, "");
+    const on = actives.some((a) => plain.toLowerCase().startsWith(a));
+    return pre + '<button type="button" class="tag' + (on ? " tag-active" : "") +
+      '" data-act="tag" data-tag="' + esc(plain) + '">@' + name +
+      (paren ? '<span class="tagval">' + paren + "</span>" : "") + "</button>";
+  });
+}
+
+function renderInline(str, actives, terms) {
+  // 링크 구간을 먼저 잘라낸다. 주소 원문에는 검색 표시자를 심지 않는다 —
+  // 스킴 한가운데가 갈라지면 주소 자체가 깨지기 때문.
+  let markRe = null;
+  if (terms.length) {
+    const pat = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    markRe = new RegExp("(" + pat + ")", "gi");
+  }
+  const hl = (t) => {
+    const v = String(t);
+    return esc(markRe ? v.replace(markRe, "\u0001$1\u0002") : v);
+  };
+
+  let out = "", last = 0, m;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(str)) !== null) {
+    let label = null, href, consumed;
+    if (m[1] !== undefined) {
+      label = m[1]; href = m[2]; consumed = m[0].length;
+    } else {
+      href = trimUrl(m[3] || m[4] || m[5]); consumed = href.length;
+    }
+    out += applyTags(hl(str.slice(last, m.index)), actives);
+    out += anchorHTML(href, label, hl);
+    last = m.index + consumed;
+    LINK_RE.lastIndex = last;
+  }
+  out += applyTags(hl(str.slice(last)), actives);
+
+  return out.replace(/\u0001/g, "<mark>").replace(/\u0002/g, "</mark>");
+}
+
+function contentHTML(it, actives, terms) {
+  if (it.type === "project") {
+    const tail = TRAIL_TAGS_RE.exec(it.body);
+    const namePart = (tail ? it.body.slice(0, tail.index) : it.body).replace(/:\s*$/, "");
+    const tagPart = tail ? tail[0] : "";
+    return '<span class="pname">' + renderInline(namePart, actives, terms) + "</span>" +
+      renderInline(tagPart, actives, terms);
+  }
+  return renderInline(it.text, actives, terms) || "&nbsp;";
+}
+
+function render() {
+  parseDoc();
+  const { show, filtering, matchCount } = computeVisible();
+  const actives = activeTagNames();
+  const terms = textTerms();
+  const doc = $("#doc");
+
+  if (state.items.every((it) => it.type === "blank")) {
+    doc.innerHTML = '<p class="empty"><b>빈 문서입니다</b>' +
+      "아무 줄이나 눌러 쓰기 시작하세요. 콜론으로 끝나면 프로젝트, " +
+      "대시로 시작하면 할 일이 됩니다.</p>";
+    doc.querySelector(".empty").addEventListener("click", () => startEdit(0));
+    updateStatus(matchCount);
+    return;
+  }
+
+  let html = "";
+  let shown = 0;
+  for (let i = 0; i < state.items.length; i++) {
+    if (!show[i]) continue;
+    const it = state.items[i];
+    shown++;
+
+    if (it.type === "blank") {
+      html += '<div class="line t-blank" data-i="' + i + '" style="--lvl:' + it.level + '"></div>';
+      continue;
+    }
+
+    let gutter = "";
+    if (it.type === "task") {
+      gutter = '<button type="button" class="check" data-act="toggle" data-i="' + i +
+        '" role="checkbox" aria-checked="' + (it.done ? "true" : "false") +
+        '" aria-label="완료 표시"></button>';
+    } else if (it.type === "project") {
+      gutter = '<button type="button" class="fold" data-act="fold" data-i="' + i +
+        '" aria-label="접기/펼치기">' + (state.folded.has(i) ? "▶" : "▼") + "</button>";
+    }
+
+    const cls = "line t-" + it.type + (it.done ? " done" : "");
+    html += '<div class="' + cls + '" data-i="' + i + '" style="--lvl:' + it.level + '">' +
+      '<div class="gutter">' + gutter + "</div>" +
+      '<div class="content" data-act="edit" data-i="' + i + '">' +
+      contentHTML(it, actives, terms) + "</div></div>";
+  }
+
+  if (shown === 0) {
+    html = '<p class="empty"><b>일치하는 항목이 없습니다</b>' +
+      "검색어를 지우거나 다른 태그로 찾아보세요.</p>";
+  }
+
+  doc.innerHTML = html;
+  updateStatus(matchCount);
+  if (state.editing !== null) mountEditor(state.editing);
+}
+
+function updateStatus(matchCount) {
+  const tasks = state.items.filter((it) => it.type === "task");
+  const done = tasks.filter((it) => it.done).length;
+  const total = tasks.length;
+
+  const ticks = 10;
+  const on = total ? Math.round((done / total) * ticks) : 0;
+  let m = "";
+  for (let i = 0; i < ticks; i++) m += '<i class="' + (i < on ? "on" : "") + '"></i>';
+  $("#meter").innerHTML = m;
+
+  $("#statCount").textContent = total
+    ? "할 일 " + total + " · 완료 " + done + " (" + Math.round((done / total) * 100) + "%)"
+    : "할 일 없음";
+  $("#statFilter").textContent = matchCount === null ? "" : "· 검색 결과 " + matchCount;
+}
+
+/* ══════════════════════════════════════════════
+   5. 문서 변경 연산
+   ══════════════════════════════════════════════ */
+function markDirty() {
+  state.dirty = true;
+  $("#fileBadge").classList.add("dirty");
+  persist();
+}
+let persistTimer;
+function persist() {
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        text: state.lines.join("\n"), name: state.name, at: Date.now(),
+      }));
+    } catch (e) { /* 저장 공간이 없으면 조용히 넘어감 */ }
+  }, 400);
+}
+
+function stripTag(raw, name) {
+  const re = new RegExp("\\s*@" + name + "(\\([^)]*\\))?", "gi");
+  return raw.replace(re, "").replace(/[ \t]+$/, "");
+}
+
+function toggleDone(i) {
+  const raw = state.lines[i];
+  const it = state.items[i];
+  state.lines[i] = it.done
+    ? stripTag(raw, "done")
+    : raw.replace(/[ \t]+$/, "") + " @done(" + today() + ")";
+  markDirty();
+  render();
+}
+
+function indentOf(raw) { return /^[\t ]*/.exec(raw)[0]; }
+
+/* ── 인라인 편집 ───────────────────────────── */
+let committing = false;
+
+function startEdit(i) {
+  if (state.mode === "edit") return;
+  if (state.editing !== null && state.editing !== i) commitEdit();
+  state.editing = i;
+  if (state.lines.length === 0) state.lines = [""];
+  render();
+}
+
+function mountEditor(i) {
+  const holder = document.querySelector('.content[data-i="' + i + '"]') ||
+    document.querySelector('.line[data-i="' + i + '"]');
+  if (!holder) { state.editing = null; return; }
+
+  const ta = document.createElement("textarea");
+  ta.className = "edit-input";
+  ta.rows = 1;
+  ta.spellcheck = false;
+  ta.value = state.lines[i] ?? "";
+
+  if (holder.classList.contains("content")) {
+    holder.innerHTML = "";
+    holder.appendChild(ta);
+  } else {
+    holder.innerHTML = "";
+    holder.appendChild(ta);
+  }
+
+  const autosize = () => { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; };
+  autosize();
+  ta.addEventListener("input", autosize);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  ta.addEventListener("keydown", (e) => {
+    const idx = state.editing;
+    const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      state.editing = null;
+      render();
+      return;
+    }
+    // 문장을 할 일로 (앞에 "- " 붙이기/떼기)
+    if ((mod && e.key === "Enter") || (mod && e.shiftKey && e.key.toLowerCase() === "t")) {
+      e.preventDefault();
+      const cur = ta.value;
+      ta.value = /^[\t ]*-(\s|$)/.test(cur)
+        ? cur.replace(/^([\t ]*)-[ \t]?/, "$1")
+        : cur.replace(/^([\t ]*)/, "$1- ");
+      state.lines[idx] = ta.value;
+      markDirty();
+      autosize();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      return;
+    }
+    // 줄을 위아래로
+    if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      const j = idx + (e.key === "ArrowUp" ? -1 : 1);
+      if (j < 0 || j >= state.lines.length) return;
+      e.preventDefault();
+      state.lines[idx] = ta.value.replace(/\n/g, " ");
+      const swap = state.lines[j];
+      state.lines[j] = state.lines[idx];
+      state.lines[idx] = swap;
+      state.folded.clear();
+      committing = true;
+      markDirty();
+      state.editing = j;
+      render();
+      committing = false;
+      return;
+    }
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      const cur = ta.value.replace(/\n/g, " ");
+      state.lines[idx] = cur;
+      const lead = indentOf(cur);
+      const isTask = /^[\t ]*-(\s|$)/.test(cur);
+      const isProject = /:$/.test(cur.replace(TRAIL_TAGS_RE, "").trimEnd()) && cur.trim() !== "";
+      let next = lead;
+      if (isTask) next = lead + "- ";
+      else if (isProject) next = lead + state.indentStr + "- ";
+      state.lines.splice(idx + 1, 0, next);
+      state.folded.clear();
+      committing = true;
+      markDirty();
+      state.editing = idx + 1;
+      render();
+      committing = false;
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const pos = ta.selectionStart;
+      if (e.shiftKey) {
+        const before = ta.value;
+        ta.value = before.replace(/^(\t| {1,8})/, "");
+        ta.setSelectionRange(Math.max(0, pos - (before.length - ta.value.length)), Math.max(0, pos - (before.length - ta.value.length)));
+      } else {
+        ta.value = state.indentStr + ta.value;
+        ta.setSelectionRange(pos + state.indentStr.length, pos + state.indentStr.length);
+      }
+      return;
+    }
+    if (e.key === "Backspace" && ta.value === "" && state.lines.length > 1) {
+      e.preventDefault();
+      state.lines.splice(idx, 1);
+      state.folded.clear();
+      committing = true;
+      markDirty();
+      state.editing = Math.max(0, idx - 1);
+      render();
+      committing = false;
+      return;
+    }
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !e.isComposing) {
+      const move = e.key === "ArrowDown" ? 1 : -1;
+      const target = idx + move;
+      if (target < 0 || target >= state.lines.length) return;
+      e.preventDefault();
+      state.lines[idx] = ta.value.replace(/\n/g, " ");
+      committing = true;
+      markDirty();
+      state.editing = target;
+      render();
+      committing = false;
+    }
+  });
+
+  ta.addEventListener("blur", () => {
+    if (committing) return;
+    commitEdit(ta.value);
+  });
+}
+
+function commitEdit(value) {
+  const idx = state.editing;
+  if (idx === null) return;
+  const ta = document.querySelector(".edit-input");
+  const v = (value !== undefined ? value : ta ? ta.value : null);
+  state.editing = null;
+  if (v === null) { render(); return; }
+  const clean = v.replace(/\n/g, " ");
+  if (state.lines[idx] !== clean) {
+    state.lines[idx] = clean;
+    markDirty();
+  }
+  render();
+}
+
+/* ══════════════════════════════════════════════
+   6. 파일 입출력
+   ══════════════════════════════════════════════ */
+function setDoc(text, name, handle) {
+  state.lines = text.replace(/\r\n?/g, "\n").split("\n");
+  state.name = name;
+  state.handle = handle || null;
+  state.dirty = false;
+  state.folded.clear();
+  state.editing = null;
+  $("#fileBadge").classList.remove("dirty");
+  $("#fileName").textContent = name;
+  $("#editor").value = state.lines.join("\n");
+  render();
+  refreshEditor();
+  persist();
+}
+
+async function openFile() {
+  if (HAS_FS) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: "TaskPaper · 텍스트", accept: { "text/plain": [".taskpaper", ".txt", ".md"] } }],
+        excludeAcceptAllOption: false, multiple: false,
+      });
+      const file = await handle.getFile();
+      setDoc(await file.text(), file.name, handle);
+      toast(file.name + " 열었습니다");
+    } catch (err) {
+      if (err && err.name !== "AbortError") toast("파일을 열지 못했습니다: " + err.message);
+    }
+  } else {
+    $("#filePicker").click();
+  }
+}
+
+$("#filePicker").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setDoc(await file.text(), file.name, null);
+  toast(file.name + " 열었습니다 (읽기 후 다운로드로 저장)");
+  e.target.value = "";
+});
+
+function download(text, name) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function saveFile() {
+  if (state.mode === "edit") syncFromEditor();
+  else if (state.editing !== null) commitEdit();
+
+  const text = state.lines.join("\n");
+
+  if (HAS_FS) {
+    try {
+      if (!state.handle) {
+        state.handle = await window.showSaveFilePicker({
+          suggestedName: state.name,
+          types: [{ description: "TaskPaper", accept: { "text/plain": [".taskpaper", ".txt"] } }],
+        });
+        state.name = state.handle.name;
+        $("#fileName").textContent = state.name;
+      }
+      const perm = await state.handle.queryPermission({ mode: "readwrite" });
+      if (perm !== "granted") {
+        const req = await state.handle.requestPermission({ mode: "readwrite" });
+        if (req !== "granted") { toast("쓰기 권한이 없어 저장하지 못했습니다"); return; }
+      }
+      const w = await state.handle.createWritable();
+      await w.write(text);
+      await w.close();
+      state.dirty = false;
+      $("#fileBadge").classList.remove("dirty");
+      toast(state.name + " 저장했습니다");
+      return;
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      toast("저장하지 못했습니다: " + err.message);
+      return;
+    }
+  }
+
+  download(text, state.name);
+  state.dirty = false;
+  $("#fileBadge").classList.remove("dirty");
+  toast(state.name + " 내려받았습니다");
+}
+
+function newFile() {
+  if (state.dirty && !confirm("저장하지 않은 변경이 있습니다. 새 파일로 시작할까요?")) return;
+  setDoc("받은 편지함:\n\t- \n", "이름 없음.taskpaper", null);
+  startEdit(1);
+}
+
+/* ══════════════════════════════════════════════
+   7. 모드 전환 · 원문 편집기
+   ══════════════════════════════════════════════ */
+function syncFromEditor() {
+  const v = $("#editor").value;
+  if (v !== state.lines.join("\n")) {
+    state.lines = v.split("\n");
+    markDirty();
+  }
+}
+
+/* ── 들여쓰기 괘선 ─────────────────────────── */
+function buildGuides(text) {
+  const unit = state.indentStr === "\t" ? null : state.indentStr.length;
+  let out = "";
+  const lines = text.split("\n");
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    const lead = /^[\t ]*/.exec(line)[0];
+    let i = 0;
+    while (i < lead.length) {
+      let chunk;
+      if (lead[i] === "\t") {
+        chunk = "\t"; i += 1;
+      } else {
+        const n = unit || 4;
+        chunk = lead.slice(i, i + n); i += chunk.length;
+      }
+      out += '<span class="g">' + chunk + "</span>";
+    }
+    out += esc(line.slice(lead.length));
+    if (li < lines.length - 1) out += "\n";
+  }
+  // 마지막 줄이 비어 있어도 레이어 높이가 맞도록
+  return out + "\u200b";
+}
+
+let guideFrame = 0;
+function refreshEditor() {
+  const ta = $("#editor");
+  ta.style.height = "auto";
+  ta.style.height = Math.max(ta.scrollHeight, window.innerHeight * 0.7) + "px";
+  if (guideFrame) cancelAnimationFrame(guideFrame);
+  guideFrame = requestAnimationFrame(() => {
+    $("#guides").innerHTML = buildGuides(ta.value);
+    guideFrame = 0;
+  });
+}
+
+/* ── 줄 단위 조작 ──────────────────────────── */
+function lineBlock(ta) {
+  const v = ta.value;
+  const s = v.lastIndexOf("\n", ta.selectionStart - 1) + 1;
+  let end = ta.selectionEnd;
+  if (end > ta.selectionStart && v[end - 1] === "\n") end -= 1; // 줄바꿈만 걸친 선택은 제외
+  let e = v.indexOf("\n", end);
+  if (e === -1) e = v.length;
+  return { s, e, v };
+}
+
+function toggleTaskInEditor(ta) {
+  const { s, e, v } = lineBlock(ta);
+  const selA = ta.selectionStart, selB = ta.selectionEnd;
+  const block = v.slice(s, e);
+  const lines = block.split("\n");
+  const filled = lines.filter((l) => l.trim());
+  if (!filled.length) return;
+
+  const allTasks = filled.every((l) => /^[\t ]*-(\s|$)/.test(l));
+  const out = lines.map((l) => {
+    if (!l.trim()) return l;
+    if (allTasks) return l.replace(/^([\t ]*)-[ \t]?/, "$1");
+    if (/^[\t ]*-(\s|$)/.test(l)) return l;   // 이미 할 일인 줄은 그대로
+    return l.replace(/^([\t ]*)/, "$1- ");
+  }).join("\n");
+
+  ta.setRangeText(out, s, e, "end");
+  if (selA === selB) {
+    const shift = out.length - block.length;
+    const c = Math.max(s, Math.min(selA + shift, s + out.length));
+    ta.setSelectionRange(c, c);
+  } else {
+    ta.setSelectionRange(s, s + out.length);
+  }
+  markDirty();
+  refreshEditor();
+}
+
+function moveLinesInEditor(ta, dir) {
+  const { s, e, v } = lineBlock(ta);
+  const a = ta.selectionStart - s, b = ta.selectionEnd - s;
+  const block = v.slice(s, e);
+
+  if (dir < 0) {
+    if (s === 0) return;
+    const ps = v.lastIndexOf("\n", s - 2) + 1;
+    const prev = v.slice(ps, s - 1);
+    ta.setRangeText(block + "\n" + prev, ps, e, "end");
+    ta.setSelectionRange(ps + a, ps + b);
+  } else {
+    if (e >= v.length) return;
+    let ne = v.indexOf("\n", e + 1);
+    if (ne === -1) ne = v.length;
+    const next = v.slice(e + 1, ne);
+    ta.setRangeText(next + "\n" + block, s, ne, "end");
+    const start = s + next.length + 1;
+    ta.setSelectionRange(start + a, start + b);
+  }
+  markDirty();
+  refreshEditor();
+}
+
+function setMode(mode) {
+  if (mode === state.mode) return;
+  if (mode === "edit") {
+    if (state.editing !== null) commitEdit();
+    parseDoc(); // 들여쓰기 단위를 최신 상태로
+    $("#editor").value = state.lines.join("\n");
+    state.mode = "edit";
+    document.body.classList.add("mode-edit");
+    $("#btnMode").setAttribute("aria-pressed", "true");
+    refreshEditor();
+    $("#editor").focus();
+  } else {
+    syncFromEditor();
+    state.mode = "view";
+    document.body.classList.remove("mode-edit");
+    $("#btnMode").setAttribute("aria-pressed", "false");
+    state.folded.clear();
+    render();
+  }
+}
+
+$("#editor").addEventListener("input", () => { markDirty(); refreshEditor(); });
+$("#editor").addEventListener("scroll", () => { $("#guides").scrollTop = $("#editor").scrollTop; });
+
+$("#editor").addEventListener("keydown", (e) => {
+  const ta = e.target;
+  const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+
+  // 문장을 할 일로 (앞에 "- " 붙이기/떼기)
+  if ((mod && e.key === "Enter") || (mod && e.shiftKey && e.key.toLowerCase() === "t")) {
+    e.preventDefault();
+    toggleTaskInEditor(ta);
+    return;
+  }
+  // 줄을 위아래로
+  if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+    e.preventDefault();
+    moveLinesInEditor(ta, e.key === "ArrowUp" ? -1 : 1);
+    return;
+  }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const s = ta.selectionStart, t = ta.selectionEnd;
+    if (s === t && !e.shiftKey) {
+      ta.setRangeText(state.indentStr, s, t, "end");
+    } else {
+      const val = ta.value;
+      const from = val.lastIndexOf("\n", s - 1) + 1;
+      const block = val.slice(from, t);
+      const next = e.shiftKey
+        ? block.replace(/^(\t| {1,4})/gm, "")
+        : block.replace(/^/gm, state.indentStr);
+      ta.setRangeText(next, from, t, "select");
+    }
+    markDirty();
+    refreshEditor();
+  }
+});
+
+/* ══════════════════════════════════════════════
+   8. 이벤트
+   ══════════════════════════════════════════════ */
+$("#doc").addEventListener("click", (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const act = el.dataset.act;
+
+  if (act === "toggle") {
+    e.preventDefault();
+    if (state.editing !== null) commitEdit();
+    toggleDone(Number(el.dataset.i));
+  } else if (act === "fold") {
+    e.preventDefault();
+    const i = Number(el.dataset.i);
+    state.folded.has(i) ? state.folded.delete(i) : state.folded.add(i);
+    render();
+  } else if (act === "tag") {
+    e.preventDefault();
+    const tag = "@" + el.dataset.tag;
+    setQuery(state.query.trim() === tag ? "" : tag);
+  }
+});
+
+$("#doc").addEventListener("dblclick", (e) => {
+  const el = e.target.closest('[data-act="edit"], .line');
+  if (!el) return;
+  const i = Number(el.dataset.i);
+  if (Number.isNaN(i)) return;
+  startEdit(i);
+});
+
+/* 빈 줄은 한 번만 눌러도 편집 */
+$("#doc").addEventListener("click", (e) => {
+  const blank = e.target.closest(".t-blank");
+  if (blank) startEdit(Number(blank.dataset.i));
+});
+
+function setQuery(v) {
+  state.query = v;
+  $("#q").value = v;
+  $("#searchWrap").classList.toggle("has", v !== "");
+  render();
+}
+
+let qTimer;
+$("#q").addEventListener("input", (e) => {
+  clearTimeout(qTimer);
+  const v = e.target.value;
+  qTimer = setTimeout(() => {
+    state.query = v;
+    $("#searchWrap").classList.toggle("has", v !== "");
+    render();
+  }, 90);
+});
+$("#btnClear").addEventListener("click", () => { setQuery(""); $("#q").focus(); });
+
+$("#btnOpen").addEventListener("click", openFile);
+$("#btnSave").addEventListener("click", saveFile);
+$("#btnNew").addEventListener("click", newFile);
+$("#btnMode").addEventListener("click", () => setMode(state.mode === "view" ? "edit" : "view"));
+$("#btnHideDone").addEventListener("click", (e) => {
+  state.hideDone = !state.hideDone;
+  e.currentTarget.setAttribute("aria-pressed", String(state.hideDone));
+  render();
+});
+$("#btnHelp").addEventListener("click", () => $("#help").showModal());
+$("#helpClose").addEventListener("click", () => $("#help").close());
+
+/* 밝기 */
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("taskpaper.theme", t); } catch (e) {}
+}
+$("#btnTheme").addEventListener("click", () => {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
+
+/* 단축키 */
+document.addEventListener("keydown", (e) => {
+  const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+  const inField = /INPUT|TEXTAREA/.test((document.activeElement || {}).tagName || "");
+
+  if (mod && e.key.toLowerCase() === "s") { e.preventDefault(); saveFile(); return; }
+  if (mod && e.key.toLowerCase() === "o") { e.preventDefault(); openFile(); return; }
+  if (mod && e.key.toLowerCase() === "e") { e.preventDefault(); setMode(state.mode === "view" ? "edit" : "view"); return; }
+  if (mod && e.key.toLowerCase() === "f") { e.preventDefault(); $("#q").focus(); $("#q").select(); return; }
+
+  if (e.key === "Escape") {
+    if (document.activeElement === $("#q")) { setQuery(""); $("#q").blur(); }
+    return;
+  }
+  if (e.key === "?" && !inField) { e.preventDefault(); $("#help").showModal(); }
+});
+
+/* 드래그앤드롭 */
+["dragover", "drop"].forEach((t) => {
+  document.addEventListener(t, async (e) => {
+    e.preventDefault();
+    if (t !== "drop") return;
+    const item = e.dataTransfer.items && e.dataTransfer.items[0];
+    if (HAS_FS && item && item.getAsFileSystemHandle) {
+      try {
+        const handle = await item.getAsFileSystemHandle();
+        if (handle && handle.kind === "file") {
+          const file = await handle.getFile();
+          setDoc(await file.text(), file.name, handle);
+          toast(file.name + " 열었습니다");
+          return;
+        }
+      } catch (err) { /* 아래 폴백으로 */ }
+    }
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      setDoc(await file.text(), file.name, null);
+      toast(file.name + " 열었습니다");
+    }
+  });
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (state.dirty) { e.preventDefault(); e.returnValue = ""; }
+});
+
+/* ══════════════════════════════════════════════
+   9. 시작
+   ══════════════════════════════════════════════ */
+(function init() {
+  let theme = null;
+  try { theme = localStorage.getItem("taskpaper.theme"); } catch (e) {}
+  applyTheme(theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch (e) {}
+  if (saved && typeof saved.text === "string" && saved.text.trim()) {
+    state.lines = saved.text.split("\n");
+    state.name = saved.name || "이름 없음.taskpaper";
+    toast("이전 작업을 불러왔습니다 — 파일에 저장하려면 " + (IS_MAC ? "⌘S" : "Ctrl+S"));
+  }
+
+  $("#fileName").textContent = state.name;
+  $("#editor").value = state.lines.join("\n");
+  $("#fsNote").textContent = HAS_FS ? "" : "원본 저장 미지원 브라우저 · 내려받기로 저장";
+  if (!HAS_FS) $("#btnSave").title = "내려받기로 저장 (Ctrl+S)";
+
+  if (!IS_MAC) {
+    document.querySelectorAll("kbd").forEach((k) => {
+      k.textContent = k.textContent
+        .replace(/⌘/g, "Ctrl+").replace(/⌥/g, "Alt+")
+        .replace(/⇧/g, "Shift+").replace(/↩/g, "Enter");
+    });
+  }
+
+  render();
+  refreshEditor();
+})();
+</script>
+</body>
+</html>
