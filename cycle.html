@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>순환 — 손글씨·타이핑·교정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F5F1;
+  --card:#FCFBF8;
+  --ink:#17181A;
+  --muted:#7C7D77;
+  --faint:#A9A9A2;
+  --grid:#C6CFBD;          /* 원고지 격자 */
+  --carry:#C9C7BE;         /* 이어받은 원고 */
+  --line:#E2E0D8;
+  --s1:#6E7175;            /* 연필 */
+  --s2:#4F6B4C;            /* 원고지 초록 */
+  --s3:#A8322A;            /* 교정 주묵 */
+  --sans:'Apple SD Gothic Neo','애플 SD 산돌고딕 Neo',-apple-system,BlinkMacSystemFont,'Malgun Gothic','맑은 고딕',sans-serif;
+  --serif:'Gowun Batang','고운바탕','Apple SD Gothic Neo',serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#141513; --card:#1B1C19; --ink:#EDEBE4; --muted:#918F86; --faint:#6A6961;
+    --grid:#3D473A; --carry:#4A4A44; --line:#2C2D29;
+    --s1:#9A9DA1; --s2:#7FA07A; --s3:#D4695E;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:var(--sans); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+  padding:0 18px calc(48px + env(safe-area-inset-bottom));
+}
+.wrap{max-width:640px;margin:0 auto}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none;padding:0}
+:focus-visible{outline:2px solid var(--s2);outline-offset:2px}
+
+/* ── 머리 ── */
+header{padding:26px 0 16px}
+.brandrow{display:flex;align-items:baseline;gap:10px;margin-bottom:18px}
+.brand{font-family:var(--serif);font-size:19px;font-weight:700;letter-spacing:.14em}
+.brandsub{font-size:11.5px;color:var(--faint);letter-spacing:.02em}
+.projrow{display:flex;gap:8px;align-items:center;margin-bottom:20px}
+select.proj{
+  flex:1;min-width:0;appearance:none;background:transparent;
+  border:none;border-bottom:1px solid var(--line);
+  padding:5px 20px 5px 0;font-size:14.5px;font-weight:600;
+  background-image:linear-gradient(45deg,transparent 50%,var(--faint) 50%),linear-gradient(135deg,var(--faint) 50%,transparent 50%);
+  background-position:calc(100% - 9px) 14px,calc(100% - 5px) 14px;
+  background-size:4px 4px,4px 4px;background-repeat:no-repeat;
+}
+.cyclebox{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.cycle{font-family:var(--serif);line-height:1}
+.cycle b{font-size:40px;font-weight:700;letter-spacing:-.02em}
+.cycle span{font-size:15px;color:var(--muted);margin:0 3px}
+.cyclemeta{margin-left:auto;text-align:right;font-family:var(--mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.5}
+.cyclemeta b{color:var(--ink);font-size:13px;font-weight:600}
+
+/* ── 원고지 게이지 ── */
+.gmark{position:relative;height:5px;margin-bottom:3px}
+.gmark::after{
+  content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);
+  border-left:4px solid transparent;border-right:4px solid transparent;
+  border-top:5px solid var(--grid);
+}
+.gauge{display:grid;grid-template-columns:repeat(20,1fr);gap:2px;margin-bottom:7px}
+.gauge i{
+  display:block;aspect-ratio:1;
+  box-shadow:inset 0 0 0 1px var(--grid);
+  transition:background .5s ease;
+}
+.gaugecap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.02em}
+
+/* ── 탭 ── */
+nav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:22px 0 24px}
+nav button{
+  padding:9px 14px;font-size:13.5px;color:var(--muted);font-weight:500;
+  border-bottom:2px solid transparent;margin-bottom:-1px;letter-spacing:.01em;
+}
+nav button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+
+/* ── 단계 표시 ── */
+.steps{display:flex;gap:0;margin-bottom:18px}
+.steps div{
+  flex:1;padding:7px 0 0;border-top:2px solid var(--line);
+  font-size:11.5px;color:var(--faint);letter-spacing:.02em;
+}
+.steps div.on{border-top-color:var(--sc);color:var(--sc);font-weight:600}
+.steps div.done{border-top-color:var(--line);color:var(--muted)}
+
+/* ── 카드 ── */
+.card{background:var(--card);border:1px solid var(--line);border-radius:2px;padding:24px 22px}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;color:var(--sc);font-weight:600;margin-bottom:9px}
+h2.t{font-family:var(--serif);font-size:25px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em}
+p.guide{font-family:var(--serif);font-size:16px;line-height:1.85;color:var(--ink);margin:0 0 20px}
+p.note{font-family:var(--serif);font-size:14px;line-height:1.8;color:var(--muted);margin:0 0 18px}
+.hintcard{
+  border-left:2px solid var(--s3);background:color-mix(in srgb,var(--s3) 6%,transparent);
+  padding:12px 14px;margin:0 0 20px;
+}
+.hintcard .lb{font-size:11px;letter-spacing:.12em;color:var(--s3);font-weight:600;margin-bottom:5px}
+.hintcard .tx{font-family:var(--serif);font-size:15.5px;line-height:1.75;white-space:pre-wrap}
+
+label.f{display:block;font-size:12.5px;font-weight:600;color:var(--muted);letter-spacing:.02em;margin:0 0 7px}
+textarea,input[type=text],input[type=number],input[type=url]{
+  width:100%;background:transparent;border:1px solid var(--line);border-radius:2px;
+  padding:11px 12px;font-family:var(--serif);font-size:15.5px;line-height:1.75;
+  resize:vertical;
+}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px}
+textarea:focus,input:focus{border-color:var(--sc,var(--s2));outline:none}
+.field{margin-bottom:20px}
+.field:last-of-type{margin-bottom:22px}
+
+/* 보조 버튼 */
+.ghost{
+  display:inline-flex;align-items:center;gap:8px;
+  border:1px solid var(--line);border-radius:2px;padding:11px 15px;
+  font-size:13.5px;font-weight:600;width:100%;justify-content:center;
+  background:var(--paper);
+}
+.ghost:hover{border-color:var(--sc)}
+.ghost small{font-weight:400;color:var(--muted);font-size:12px}
+
+/* 칩 */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  border:1px solid var(--line);border-radius:2px;padding:7px 11px;font-size:13px;color:var(--muted);
+}
+.chip[aria-pressed="true"]{border-color:var(--sc);color:var(--sc);font-weight:600;background:color-mix(in srgb,var(--sc) 7%,transparent)}
+
+/* 계산 표시 */
+.calc{
+  display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:12px;font-family:var(--mono);
+  font-variant-numeric:tabular-nums;font-size:12px;color:var(--muted);
+}
+.calc b{display:block;font-size:20px;color:var(--ink);font-weight:600;letter-spacing:-.02em;margin-top:2px}
+.calc .up b{color:var(--s2)} .calc .down b{color:var(--s3)}
+
+/* 주 버튼 */
+.done{
+  width:100%;background:var(--sc);color:#fff;border-radius:2px;
+  padding:19px 20px;font-size:16px;font-weight:700;letter-spacing:.01em;
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  transition:filter .15s;
+}
+@media (prefers-color-scheme: dark){.done{color:#141513}}
+.done:hover{filter:brightness(1.12)}
+.done kbd{font-family:var(--mono);font-size:11.5px;font-weight:500;opacity:.65;letter-spacing:0}
+
+/* ── 로그 ── */
+.today{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:2px;margin-bottom:26px}
+.today div{background:var(--card);padding:13px 12px}
+.today dt{font-size:11px;color:var(--muted);letter-spacing:.02em}
+.today dd{margin:3px 0 0;font-family:var(--mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.today dd small{font-size:11px;font-weight:400;color:var(--faint);margin-left:1px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{
+  text-align:left;font-size:11px;letter-spacing:.06em;color:var(--faint);font-weight:600;
+  padding:0 8px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap;
+}
+td{padding:11px 8px 11px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.d{color:var(--s2);font-size:11.5px} .d.m{color:var(--s3)}
+td .rs{font-size:12px;color:var(--muted);display:block;margin-top:2px;font-family:var(--serif)}
+.del{color:var(--faint);font-size:15px;line-height:1;padding:2px 4px}
+.del:hover{color:var(--s3)}
+.lnk{font-family:var(--mono);font-size:13px;border-bottom:1px dashed var(--line);padding-bottom:1px}
+.lnk:hover{border-bottom-color:var(--s2);color:var(--s2)}
+.empty{font-family:var(--serif);color:var(--muted);text-align:center;padding:44px 20px;font-size:15px;line-height:1.9}
+
+/* ── 설정 ── */
+.sec{border-top:1px solid var(--line);padding:22px 0}
+.sec:first-of-type{border-top:none;padding-top:0}
+h3{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:600;margin:0 0 14px}
+.row{display:flex;gap:8px;align-items:flex-start}
+.row .ghost{width:auto;flex:0 0 auto;padding:11px 14px}
+.plist{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:2px;margin-bottom:12px}
+.pitem{background:var(--card);padding:11px 13px;display:flex;align-items:center;gap:10px}
+.pitem.on{background:color-mix(in srgb,var(--s2) 8%,var(--card))}
+.pitem span{flex:1;font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pitem em{font-family:var(--mono);font-size:11px;color:var(--muted);font-style:normal}
+.pitem button{font-size:12px;color:var(--muted)}
+.pitem button:hover{color:var(--ink)}
+.hint{font-family:var(--serif);font-size:13.5px;color:var(--muted);line-height:1.75;margin:9px 0 0}
+
+/* 토스트 */
+#toast{
+  position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);
+  background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:2px;
+  font-size:13.5px;font-weight:600;opacity:0;pointer-events:none;transition:.22s;z-index:9;
+}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:560px){
+  .today{grid-template-columns:repeat(2,1fr)}
+  table,thead,tbody,tr,td{display:block}
+  thead{display:none}
+  tr{border-bottom:1px solid var(--line);padding:13px 0;position:relative}
+  td{border:none;padding:1px 34px 1px 0}
+  td.n{display:inline-block;margin-right:14px}
+  td.act{position:absolute;right:0;top:11px;padding:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brandrow"><div class="brand">순 환</div><div class="brandsub">손글씨 → 타이핑 → 종이 교정</div></div>
+    <div class="projrow"><select class="proj" id="projSel"></select></div>
+    <div class="cyclebox">
+      <div class="cycle" id="cycleNo"></div>
+      <div class="cyclemeta" id="cycleMeta"></div>
+    </div>
+    <div class="gmark" aria-hidden="true"></div>
+    <div class="gauge" id="gauge"></div>
+    <div class="gaugecap" id="gaugeCap"></div>
+  </header>
+
+  <nav>
+    <button data-tab="cycle" aria-selected="true">글쓰기 순환</button>
+    <button data-tab="log" aria-selected="false">로그</button>
+    <button data-tab="set" aria-selected="false">설정</button>
+  </nav>
+
+  <main id="view"></main>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const KEY = "sunhwan.v1";
+const TAGS = ["흐름이 막힘","다음 문장이 생각 안 남","자료의 부족","납득 못할 전개","피로","딴생각"];
+const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+const CMD = MAC ? "⌘↵" : "Ctrl+↵";
+const SC = ["", "var(--s1)", "var(--s2)", "var(--s3)"];
+
+/* ── 상태 ── */
+const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
+const blankDraft = () => ({ summary:"", chars:"", tags:[], note:"", hint:"" });
+const newProject = (name) => ({
+  id: uid(), name: name || "새 원고", goalPages: 80, scrivenerUrl: "", startChars: 0,
+  cycle: 1, stage: 1, carryHint: "", draft: blankDraft(), entries: []
+});
+
+let S = load(), tab = "cycle";
+
+function load(){
+  try{
+    const r = JSON.parse(localStorage.getItem(KEY));
+    if (r && Array.isArray(r.projects) && r.projects.length) return migrate(r);
+  }catch(e){}
+  const p = newProject("첫 원고");
+  return { version:1, activeId:p.id, projects:[p] };
+}
+function migrate(r){
+  r.projects.forEach(x => {
+    x.draft = x.draft || blankDraft(); x.entries = x.entries || [];
+    x.stage = x.stage || 1; x.cycle = x.cycle || 1;
+    x.startChars = Math.max(0, parseInt(x.startChars, 10) || 0);
+  });
+  if (!r.projects.some(x => x.id === r.activeId)) r.activeId = r.projects[0].id;
+  return r;
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장 공간이 가득 찼습니다"); } }
+function P(){ return S.projects.find(p => p.id === S.activeId) || S.projects[0]; }
+
+function rows(p){
+  const list = [...p.entries].sort((a,b) => a.cycle - b.cycle || a.ts - b.ts);
+  let prev = p.startChars || 0;
+  return list.map(e => { const d = e.chars - prev; prev = e.chars; return {...e, delta:d}; });
+}
+const totalChars = p => { const r = rows(p); return r.length ? r[r.length-1].chars : (p.startChars || 0); };
+const pagesOf = c => c / 200;
+const fmt = n => n.toLocaleString("ko-KR");
+const pg = c => (c/200).toFixed(1);
+
+/* ── 공용 ── */
+let toastT;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2000);
+}
+async function copy(text, msg){
+  if (!text.trim()){ toast("복사할 내용이 아직 없습니다"); return false; }
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(_){ document.body.removeChild(ta); toast("복사하지 못했습니다"); return false; }
+    document.body.removeChild(ta);
+  }
+  toast(msg || "복사했습니다"); return true;
+}
+function openScrivener(p){
+  if (!p.scrivenerUrl){ toast("설정에서 스크리브너 주소를 등록하세요"); return; }
+  window.open(p.scrivenerUrl, "_blank");
+}
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const sameDay = (a,b) => { const x = new Date(a), y = new Date(b);
+  return x.getFullYear()===y.getFullYear() && x.getMonth()===y.getMonth() && x.getDate()===y.getDate(); };
+function stamp(ts){
+  const d = new Date(ts), p = n => String(n).padStart(2,"0");
+  return `${d.getMonth()+1}월 ${d.getDate()}일 ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function reasonText(d){
+  const t = (d.tags||[]).join(", ");
+  return [t, (d.note||"").trim()].filter(Boolean).join(" — ");
+}
+
+/* ── 머리 그리기 ── */
+function renderHead(){
+  const p = P();
+  document.getElementById("projSel").innerHTML =
+    S.projects.map(x => `<option value="${x.id}"${x.id===p.id?" selected":""}>${esc(x.name)}</option>`).join("");
+
+  document.getElementById("cycleNo").innerHTML = `<span>제</span><b>${p.cycle}</b><span>회차</span>`;
+
+  const c = totalChars(p), pgs = pagesOf(c), goal = p.goalPages || 80;
+  const start = p.startChars || 0, spg = pagesOf(start), diff = pgs - spg;
+  document.getElementById("cycleMeta").innerHTML =
+    `<b>${pgs.toFixed(1)}매</b> / ${goal}매<br>${fmt(c)}자 · ${p.entries.length}회 완주`
+    + (start ? `<br>이 순환으로 ${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)}매` : "");
+
+  const CELLS = 80, unit = goal / CELLS;
+  const fT = pgs / unit, fS = Math.min(spg, pgs) / unit;
+  document.getElementById("gauge").innerHTML =
+    Array.from({length:CELLS}, (_,i) => {
+      const s = (Math.max(0, Math.min(1, fS - i)) * 100).toFixed(1);
+      const f = (Math.max(0, Math.min(1, fT - i)) * 100).toFixed(1);
+      return `<i style="background:linear-gradient(to top,var(--carry) 0 ${s}%,var(--ink) ${s}% ${f}%,transparent ${f}% 100%)"></i>`;
+    }).join("");
+
+  const u = unit === 1 ? "1매" : unit.toFixed(unit < 1 ? 2 : 1) + "매";
+  const line = (unit * 20 === Math.round(unit * 20)) ? (unit*20) + "매" : (unit*20).toFixed(1) + "매";
+  document.getElementById("gaugeCap").innerHTML =
+    `<span>${Math.max(0, Math.min(100, Math.round(pgs/goal*100)))}%</span>`
+    + `<span>${start ? "옅은 칸 = 이어받은 원고 · " : ""}칸 ${u} · 한 줄 ${line}</span>`;
+}
+
+/* ── 순환 탭 ── */
+function renderCycle(){
+  const p = P(), d = p.draft, s = p.stage, sc = SC[s];
+  const steps = ["손글씨 2매","스크리브너 타이핑","프린트 교정"]
+    .map((t,i) => `<div class="${i+1===s?"on":(i+1<s?"done":"")}">${i+1}. ${t}</div>`).join("");
+
+  let body = "";
+  if (s === 1){
+    body = `
+      <div class="eyebrow">1단계 · 연필</div>
+      <h2 class="t">원고지 2매 쓰기</h2>
+      <p class="guide">손으로 400자를 종이에 씁니다.<br>고칠 생각 없이, 손이 가는 대로 끝까지 씁니다.</p>
+      ${p.carryHint ? `<div class="hintcard"><div class="lb">지난 회차의 집필 힌트</div><div class="tx">${esc(p.carryHint)}</div></div>` : ""}
+      <div class="field">
+        <label class="f" for="i-summary">방금 쓴 2매의 내용 요약</label>
+        <textarea id="i-summary" rows="5" placeholder="무엇을 썼는지 몇 줄로 적습니다. 다음 단계에서 이 요약이 클립보드로 넘어갑니다.">${esc(d.summary)}</textarea>
+      </div>
+      <button class="done" data-act="next">2매를 다 썼습니다 <kbd>${CMD}</kbd></button>`;
+  } else if (s === 2){
+    const last = totalChars(p);
+    body = `
+      <div class="eyebrow">2단계 · 원고지</div>
+      <h2 class="t">스크리브너 타이핑</h2>
+      <p class="guide">손으로 쓴 2매를 스크리브너에서 타이핑하며 확장합니다.</p>
+      <div class="field">
+        <button class="ghost" data-act="scriv2">스크리브너 열기 <small>2매 요약을 복사합니다</small></button>
+        <p class="hint">복사된 요약을 먼저 붙여 넣고, 그 아래부터 이어서 씁니다.</p>
+      </div>
+      <div class="field">
+        <label class="f" for="i-chars">지금까지 쓴 총 글자수 (공백 포함)</label>
+        <input type="number" id="i-chars" inputmode="numeric" min="0" step="1" placeholder="${fmt(last)}" value="${esc(d.chars)}">
+        <div class="calc" id="calc"></div>
+      </div>
+      <div class="field">
+        <label class="f">글쓰기를 멈춘 이유</label>
+        <div class="chips">${TAGS.map(t =>
+          `<button class="chip" data-act="tag" data-t="${esc(t)}" aria-pressed="${d.tags.includes(t)}">${t}</button>`).join("")}</div>
+      </div>
+      <div class="field">
+        <label class="f" for="i-note">자세한 내용</label>
+        <textarea id="i-note" rows="4" placeholder="어디서, 왜 멈췄는지 적습니다. 이 글은 다음 단계에서 초고 맨 위에 붙습니다.">${esc(d.note)}</textarea>
+      </div>
+      <button class="done" data-act="next">타이핑을 마쳤습니다 <kbd>${CMD}</kbd></button>`;
+  } else {
+    body = `
+      <div class="eyebrow">3단계 · 주묵</div>
+      <h2 class="t">프린트 교정</h2>
+      <p class="guide">초고를 프린트한 뒤, 초고 위에서 작업합니다.</p>
+      <div class="field">
+        <button class="ghost" data-act="scriv3">스크리브너 열기 <small>멈춘 이유를 복사합니다</small></button>
+        <p class="hint">복사된 이유를 원고 맨 위에 붙인 다음 프린트합니다. 종이 위에서 그 문장부터 읽으면 손이 먼저 움직입니다.</p>
+      </div>
+      <div class="field">
+        <label class="f" for="i-hint">다음 회차 손글씨를 위한 집필 힌트</label>
+        <textarea id="i-hint" rows="5" placeholder="다음 2매에서 무엇을 쓸지 한두 줄로 남깁니다. 다음 회차 1단계 맨 위에 이 글이 놓입니다.">${esc(d.hint)}</textarea>
+      </div>
+      <button class="done" data-act="next">교정을 마쳤습니다 · 다음 회차로 <kbd>${CMD}</kbd></button>`;
+  }
+
+  document.getElementById("view").innerHTML =
+    `<div style="--sc:${sc}"><div class="steps">${steps}</div><div class="card">${body}</div></div>`;
+  if (s === 2) calc();
+}
+
+function calc(){
+  const el = document.getElementById("calc"); if (!el) return;
+  const p = P(), last = totalChars(p), v = parseInt(p.draft.chars, 10);
+  if (isNaN(v)){ el.innerHTML = `<div>누적 ${fmt(last)}자 · ${pg(last)}매에서 이어 씁니다.</div>`; return; }
+  const dl = v - last, cut = dl < 0;
+  el.innerHTML =
+    `<div>원고지<b>${pg(v)}매</b></div>
+     <div class="${cut?"down":"up"}">${cut ? "덜어낸 분량" : "직전 대비 순증"}<b>${cut?"−":"+"}${fmt(Math.abs(dl))}자</b></div>
+     <div class="${cut?"down":"up"}">&nbsp;<b>${cut?"−":"+"}${(Math.abs(dl)/200).toFixed(1)}매</b></div>`
+    + (cut ? `<div style="flex-basis:100%;font-family:var(--serif);font-size:13px;color:var(--s3);margin-top:2px">교정으로 줄어든 회차입니다. 그대로 기록됩니다.</div>` : "");
+}
+
+/* ── 단계 넘기기 ── */
+function next(){
+  const p = P(), d = p.draft;
+  if (p.stage === 1){
+    if (!d.summary.trim()){ focus("i-summary"); toast("요약을 한 줄이라도 남겨 주세요"); return; }
+    p.stage = 2;
+  } else if (p.stage === 2){
+    const v = parseInt(d.chars, 10);
+    if (isNaN(v) || v < 0){ focus("i-chars"); toast("총 글자수를 입력해 주세요"); return; }
+    p.stage = 3;
+  } else {
+    const v = parseInt(d.chars, 10) || totalChars(p);
+    p.entries.push({ id:uid(), cycle:p.cycle, ts:Date.now(), chars:v,
+      tags:[...d.tags], note:d.note.trim(), summary:d.summary.trim(), hint:d.hint.trim() });
+    p.carryHint = d.hint.trim();
+    p.cycle += 1; p.stage = 1; p.draft = blankDraft();
+    toast(`${p.cycle - 1}회차를 마쳤습니다`);
+  }
+  save(); renderHead(); renderCycle();
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+function focus(id){ const e = document.getElementById(id); if (e){ e.focus(); e.scrollIntoView({block:"center",behavior:"smooth"}); } }
+
+/* ── 로그 탭 ── */
+function renderLog(){
+  const p = P(), r = rows(p), now = Date.now();
+  const today = r.filter(e => sameDay(e.ts, now));
+  const tChars = today.reduce((a,b) => a + b.delta, 0);
+  const total = totalChars(p);
+
+  const head = `
+    <dl class="today">
+      <div><dt>오늘 마친 회차</dt><dd>${today.length}<small>회</small></dd></div>
+      <div><dt>오늘 순증</dt><dd${tChars<0?' style="color:var(--s3)"':''}>${tChars>=0?"":"−"}${fmt(Math.abs(tChars))}<small>자</small></dd></div>
+      <div><dt>오늘 매수</dt><dd${tChars<0?' style="color:var(--s3)"':''}>${tChars>=0?"":"−"}${(Math.abs(tChars)/200).toFixed(1)}<small>매</small></dd></div>
+      <div><dt>목표까지</dt><dd>${Math.max(0, p.goalPages - pagesOf(total)).toFixed(1)}<small>매</small></dd></div>
+    </dl>`;
+
+  const table = r.length ? `
+    <table>
+      <thead><tr><th>회차</th><th>적은 시각</th><th>누적 글자수</th><th>원고지 매수</th><th>멈춘 이유</th><th></th></tr></thead>
+      <tbody>${[...r].reverse().map(e => `
+        <tr>
+          <td class="n">${e.cycle}회</td>
+          <td class="n" style="color:var(--muted)">${stamp(e.ts)}</td>
+          <td class="n"><button class="lnk" data-act="edit" data-id="${e.id}" title="누적 글자수 고치기">${fmt(e.chars)}자</button></td>
+          <td class="n">${pg(e.chars)}매 <span class="d${e.delta<0?" m":""}">${e.delta>=0?"+":"−"}${(Math.abs(e.delta)/200).toFixed(1)}</span></td>
+          <td>${e.tags.length ? esc(e.tags.join(", ")) : '<span style="color:var(--faint)">—</span>'}
+              ${e.note ? `<span class="rs">${esc(e.note)}</span>` : ""}</td>
+          <td class="act"><button class="del" data-act="del" data-id="${e.id}" title="삭제">×</button></td>
+        </tr>`).join("")}
+      </tbody>
+    </table>` : `<p class="empty">아직 마친 회차가 없습니다.<br>3단계까지 한 바퀴를 돌면 여기 한 줄이 쌓입니다.</p>`;
+
+  document.getElementById("view").innerHTML = head + table + `
+    <div class="sec" style="margin-top:26px">
+      <h3>AI 분석 프롬프트</h3>
+      <p class="hint" style="margin:0 0 12px">회차 기록을 표로 정리하고 분석 질문을 붙여 만듭니다. 복사해서 대화창에 붙여 넣으면 됩니다.</p>
+      <button class="ghost" data-act="prompt">분석 프롬프트 만들기</button>
+      <div id="promptBox"></div>
+    </div>`;
+}
+
+function buildPrompt(){
+  const p = P(), r = rows(p), total = totalChars(p), start = p.startChars || 0;
+  const lines = r.map(e =>
+    `${e.cycle} | ${new Date(e.ts).toLocaleString("ko-KR")} | ${e.chars} | ${pg(e.chars)} | ${e.delta>=0?"+":""}${e.delta} | ${e.tags.join(", ")||"-"} | ${e.note||"-"}`);
+  return [
+    "나는 소설을 쓰는 사람입니다. '손글씨 2매 → 스크리브너 타이핑 → 프린트 교정'을 한 회차로 삼아 반복하며 원고를 씁니다.",
+    "아래는 그 회차별 기록입니다.",
+    "",
+    `원고: ${p.name}`,
+    `목표: ${p.goalPages}매 / 현재: ${pg(total)}매 (${Math.round(pagesOf(total)/p.goalPages*100)}%)`,
+    start
+      ? `시작 시점에 이미 쓰여 있던 분량: ${start}자 (${pg(start)}매). 이 순환으로 새로 쓴 분량은 ${total - start}자 (${pg(total - start)}매)입니다. 아래 '누적'은 기존 분량을 포함한 수치이고, '순증'은 직전 회차 대비 증가분입니다. 1회차의 순증은 기존 분량 위에 얹은 양입니다.`
+      : "처음부터 쓰기 시작한 원고입니다. 누적은 0자에서 출발합니다.",
+    `완주 회차: ${r.length}회 (늘린 회차 ${r.filter(e=>e.delta>0).length}회, 교정으로 덜어낸 회차 ${r.filter(e=>e.delta<0).length}회)`,
+    "",
+    "순증이 음수인 회차는 새로 쓴 분량보다 교정으로 덜어낸 분량이 많았던 회차입니다. 실패가 아니라 원고를 조인 회차로 읽어 주세요.",
+    "",
+    "회차 | 시각 | 누적 글자수 | 누적 매수 | 순증 글자 | 멈춘 이유 | 자세한 내용",
+    "---",
+    ...lines,
+    "",
+    "이 데이터를 보고 다음을 짚어 주세요.",
+    "1. 회차당 순증량의 추이. 늘고 있는지 줄고 있는지, 눈에 띄는 굴곡이 있는지.",
+    "2. 덜어낸 회차가 있다면 그 앞뒤 회차의 양상. 무엇을 쓴 뒤에 잘라내게 되는지, 잘라낸 다음 회차는 회복되는지.",
+    "3. '멈춘 이유' 태그의 분포와 반복되는 패턴. 특정 이유가 특정 시점이나 분량대에 몰리는지.",
+    "4. 자세한 내용에 적힌 문장들에서 읽히는, 내가 자주 걸려 넘어지는 지점.",
+    "5. 시각 기록으로 볼 때 생산성이 좋은 시간대나 리듬.",
+    `6. 지금 속도라면 목표 ${p.goalPages}매까지 몇 회차가 더 필요한지. 회차당 순증의 평균과 중앙값을 각각 근거로.`,
+    "7. 다음 회차에 시도해 볼 구체적인 처방 두세 가지. 일반론 말고 이 기록에 근거해서."
+  ].join("\n");
+}
+
+/* ── 설정 탭 ── */
+function renderSet(){
+  const p = P();
+  document.getElementById("view").innerHTML = `
+    <div class="sec">
+      <h3>원고</h3>
+      <div class="plist">${S.projects.map(x => `
+        <div class="pitem${x.id===p.id?" on":""}">
+          <span>${esc(x.name)}</span>
+          <em>${x.cycle}회차 · ${pg(totalChars(x))}매</em>
+          ${x.id===p.id ? "" : `<button data-act="pick" data-id="${x.id}">열기</button>`}
+          <button data-act="rename" data-id="${x.id}">이름</button>
+          <button data-act="pdel" data-id="${x.id}">삭제</button>
+        </div>`).join("")}
+      </div>
+      <div class="row"><input type="text" id="i-newproj" placeholder="새 원고 이름"><button class="ghost" data-act="padd">추가</button></div>
+    </div>
+
+    <div class="sec">
+      <h3>이 원고의 설정</h3>
+      <div class="field">
+        <label class="f" for="i-goal">목표 원고지 매수</label>
+        <input type="number" id="i-goal" min="1" step="1" value="${p.goalPages}">
+      </div>
+      <div class="field">
+        <label class="f" for="i-start">시작할 때 이미 쓰여 있던 글자수 (공백 포함)</label>
+        <input type="number" id="i-start" min="0" step="1" value="${p.startChars || 0}">
+        <p class="hint">이어쓰는 원고라면 첫 회차를 시작하기 전 분량을 넣습니다. 지금 <b>${pg(p.startChars||0)}매</b>에서 출발합니다. 게이지에서 이 분량은 옅은 색으로 채워지고, 순증은 이 숫자 위에서부터 계산됩니다.</p>
+      </div>
+      <div class="field">
+        <label class="f" for="i-scriv">스크리브너 바로가기 주소</label>
+        <input type="url" id="i-scriv" placeholder="x-scrivener-item://... 또는 file:///..." value="${esc(p.scrivenerUrl)}">
+        <p class="hint">스크리브너에서 문서를 오른쪽 클릭해 링크를 복사하거나, 프로젝트 파일 경로를 붙여 넣습니다. 2·3단계 버튼이 이 주소를 엽니다.</p>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>백업</h3>
+      <div class="row">
+        <button class="ghost" data-act="export">백업 파일 내려받기</button>
+        <button class="ghost" data-act="importBtn">복원하기</button>
+      </div>
+      <input type="file" id="i-file" accept="application/json,.json" style="display:none">
+      <p class="hint">모든 원고와 회차 기록이 JSON 한 파일로 저장됩니다. 복원하면 지금 데이터를 덮어씁니다.</p>
+    </div>`;
+}
+
+/* ── 그리기 ── */
+function render(){
+  document.querySelectorAll("nav button").forEach(b =>
+    b.setAttribute("aria-selected", b.dataset.tab === tab));
+  renderHead();
+  if (tab === "cycle") renderCycle();
+  else if (tab === "log") renderLog();
+  else renderSet();
+}
+
+/* ── 이벤트 ── */
+document.addEventListener("click", e => {
+  const nav = e.target.closest("nav button");
+  if (nav){ tab = nav.dataset.tab; render(); return; }
+
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const p = P(), a = b.dataset.act;
+
+  if (a === "next") next();
+  else if (a === "scriv2"){ copy(p.draft.summary, "2매 요약을 복사했습니다"); openScrivener(p); }
+  else if (a === "scriv3"){ copy(reasonText(p.draft), "멈춘 이유를 복사했습니다"); openScrivener(p); }
+  else if (a === "tag"){
+    const t = b.dataset.t, i = p.draft.tags.indexOf(t);
+    if (i < 0) p.draft.tags.push(t); else p.draft.tags.splice(i,1);
+    b.setAttribute("aria-pressed", i < 0); save();
+  }
+  else if (a === "del"){
+    if (!confirm("이 회차 기록을 지울까요?")) return;
+    p.entries = p.entries.filter(x => x.id !== b.dataset.id);
+    save(); render(); toast("기록을 지웠습니다");
+  }
+  else if (a === "edit"){
+    const x = p.entries.find(y => y.id === b.dataset.id); if (!x) return;
+    const n = prompt(`${x.cycle}회차를 마쳤을 때의 누적 글자수 (공백 포함)\n교정으로 덜어냈다면 줄어든 숫자를 넣습니다.`, x.chars);
+    if (n === null) return;
+    const v = parseInt(n, 10);
+    if (isNaN(v) || v < 0){ toast("숫자를 입력해 주세요"); return; }
+    x.chars = v; save(); render(); toast("고쳤습니다");
+  }
+  else if (a === "prompt"){
+    const box = document.getElementById("promptBox");
+    box.innerHTML = `<textarea rows="10" readonly style="margin-top:12px;font-size:13px">${esc(buildPrompt())}</textarea>
+      <button class="ghost" data-act="pcopy" style="margin-top:8px">프롬프트 복사</button>`;
+  }
+  else if (a === "pcopy") copy(buildPrompt(), "프롬프트를 복사했습니다");
+  else if (a === "pick"){ S.activeId = b.dataset.id; save(); render(); }
+  else if (a === "padd"){
+    const el = document.getElementById("i-newproj"), n = el.value.trim();
+    const np = newProject(n || "새 원고");
+    S.projects.push(np); S.activeId = np.id; save(); tab = "cycle"; render(); toast("원고를 만들었습니다");
+  }
+  else if (a === "rename"){
+    const x = S.projects.find(y => y.id === b.dataset.id);
+    const n = prompt("원고 이름", x.name); if (n && n.trim()){ x.name = n.trim(); save(); render(); }
+  }
+  else if (a === "pdel"){
+    if (S.projects.length === 1){ toast("마지막 원고는 지울 수 없습니다"); return; }
+    const x = S.projects.find(y => y.id === b.dataset.id);
+    if (!confirm(`'${x.name}'과 그 회차 기록을 모두 지울까요?`)) return;
+    S.projects = S.projects.filter(y => y.id !== x.id);
+    if (S.activeId === x.id) S.activeId = S.projects[0].id;
+    save(); render();
+  }
+  else if (a === "export"){
+    const d = new Date(), pad = n => String(n).padStart(2,"0");
+    const url = URL.createObjectURL(new Blob([JSON.stringify(S,null,2)], {type:"application/json"}));
+    const link = document.createElement("a");
+    link.href = url; link.download = `순환-백업-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
+    link.click(); URL.revokeObjectURL(url); toast("백업 파일을 내려받았습니다");
+  }
+  else if (a === "importBtn") document.getElementById("i-file").click();
+});
+
+document.addEventListener("input", e => {
+  const p = P(), id = e.target.id, v = e.target.value;
+  if (id === "i-summary") p.draft.summary = v;
+  else if (id === "i-note") p.draft.note = v;
+  else if (id === "i-hint") p.draft.hint = v;
+  else if (id === "i-chars"){ p.draft.chars = v; calc(); }
+  else if (id === "i-goal"){ p.goalPages = Math.max(1, parseInt(v,10) || 80); renderHead(); }
+  else if (id === "i-start"){
+    p.startChars = Math.max(0, parseInt(v,10) || 0);
+    renderHead();
+    const h = e.target.parentNode.querySelector(".hint b");
+    if (h) h.textContent = pg(p.startChars) + "매";
+  }
+  else if (id === "i-scriv"){ p.scrivenerUrl = v.trim(); }
+  else return;
+  save();
+});
+
+document.addEventListener("change", e => {
+  if (e.target.id === "projSel"){ S.activeId = e.target.value; save(); render(); return; }
+  if (e.target.id === "i-file"){
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        const data = JSON.parse(rd.result);
+        if (!data || !Array.isArray(data.projects) || !data.projects.length) throw 0;
+        if (!confirm("지금 데이터를 백업 파일로 덮어씁니다. 계속할까요?")) return;
+        S = migrate(data);
+        save(); render(); toast("복원했습니다");
+      }catch(_){ toast("읽을 수 없는 파일입니다"); }
+      e.target.value = "";
+    };
+    rd.readAsText(f);
+  }
+});
+
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter"){
+    e.preventDefault();
+    if (tab !== "cycle"){ tab = "cycle"; render(); return; }
+    next();
+  }
+});
+
+render();
+</script>
+</body>
+</html>
