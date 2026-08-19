@@ -58,7 +58,7 @@ select.proj{
   background-position:calc(100% - 9px) 14px,calc(100% - 5px) 14px;
   background-size:4px 4px,4px 4px;background-repeat:no-repeat;
 }
-.cyclebox{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.cyclebox{display:flex;align-items:baseline;gap:14px;margin-bottom:24px}
 .cycle{font-family:var(--serif);line-height:1}
 .cycle b{font-size:40px;font-weight:700;letter-spacing:-.02em}
 .cycle span{font-size:15px;color:var(--muted);margin:0 3px}
@@ -66,17 +66,19 @@ select.proj{
 .cyclemeta b{color:var(--ink);font-size:13px;font-weight:600}
 
 /* ── 원고지 게이지 ── */
-.gmark{position:relative;height:5px;margin-bottom:3px}
-.gmark::after{
-  content:"";position:absolute;left:50%;top:0;transform:translateX(-50%);
-  border-left:4px solid transparent;border-right:4px solid transparent;
-  border-top:5px solid var(--grid);
+.gwrap{position:relative;margin-bottom:7px}
+.gseg{display:flex;gap:1px;height:22px}
+.gseg div{
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  font-family:var(--mono);font-size:10px;letter-spacing:.02em;
+  transition:background .4s ease;
 }
-.gauge{display:grid;grid-template-columns:repeat(20,1fr);gap:2px;margin-bottom:7px}
-.gauge i{
-  display:block;aspect-ratio:1;
-  box-shadow:inset 0 0 0 1px var(--grid);
-  transition:background .5s ease;
+.gbar{margin-top:4px;height:9px;background:var(--line);overflow:hidden}
+.gbar i{display:block;height:100%;transition:width .5s ease}
+.qtick{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--s3);opacity:.55;pointer-events:none}
+.qtick b{
+  position:absolute;top:-13px;left:50%;transform:translateX(-50%);
+  font-family:var(--mono);font-size:9px;font-weight:500;color:var(--s3);opacity:.9;
 }
 .gaugecap{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.02em}
 
@@ -222,8 +224,13 @@ h3{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:600;margin
       <div class="cycle" id="cycleNo"></div>
       <div class="cyclemeta" id="cycleMeta"></div>
     </div>
-    <div class="gmark" aria-hidden="true"></div>
-    <div class="gauge" id="gauge"></div>
+    <div class="gwrap">
+      <div class="gseg" id="gSeg"></div>
+      <div class="gbar"><i id="gFill"></i></div>
+      <div class="qtick" style="left:25%"><b>¼</b></div>
+      <div class="qtick" style="left:50%"><b>½</b></div>
+      <div class="qtick" style="left:75%"><b>¾</b></div>
+    </div>
     <div class="gaugecap" id="gaugeCap"></div>
   </header>
 
@@ -334,20 +341,29 @@ function renderHead(){
     `<b>${pgs.toFixed(1)}매</b> / ${goal}매<br>${fmt(c)}자 · ${p.entries.length}회 완주`
     + (start ? `<br>이 순환으로 ${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)}매` : "");
 
-  const CELLS = 80, unit = goal / CELLS;
-  const fT = pgs / unit, fS = Math.min(spg, pgs) / unit;
-  document.getElementById("gauge").innerHTML =
-    Array.from({length:CELLS}, (_,i) => {
-      const s = (Math.max(0, Math.min(1, fS - i)) * 100).toFixed(1);
-      const f = (Math.max(0, Math.min(1, fT - i)) * 100).toFixed(1);
-      return `<i style="background:linear-gradient(to top,var(--carry) 0 ${s}%,var(--ink) ${s}% ${f}%,transparent ${f}% 100%)"></i>`;
+  const UNIT = 2667, goalChars = goal * 200;
+  const n = Math.max(1, Math.ceil(goalChars / UNIT));
+  const cur = Math.max(1, Math.min(n, Math.floor(c / UNIT) + 1));
+  const inSeg = Math.max(0, c - (cur - 1) * UNIT);
+
+  document.getElementById("gSeg").innerHTML =
+    Array.from({length:n}, (_,i) => {
+      const w = Math.min(UNIT, goalChars - i * UNIT);
+      const on = (i + 1) === cur;
+      const bg = on ? "var(--s2)" : `color-mix(in srgb,var(--s2) ${i % 2 ? 24 : 42}%,var(--paper))`;
+      const fg = on ? "var(--paper)" : "color-mix(in srgb,var(--ink) 45%,transparent)";
+      return `<div style="flex:${w} 0 0;background:${bg};color:${fg}${on?";font-weight:700":""}">${i+1}</div>`;
     }).join("");
 
-  const u = unit === 1 ? "1매" : unit.toFixed(unit < 1 ? 2 : 1) + "매";
-  const line = (unit * 20 === Math.round(unit * 20)) ? (unit*20) + "매" : (unit*20).toFixed(1) + "매";
+  const pct = Math.max(0, Math.min(100, c / goalChars * 100));
+  const cPct = Math.max(0, Math.min(pct, start / goalChars * 100));
+  const rel = pct > 0 ? (cPct / pct * 100).toFixed(1) : 0;
+  document.getElementById("gFill").style.cssText =
+    `width:${pct.toFixed(2)}%;background:linear-gradient(to right,var(--carry) 0 ${rel}%,var(--ink) ${rel}% 100%)`;
+
   document.getElementById("gaugeCap").innerHTML =
-    `<span>${Math.max(0, Math.min(100, Math.round(pgs/goal*100)))}%</span>`
-    + `<span>${start ? "옅은 칸 = 이어받은 원고 · " : ""}칸 ${u} · 한 줄 ${line}</span>`;
+    `<span>${cur}구간 · 이 구간에서 ${fmt(Math.min(inSeg, UNIT))}자 / ${fmt(UNIT)}자</span>`
+    + `<span>${Math.round(pgs / goal * 100)}% · 전체 ${n}구간</span>`;
 }
 
 /* ── 순환 탭 ── */
