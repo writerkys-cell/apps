@@ -1535,8 +1535,10 @@ function renderDailyFeed(){
   const frag = document.createDocumentFragment();
   const today = dateKey();
   getOrCreatePage(today);
+  // 앞날에 적어 둔 날짜 페이지는 이 화면에서 뺀다.
+  // (예매·마감처럼 미리 만들어 둔 페이지가 맨 위로 올라와 오늘 행세를 하던 문제)
   const dailies = Object.values(G.pages)
-    .filter(p => isDailyTitle(p.title))
+    .filter(p => isDailyTitle(p.title) && p.title <= today)
     .sort((a,b) => b.title.localeCompare(a.title))
     .slice(0, 7);
   dailies.forEach((p, i) => {
@@ -1544,13 +1546,15 @@ function renderDailyFeed(){
     sec.className = "feed-page";
     const t = document.createElement("div");
     t.className = "feed-title";
-    t.style.fontSize = i === 0 ? "29px" : "19px";
+    const isToday = p.title === today;
+    t.style.fontSize = isToday ? "29px" : "19px";
     t.textContent = p.title;
     t.title = "Shift+클릭: 오른쪽에 두기";
     t.onclick = e => e.shiftKey ? sideAdd({ type:"page", id:p.id }) : openPage(p.id);
     const s = document.createElement("div");
     s.className = "feed-sub";
-    s.textContent = weekdayOf(p.title) + (i === 0 ? " · 오늘" : "");
+    // '오늘'은 차례가 아니라 실제 날짜로 가른다
+    s.textContent = weekdayOf(p.title) + (isToday ? " · 오늘" : "");
     sec.append(t, s);
     if(!p.children.length) newBlock(p.id, "");
     sec.appendChild(outline(p.id));
