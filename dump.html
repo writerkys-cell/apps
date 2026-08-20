@@ -184,9 +184,10 @@ details summary:hover{color:var(--ink)}
 
 <section id="s-plan">
   <div class="row">
-    <input type="text" id="planTitle" placeholder="일정" style="flex:1;min-width:150px">
+    <input type="text" id="planTitle" placeholder="일정" style="flex:1;min-width:130px">
     <input type="date" id="planDate" style="width:150px">
     <input type="time" id="planTime" style="width:110px">
+    <input type="text" id="planPlace" placeholder="장소" style="width:120px">
     <button class="act" id="btnPlanAdd">추가</button>
   </div>
   <h2>다가오는 순서</h2>
@@ -462,11 +463,12 @@ function bindJudge(){
       toast(data.settings.defer+"일 더 묻었다");render();
     }else if(j==="일정"){
       const slot=card.querySelector("[data-slot]");slot.style.display="flex";
-      slot.innerHTML=`<input type="date" style="width:150px" value="${plusDays(7)}"><input type="time" style="width:110px"><button class="act">잡기</button>`;
+      slot.innerHTML=`<input type="date" style="width:150px" value="${plusDays(7)}"><input type="time" style="width:110px"><input type="text" class="e-place" placeholder="장소" style="width:120px"><button class="act">잡기</button>`;
       slot.querySelector("button").onclick=()=>{
         const d=slot.querySelector("input[type=date]").value;
         if(!d)return toast("날짜가 없다");
-        data.events.push({id:uid(),title:t.text,date:d,time:slot.querySelector("input[type=time]").value,place:"",at:Date.now()});
+        data.events.push({id:uid(),title:t.text,date:d,time:slot.querySelector("input[type=time]").value,
+          place:slot.querySelector(".e-place").value.trim(),at:Date.now()});
         t.status="알곡";t.judgedAt=TODAY;save();toast("일정으로 옮겼다");render();
       };
     }
@@ -489,14 +491,23 @@ function rDump(){
     const day=d.at.slice(0,10), head=`${md(day)} · ${(d.len||0).toLocaleString()}자`;
     const tally=d.counts?`잡념 ${d.counts.잡념} · 할 일 ${d.counts.할일} · 일정 ${d.counts.일정}`:"";
     const pin=`<button class="pin ${d.pinned?"on":""}" data-pin="${d.id}" title="꽂아두면 지워지지 않는다">☗</button>`;
+    const del=`<button class="x" data-ddel="${d.id}" title="자취까지 지우기">×</button>`;
     if(!d.text) return `<div class="card spread" style="padding:10px 14px">
         <span class="mono" style="color:var(--ash)">${head}${tally?" → "+tally:""}</span>
-        <span class="mono">${d.gone==="담김"?"살은 버렸다":"묵어서 지웠다"} ${pin}</span></div>`;
+        <span class="mono">${d.gone==="담김"?"살은 버렸다":"묵어서 지웠다"} ${pin}${del}</span></div>`;
     const left=d.used?"":`${Math.max(0,(data.settings.keepDays||7)-dayDiff(TODAY,day))}일 뒤 지워짐`;
     return `<details class="card"><summary>${head} ${d.pinned?"· 꽂아둠":left?"· "+left:""}</summary>
       <div style="font-family:var(--serif);white-space:pre-wrap;margin:8px 0;font-size:15px">${esc(d.text)}</div>
-      <div class="row" style="justify-content:flex-end">${pin}</div></details>`;
+      <div class="row" style="justify-content:flex-end">${pin}${del}</div></details>`;
   }).join(""):`<div class="empty">쏟아낸 기록이 없다.</div>`;
+  $$("[data-ddel]").forEach(b=>b.onclick=e=>{
+    e.preventDefault();
+    const d=data.dumps.find(x=>x.id===b.dataset.ddel);
+    if(!confirm(d.text?"원문과 자취를 함께 지운다. 계속할까?":"이 날의 자취를 지운다. 계속할까?"))return;
+    data.dumps=data.dumps.filter(x=>x.id!==b.dataset.ddel);
+    if(data.settings.activeDump===b.dataset.ddel)data.settings.activeDump=null;
+    save();toast("지웠다");rDump();
+  });
   $$("[data-pin]").forEach(b=>b.onclick=e=>{
     e.preventDefault();
     const d=data.dumps.find(x=>x.id===b.dataset.pin);
@@ -662,9 +673,10 @@ function drawPreview(){
     if(m&&m.kind!=="event")m=null;
     o._m=m;
     rows.push(`<div class="card" data-k="일정" data-i="${i}">
-      <div class="row"><span class="tag jjok">일정</span><span style="flex:1">${esc(o.text)}</span>
+      <div class="row"><span class="tag jjok">일정</span><span style="flex:1;min-width:120px">${esc(o.text)}</span>
         <input type="date" value="${o.date||""}" style="width:148px">
         <input type="time" value="${o.time||""}" style="width:106px">
+        <input type="text" class="e-place" value="${esc(o.place||"")}" placeholder="장소" style="width:120px">
         <button class="x">×</button></div>
       ${m?pairHTML(m,true):""}
     </div>`);
@@ -714,7 +726,8 @@ function commit(){
         data.todos.push({id:uid(),text:o.text,due:d,done:false,star:false,at:Date.now(),times:1,dates:[TODAY]});add++;
       }
     }else{
-      data.events.push({id:uid(),title:o.text,date:d||TODAY,time:tm,place:o.place||"",at:Date.now()});add++;
+      data.events.push({id:uid(),title:o.text,date:d||TODAY,time:tm,
+        place:(row.querySelector(".e-place")?.value||o.place||"").trim(),at:Date.now()});add++;
     }
   });
   const kept=(data.dumps.find(x=>x.id===data.settings.activeDump)||{}).pinned;
@@ -734,6 +747,7 @@ function todoRow(t){
       ${(t.times||1)>1?` <span class="tag bori">${t.times}번째 올라옴</span>`:""}</span>
     ${t.due?`<span class="due ${cls}">${t.due.slice(5)} ${ddayText(t.due)}</span>`:""}
     <button class="star ${t.star?"on":""}" data-star>★</button>
+    <button class="pin" data-edit title="고치기">✎</button>
     <button class="x" data-del>×</button></div>`;
 }
 function bindTodo(){
@@ -744,6 +758,22 @@ function bindTodo(){
     const t=data.todos.find(x=>x.id===b.closest(".card").dataset.id);t.star=!t.star;save();render();});
   $$("[data-del]").forEach(b=>b.onclick=()=>{
     const id=b.closest(".card").dataset.id;data.todos=data.todos.filter(x=>x.id!==id);save();render();});
+  $$("[data-edit]").forEach(b=>b.onclick=()=>{
+    const host=b.closest(".card"),t=data.todos.find(x=>x.id===host.dataset.id);
+    host.className="card";
+    host.innerHTML=`<div class="row">
+      <input type="text" class="e-text" value="${esc(t.text)}" style="flex:1;min-width:150px">
+      <input type="date" class="e-due" value="${t.due||""}" style="width:150px">
+      <button class="act e-ok">저장</button><button class="act ghost e-no">취소</button></div>`;
+    const ok=()=>{
+      const v=host.querySelector(".e-text").value.trim();
+      if(!v)return toast("내용이 비었다");
+      t.text=v;t.due=host.querySelector(".e-due").value;save();toast("고쳤다");render();};
+    host.querySelector(".e-ok").onclick=ok;
+    host.querySelector(".e-no").onclick=()=>render();
+    host.querySelector(".e-text").onkeydown=e=>{if(e.key==="Enter")ok();if(e.key==="Escape")render();};
+    host.querySelector(".e-text").focus();
+  });
 }
 function rTodo(){
   const o=openTodos();
@@ -765,10 +795,31 @@ function rPlan(){
   $("#planList").innerHTML=up.length?up.map(e=>`<div class="card spread" data-id="${e.id}">
       <span>${esc(e.title)}${e.place?` <span class="mono">${esc(e.place)}</span>`:""}</span>
       <span><span class="mono">${md(e.date)} ${e.time||""} · ${ddayText(e.date)}</span>
+      <button class="pin" data-pedit title="고치기">✎</button>
       <button class="x" data-pdel>×</button></span></div>`).join("")
     :`<div class="empty">다가오는 일정이 없다.</div>`;
   $$("[data-pdel]").forEach(b=>b.onclick=()=>{
     const id=b.closest(".card").dataset.id;data.events=data.events.filter(x=>x.id!==id);save();render();});
+  $$("[data-pedit]").forEach(b=>b.onclick=()=>{
+    const host=b.closest(".card"),e=data.events.find(x=>x.id===host.dataset.id);
+    host.className="card";
+    host.innerHTML=`<div class="row">
+      <input type="text" class="e-title" value="${esc(e.title)}" style="flex:1;min-width:130px">
+      <input type="date" class="e-date" value="${e.date}" style="width:150px">
+      <input type="time" class="e-time" value="${e.time||""}" style="width:106px">
+      <input type="text" class="e-place" value="${esc(e.place||"")}" placeholder="장소" style="width:120px">
+      <button class="act e-ok">저장</button><button class="act ghost e-no">취소</button></div>`;
+    const ok=()=>{
+      const v=host.querySelector(".e-title").value.trim(),d=host.querySelector(".e-date").value;
+      if(!v||!d)return toast("일정과 날짜가 필요하다");
+      e.title=v;e.date=d;e.time=host.querySelector(".e-time").value;
+      e.place=host.querySelector(".e-place").value.trim();
+      save();toast("고쳤다");render();};
+    host.querySelector(".e-ok").onclick=ok;
+    host.querySelector(".e-no").onclick=()=>render();
+    host.querySelector(".e-title").onkeydown=ev=>{if(ev.key==="Enter")ok();if(ev.key==="Escape")render();};
+    host.querySelector(".e-title").focus();
+  });
   drawCal();
 }
 function drawCal(){
@@ -790,7 +841,7 @@ function showDay(){
   if(!calSel){$("#calDay").innerHTML="";return;}
   const list=data.events.filter(e=>e.date===calSel).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
   $("#calDay").innerHTML=`<h2>${calSel} (${wd(calSel)})</h2>`+(list.length
-    ?list.map(e=>`<div class="card spread"><span>${esc(e.title)}</span><span class="mono">${e.time||"종일"}</span></div>`).join("")
+    ?list.map(e=>`<div class="card spread"><span>${esc(e.title)}${e.place?` <span class="mono">${esc(e.place)}</span>`:""}</span><span class="mono">${e.time||"종일"}</span></div>`).join("")
     :`<div class="empty">이 날은 비어 있다.</div>`);
 }
 $("#calPrev").onclick=()=>{calCursor.setMonth(calCursor.getMonth()-1);drawCal();};
@@ -798,9 +849,12 @@ $("#calNext").onclick=()=>{calCursor.setMonth(calCursor.getMonth()+1);drawCal();
 $("#btnPlanAdd").onclick=()=>{
   const t=$("#planTitle").value.trim(),d=$("#planDate").value;
   if(!t||!d)return toast("일정과 날짜가 필요하다");
-  data.events.push({id:uid(),title:t,date:d,time:$("#planTime").value,place:"",at:Date.now()});
-  $("#planTitle").value="";$("#planDate").value="";$("#planTime").value="";save();render();
+  data.events.push({id:uid(),title:t,date:d,time:$("#planTime").value,place:$("#planPlace").value.trim(),at:Date.now()});
+  $("#planTitle").value="";$("#planDate").value="";$("#planTime").value="";$("#planPlace").value="";
+  save();render();
 };
+$("#planTitle").onkeydown=e=>{if(e.key==="Enter")$("#btnPlanAdd").click();};
+$("#planPlace").onkeydown=e=>{if(e.key==="Enter")$("#btnPlanAdd").click();};
 
 /* ═══ 묵힘 ═══ */
 function rRest(){
