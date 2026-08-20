@@ -439,6 +439,77 @@ function renderHead(){
     : `<span>${q}/4 구간</span><span>${Math.round(pgs / goal * 100)}% · 목표 ${goal}매</span>`;
 }
 
+/* 아이폰 화면에서 읽기 좋게 짠 인쇄용 문서를 띄운다.
+   브라우저는 폴더에 직접 쓸 수 없으므로 인쇄 대화상자의 'PDF로 저장'을 거친다. */
+function exportNotePDF(){
+  const p = P();
+  if (!p.carryTail && !p.carryHint){ toast("내보낼 원고나 힌트가 없습니다"); return; }
+
+  const para = t => esc(t).split(/\n{2,}/).map(b =>
+    `<p>${b.split("\n").join("<br>")}</p>`).join("");
+  const d = new Date(), pd = n => String(n).padStart(2,"0");
+  const stampTxt = `${d.getFullYear()}. ${pd(d.getMonth()+1)}. ${pd(d.getDate())}`;
+
+  const w = window.open("", "_blank", "width=520,height=760");
+  if (!w){ toast("팝업이 막혔습니다. 이 사이트의 팝업을 허용해 주세요"); return; }
+
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">
+<title>${esc(p.name)} ${p.cycle}회차</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  @page{ size:A4 portrait; margin:16mm 14mm 18mm; }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:24px;background:#fff;color:#111;
+    font-family:'Gowun Batang','고운바탕',serif;
+    font-size:24pt;line-height:1.95;letter-spacing:.01em;
+  }
+  .bar{
+    background:#1c1b19;color:#fff;padding:14px 16px;border-radius:3px;
+    font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
+    font-size:13px;line-height:1.6;margin-bottom:26px;
+  }
+  .bar b{display:block;font-size:14px;margin-bottom:4px}
+  .head{
+    font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
+    font-size:15pt;color:#777;border-bottom:1px solid #ccc;
+    padding-bottom:10pt;margin-bottom:24pt;line-height:1.55;
+  }
+  .head b{color:#111;font-size:16.5pt}
+  p{margin:0 0 1.05em;text-indent:1em}
+  p:first-of-type{text-indent:0}
+  .rule{border:none;border-top:1px solid #bbb;margin:26pt 0 20pt}
+  .hint{
+    border-left:3pt solid #A8322A;padding:2pt 0 2pt 14pt;
+    page-break-inside:avoid;break-inside:avoid;
+  }
+  .hint .lb{
+    font-family:-apple-system,'Apple SD Gothic Neo',sans-serif;
+    font-size:15pt;letter-spacing:.1em;color:#A8322A;font-weight:700;
+    margin-bottom:10pt;text-indent:0;
+  }
+  .hint p{margin:0 0 .7em;text-indent:0}
+  @media print{ .bar{display:none} body{padding:0} }
+</style></head><body>
+<div class="bar"><b>인쇄 대화상자가 열립니다.</b>
+왼쪽 아래 <b style="display:inline">PDF ▾</b> 를 눌러 ‘PDF로 저장’을 고르고 문서 폴더에 저장하세요.
+아이폰 화면에 맞춰 글자를 크게 잡았습니다.</div>
+<div class="head"><b>${esc(p.name)}</b> · ${p.cycle}회차 · ${stampTxt}
+${p.carryTail && p.carryHint ? "<br>집필 힌트는 맨 끝에 있습니다." : ""}</div>
+${p.carryTail ? para(p.carryTail) : ""}
+${p.carryTail && p.carryHint ? '<hr class="rule">' : ""}
+${p.carryHint ? `<div class="hint"><div class="lb">집필 힌트</div>${para(p.carryHint)}</div>` : ""}
+</body></html>`);
+  w.document.close();
+
+  const go = () => { try{ w.focus(); w.print(); }catch(e){} };
+  if (w.document.fonts && w.document.fonts.ready) w.document.fonts.ready.then(() => setTimeout(go, 200));
+  else setTimeout(go, 800);
+  toast("인쇄 창에서 ‘PDF로 저장’을 고르세요");
+}
+
 /* ── 순환 탭 ── */
 /* 1단계는 앞 단계가 앱 안에서 끝나므로 확인할 물건이 없다 */
 function needGate(p){ return p.stage !== 1; }
@@ -459,6 +530,11 @@ function renderCycle(){
       ${p.carryTail ? `<div class="tailcard"><div class="lb">여기까지 쓴 원고</div><div class="tx">${esc(p.carryTail)}</div></div>` : ""}
       ${p.carryHint ? `<div class="hintcard"><div class="lb">지난 회차의 집필 힌트</div><div class="tx">${esc(p.carryHint)}</div></div>` : ""}`;
     body = `
+      ${(p.carryTail || p.carryHint) ? `
+      <div class="field">
+        <button class="ghost" data-act="pdf">아이폰으로 가져갈 PDF 만들기</button>
+        <p class="hint">위의 원고와 집필 힌트를 아이폰 화면에 맞춘 PDF로 뽑습니다. 인쇄 대화상자에서 ‘PDF로 저장’을 골라 문서 폴더에 넣으면, 책상을 떠나 노트만 펴 놓고 쓸 수 있습니다.</p>
+      </div>` : ""}
       <div class="field">
         <label class="f" for="i-insight">방금 손으로 쓰고 깨닫게 된 것 <span style="font-weight:400;color:var(--faint)">· 선택</span></label>
         <textarea id="i-insight" rows="5" placeholder="쓰는 동안 알게 된 것을 적습니다. 인물이 예상과 다르게 움직였다든가, 앞을 고쳐야겠다든가.">${esc(d.insight)}</textarea>
@@ -1072,6 +1148,7 @@ document.addEventListener("click", e => {
   const p = P(), a = b.dataset.act;
 
   if (a === "next") next();
+  else if (a === "pdf") exportNotePDF();
   else if (a === "scriv2"){ copy(p.draft.insight, "깨달은 것을 복사했습니다"); openScrivener(p); }
   else if (a === "scriv3"){ copy(p.draft.proof, "교열의 방향을 복사했습니다"); openScrivener(p); }
   else if (a === "scriv4"){ copy(p.draft.plan, "개작 방향을 복사했습니다"); openScrivener(p); }
