@@ -20,6 +20,7 @@
   --s1:#6E7175;            /* 연필 */
   --s2:#4F6B4C;            /* 원고지 초록 */
   --s3:#A8322A;            /* 교정 주묵 */
+  --s4:#3E5A6E;            /* 재타이핑 청람 */
   --sans:'Apple SD Gothic Neo','애플 SD 산돌고딕 Neo',-apple-system,BlinkMacSystemFont,'Malgun Gothic','맑은 고딕',sans-serif;
   --serif:'Gowun Batang','고운바탕','Apple SD Gothic Neo',serif;
   --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
@@ -28,7 +29,7 @@
   :root{
     --paper:#141513; --card:#1B1C19; --ink:#EDEBE4; --muted:#918F86; --faint:#6A6961;
     --grid:#3D473A; --carry:#4A4A44; --line:#2C2D29;
-    --s1:#9A9DA1; --s2:#7FA07A; --s3:#D4695E;
+    --s1:#9A9DA1; --s2:#7FA07A; --s3:#D4695E; --s4:#7FA0BC;
   }
 }
 *{box-sizing:border-box}
@@ -96,7 +97,8 @@ nav button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-
 .steps{display:flex;gap:0;margin-bottom:18px}
 .steps div{
   flex:1;padding:7px 0 0;border-top:2px solid var(--line);
-  font-size:11.5px;color:var(--faint);letter-spacing:.02em;
+  font-size:11px;color:var(--faint);letter-spacing:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px;
 }
 .steps div.on{border-top-color:var(--sc);color:var(--sc);font-weight:600}
 .steps div.done{border-top-color:var(--line);color:var(--muted)}
@@ -286,14 +288,14 @@ const KEY = "sunhwan.v1";
 const FEELS = ["잘 풀린다","나쁘지 않다","모르겠다","미덥잖다","안 될 것 같다"];
 const feelScore = f => { const i = FEELS.indexOf(f); return i < 0 ? null : 5 - i; };
 const feelOf = e => e.feel || (e.tags || []).join(", ") || "";
-const GATES = { 1:"원고를 교열했습니까?", 2:"400자 원고가 준비됐습니까?", 3:"원고를 프린트했습니까?" };
+const GATES = { 2:"400자 원고가 준비됐습니까?", 3:"원고를 프린트했습니까?", 4:"원고를 교열했습니까?" };
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const CMD = MAC ? "⌘↵" : "Ctrl+↵";
-const SC = ["", "var(--s1)", "var(--s2)", "var(--s3)"];
+const SC = ["", "var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
 
 /* ── 상태 ── */
 const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
-const blankDraft = () => ({ summary:"", chars:"", feel:"", note:"", hint:"", gate:{} });
+const blankDraft = () => ({ summary:"", chars:"", feel:"", note:"", plan:"", final:"", hint:"", gate:{} });
 const newProject = (name) => ({
   id: uid(), name: name || "새 원고", goalPages: 80, scrivenerUrl: "", startChars: 0, use2667: true,
   cycle: 1, stage: 1, carryHint: "", draft: blankDraft(), entries: []
@@ -338,7 +340,12 @@ function P(){ return S.projects.find(p => p.id === S.activeId) || S.projects[0];
 function rows(p){
   const list = [...p.entries].sort((a,b) => a.cycle - b.cycle || a.ts - b.ts);
   let prev = p.startChars || 0;
-  return list.map(e => { const d = e.chars - prev; prev = e.chars; return {...e, delta:d}; });
+  return list.map(e => {
+    const mid = (typeof e.mid === "number") ? e.mid : e.chars;
+    const d = e.chars - prev, grew = mid - prev, trim = e.chars - mid;
+    prev = e.chars;
+    return { ...e, delta:d, grew, trim };
+  });
 }
 const totalChars = p => { const r = rows(p); return r.length ? r[r.length-1].chars : (p.startChars || 0); };
 const pagesOf = c => c / 200;
@@ -428,20 +435,20 @@ function renderHead(){
 }
 
 /* ── 순환 탭 ── */
-/* 첫 회차의 1단계에는 앞선 교열이 없으므로 체크포인트를 두지 않는다 */
-function needGate(p){ return !(p.stage === 1 && p.cycle === 1); }
+/* 1단계는 앞 단계가 앱 안에서 끝나므로 확인할 물건이 없다 */
+function needGate(p){ return p.stage !== 1; }
 function gateOk(p){ return !needGate(p) || !!p.draft.gate[p.stage]; }
 
 function renderCycle(){
   const p = P(), d = p.draft, s = p.stage, sc = SC[s];
-  const steps = ["손글씨 2매","스크리브너 타이핑","프린트 교정"]
+  const steps = ["손글씨 2매","타이핑","프린트 교정","재타이핑"]
     .map((t,i) => `<div class="${i+1===s?"on":(i+1<s?"done":"")}">${i+1}. ${t}</div>`).join("");
   const ok = gateOk(p);
 
   let head = "", body = "";
   if (s === 1){
     head = `
-      <div class="eyebrow">1단계 · 연필</div>
+      <div class="eyebrow">1단계 · 연필 · 새 원고</div>
       <h2 class="t">원고지 2매 쓰기</h2>
       <p class="guide">손으로 400자를 종이에 씁니다.<br>고칠 생각 없이, 손이 가는 대로 끝까지 씁니다.</p>
       ${p.carryHint ? `<div class="hintcard"><div class="lb">지난 회차의 집필 힌트</div><div class="tx">${esc(p.carryHint)}</div></div>` : ""}`;
@@ -454,7 +461,7 @@ function renderCycle(){
   } else if (s === 2){
     const last = totalChars(p);
     head = `
-      <div class="eyebrow">2단계 · 원고지</div>
+      <div class="eyebrow">2단계 · 원고지 · 새 원고 다듬기</div>
       <h2 class="t">스크리브너 타이핑</h2>
       <p class="guide">손으로 쓴 2매를 스크리브너에서 타이핑하며 확장합니다.</p>`;
     body = `
@@ -463,7 +470,7 @@ function renderCycle(){
         <p class="hint">복사된 요약을 먼저 붙여 넣고, 그 아래부터 이어서 씁니다.</p>
       </div>
       <div class="field">
-        <label class="f" for="i-chars">지금까지 쓴 총 글자수 (공백 포함)</label>
+        <label class="f" for="i-chars">타이핑을 마친 시점의 총 글자수 <span style="font-weight:400;color:var(--faint)">· 공백 포함</span></label>
         <input type="number" id="i-chars" inputmode="numeric" min="0" step="1" placeholder="${fmt(last)}" value="${esc(d.chars)}">
         <div class="calc" id="calc"></div>
       </div>
@@ -477,17 +484,37 @@ function renderCycle(){
         <textarea id="i-note" rows="4" placeholder="지금 원고가 어떻게 느껴지는지 적습니다. 맞는 말일 필요는 없습니다. 이 글은 다음 단계에서 초고 맨 위에 붙습니다.">${esc(d.note)}</textarea>
       </div>
       <button class="done" data-act="next">타이핑을 마쳤습니다 <kbd>${CMD}</kbd></button>`;
+  } else if (s === 3){
+    head = `
+      <div class="eyebrow">3단계 · 주묵 · 전체 원고 교열</div>
+      <h2 class="t">프린트 교정</h2>
+      <p class="guide">새로 쓴 대목을 포함해 원고 전체를 프린트한 뒤, 종이 위에서 교열합니다.</p>`;
+    body = `
+      <div class="field">
+        <label class="f" for="i-plan">재타이핑을 위한 개작 방향</label>
+        <textarea id="i-plan" rows="5" placeholder="종이에서 발견한 것 가운데, 다음 단계에서 손볼 방향을 적습니다. 다음 단계에서 이 글이 클립보드로 넘어갑니다.">${esc(d.plan)}</textarea>
+      </div>
+      <button class="done" data-act="next">교열을 마쳤습니다 <kbd>${CMD}</kbd></button>`;
   } else {
     head = `
-      <div class="eyebrow">3단계 · 주묵</div>
-      <h2 class="t">프린트 교정</h2>
-      <p class="guide">초고를 프린트한 뒤, 초고 위에서 작업합니다.<br>스크리브너에서 원고를 열고 프린트합니다.</p>`;
+      <div class="eyebrow">4단계 · 청람 · 기존 원고 다듬기</div>
+      <h2 class="t">스크리브너 재타이핑</h2>
+      <p class="guide">교열한 종이를 옆에 놓고, 스크리브너에서 원고를 고쳐 씁니다.<br>이 단계에서는 프린트하지 않습니다.</p>`;
     body = `
+      <div class="field">
+        <button class="ghost" data-act="scriv4">스크리브너 열기 <small>개작 방향을 복사합니다</small></button>
+        <p class="hint">종이의 교정 부호를 따라가며 원고를 고칩니다. 여기까지가 한 회차입니다.</p>
+      </div>
+      <div class="field">
+        <label class="f" for="i-final">재타이핑을 마친 최종 총 글자수 <span style="font-weight:400;color:var(--faint)">· 공백 포함</span></label>
+        <input type="number" id="i-final" inputmode="numeric" min="0" step="1" placeholder="${fmt(parseInt(d.chars,10) || totalChars(p))}" value="${esc(d.final)}">
+        <div class="calc" id="calc"></div>
+      </div>
       <div class="field">
         <label class="f" for="i-hint">다음 회차 손글씨를 위한 집필 힌트</label>
         <textarea id="i-hint" rows="5" placeholder="다음 2매에서 무엇을 쓸지 한두 줄로 남깁니다. 다음 회차 1단계 맨 위에 이 글이 놓입니다.">${esc(d.hint)}</textarea>
       </div>
-      <button class="done" data-act="next">교정을 마쳤습니다 · 다음 회차로 <kbd>${CMD}</kbd></button>`;
+      <button class="done" data-act="next">재타이핑을 마쳤습니다 · 다음 회차로 <kbd>${CMD}</kbd></button>`;
   }
 
   const gate = !needGate(p) ? "" : `
@@ -499,26 +526,44 @@ function renderCycle(){
         </label>
         ${s === 3 ? `<button class="ghost" data-act="scriv3">스크리브너<br>열기</button>` : ""}
       </div>
-      ${ok ? "" : `<p class="gatehint">${s===1 ? "지난 회차에 프린트해 둔 원고를 교열했다면 확인하고 시작합니다."
-        : s===2 ? "손으로 쓴 400자가 책상 위에 있다면 확인하고 시작합니다."
-        : "‘스크리브너 열기’를 누르면 지금의 느낌이 복사됩니다. 원고 맨 위에 붙인 다음 프린트하고, 종이가 손에 들어오면 확인합니다."}</p>`}
+      ${ok ? "" : `<p class="gatehint">${
+          s===2 ? "손으로 쓴 400자가 책상 위에 있다면 확인하고 시작합니다."
+        : s===3 ? "‘스크리브너 열기’를 누르면 지금의 느낌이 복사됩니다. 원고 맨 위에 붙인 다음 프린트하고, 종이가 손에 들어오면 확인합니다."
+        : "종이 위에서 교열을 마쳤다면 확인하고 시작합니다. 교정 부호가 없는 종이라면 아직 3단계입니다."}</p>`}
     </div>`;
 
   document.getElementById("view").innerHTML =
     `<div style="--sc:${sc}"><div class="steps">${steps}</div><div class="card">${head}${gate}${ok ? body : ""}</div></div>`;
-  if (ok && s === 2) calc();
+  if (ok && (s === 2 || s === 4)) calc();
 }
 
 function calc(){
   const el = document.getElementById("calc"); if (!el) return;
-  const p = P(), last = totalChars(p), v = parseInt(p.draft.chars, 10);
-  if (isNaN(v)){ el.innerHTML = `<div>누적 ${fmt(last)}자 · ${pg(last)}매에서 이어 씁니다.</div>`; return; }
-  const dl = v - last, cut = dl < 0;
+  const p = P(), d = p.draft, last = totalChars(p);
+
+  if (p.stage === 2){
+    const v = parseInt(d.chars, 10);
+    if (isNaN(v)){ el.innerHTML = `<div>누적 ${fmt(last)}자 · ${pg(last)}매에서 이어 씁니다.</div>`; return; }
+    const dl = v - last, cut = dl < 0;
+    el.innerHTML =
+      `<div>원고지<b>${pg(v)}매</b></div>
+       <div class="${cut?"down":"up"}">${cut ? "덜어낸 분량" : "이번에 늘린 분량"}<b>${cut?"−":"+"}${fmt(Math.abs(dl))}자</b></div>
+       <div class="${cut?"down":"up"}">&nbsp;<b>${cut?"−":"+"}${(Math.abs(dl)/200).toFixed(1)}매</b></div>`;
+    return;
+  }
+
+  const mid = parseInt(d.chars, 10), base = isNaN(mid) ? last : mid;
+  const v = parseInt(d.final, 10);
+  if (isNaN(v)){
+    el.innerHTML = `<div>2단계에서 적은 ${fmt(base)}자에서 고쳐 씁니다. 다 고친 뒤의 숫자를 넣습니다.</div>`;
+    return;
+  }
+  const grew = base - last, trim = v - base, net = v - last;
   el.innerHTML =
-    `<div>원고지<b>${pg(v)}매</b></div>
-     <div class="${cut?"down":"up"}">${cut ? "덜어낸 분량" : "직전 대비 순증"}<b>${cut?"−":"+"}${fmt(Math.abs(dl))}자</b></div>
-     <div class="${cut?"down":"up"}">&nbsp;<b>${cut?"−":"+"}${(Math.abs(dl)/200).toFixed(1)}매</b></div>`
-    + (cut ? `<div style="flex-basis:100%;font-family:var(--serif);font-size:13px;color:var(--s3);margin-top:2px">교정으로 줄어든 회차입니다. 그대로 기록됩니다.</div>` : "");
+    `<div>최종<b>${pg(v)}매</b></div>
+     <div class="${net<0?"down":"up"}">이 회차 순증<b>${net<0?"−":"+"}${fmt(Math.abs(net))}자</b></div>
+     <div class="up">늘린 양<b>${grew<0?"−":"+"}${fmt(Math.abs(grew))}자</b></div>
+     <div class="down">조인 양<b>${trim>0?"+":"−"}${fmt(Math.abs(trim))}자</b></div>`;
 }
 
 /* ── 단계 넘기기 ── */
@@ -537,10 +582,16 @@ function next(){
     const v = parseInt(d.chars, 10);
     if (isNaN(v) || v < 0){ focus("i-chars"); toast("총 글자수를 입력해 주세요"); return; }
     p.stage = 3;
+  } else if (p.stage === 3){
+    p.stage = 4;
   } else {
-    const v = parseInt(d.chars, 10) || totalChars(p);
+    const mid = parseInt(d.chars, 10);
+    const v = parseInt(d.final, 10);
+    if (isNaN(v) || v < 0){ focus("i-final"); toast("최종 글자수를 입력해 주세요"); return; }
     p.entries.push({ id:uid(), cycle:p.cycle, ts:Date.now(), chars:v,
-      feel:d.feel || "", note:d.note.trim(), summary:d.summary.trim(), hint:d.hint.trim() });
+      mid: isNaN(mid) ? v : mid,
+      feel:d.feel || "", note:d.note.trim(), summary:d.summary.trim(),
+      plan:d.plan.trim(), hint:d.hint.trim() });
     p.carryHint = d.hint.trim();
     p.cycle += 1; p.stage = 1; p.draft = blankDraft(); p.lastUsed = Date.now();
     toast(`${p.cycle - 1}회차를 마쳤습니다`);
@@ -599,7 +650,8 @@ function renderLog(){
           <td class="n">${e.cycle}회</td>
           <td class="n" style="color:var(--muted)">${stamp(e.ts)}</td>
           <td class="n"><button class="lnk" data-act="edit" data-id="${e.id}" title="누적 글자수 고치기">${fmt(e.chars)}자</button></td>
-          <td class="n">${pg(e.chars)}매 <span class="d${e.delta<0?" m":""}">${e.delta>=0?"+":"−"}${(Math.abs(e.delta)/200).toFixed(1)}</span></td>
+          <td class="n">${pg(e.chars)}매 <span class="d${e.delta<0?" m":""}">${e.delta>=0?"+":"−"}${(Math.abs(e.delta)/200).toFixed(1)}</span>
+              ${e.trim ? `<span class="rs">늘림 ${e.grew>=0?"+":"−"}${fmt(Math.abs(e.grew))} · 조임 ${e.trim>0?"+":"−"}${fmt(Math.abs(e.trim))}</span>` : ""}</td>
           <td>${feelOf(e) ? esc(feelOf(e)) : '<span style="color:var(--faint)">—</span>'}
               ${e.note ? `<span class="rs">${esc(e.note)}</span>` : ""}</td>
           <td class="act"><button class="del" data-act="del" data-id="${e.id}" title="삭제">×</button></td>
@@ -651,7 +703,9 @@ function buildPromptAll(){
     const rows = list.map(e => {
       const t = new Date(e.ts), p = n => String(n).padStart(2,"0");
       return `  · ${e.proj} ${e.cycle}회차 ${p(t.getHours())}:${p(t.getMinutes())} `
-        + `${e.delta>=0?"+":"−"}${Math.abs(e.delta)}자 / 느낌: ${feelOf(e)||"-"}`
+        + `${e.delta>=0?"+":"−"}${Math.abs(e.delta)}자`
+        + (e.trim ? ` (늘림 ${e.grew>=0?"+":"−"}${Math.abs(e.grew)}, 조임 ${e.trim})` : "")
+        + ` / 느낌: ${feelOf(e)||"-"}`
         + (e.note ? ` — ${e.note}` : "");
     });
     return [head, ...rows].join("\n");
@@ -664,7 +718,7 @@ function buildPromptAll(){
   const wroteToday = days.has(todayKey);
 
   return [
-    "나는 소설을 쓰는 사람입니다. '손글씨 2매 → 스크리브너 타이핑 → 프린트 교정'을 한 회차로 삼아 반복합니다.",
+    "나는 소설을 쓰는 사람입니다. 한 회차는 네 단계입니다. 1) 손으로 400자를 새로 쓰고 2) 스크리브너에 타이핑하며 그 대목을 다듬고 3) 원고 전체를 프린트해 종이 위에서 교열하고 4) 교열한 종이를 보며 스크리브너에서 다시 고쳐 씁니다. 1·2단계가 원고를 늘리는 일이고, 3·4단계가 이미 쓴 것을 조이는 일입니다.",
     "여러 원고를 동시에 굴리기도 합니다. 아래는 모든 원고의 기록을 날짜별로 묶은 것입니다.",
     "",
     "[원고 현황]",
@@ -700,9 +754,9 @@ function buildPromptAll(){
 function buildPrompt(){
   const p = P(), r = rows(p), total = totalChars(p), start = p.startChars || 0;
   const lines = r.map(e =>
-    `${e.cycle} | ${new Date(e.ts).toLocaleString("ko-KR")} | ${e.chars} | ${pg(e.chars)} | ${e.delta>=0?"+":""}${e.delta} | ${feelOf(e)||"-"} | ${e.note||"-"}`);
+    `${e.cycle} | ${new Date(e.ts).toLocaleString("ko-KR")} | ${e.chars} | ${pg(e.chars)} | ${e.delta>=0?"+":""}${e.delta} | ${e.grew>=0?"+":""}${e.grew} | ${e.trim} | ${feelOf(e)||"-"} | ${e.note||"-"} | ${e.plan||"-"}`);
   return [
-    "나는 소설을 쓰는 사람입니다. '손글씨 2매 → 스크리브너 타이핑 → 프린트 교정'을 한 회차로 삼아 반복하며 원고를 씁니다.",
+    "나는 소설을 쓰는 사람입니다. 한 회차는 네 단계입니다. 1) 손으로 400자를 새로 쓰고 2) 스크리브너에 타이핑하며 그 대목을 다듬고 3) 원고 전체를 프린트해 종이 위에서 교열하고 4) 교열한 종이를 보며 스크리브너에서 다시 고쳐 씁니다. 1·2단계가 원고를 늘리는 일이고, 3·4단계가 이미 쓴 것을 조이는 일입니다.",
     "아래는 그 회차별 기록입니다.",
     "",
     "'느낌'은 타이핑을 마친 순간의 주관적인 감각입니다. 5단계 척도로, 좋은 쪽부터 "
@@ -720,20 +774,25 @@ function buildPrompt(){
     "",
     "순증이 음수인 회차는 새로 쓴 분량보다 교정으로 덜어낸 분량이 많았던 회차입니다. 실패가 아니라 원고를 조인 회차로 읽어 주세요.",
     "",
-    "회차 | 시각 | 누적 글자수 | 누적 매수 | 순증 글자 | 느낌 | 느낌을 조금 더",
+    "회차 | 시각 | 최종 누적 글자수 | 누적 매수 | 순증 | 늘린 양 | 조인 양 | 느낌 | 느낌을 조금 더 | 개작 방향",
     "---",
     ...lines,
     "",
+    "'늘린 양'은 2단계 타이핑으로 새로 불린 글자수, '조인 양'은 4단계 재타이핑에서 깎인 글자수(음수)입니다. 둘을 더하면 순증이 됩니다.",
+    "'개작 방향'은 3단계에서 종이를 교열한 뒤, 4단계에서 무엇을 고칠지 스스로에게 남긴 메모입니다. 시각은 회차를 마친 때입니다.",
+    "",
     "이 데이터를 보고 다음을 짚어 주세요.",
     "1. 회차당 순증량의 추이. 늘고 있는지 줄고 있는지, 눈에 띄는 굴곡이 있는지.",
-    "2. 느낌과 실제 순증의 관계. 느낌이 좋았던 회차가 정말 많이 쓴 회차인지, 어긋난다면 어느 방향으로 어긋나는지.",
-    "3. 내 느낌이 예보로서 쓸모가 있는지. 느낌이 나빴던 회차의 '다음' 회차는 어떻게 되는지, 회복되는지 더 가라앉는지.",
-    "4. 느낌이 나쁜데도 분량이 나온 회차와, 느낌이 좋은데 분량이 적은 회차. 각각 무엇을 쓰던 때인지.",
-    "5. '느낌을 조금 더'에 적힌 문장들에서 반복되는 걱정거리. 내가 같은 것을 몇 번이나 다시 걱정하는지.",
-    "6. 덜어낸 회차의 앞뒤 양상. 무엇을 쓴 뒤에 잘라내게 되는지.",
-    "7. 시각 기록으로 볼 때 생산성이 좋은 시간대나 리듬.",
-    `8. 지금 속도라면 목표 ${p.goalPages}매까지 몇 회차가 더 필요한지. 회차당 순증의 평균과 중앙값을 각각 근거로.`,
-    "9. 다음 회차에 시도해 볼 구체적인 처방 두세 가지. 일반론 말고 이 기록에 근거해서."
+    "2. 늘린 양과 조인 양의 비율. 내가 쓰는 사람인지 깎는 사람인지, 그 비율이 원고가 길어질수록 어떻게 변하는지.",
+    "3. 많이 늘린 회차일수록 많이 깎게 되는지. 늘림과 조임 사이에 관계가 있는지.",
+    "4. 느낌과 실제 순증의 관계. 느낌이 좋았던 회차가 정말 많이 쓴 회차인지, 어긋난다면 어느 방향으로 어긋나는지.",
+    "5. 느낌이 늘린 양과 붙어 있는지, 조인 양과 붙어 있는지. 많이 깎은 날의 기분이 어떤지.",
+    "6. 내 느낌이 예보로서 쓸모가 있는지. 느낌이 나빴던 회차의 '다음' 회차는 어떻게 되는지.",
+    "7. 개작 방향에 반복해서 적히는 항목. 같은 문제를 몇 회차에 걸쳐 다시 고치고 있는지, 그것이 끝내 해결되는지.",
+    "8. 크게 뜯어고치기로 한 회차 뒤에 무슨 일이 일어나는지. 다음 회차의 늘림·조임·느낌으로.",
+    "9. 시각 기록으로 볼 때 생산성이 좋은 시간대나 리듬.",
+    `10. 지금 속도라면 목표 ${p.goalPages}매까지 몇 회차가 더 필요한지. 회차당 순증의 평균과 중앙값을 각각 근거로.`,
+    "11. 다음 회차에 시도해 볼 구체적인 처방 두세 가지. 일반론 말고 이 기록에 근거해서."
   ].filter(x => x !== null).join("\n");
 }
 
@@ -756,7 +815,10 @@ function arcStats(a){
   };
   const k = Math.ceil(deltas.length / 3);
   return {
-    list, deltas, final, days, span, feels,
+    list, deltas, days, span, feels, final,
+    avgGrew: mean(list.map(e => ((typeof e.mid === "number") ? e.mid : e.chars))
+      .map((m,i) => m - (i ? list[i-1].chars : (a.startChars || 0)))),
+    avgTrim: mean(list.map(e => e.chars - ((typeof e.mid === "number") ? e.mid : e.chars))),
     avgFeel: scores.length ? +(scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(1) : null,
     avg: mean(deltas), med: median(deltas), cuts: deltas.filter(d => d < 0).length,
     thirds: [mean(deltas.slice(0,k)), mean(deltas.slice(k, k*2)), mean(deltas.slice(k*2))]
@@ -788,7 +850,8 @@ function archiveProject(id){
     cycles: st.list.length, finalChars: st.final,
     startedAt: st.list.length ? st.list[0].ts : Date.now(), finishedAt: Date.now(),
     days: st.days, span: st.span, avg: st.avg, med: st.med, cuts: st.cuts,
-    thirds: st.thirds, feels: st.feels, avgFeel: st.avgFeel
+    thirds: st.thirds, feels: st.feels, avgFeel: st.avgFeel,
+    avgGrew: st.avgGrew, avgTrim: st.avgTrim
   });
 
   S.projects = S.projects.filter(y => y.id !== id);
@@ -827,12 +890,12 @@ function buildPromptArchive(){
     `   기간: ${dayKey(a.startedAt)} ~ ${dayKey(a.finishedAt)} (달력 ${a.span}일 가운데 ${a.days}일 집필)`,
     `   회차: ${a.cycles}회 / 최종 ${pg(a.finalChars)}매 (시작 ${pg(a.startChars)}매, 목표 ${a.goalPages}매)`,
     `   회차당 순증: 평균 ${a.avg}자, 중앙값 ${a.med ?? "-"}자 / 초반 ${a.thirds[0]} · 중반 ${a.thirds[1]} · 후반 ${a.thirds[2]}`,
-    `   교정으로 덜어낸 회차: ${a.cuts}회`,
+    `   회차당 늘린 양 ${a.avgGrew ?? "-"}자 · 조인 양 ${a.avgTrim ?? "-"}자 / 순증이 음수였던 회차 ${a.cuts}회`,
     `   느낌 평균: ${a.avgFeel ?? "-"} / 분포: ${tagLine(a.feels || a.tags || {})}`
   ].join("\n"));
 
   return [
-    "나는 소설을 쓰는 사람입니다. '손글씨 2매 → 스크리브너 타이핑 → 프린트 교정'을 한 회차로 삼아 반복하며 원고를 씁니다.",
+    "나는 소설을 쓰는 사람입니다. 한 회차는 네 단계입니다. 1) 손으로 400자를 새로 쓰고 2) 스크리브너에 타이핑하며 그 대목을 다듬고 3) 원고 전체를 프린트해 종이 위에서 교열하고 4) 교열한 종이를 보며 스크리브너에서 다시 고쳐 씁니다. 1·2단계가 원고를 늘리는 일이고, 3·4단계가 이미 쓴 것을 조이는 일입니다.",
     `아래는 지금까지 완료한 원고 ${all.length}편의 집필 기록 요약입니다.`,
     "순증이 음수인 회차는 새로 쓴 분량보다 교정으로 덜어낸 분량이 많았던 회차입니다. 실패가 아니라 원고를 조인 회차입니다.",
     "'느낌'은 각 회차의 타이핑을 마친 순간에 적어 둔 주관적 감각입니다. 좋은 쪽부터 "
@@ -988,6 +1051,7 @@ document.addEventListener("click", e => {
   if (a === "next") next();
   else if (a === "scriv2"){ copy(p.draft.summary, "2매 요약을 복사했습니다"); openScrivener(p); }
   else if (a === "scriv3"){ copy(feelText(p.draft), "지금의 느낌을 복사했습니다"); openScrivener(p); }
+  else if (a === "scriv4"){ copy(p.draft.plan, "개작 방향을 복사했습니다"); openScrivener(p); }
   else if (a === "feel"){
     const t = b.dataset.t;
     p.draft.feel = (p.draft.feel === t) ? "" : t;
@@ -1058,8 +1122,10 @@ document.addEventListener("input", e => {
   const p = P(), id = e.target.id, v = e.target.value;
   if (id === "i-summary") p.draft.summary = v;
   else if (id === "i-note") p.draft.note = v;
+  else if (id === "i-plan") p.draft.plan = v;
   else if (id === "i-hint") p.draft.hint = v;
   else if (id === "i-chars"){ p.draft.chars = v; calc(); }
+  else if (id === "i-final"){ p.draft.final = v; calc(); }
   else if (id === "i-goal"){
     p.goalPages = Math.max(1, parseInt(v,10) || 80); renderHead();
     const box = document.getElementById("i-2667");
