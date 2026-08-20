@@ -190,8 +190,6 @@ details summary:hover{color:var(--ink)}
     <input type="text" id="planPlace" placeholder="장소" style="width:120px">
     <button class="act" id="btnPlanAdd">추가</button>
   </div>
-  <h2>다가오는 순서</h2>
-  <div id="planList"></div>
   <h2>달</h2>
   <div class="row" style="justify-content:space-between">
     <button class="act ghost" id="calPrev">이전</button>
@@ -200,6 +198,8 @@ details summary:hover{color:var(--ink)}
   </div>
   <div id="calWrap"></div>
   <div id="calDay"></div>
+  <h2>다가오는 순서</h2>
+  <div id="planList"></div>
 </section>
 
 <section id="s-rest">
@@ -419,10 +419,9 @@ function rToday(){
   $("#today-todo").innerHTML=list.length?list.map(todoRow).join(""):`<div class="empty">할 일이 비어 있다.</div>`;
   bindTodo();
   const up=upcoming().slice(0,4);
-  $("#today-plan").innerHTML=up.length?up.map(e=>`<div class="card spread">
-      <span>${esc(e.title)}${e.place?` <span class="mono">${esc(e.place)}</span>`:""}</span>
-      <span class="mono">${md(e.date)} ${e.time||""} · ${ddayText(e.date)}</span></div>`).join("")
+  $("#today-plan").innerHTML=up.length?up.map(e=>planRow(e,"today")).join("")
     :`<div class="empty">잡힌 약속이 없다.</div>`;
+  bindPlan();
   const last=data.settings.lastDump;
   const gap=last?dayDiff(TODAY,last.slice(0,10)):null;
   $("#today-nudge").innerHTML=`<div class="foot">${last
@@ -790,14 +789,15 @@ $("#btnTodoAdd").onclick=()=>{
 $("#todoNew").onkeydown=e=>{if(e.key==="Enter")$("#btnTodoAdd").click();};
 
 /* ═══ 일정 ═══ */
-function rPlan(){
-  const up=upcoming();
-  $("#planList").innerHTML=up.length?up.map(e=>`<div class="card spread" data-id="${e.id}">
-      <span>${esc(e.title)}${e.place?` <span class="mono">${esc(e.place)}</span>`:""}</span>
-      <span><span class="mono">${md(e.date)} ${e.time||""} · ${ddayText(e.date)}</span>
-      <button class="pin" data-pedit title="고치기">✎</button>
-      <button class="x" data-pdel>×</button></span></div>`).join("")
-    :`<div class="empty">다가오는 일정이 없다.</div>`;
+function planRow(e,mode){
+  const meta=mode==="day"?(e.time||"종일"):`${md(e.date)} ${e.time||""} · ${ddayText(e.date)}`;
+  return `<div class="card spread" data-id="${e.id}">
+    <span>${esc(e.title)}${e.place?` <span class="mono">${esc(e.place)}</span>`:""}</span>
+    <span><span class="mono">${meta}</span>
+    <button class="pin" data-pedit title="고치기">✎</button>
+    ${mode==="today"?"":`<button class="x" data-pdel>×</button>`}</span></div>`;
+}
+function bindPlan(){
   $$("[data-pdel]").forEach(b=>b.onclick=()=>{
     const id=b.closest(".card").dataset.id;data.events=data.events.filter(x=>x.id!==id);save();render();});
   $$("[data-pedit]").forEach(b=>b.onclick=()=>{
@@ -820,6 +820,11 @@ function rPlan(){
     host.querySelector(".e-title").onkeydown=ev=>{if(ev.key==="Enter")ok();if(ev.key==="Escape")render();};
     host.querySelector(".e-title").focus();
   });
+}
+function rPlan(){
+  const up=upcoming();
+  $("#planList").innerHTML=up.length?up.map(e=>planRow(e,"list")).join("")
+    :`<div class="empty">다가오는 일정이 없다.</div>`;
   drawCal();
 }
 function drawCal(){
@@ -834,15 +839,19 @@ function drawCal(){
       html+=`<td data-d="${s}" class="${d.getMonth()!==m?"out":""} ${s===TODAY?"today":""} ${s===calSel?"sel":""}">${d.getDate()}${has?'<span class="dot"></span>':""}</td>`;
     }html+="</tr>";}
   $("#calWrap").innerHTML=html+"</table>";
-  $$("#calWrap td").forEach(td=>td.onclick=()=>{calSel=td.dataset.d;drawCal();showDay();});
+  $$("#calWrap td").forEach(td=>td.onclick=()=>{
+    calSel=td.dataset.d;
+    const pd=$("#planDate");if(pd)pd.value=calSel;
+    drawCal();showDay();});
   showDay();
 }
 function showDay(){
-  if(!calSel){$("#calDay").innerHTML="";return;}
+  if(!calSel){$("#calDay").innerHTML="";bindPlan();return;}
   const list=data.events.filter(e=>e.date===calSel).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
-  $("#calDay").innerHTML=`<h2>${calSel} (${wd(calSel)})</h2>`+(list.length
-    ?list.map(e=>`<div class="card spread"><span>${esc(e.title)}${e.place?` <span class="mono">${esc(e.place)}</span>`:""}</span><span class="mono">${e.time||"종일"}</span></div>`).join("")
-    :`<div class="empty">이 날은 비어 있다.</div>`);
+  $("#calDay").innerHTML=`<h2>${calSel.slice(5).replace("-",". ")} (${wd(calSel)}) · ${ddayText(calSel)}</h2>`
+    +(list.length?list.map(e=>planRow(e,"day")).join("")
+      :`<div class="empty">이 날은 비어 있다. 위 칸에 적어 넣으면 이 날짜로 잡힌다.</div>`);
+  bindPlan();
 }
 $("#calPrev").onclick=()=>{calCursor.setMonth(calCursor.getMonth()-1);drawCal();};
 $("#calNext").onclick=()=>{calCursor.setMonth(calCursor.getMonth()+1);drawCal();};
