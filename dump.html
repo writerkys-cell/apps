@@ -140,6 +140,7 @@ details summary:hover{color:var(--ink)}
 </nav>
 
 <section id="s-today" class="on">
+  <div id="today-overdue"></div>
   <div id="today-open"></div>
   <h2>오늘 손댈 것</h2>
   <div id="today-todo"></div>
@@ -243,6 +244,12 @@ details summary:hover{color:var(--ink)}
       <button class="act ghost" id="btnChaffSave">저장</button>
     </div>
     <div class="row" style="margin-top:10px">
+      <span>밀린 할 일을 묻는 기준</span>
+      <input type="text" id="setOver" style="width:70px" inputmode="numeric">
+      <span>일</span>
+      <button class="act ghost" id="btnOverSave">저장</button>
+    </div>
+    <div class="row" style="margin-top:10px">
       <span>담기지 않은 원문을 남겨둘 기간</span>
       <input type="text" id="setKeep" style="width:70px" inputmode="numeric">
       <span>일</span>
@@ -319,7 +326,7 @@ let data=load(), tab="today", calCursor=new Date(), calSel=null;
 purgeDumps();
 
 function blank(){return{v:2,dumps:[],thoughts:[],todos:[],events:[],
-  settings:{defer:14,chaffDays:90,keepDays:7,lastDump:null,prompt:null,refs:{},activeDump:null}};}
+  settings:{defer:14,chaffDays:90,keepDays:7,overdueDays:14,lastDump:null,prompt:null,refs:{},activeDump:null}};}
 function load(){
   try{const r=localStorage.getItem(KEY);if(!r)return blank();
     const d=JSON.parse(r),b=blank();
@@ -357,6 +364,8 @@ $$("nav button").forEach(b=>b.onclick=()=>{
 const opened=()=>data.thoughts.filter(t=>t.status==="묵힘"&&(t.openAt<=TODAY||t.peeked));
 const resting=()=>data.thoughts.filter(t=>t.status==="묵힘"&&t.openAt>TODAY&&!t.peeked).sort((a,b)=>a.openAt.localeCompare(b.openAt));
 const openTodos=()=>data.todos.filter(t=>!t.done).sort((a,b)=>(b.star?1:0)-(a.star?1:0)||(a.due||"9999").localeCompare(b.due||"9999")||a.at-b.at);
+const isStale=t=>!t.done&&t.due&&dayDiff(TODAY,t.due)>(data.settings.overdueDays||14);
+const stale=()=>data.todos.filter(isStale).sort((a,b)=>a.due.localeCompare(b.due));
 const upcoming=()=>data.events.filter(e=>e.date>=TODAY).sort((a,b)=>(a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
 const chaffRecent=()=>data.thoughts.filter(t=>t.status==="쭉정이"&&t.judgedAt&&dayDiff(TODAY,t.judgedAt)<=data.settings.chaffDays);
 const seeds=()=>data.thoughts.filter(t=>t.status==="씨앗");
@@ -409,13 +418,29 @@ function fillPrompt(body,ctx){
 
 /* ═══ 오늘 ═══ */
 function rToday(){
+  const st=stale();
+  $("#today-overdue").innerHTML=st.length?`<h2>오래 밀린 것 ${st.length}</h2>`
+    +st.map(t=>`<div class="card" data-id="${t.id}">
+      <div class="spread"><span class="word" style="padding:0">${esc(t.text)}</span>
+        <span class="mono warn">${t.due.slice(5)} · ${ddayText(t.due)}</span></div>
+      ${t.pushes?`<div style="margin-top:6px"><span class="tag bori">${t.pushes}번 날짜를 새로 잡았다</span></div>`:""}
+      <div class="judge">
+        <button class="grain" data-o="새로">날짜 새로 잡기</button>
+        <button class="chaff" data-o="지움">지운다</button>
+        <button data-o="잡념">할 일이 아니었다</button>
+      </div>
+      <div class="row tight" data-oslot style="margin-top:8px;display:none"></div>
+    </div>`).join("")
+    +`<div class="hint">${data.settings.overdueDays||14}일을 미룬 일은 대개 할 일이 아니다. 진짜였으면 벌써 했을 테니.</div>`
+    :"";
+  bindStale();
   const op=opened();
   $("#today-open").innerHTML=op.length
     ? `<h2>열어볼 때가 된 생각 ${op.length}</h2>`+op.map(cardThought).join("")
     : `<h2>열어볼 때가 된 생각</h2><div class="empty">오늘 열릴 생각은 없다. 묵고 있는 것 ${resting().length}개.</div>`;
   bindJudge();
-  const due=openTodos().filter(t=>t.star||(t.due&&t.due<=TODAY));
-  const list=due.length?due:openTodos().slice(0,3);
+  const due=openTodos().filter(t=>!isStale(t)&&(t.star||(t.due&&t.due<=TODAY)));
+  const list=due.length?due:openTodos().filter(t=>!isStale(t)).slice(0,3);
   $("#today-todo").innerHTML=list.length?list.map(todoRow).join(""):`<div class="empty">할 일이 비어 있다.</div>`;
   bindTodo();
   const up=upcoming().slice(0,4);
@@ -428,6 +453,28 @@ function rToday(){
     ?`마지막으로 쏟아낸 지 ${gap}일. ${gap>=4?"머리가 무거울 때다.":"아직은 가볍다."}`
     :"아직 한 번도 쏟아내지 않았다. 〈쏟기〉에서 시작한다."}</div>`;
 }
+function bindStale(){
+  $$("[data-o]").forEach(b=>b.onclick=()=>{
+    const card=b.closest(".card"),t=data.todos.find(x=>x.id===card.dataset.id),j=b.dataset.o;
+    if(j==="지움"){
+      data.todos=data.todos.filter(x=>x.id!==t.id);save();toast("지웠다");render();
+    }else if(j==="잡념"){
+      data.thoughts.push({id:uid(),text:t.text,createdAt:TODAY,dates:[TODAY],
+        openAt:plusDays(data.settings.defer),status:"묵힘",times:1,peeked:false,from:"할일"});
+      data.todos=data.todos.filter(x=>x.id!==t.id);
+      save();toast(data.settings.defer+"일 뒤에 다시 묻는다");render();
+    }else{
+      const slot=card.querySelector("[data-oslot]");slot.style.display="flex";
+      slot.innerHTML=`<input type="date" style="width:150px" value="${TODAY}"><button class="act">이 날로</button>`;
+      slot.querySelector("button").onclick=()=>{
+        const d=slot.querySelector("input[type=date]").value;
+        if(!d)return toast("날짜가 없다");
+        t.due=d;t.pushes=(t.pushes||0)+1;save();toast("날짜를 새로 잡았다");render();
+      };
+      slot.querySelector("input").focus();
+    }
+  });
+}
 function cardThought(t){
   const times=t.times||1, ds=t.dates||[t.createdAt];
   return `<div class="card anim" data-id="${t.id}">
@@ -438,6 +485,7 @@ function cardThought(t){
       <span class="mono">${ds.map(d=>d.slice(5).replace("-","/")).join(" · ")}</span>
       ${t.revived?` <span class="tag red">한 번 날렸는데 돌아왔다</span>`:""}
       ${times>=3?`<div class="hint">세 번 넘게 돌아온 건 잡념이 아니다.</div>`:""}</div>`:""}
+    ${t.from==="할일"?`<div style="margin-top:7px"><span class="tag bori">밀린 할 일에서 내려온 것</span></div>`:""}
     <div class="judge">
       <button class="chaff" data-j="쭉정이">쭉정이였다</button>
       <button class="grain" data-j="할일">할 일로</button>
@@ -743,7 +791,8 @@ function todoRow(t){
     <div class="box" data-do></div>
     <span class="t">${esc(t.text)}
       ${t.from?` <span class="tag bori">생각에서</span>`:""}
-      ${(t.times||1)>1?` <span class="tag bori">${t.times}번째 올라옴</span>`:""}</span>
+      ${(t.times||1)>1?` <span class="tag bori">${t.times}번째 올라옴</span>`:""}
+      ${t.pushes?` <span class="tag bori">${t.pushes}번 미룸</span>`:""}</span>
     ${t.due?`<span class="due ${cls}">${t.due.slice(5)} ${ddayText(t.due)}</span>`:""}
     <button class="star ${t.star?"on":""}" data-star>★</button>
     <button class="pin" data-edit title="고치기">✎</button>
@@ -905,6 +954,7 @@ function rKeep(){
   $("#setDefer").value=data.settings.defer;
   $("#setChaff").value=data.settings.chaffDays;
   $("#setKeep").value=data.settings.keepDays;
+  $("#setOver").value=data.settings.overdueDays||14;
   if($("#promptBox").value==="")$("#promptBox").value=data.settings.prompt||DEFAULT_PROMPT;
 }
 $("#btnPromptSave").onclick=()=>{
@@ -935,6 +985,11 @@ $("#btnChaffSave").onclick=()=>{
   const n=parseInt($("#setChaff").value,10);
   if(!n||n<1)return toast("숫자를 넣는다");
   data.settings.chaffDays=n;save();toast("쭉정이 범위를 "+n+"일로 두었다");
+};
+$("#btnOverSave").onclick=()=>{
+  const n=parseInt($("#setOver").value,10);
+  if(!n||n<1)return toast("숫자를 넣는다");
+  data.settings.overdueDays=n;save();toast("마감 지난 지 "+n+"일부터 묻는다");
 };
 $("#btnKeepSave").onclick=()=>{
   const n=parseInt($("#setKeep").value,10);
