@@ -134,6 +134,8 @@ textarea:focus,input:focus{border-color:var(--sc,var(--s2));outline:none}
 }
 .ghost:hover{border-color:var(--sc)}
 .ghost small{font-weight:400;color:var(--muted);font-size:12px}
+.ghost.fin{border-color:color-mix(in srgb,var(--s3) 45%,var(--line));color:var(--s3)}
+.ghost.fin:hover{border-color:var(--s3);background:color-mix(in srgb,var(--s3) 6%,var(--paper))}
 
 /* 칩 */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -197,10 +199,32 @@ h3{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:600;margin
 .pitem button{font-size:12px;color:var(--muted)}
 .pitem button:hover{color:var(--ink)}
 .hint{font-family:var(--serif);font-size:13.5px;color:var(--muted);line-height:1.75;margin:9px 0 0}
+.gatewrap{margin-bottom:22px}
+.gate{
+  display:flex;align-items:center;gap:12px;cursor:pointer;
+  border:1px solid var(--sc);border-radius:2px;padding:16px;
+  background:color-mix(in srgb,var(--sc) 6%,transparent);
+}
+.gate input{width:18px;height:18px;accent-color:var(--sc);margin:0;cursor:pointer;flex:0 0 auto}
+.gate span{font-family:var(--serif);font-size:16.5px;font-weight:700;line-height:1.4}
+.gate.on{border-color:var(--line);background:transparent;padding:10px 13px}
+.gate.on span{font-size:14px;font-weight:400;color:var(--muted)}
+.gate.on input{width:15px;height:15px}
+.gatehint{font-family:var(--serif);font-size:13.5px;color:var(--muted);margin:10px 0 0}
+
 label.sw{display:flex;align-items:center;gap:9px;cursor:pointer;font-size:14px;font-weight:600}
 label.sw input{width:16px;height:16px;accent-color:var(--s2);margin:0;cursor:pointer}
 
 /* 토스트 */
+#alert{
+  display:none;background:var(--s3);color:#fff;padding:13px 18px;
+  font-size:13.5px;line-height:1.6;text-align:center;margin:0 -18px 0;
+}
+#alert.on{display:block}
+#alert button{
+  border:1px solid rgba(255,255,255,.55);border-radius:2px;padding:4px 10px;
+  font-size:12.5px;font-weight:600;margin-left:8px;color:#fff;
+}
 #toast{
   position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);
   background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:2px;
@@ -221,6 +245,10 @@ label.sw input{width:16px;height:16px;accent-color:var(--s2);margin:0;cursor:poi
 </style>
 </head>
 <body>
+<div id="alert">
+  <b>저장 공간이 가득 찼습니다.</b> 지금부터의 기록이 저장되지 않습니다. 백업을 내려받고, 완료한 원고를 보관해 자리를 비우세요.
+  <button data-act="export">백업 내려받기</button>
+</div>
 <div class="wrap">
   <header>
     <div class="brandrow"><div class="brand">순 환</div><div class="brandsub">손글씨 → 타이핑 → 종이 교정</div></div>
@@ -253,19 +281,21 @@ label.sw input{width:16px;height:16px;accent-color:var(--s2);margin:0;cursor:poi
 "use strict";
 const KEY = "sunhwan.v1";
 const TAGS = ["흐름이 막힘","다음 문장이 생각 안 남","자료의 부족","납득 못할 전개","피로","딴생각"];
+const GATES = { 1:"원고를 교열했습니까?", 2:"400자 원고가 준비됐습니까?", 3:"원고를 프린트했습니까?" };
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const CMD = MAC ? "⌘↵" : "Ctrl+↵";
 const SC = ["", "var(--s1)", "var(--s2)", "var(--s3)"];
 
 /* ── 상태 ── */
 const uid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36);
-const blankDraft = () => ({ summary:"", chars:"", tags:[], note:"", hint:"" });
+const blankDraft = () => ({ summary:"", chars:"", tags:[], note:"", hint:"", gate:{} });
 const newProject = (name) => ({
   id: uid(), name: name || "새 원고", goalPages: 80, scrivenerUrl: "", startChars: 0, use2667: true,
   cycle: 1, stage: 1, carryHint: "", draft: blankDraft(), entries: []
 });
 
-let S = load(), tab = "cycle";
+let S = load(), tab = "cycle", logLimit = 50, projQ = "", arcQ = "";
+const LIST_MAX = 12;
 
 function load(){
   try{
@@ -273,11 +303,13 @@ function load(){
     if (r && Array.isArray(r.projects) && r.projects.length) return migrate(r);
   }catch(e){}
   const p = newProject("첫 원고");
-  return { version:1, activeId:p.id, projects:[p] };
+  return { version:1, activeId:p.id, projects:[p], archives:[] };
 }
 function migrate(r){
+  r.archives = Array.isArray(r.archives) ? r.archives : [];
   r.projects.forEach(x => {
-    x.draft = x.draft || blankDraft(); x.entries = x.entries || [];
+    x.draft = x.draft || blankDraft(); x.draft.gate = x.draft.gate || {};
+    x.entries = x.entries || [];
     x.stage = x.stage || 1; x.cycle = x.cycle || 1;
     x.startChars = Math.max(0, parseInt(x.startChars, 10) || 0);
     x.use2667 = x.use2667 !== false;
@@ -285,7 +317,17 @@ function migrate(r){
   if (!r.projects.some(x => x.id === r.activeId)) r.activeId = r.projects[0].id;
   return r;
 }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장 공간이 가득 찼습니다"); } }
+let saveFailed = false;
+function usage(){ try{ return (localStorage.getItem(KEY) || "").length * 2; }catch(e){ return 0; } }
+function save(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(S));
+    if (saveFailed){ saveFailed = false; document.getElementById("alert").classList.remove("on"); }
+  }catch(e){
+    saveFailed = true;
+    document.getElementById("alert").classList.add("on");
+  }
+}
 function P(){ return S.projects.find(p => p.id === S.activeId) || S.projects[0]; }
 
 function rows(p){
@@ -336,8 +378,10 @@ function reasonText(d){
 /* ── 머리 그리기 ── */
 function renderHead(){
   const p = P();
+  p.lastUsed = p.lastUsed || 0;
+  const opts = [...S.projects].sort((a,b) => (b.lastUsed||0) - (a.lastUsed||0));
   document.getElementById("projSel").innerHTML =
-    S.projects.map(x => `<option value="${x.id}"${x.id===p.id?" selected":""}>${esc(x.name)}</option>`).join("");
+    opts.map(x => `<option value="${x.id}"${x.id===p.id?" selected":""}>${esc(x.name)}</option>`).join("");
 
   document.getElementById("cycleNo").innerHTML = `<span>제</span><b>${p.cycle}</b><span>회차</span>`;
 
@@ -376,18 +420,24 @@ function renderHead(){
 }
 
 /* ── 순환 탭 ── */
+/* 첫 회차의 1단계에는 앞선 교열이 없으므로 체크포인트를 두지 않는다 */
+function needGate(p){ return !(p.stage === 1 && p.cycle === 1); }
+function gateOk(p){ return !needGate(p) || !!p.draft.gate[p.stage]; }
+
 function renderCycle(){
   const p = P(), d = p.draft, s = p.stage, sc = SC[s];
   const steps = ["손글씨 2매","스크리브너 타이핑","프린트 교정"]
     .map((t,i) => `<div class="${i+1===s?"on":(i+1<s?"done":"")}">${i+1}. ${t}</div>`).join("");
+  const ok = gateOk(p);
 
-  let body = "";
+  let head = "", body = "";
   if (s === 1){
-    body = `
+    head = `
       <div class="eyebrow">1단계 · 연필</div>
       <h2 class="t">원고지 2매 쓰기</h2>
       <p class="guide">손으로 400자를 종이에 씁니다.<br>고칠 생각 없이, 손이 가는 대로 끝까지 씁니다.</p>
-      ${p.carryHint ? `<div class="hintcard"><div class="lb">지난 회차의 집필 힌트</div><div class="tx">${esc(p.carryHint)}</div></div>` : ""}
+      ${p.carryHint ? `<div class="hintcard"><div class="lb">지난 회차의 집필 힌트</div><div class="tx">${esc(p.carryHint)}</div></div>` : ""}`;
+    body = `
       <div class="field">
         <label class="f" for="i-summary">방금 쓴 2매의 내용 요약</label>
         <textarea id="i-summary" rows="5" placeholder="무엇을 썼는지 몇 줄로 적습니다. 다음 단계에서 이 요약이 클립보드로 넘어갑니다.">${esc(d.summary)}</textarea>
@@ -395,10 +445,11 @@ function renderCycle(){
       <button class="done" data-act="next">2매를 다 썼습니다 <kbd>${CMD}</kbd></button>`;
   } else if (s === 2){
     const last = totalChars(p);
-    body = `
+    head = `
       <div class="eyebrow">2단계 · 원고지</div>
       <h2 class="t">스크리브너 타이핑</h2>
-      <p class="guide">손으로 쓴 2매를 스크리브너에서 타이핑하며 확장합니다.</p>
+      <p class="guide">손으로 쓴 2매를 스크리브너에서 타이핑하며 확장합니다.</p>`;
+    body = `
       <div class="field">
         <button class="ghost" data-act="scriv2">스크리브너 열기 <small>2매 요약을 복사합니다</small></button>
         <p class="hint">복사된 요약을 먼저 붙여 넣고, 그 아래부터 이어서 씁니다.</p>
@@ -419,10 +470,11 @@ function renderCycle(){
       </div>
       <button class="done" data-act="next">타이핑을 마쳤습니다 <kbd>${CMD}</kbd></button>`;
   } else {
-    body = `
+    head = `
       <div class="eyebrow">3단계 · 주묵</div>
       <h2 class="t">프린트 교정</h2>
-      <p class="guide">초고를 프린트한 뒤, 초고 위에서 작업합니다.</p>
+      <p class="guide">초고를 프린트한 뒤, 초고 위에서 작업합니다.</p>`;
+    body = `
       <div class="field">
         <button class="ghost" data-act="scriv3">스크리브너 열기 <small>멈춘 이유를 복사합니다</small></button>
         <p class="hint">복사된 이유를 원고 맨 위에 붙인 다음 프린트합니다. 종이 위에서 그 문장부터 읽으면 손이 먼저 움직입니다.</p>
@@ -434,9 +486,20 @@ function renderCycle(){
       <button class="done" data-act="next">교정을 마쳤습니다 · 다음 회차로 <kbd>${CMD}</kbd></button>`;
   }
 
+  const gate = !needGate(p) ? "" : `
+    <div class="gatewrap">
+      <label class="gate${ok ? " on" : ""}">
+        <input type="checkbox" id="i-gate"${ok ? " checked" : ""}>
+        <span>${GATES[s]}</span>
+      </label>
+      ${ok ? "" : `<p class="gatehint">${s===1 ? "지난 회차에 프린트해 둔 원고를 교열했다면 확인하고 시작합니다."
+        : s===2 ? "손으로 쓴 400자가 책상 위에 있다면 확인하고 시작합니다."
+        : "초고를 종이로 뽑았다면 확인하고 시작합니다."}</p>`}
+    </div>`;
+
   document.getElementById("view").innerHTML =
-    `<div style="--sc:${sc}"><div class="steps">${steps}</div><div class="card">${body}</div></div>`;
-  if (s === 2) calc();
+    `<div style="--sc:${sc}"><div class="steps">${steps}</div><div class="card">${head}${gate}${ok ? body : ""}</div></div>`;
+  if (ok && s === 2) calc();
 }
 
 function calc(){
@@ -454,6 +517,12 @@ function calc(){
 /* ── 단계 넘기기 ── */
 function next(){
   const p = P(), d = p.draft;
+  if (!gateOk(p)){
+    toast("먼저 체크포인트를 확인해 주세요");
+    const g = document.getElementById("i-gate");
+    if (g){ g.focus(); g.closest(".gate").scrollIntoView({block:"center",behavior:"smooth"}); }
+    return;
+  }
   if (p.stage === 1){
     if (!d.summary.trim()){ focus("i-summary"); toast("요약을 한 줄이라도 남겨 주세요"); return; }
     p.stage = 2;
@@ -466,7 +535,7 @@ function next(){
     p.entries.push({ id:uid(), cycle:p.cycle, ts:Date.now(), chars:v,
       tags:[...d.tags], note:d.note.trim(), summary:d.summary.trim(), hint:d.hint.trim() });
     p.carryHint = d.hint.trim();
-    p.cycle += 1; p.stage = 1; p.draft = blankDraft();
+    p.cycle += 1; p.stage = 1; p.draft = blankDraft(); p.lastUsed = Date.now();
     toast(`${p.cycle - 1}회차를 마쳤습니다`);
   }
   save(); renderHead(); renderCycle();
@@ -481,8 +550,11 @@ function allEntries(){
 }
 function todayAll(){
   const now = Date.now();
-  const t = allEntries().filter(e => sameDay(e.ts, now));
-  return { cycles: t.length, chars: t.reduce((a,b) => a + b.delta, 0) };
+  let cycles = 0, chars = 0;
+  S.projects.forEach(p => rows(p).forEach(e => {
+    if (sameDay(e.ts, now)){ cycles++; chars += e.delta; }
+  }));
+  return { cycles, chars };
 }
 const DOW = ["일","월","화","수","목","금","토"];
 function dayKey(ts){
@@ -511,10 +583,11 @@ function renderLog(){
     ${multi ? '<p class="hint" style="margin:-18px 0 24px">괄호 안은 오늘 모든 원고를 합한 수치입니다.</p>' : ""}`;
   })();
 
+  const rev = [...r].reverse(), showing = rev.slice(0, logLimit);
   const table = r.length ? `
     <table>
       <thead><tr><th>회차</th><th>적은 시각</th><th>누적 글자수</th><th>원고지 매수</th><th>멈춘 이유</th><th></th></tr></thead>
-      <tbody>${[...r].reverse().map(e => `
+      <tbody>${showing.map(e => `
         <tr>
           <td class="n">${e.cycle}회</td>
           <td class="n" style="color:var(--muted)">${stamp(e.ts)}</td>
@@ -525,7 +598,9 @@ function renderLog(){
           <td class="act"><button class="del" data-act="del" data-id="${e.id}" title="삭제">×</button></td>
         </tr>`).join("")}
       </tbody>
-    </table>` : `<p class="empty">아직 마친 회차가 없습니다.<br>3단계까지 한 바퀴를 돌면 여기 한 줄이 쌓입니다.</p>`;
+    </table>
+    ${rev.length > logLimit ? `<button class="ghost" data-act="more" style="margin-top:14px">이전 회차 더 보기 <small>남은 ${rev.length - logLimit}회차</small></button>` : ""}`
+    : `<p class="empty">아직 마친 회차가 없습니다.<br>3단계까지 한 바퀴를 돌면 여기 한 줄이 쌓입니다.</p>`;
 
   document.getElementById("view").innerHTML = head + table + `
     <div class="sec" style="margin-top:26px">
@@ -647,21 +722,164 @@ function buildPrompt(){
   ].filter(x => x !== null).join("\n");
 }
 
+/* ── 아카이브 ── */
+function arcStats(a){
+  const list = [...(a.entries||[])].sort((x,y) => x.cycle - y.cycle || x.ts - y.ts);
+  let prev = a.startChars || 0;
+  const deltas = list.map(e => { const d = e.chars - prev; prev = e.chars; return d; });
+  const final = list.length ? list[list.length-1].chars : (a.startChars || 0);
+  const days = new Set(list.map(e => dayKey(e.ts))).size;
+  const span = list.length ? Math.round((list[list.length-1].ts - list[0].ts) / 86400000) + 1 : 0;
+  const tags = {};
+  list.forEach(e => (e.tags||[]).forEach(t => tags[t] = (tags[t]||0) + 1));
+  const mean = arr => arr.length ? Math.round(arr.reduce((x,y) => x+y, 0) / arr.length) : 0;
+  const median = arr => {
+    if (!arr.length) return 0;
+    const q = [...arr].sort((x,y) => x-y), m = q.length >> 1;
+    return q.length % 2 ? q[m] : Math.round((q[m-1] + q[m]) / 2);
+  };
+  const k = Math.ceil(deltas.length / 3);
+  return {
+    list, deltas, final, days, span, tags,
+    avg: mean(deltas), med: median(deltas), cuts: deltas.filter(d => d < 0).length,
+    thirds: [mean(deltas.slice(0,k)), mean(deltas.slice(k, k*2)), mean(deltas.slice(k*2))]
+  };
+}
+
+function downloadJSON(obj, filename){
+  const url = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], {type:"application/json"}));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function archiveProject(id){
+  const x = S.projects.find(y => y.id === id); if (!x) return;
+  const st = arcStats({ entries:x.entries, startChars:x.startChars });
+  if (!confirm(
+    `'${x.name}'을 완료 처리합니다.\n\n최종 ${pg(st.final)}매 · ${x.entries.length}회차 완주\n\n`
+    + `전체 회차 기록은 파일로 내려받고, 앱에는 통계 요약만 남깁니다.\n`
+    + `그 파일로 언제든 되살릴 수 있습니다.`)) return;
+
+  downloadJSON({
+    kind: "순환-아카이브", name:x.name, goalPages:x.goalPages, startChars:x.startChars || 0,
+    use2667: x.use2667 !== false, finishedAt: Date.now(), entries: x.entries
+  }, `순환-${x.name}-${dayKey(Date.now()).replace(/-/g,"")}.json`);
+
+  S.archives.push({
+    id: uid(), name: x.name, goalPages: x.goalPages, startChars: x.startChars || 0,
+    cycles: st.list.length, finalChars: st.final,
+    startedAt: st.list.length ? st.list[0].ts : Date.now(), finishedAt: Date.now(),
+    days: st.days, span: st.span, avg: st.avg, med: st.med, cuts: st.cuts,
+    thirds: st.thirds, tags: st.tags
+  });
+
+  S.projects = S.projects.filter(y => y.id !== id);
+  if (!S.projects.length) S.projects.push(newProject("새 원고"));
+  if (S.activeId === id) S.activeId = S.projects[0].id;
+  save(); render(); toast("완료 처리하고 기록 파일을 내려받았습니다");
+}
+
+function restoreArchive(data){
+  if (!data || data.kind !== "순환-아카이브" || !Array.isArray(data.entries)) return false;
+  const np = newProject(data.name || "되살린 원고");
+  Object.assign(np, {
+    goalPages: data.goalPages || 80, startChars: data.startChars || 0,
+    use2667: data.use2667 !== false, entries: data.entries,
+    cycle: data.entries.length + 1
+  });
+  S.projects.push(np); S.activeId = np.id;
+  const same = S.archives.find(a => a.name === np.name && a.cycles === data.entries.length);
+  if (same) S.archives = S.archives.filter(a => a !== same);
+  save(); render(); toast(`'${np.name}'을 되살렸습니다`);
+  return true;
+}
+
+function buildPromptArchive(){
+  if (!S.archives.length) return null;
+  const all = [...S.archives].sort((a,b) => a.finishedAt - b.finishedAt);
+  const CAP = 20, shown = all.slice(-CAP), cut = all.length > CAP;
+
+  const sum = (f) => all.reduce((n,a) => n + (f(a) || 0), 0);
+  const tagAll = {};
+  all.forEach(a => Object.entries(a.tags || {}).forEach(([k,v]) => tagAll[k] = (tagAll[k]||0) + v));
+  const tagLine = o => Object.entries(o).sort((x,y) => y[1]-x[1]).map(([k,v]) => `${k} ${v}`).join(", ") || "-";
+
+  const blocks = shown.map((a,i) => [
+    `${all.length - shown.length + i + 1}) ${a.name}`,
+    `   기간: ${dayKey(a.startedAt)} ~ ${dayKey(a.finishedAt)} (달력 ${a.span}일 가운데 ${a.days}일 집필)`,
+    `   회차: ${a.cycles}회 / 최종 ${pg(a.finalChars)}매 (시작 ${pg(a.startChars)}매, 목표 ${a.goalPages}매)`,
+    `   회차당 순증: 평균 ${a.avg}자, 중앙값 ${a.med ?? "-"}자 / 초반 ${a.thirds[0]} · 중반 ${a.thirds[1]} · 후반 ${a.thirds[2]}`,
+    `   교정으로 덜어낸 회차: ${a.cuts}회`,
+    `   멈춘 이유: ${tagLine(a.tags || {})}`
+  ].join("\n"));
+
+  return [
+    "나는 소설을 쓰는 사람입니다. '손글씨 2매 → 스크리브너 타이핑 → 프린트 교정'을 한 회차로 삼아 반복하며 원고를 씁니다.",
+    `아래는 지금까지 완료한 원고 ${all.length}편의 집필 기록 요약입니다.`,
+    "순증이 음수인 회차는 새로 쓴 분량보다 교정으로 덜어낸 분량이 많았던 회차입니다. 실패가 아니라 원고를 조인 회차입니다.",
+    "",
+    "[전체 집계]",
+    `- 완료 ${all.length}편 / 총 ${sum(a => a.cycles)}회차 / 총 ${pg(sum(a => a.finalChars - a.startChars))}매`,
+    `- 편당 평균: ${Math.round(sum(a => a.cycles)/all.length)}회차, ${pg(sum(a => a.finalChars - a.startChars)/all.length)}매, 달력 ${Math.round(sum(a => a.span)/all.length)}일 가운데 ${Math.round(sum(a => a.days)/all.length)}일 집필`,
+    `- 멈춘 이유 총합: ${tagLine(tagAll)}`,
+    "",
+    cut ? `[최근 ${CAP}편] 전체 ${all.length}편 가운데 최근 ${CAP}편만 자세히 싣습니다.` : "[편별 기록]",
+    "",
+    ...blocks.map(b => b + "\n"),
+    "[요청] 완료한 원고들을 견주어 분석해 주세요.",
+    "1. 한 편을 끝내기까지의 리듬. 편마다 걸린 기간과 집필 밀도가 어떻게 달랐는지.",
+    "2. 초반·중반·후반 순증의 변화. 편마다 같은 모양으로 무너지거나 살아나는 구간이 있는지.",
+    "3. 평균과 중앙값의 벌어짐. 몰아 쓰는 편인지 고르게 쓰는 편인지, 편마다 다른지.",
+    "4. 멈춘 이유의 분포가 편마다 어떻게 다른지. 편이 바뀌어도 반복되는 나의 약점은 무엇인지.",
+    "5. 뒤에 쓴 원고일수록 나아진 지표와 오히려 나빠진 지표.",
+    "6. 목표 매수와 최종 매수의 차이. 내가 분량을 어떻게 잘못 어림하는 편인지.",
+    "7. 다음 원고를 시작할 때 미리 정해 두면 좋을 것 두세 가지. 이 기록에서 읽히는 것만."
+  ].join("\n");
+}
+
+function projListHTML(){
+  const p = P();
+  const q = projQ.trim().toLowerCase();
+  const hit = S.projects.filter(x => !q || x.name.toLowerCase().includes(q));
+  const view = hit.slice(0, LIST_MAX);
+  if (!hit.length) return `<div class="pitem"><span style="font-weight:400;color:var(--muted)">찾는 원고가 없습니다</span></div>`;
+  return view.map(x => `
+    <div class="pitem${x.id===p.id?" on":""}">
+      <span>${esc(x.name)}</span>
+      <em>${x.cycle}회차 · ${pg(totalChars(x))}매</em>
+      ${x.id===p.id ? "" : `<button data-act="pick" data-id="${x.id}">열기</button>`}
+      <button data-act="rename" data-id="${x.id}">이름</button>
+      <button data-act="pdel" data-id="${x.id}">삭제</button>
+    </div>`).join("")
+    + (hit.length > LIST_MAX
+      ? `<div class="pitem"><span style="font-weight:400;color:var(--muted)">${hit.length}개 가운데 ${LIST_MAX}개만 보입니다. 이름으로 찾으세요.</span></div>` : "");
+}
+
+function arcListHTML(){
+  const q = arcQ.trim().toLowerCase();
+  const hit = [...S.archives].sort((a,b) => b.finishedAt - a.finishedAt)
+    .filter(a => !q || a.name.toLowerCase().includes(q));
+  if (!hit.length) return `<div class="pitem"><span style="font-weight:400;color:var(--muted)">찾는 원고가 없습니다</span></div>`;
+  return hit.slice(0, LIST_MAX).map(a => `
+    <div class="pitem">
+      <span>${esc(a.name)}</span>
+      <em>${pg(a.finalChars)}매 · ${a.cycles}회차 · ${dayKey(a.finishedAt).slice(2)}</em>
+      <button data-act="arcdel" data-id="${a.id}">삭제</button>
+    </div>`).join("")
+    + (hit.length > LIST_MAX
+      ? `<div class="pitem"><span style="font-weight:400;color:var(--muted)">${hit.length}편 가운데 ${LIST_MAX}편만 보입니다. 이름으로 찾으세요.</span></div>` : "");
+}
+
 /* ── 설정 탭 ── */
 function renderSet(){
   const p = P();
   document.getElementById("view").innerHTML = `
     <div class="sec">
-      <h3>원고</h3>
-      <div class="plist">${S.projects.map(x => `
-        <div class="pitem${x.id===p.id?" on":""}">
-          <span>${esc(x.name)}</span>
-          <em>${x.cycle}회차 · ${pg(totalChars(x))}매</em>
-          ${x.id===p.id ? "" : `<button data-act="pick" data-id="${x.id}">열기</button>`}
-          <button data-act="rename" data-id="${x.id}">이름</button>
-          <button data-act="pdel" data-id="${x.id}">삭제</button>
-        </div>`).join("")}
-      </div>
+      <h3>원고${S.projects.length > LIST_MAX ? " · " + S.projects.length + "편" : ""}</h3>
+      ${S.projects.length > LIST_MAX
+        ? `<input type="text" id="i-projq" placeholder="원고 이름으로 찾기" value="${esc(projQ)}" style="margin-bottom:10px">` : ""}
+      <div class="plist" id="plist">${projListHTML()}</div>
       <div class="row"><input type="text" id="i-newproj" placeholder="새 원고 이름"><button class="ghost" data-act="padd">추가</button></div>
     </div>
 
@@ -685,6 +903,26 @@ function renderSet(){
         <input type="url" id="i-scriv" placeholder="x-scrivener-item://... 또는 file:///..." value="${esc(p.scrivenerUrl)}">
         <p class="hint">스크리브너에서 문서를 오른쪽 클릭해 링크를 복사하거나, 프로젝트 파일 경로를 붙여 넣습니다. 2·3단계 버튼이 이 주소를 엽니다.</p>
       </div>
+      <div class="field" style="margin-bottom:0">
+        <button class="ghost fin" data-act="finish" data-id="${p.id}">이 원고를 완료하고 보관하기</button>
+        <p class="hint">지금까지의 회차 기록을 묶어 아카이브로 옮깁니다. 현재 ${p.entries.length}회차 · ${pg(totalChars(p))}매.</p>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>완료한 원고${S.archives.length ? " · " + S.archives.length + "편" : ""}</h3>
+      ${S.archives.length ? `
+        ${S.archives.length > LIST_MAX
+          ? `<input type="text" id="i-arcq" placeholder="완료한 원고 찾기" value="${esc(arcQ)}" style="margin-bottom:10px">` : ""}
+        <div class="plist" id="arclist">${arcListHTML()}</div>
+        <button class="ghost" data-act="promptArc">완료한 원고 분석 프롬프트</button>
+        <div id="promptBox"></div>`
+        : `<p class="hint" style="margin:0 0 14px">아직 완료한 원고가 없습니다. 한 편을 마치면 여기 쌓이고, 여러 편을 견주는 분석 프롬프트를 만들 수 있습니다.</p>`}
+      <div class="row" style="margin-top:12px">
+        <button class="ghost" data-act="restoreBtn">기록 파일로 되살리기</button>
+      </div>
+      <input type="file" id="i-arcfile" accept="application/json,.json" style="display:none">
+      <p class="hint">완료할 때 내려받은 <b>순환-원고이름-날짜.json</b> 파일을 고르면 그 원고를 다시 쓰는 목록으로 되살립니다.</p>
     </div>
 
     <div class="sec">
@@ -694,7 +932,18 @@ function renderSet(){
         <button class="ghost" data-act="importBtn">복원하기</button>
       </div>
       <input type="file" id="i-file" accept="application/json,.json" style="display:none">
-      <p class="hint">모든 원고와 회차 기록이 JSON 한 파일로 저장됩니다. 복원하면 지금 데이터를 덮어씁니다.</p>
+      <p class="hint">모든 원고와 완료 기록이 JSON 한 파일로 저장됩니다. 복원하면 지금 데이터를 덮어씁니다.</p>
+      ${(() => {
+        const u = usage(), LIMIT = 5 * 1024 * 1024, r = Math.min(100, u / LIMIT * 100);
+        const col = r > 85 ? "var(--s3)" : r > 60 ? "var(--s1)" : "var(--s2)";
+        return `<div style="margin-top:18px">
+          <div style="height:6px;background:var(--line);border-radius:2px;overflow:hidden">
+            <div style="width:${r.toFixed(1)}%;height:100%;background:${col}"></div>
+          </div>
+          <p class="hint" style="margin-top:7px">브라우저 저장 공간 ${(u/1048576).toFixed(2)}MB / 약 5MB 사용 중 (${Math.round(r)}%).
+          ${r > 60 ? "완료한 원고를 보관해 자리를 비우면 줄어듭니다." : "회차 기록 수천 건까지는 넉넉합니다."}</p>
+        </div>`;
+      })()}
     </div>`;
 }
 
@@ -711,7 +960,7 @@ function render(){
 /* ── 이벤트 ── */
 document.addEventListener("click", e => {
   const nav = e.target.closest("nav button");
-  if (nav){ tab = nav.dataset.tab; render(); return; }
+  if (nav){ tab = nav.dataset.tab; logLimit = 50; projQ = ""; arcQ = ""; render(); return; }
 
   const b = e.target.closest("[data-act]"); if (!b) return;
   const p = P(), a = b.dataset.act;
@@ -744,7 +993,7 @@ document.addEventListener("click", e => {
     showPrompt(t);
   }
   else if (a === "pcopy") copy(lastPrompt, "프롬프트를 복사했습니다");
-  else if (a === "pick"){ S.activeId = b.dataset.id; save(); render(); }
+  else if (a === "pick"){ S.activeId = b.dataset.id; P().lastUsed = Date.now(); logLimit = 50; save(); render(); }
   else if (a === "padd"){
     const el = document.getElementById("i-newproj"), n = el.value.trim();
     const np = newProject(n || "새 원고");
@@ -762,12 +1011,23 @@ document.addEventListener("click", e => {
     if (S.activeId === x.id) S.activeId = S.projects[0].id;
     save(); render();
   }
+  else if (a === "finish") archiveProject(b.dataset.id);
+  else if (a === "restoreBtn") document.getElementById("i-arcfile").click();
+  else if (a === "more"){ logLimit += 100; renderLog(); }
+  else if (a === "arcdel"){
+    const x = S.archives.find(y => y.id === b.dataset.id); if (!x) return;
+    if (!confirm(`'${x.name}'의 완료 기록을 지울까요?\n앱에서만 지워지고, 내려받아 둔 기록 파일은 그대로 남습니다.`)) return;
+    S.archives = S.archives.filter(y => y.id !== x.id);
+    save(); render(); toast("지웠습니다");
+  }
+  else if (a === "promptArc"){
+    const t = buildPromptArchive();
+    if (!t){ toast("완료한 원고가 없습니다"); return; }
+    showPrompt(t);
+  }
   else if (a === "export"){
-    const d = new Date(), pad = n => String(n).padStart(2,"0");
-    const url = URL.createObjectURL(new Blob([JSON.stringify(S,null,2)], {type:"application/json"}));
-    const link = document.createElement("a");
-    link.href = url; link.download = `순환-백업-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
-    link.click(); URL.revokeObjectURL(url); toast("백업 파일을 내려받았습니다");
+    downloadJSON(S, `순환-백업-${dayKey(Date.now()).replace(/-/g,"")}.json`);
+    toast("백업 파일을 내려받았습니다");
   }
   else if (a === "importBtn") document.getElementById("i-file").click();
 });
@@ -790,14 +1050,34 @@ document.addEventListener("input", e => {
     const h = e.target.parentNode.querySelector(".hint b");
     if (h) h.textContent = pg(p.startChars) + "매";
   }
+  else if (id === "i-projq"){ projQ = v; document.getElementById("plist").innerHTML = projListHTML(); return; }
+  else if (id === "i-arcq"){ arcQ = v; document.getElementById("arclist").innerHTML = arcListHTML(); return; }
   else if (id === "i-scriv"){ p.scrivenerUrl = v.trim(); }
   else return;
   save();
 });
 
 document.addEventListener("change", e => {
+  if (e.target.id === "i-gate"){
+    const p = P();
+    p.draft.gate[p.stage] = e.target.checked;
+    save(); renderCycle();
+    return;
+  }
   if (e.target.id === "i-2667"){ P().use2667 = e.target.checked; save(); renderHead(); return; }
-  if (e.target.id === "projSel"){ S.activeId = e.target.value; save(); render(); return; }
+  if (e.target.id === "projSel"){ S.activeId = e.target.value; P().lastUsed = Date.now(); logLimit = 50; save(); render(); return; }
+  if (e.target.id === "i-arcfile"){
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try{
+        if (!restoreArchive(JSON.parse(rd.result))) toast("순환 아카이브 파일이 아닙니다");
+      }catch(_){ toast("읽을 수 없는 파일입니다"); }
+      e.target.value = "";
+    };
+    rd.readAsText(f);
+    return;
+  }
   if (e.target.id === "i-file"){
     const f = e.target.files[0]; if (!f) return;
     const rd = new FileReader();
