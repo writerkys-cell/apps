@@ -71,18 +71,18 @@
   input:focus, textarea:focus, select:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(22,24,26,.06)}
   label.f{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;color:var(--muted);margin:0 0 6px}
 
-  button.btn{
-    all:unset;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
-    font-size:13px;font-weight:500;padding:9px 16px;border-radius:2px;
-    background:var(--ink);color:#fff;letter-spacing:-.01em;
+  .btn{
+    all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    font-family:var(--sans);font-size:13px;font-weight:500;padding:9px 16px;border-radius:2px;
+    background:var(--ink);color:#fff;letter-spacing:-.01em;text-decoration:none;
   }
-  button.btn:hover{background:#000}
-  button.btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--rule)}
-  button.btn.ghost:hover{border-color:var(--ink-2);color:var(--ink)}
-  button.btn.quiet{background:transparent;color:var(--muted);padding:6px 0;font-size:12px}
-  button.btn.quiet:hover{color:var(--ink)}
-  button.btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
-  button.btn[disabled]{opacity:.35;cursor:not-allowed}
+  .btn:hover{background:#000;color:#fff}
+  .btn.ghost{background:transparent;color:var(--ink-2);border:1px solid var(--rule)}
+  .btn.ghost:hover{background:transparent;border-color:var(--ink-2);color:var(--ink)}
+  .btn.quiet{background:transparent;color:var(--muted);padding:6px 0;font-size:12px}
+  .btn.quiet:hover{background:transparent;color:var(--ink)}
+  .btn:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+  .btn[disabled]{opacity:.35;cursor:not-allowed}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 
   /* ── 링크 담기 ── */
@@ -338,6 +338,7 @@ function parseSpotify(url){
 }
 const embedUrl = id => "https://open.spotify.com/embed/album/"+id+"?utm_source=generator";
 const openUrl  = id => "https://open.spotify.com/album/"+id;
+const appUrl   = id => "spotify:album:"+id;
 
 async function fetchMeta(id){
   try{
@@ -494,13 +495,25 @@ function todayCard(a){
   const playRow = document.createElement("div");
   playRow.className = "row"; playRow.style.marginTop="20px";
   playRow.appendChild(playBtn);
-  const openA = document.createElement("a");
-  openA.href = openUrl(a.sid); openA.target="_blank"; openA.rel="noopener";
-  openA.className="btn ghost"; openA.textContent="스포티파이에서 열기";
-  openA.style.textDecoration="none";
-  playRow.appendChild(openA);
+
+  const openApp = document.createElement("a");
+  openApp.href = appUrl(a.sid);
+  openApp.className = "btn ghost"; openApp.textContent = "앱에서 열기";
+  playRow.appendChild(openApp);
+
+  const openWeb = document.createElement("a");
+  openWeb.href = openUrl(a.sid); openWeb.target = "_blank"; openWeb.rel = "noopener";
+  openWeb.className = "btn quiet"; openWeb.textContent = "웹 플레이어";
+  playRow.appendChild(openWeb);
+
   box.appendChild(playRow);
   box.appendChild(player);
+
+  const pHint = document.createElement("p");
+  pHint.className = "hint";
+  pHint.textContent = "여기 재생기는 브라우저에 스포티파이 로그인이 남아 있을 때만 전곡이 나옵니다. 종일 들으실 거면 앱에서 열기 쪽이 낫습니다.";
+  pHint.hidden = true;
+  box.appendChild(pHint);
 
   playBtn.addEventListener("click", ()=>{
     if(player.dataset.on) return;
@@ -513,6 +526,7 @@ function todayCard(a){
     playBtn.textContent = "재생 중";
     playBtn.disabled = true;
     disc.classList.add("spin");
+    pHint.hidden = false;
   });
 
   // 별점
@@ -627,9 +641,13 @@ function shelfItem(a){
   const tools = document.createElement("div");
   tools.className="i-tools";
   const again = document.createElement("button"); again.textContent="다시 듣기";
+  const inApp = document.createElement("a"); inApp.textContent="앱에서 열기"; inApp.href=appUrl(a.sid);
+  inApp.style.cssText="font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-decoration:none";
+  inApp.addEventListener("mouseenter",()=>inApp.style.color="var(--ink)");
+  inApp.addEventListener("mouseleave",()=>inApp.style.color="var(--muted)");
   const edit  = document.createElement("button"); edit.textContent="고치기";
   const del   = document.createElement("button"); del.textContent="지우기";
-  tools.appendChild(again); tools.appendChild(edit); tools.appendChild(del);
+  tools.appendChild(again); tools.appendChild(inApp); tools.appendChild(edit); tools.appendChild(del);
   body.appendChild(tools);
 
   const pl = document.createElement("div");
