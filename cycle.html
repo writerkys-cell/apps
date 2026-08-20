@@ -317,10 +317,11 @@ function load(){
     if (r && Array.isArray(r.projects) && r.projects.length) return migrate(r);
   }catch(e){}
   const p = newProject("첫 원고");
-  return { version:1, activeId:p.id, projects:[p], archives:[] };
+  return { version:1, activeId:p.id, projects:[p], archives:[], settings:{ shortcut:"알람", minutes:25 } };
 }
 function migrate(r){
   r.archives = Array.isArray(r.archives) ? r.archives : [];
+  r.settings = Object.assign({ shortcut:"알람", minutes:25 }, r.settings || {});
   r.projects.forEach(x => {
     x.draft = x.draft || blankDraft(); x.draft.gate = x.draft.gate || {};
     x.carryTail = x.carryTail || "";
@@ -378,6 +379,17 @@ async function copy(text, msg){
     document.body.removeChild(ta);
   }
   toast(msg || "복사했습니다"); return true;
+}
+function shortcutOn(){
+  const s = S.settings || {};
+  return !!(s.shortcut && s.shortcut.trim() && parseInt(s.minutes,10) > 0);
+}
+function runShortcut(){
+  if (!shortcutOn()) return;
+  const s = S.settings;
+  const url = "shortcuts://run-shortcut?name=" + encodeURIComponent(s.shortcut.trim())
+    + "&input=text&text=" + encodeURIComponent(String(parseInt(s.minutes,10)));
+  setTimeout(() => { try{ window.location.href = url; }catch(e){} }, 400);
 }
 function openScrivener(p){
   if (!p.scrivenerUrl){ toast("설정에서 스크리브너 주소를 등록하세요"); return; }
@@ -548,7 +560,7 @@ function renderCycle(){
       <p class="guide">손으로 쓴 노트 한 장을 스크리브너에서 타이핑하며 확장합니다.</p>`;
     body = `
       <div class="field">
-        <button class="ghost" data-act="scriv2">스크리브너 열기 <small>깨달은 것을 복사합니다</small></button>
+        <button class="ghost" data-act="scriv2">스크리브너 열기 <small>깨달은 것을 복사${shortcutOn() ? `하고 ${S.settings.minutes}분 알람` : ""}합니다</small></button>
         <p class="hint">복사한 메모를 곁에 두고, 노트에 쓴 것을 이어서 타이핑합니다.</p>
       </div>
       <div class="field">
@@ -584,7 +596,7 @@ function renderCycle(){
       <p class="guide">교열한 종이를 옆에 놓고, 스크리브너에서 원고를 고쳐 씁니다.<br>이 단계에서는 프린트하지 않습니다.</p>`;
     body = `
       <div class="field">
-        <button class="ghost" data-act="scriv4">스크리브너 열기 <small>개작 방향을 복사합니다</small></button>
+        <button class="ghost" data-act="scriv4">스크리브너 열기 <small>개작 방향을 복사${shortcutOn() ? `하고 ${S.settings.minutes}분 알람` : ""}합니다</small></button>
         <p class="hint">종이의 교정 부호를 따라가며 원고를 고칩니다. 여기까지가 한 회차입니다.</p>
       </div>
       <div class="field">
@@ -1108,6 +1120,22 @@ function renderSet(){
     </div>
 
     <div class="sec">
+      <h3>작업 알람 단축어</h3>
+      <div class="row">
+        <div style="flex:1;min-width:0">
+          <label class="f" for="i-sc-name">애플 단축어 이름</label>
+          <input type="text" id="i-sc-name" placeholder="알람" value="${esc((S.settings.shortcut)||"")}">
+        </div>
+        <div style="flex:0 0 96px">
+          <label class="f" for="i-sc-min">분</label>
+          <input type="number" id="i-sc-min" min="0" step="1" value="${parseInt(S.settings.minutes,10)||0}">
+        </div>
+      </div>
+      <p class="hint">2단계와 4단계에서 ‘스크리브너 열기’를 누르면, 이 이름의 단축어에 <b>${parseInt(S.settings.minutes,10)||0}</b>이라는 숫자를 입력으로 보냅니다. 단축어 안에서 그 숫자를 받아 타이머를 걸도록 만들어 두면 됩니다. 3단계는 종이 작업이라 알람을 걸지 않습니다. 이름을 비우거나 0분으로 두면 실행하지 않습니다.</p>
+      <div class="row" style="margin-top:10px"><button class="ghost" data-act="testSc">단축어 실행해 보기</button></div>
+    </div>
+
+    <div class="sec">
       <h3>백업</h3>
       <div class="row">
         <button class="ghost" data-act="export">백업 파일 내려받기</button>
@@ -1149,9 +1177,9 @@ document.addEventListener("click", e => {
 
   if (a === "next") next();
   else if (a === "pdf") exportNotePDF();
-  else if (a === "scriv2"){ copy(p.draft.insight, "깨달은 것을 복사했습니다"); openScrivener(p); }
+  else if (a === "scriv2"){ copy(p.draft.insight, "깨달은 것을 복사했습니다"); openScrivener(p); runShortcut(); }
   else if (a === "scriv3"){ copy(p.draft.proof, "교열의 방향을 복사했습니다"); openScrivener(p); }
-  else if (a === "scriv4"){ copy(p.draft.plan, "개작 방향을 복사했습니다"); openScrivener(p); }
+  else if (a === "scriv4"){ copy(p.draft.plan, "개작 방향을 복사했습니다"); openScrivener(p); runShortcut(); }
   else if (a === "feel" || a === "feel2"){
     const key = a, t = b.dataset.t;
     p.draft[key] = (p.draft[key] === t) ? "" : t;
@@ -1211,6 +1239,10 @@ document.addEventListener("click", e => {
     if (!t){ toast("완료한 원고가 없습니다"); return; }
     showPrompt(t);
   }
+  else if (a === "testSc"){
+    if (!shortcutOn()){ toast("단축어 이름과 분을 먼저 채워 주세요"); return; }
+    runShortcut(); toast(`‘${S.settings.shortcut}’에 ${S.settings.minutes}를 보냅니다`);
+  }
   else if (a === "export"){
     downloadJSON(S, `순환-백업-${dayKey(Date.now()).replace(/-/g,"")}.json`);
     toast("백업 파일을 내려받았습니다");
@@ -1241,6 +1273,13 @@ document.addEventListener("input", e => {
   }
   else if (id === "i-projq"){ projQ = v; document.getElementById("plist").innerHTML = projListHTML(); return; }
   else if (id === "i-arcq"){ arcQ = v; document.getElementById("arclist").innerHTML = arcListHTML(); return; }
+  else if (id === "i-sc-name"){ S.settings.shortcut = v; save(); return; }
+  else if (id === "i-sc-min"){
+    S.settings.minutes = Math.max(0, parseInt(v,10) || 0);
+    const b = e.target.closest(".sec").querySelector(".hint b");
+    if (b) b.textContent = S.settings.minutes;
+    save(); return;
+  }
   else if (id === "i-scriv"){ p.scrivenerUrl = v.trim(); }
   else return;
   save();
