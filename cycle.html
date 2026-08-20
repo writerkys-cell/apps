@@ -78,6 +78,7 @@ select.proj{
 .gwrap.solo .gbar{margin-top:0;height:16px}
 .gbar{margin-top:4px;height:11px;background:var(--line);overflow:hidden;position:relative}
 .gbar i{display:block;height:100%;transition:width .5s ease;box-shadow:1px 0 0 var(--s3)}
+.gbar u{position:absolute;top:0;bottom:0;width:1px;background:var(--s4);opacity:.9;display:none}
 .qtick{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--s3);opacity:.55;pointer-events:none}
 .qtick b{
   position:absolute;top:-13px;left:50%;transform:translateX(-50%);
@@ -271,7 +272,7 @@ label.sw input{width:16px;height:16px;accent-color:var(--s2);margin:0;cursor:poi
     </div>
     <div class="gwrap" id="gWrap">
       <div class="gseg" id="gSeg"></div>
-      <div class="gbar"><i id="gFill"></i></div>
+      <div class="gbar"><i id="gFill"></i><u id="gMark"></u></div>
       <div class="qtick" style="left:25%"><b>¼</b></div>
       <div class="qtick" style="left:50%"><b>½</b></div>
       <div class="qtick" style="left:75%"><b>¾</b></div>
@@ -357,6 +358,14 @@ function rows(p){
   });
 }
 const totalChars = p => { const r = rows(p); return r.length ? r[r.length-1].chars : (p.startChars || 0); };
+/* 아직 기록되지 않은 이번 회차의 숫자까지 반영한 현재 글자수 */
+function liveChars(p){
+  const d = p.draft || {};
+  const v4 = parseInt(d.final, 10), v2 = parseInt(d.chars, 10);
+  if (!isNaN(v4) && v4 >= 0) return v4;
+  if (!isNaN(v2) && v2 >= 0) return v2;
+  return totalChars(p);
+}
 const pagesOf = c => c / 200;
 const fmt = n => n.toLocaleString("ko-KR");
 const pg = c => (c/200).toFixed(1);
@@ -413,11 +422,14 @@ function renderHead(){
 
   document.getElementById("cycleNo").innerHTML = `<span>제</span><b>${p.cycle}</b><span>회차</span>`;
 
-  const c = totalChars(p), pgs = pagesOf(c), goal = p.goalPages || 80;
+  const rec = totalChars(p), c = liveChars(p), pend = c - rec;
+  const pgs = pagesOf(c), goal = p.goalPages || 80;
+  const pendCol = pend < 0 ? "var(--s4)" : "var(--s2)";
   const start = p.startChars || 0, spg = pagesOf(start), diff = pgs - spg;
   document.getElementById("cycleMeta").innerHTML =
     `<b>${pgs.toFixed(1)}매</b> / ${goal}매<br>${fmt(c)}자 · ${p.entries.length}회 완주`
-    + (start ? `<br>이 순환으로 ${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)}매` : "");
+    + (start ? `<br>이 순환으로 ${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)}매` : "")
+    + (pend ? `<br><span style="color:${pendCol}">이번 회차 ${pend > 0 ? "+" : "−"}${fmt(Math.abs(pend))}자</span>` : "");
 
   const UNIT = 2667, goalChars = goal * 200, on2667 = p.use2667 !== false;
   const n = Math.max(1, Math.ceil(goalChars / UNIT));
@@ -439,10 +451,19 @@ function renderHead(){
     }).join("");
 
   const pct = Math.max(0, Math.min(100, c / goalChars * 100));
+  const recPct = Math.max(0, Math.min(100, rec / goalChars * 100));
   const cPct = Math.max(0, Math.min(pct, start / goalChars * 100));
-  const rel = pct > 0 ? (cPct / pct * 100).toFixed(1) : 0;
+  const rel = pct > 0 ? (cPct / pct * 100) : 0;
+  const inkEnd = pct > 0 ? Math.max(rel, Math.min(100, recPct / pct * 100)) : 100;
   document.getElementById("gFill").style.cssText =
-    `width:${pct.toFixed(2)}%;background:linear-gradient(to right,color-mix(in srgb,var(--ink) 32%,var(--line)) 0 ${rel}%,var(--ink) ${rel}% 100%)`;
+    `width:${pct.toFixed(2)}%;background:linear-gradient(to right,`
+    + `color-mix(in srgb,var(--ink) 32%,var(--line)) 0 ${rel.toFixed(1)}%,`
+    + `var(--ink) ${rel.toFixed(1)}% ${inkEnd.toFixed(1)}%,`
+    + `var(--s2) ${inkEnd.toFixed(1)}% 100%)`;
+
+  const mk = document.getElementById("gMark");
+  if (pend < 0){ mk.style.display = "block"; mk.style.left = recPct.toFixed(2) + "%"; }
+  else mk.style.display = "none";
 
   const q = Math.max(1, Math.min(4, Math.floor(pct / 25) + 1));
   document.getElementById("gaugeCap").innerHTML = on2667
@@ -1257,8 +1278,8 @@ document.addEventListener("input", e => {
   else if (id === "i-proof") p.draft.proof = v;
   else if (id === "i-plan") p.draft.plan = v;
   else if (id === "i-hint") p.draft.hint = v;
-  else if (id === "i-chars"){ p.draft.chars = v; calc(); }
-  else if (id === "i-final"){ p.draft.final = v; calc(); }
+  else if (id === "i-chars"){ p.draft.chars = v; calc(); renderHead(); }
+  else if (id === "i-final"){ p.draft.final = v; calc(); renderHead(); }
   else if (id === "i-goal"){
     p.goalPages = Math.max(1, parseInt(v,10) || 80); renderHead();
     const box = document.getElementById("i-2667");
