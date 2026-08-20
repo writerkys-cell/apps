@@ -340,17 +340,135 @@ const embedUrl = id => "https://open.spotify.com/embed/album/"+id+"?utm_source=g
 const openUrl  = id => "https://open.spotify.com/album/"+id;
 const appUrl   = id => "spotify:album:"+id;
 
-async function fetchMeta(id){
-  try{
-    const r = await fetch("https://open.spotify.com/oembed?url="+encodeURIComponent(openUrl(id)), {mode:"cors"});
-    if(!r.ok) throw 0;
-    const j = await r.json();
-    return { title:(j.title||"").trim(), cover:j.thumbnail_url||"" };
-  }catch(e){ return null; }
+/* ────────── 앨범 정보 가져오기 ──────────
+   스포티파이 oEmbed는 앨범 이름과 표지만 돌려줍니다. 응답 명세에 아티스트
+   항목 자체가 없어서, 뒤로 두 군데를 더 두고 차례로 물어봅니다.          */
+
+function withTimeout(p, ms){
+  return Promise.race([ p, new Promise((_,rej)=>setTimeout(()=>rej(new Error("느림")), ms)) ]);
 }
 
-/* ────────── 별점 ────────── */
-const starText = v => { // 목록용 문자 별
+// 1. 스포티파이 oEmbed — 앨범 이름과 표지
+async function fromOembed(id){
+  const r = await withTimeout(fetch("https://open.spotify.com/oembed?url="+encodeURIComponent(openUrl(id)), {mode:"cors"}), 7000);
+  if(!r.ok) throw new Error("oembed "+r.status);
+  const j = await r.json();
+  return { title:(j.title||"").trim(), cover:j.thumbnail_url||"", artist:"" };
+}
+
+// 2. Odesli — 스포티파이 앨범 주소를 그대로 넘기면 아티스트 이름이 옵니다
+async function fromOdesli(id){
+  const u = "https://api.song.link/v1-alpha.1/links?songIfSingle=false&url=" + encodeURIComponent(openUrl(id));
+  const r = await withTimeout(fetch(u, {mode:"cors"}), 8000);
+  if(!r.ok) throw new Error("odesli "+r.status);
+  const j = await r.json();
+  const box = j.entitiesByUniqueId || {};
+  const e = box["SPOTIFY_ALBUM::"+id] || box[j.entityUniqueId] || Object.values(box)[0];
+  if(!e) throw new Error("odesli 빈 응답");
+  return { title:(e.title||"").trim(), artist:(e.artistName||"").trim(), cover:e.thumbnailUrl||"" };
+}
+
+// 3. 아이튠즈 — 앨범 이름으로 찾습니다. JSONP라 CORS를 타지 않습니다
+function fromItunes(term){
+  return new Promise((res, rej)=>{
+    const cb = "oe_cb_" + Math.random().toString(36).slice(2,9);
+    const s = document.createElement("script");
+    const t = setTimeout(()=>{ done(); rej(new Error("느림")); }, 8000);
+    function done(){ clearTimeout(t); try{ delete window[cb]; }catch(e){} s.remove(); }
+    window[cb] = d => {
+      const r = d && d.results && d.results[0];
+      done();
+      if(!r) return rej(new Error("itunes 빈 응답"));
+      res({
+        title:(r.collectionName||"").trim(),
+        artist:(r.artistName||"").trim(),
+        cover:(r.artworkUrl100||"").replace("100x100","600x600")
+      });
+    };
+    s.onerror = ()=>{ done(); rej(new Error("itunes 연결 실패")); };
+    s.src = "https://itunes.apple.com/search?media=music&entity=album&limit=1&callback="+cb+"&term="+encodeURIComponent(term);
+    document.head.appendChild(s);
+  });
+}
+
+async function fetchMeta(id){
+  const out = { title:"", artist:"", cover:"", guessed:false, got:false };
+
+  try{
+    const a = await fromOembed(id);
+    out.title = a.title; out.cover = a.cover; out.got = true;
+  }catch(e){ console.warn("oEmbed:", e.message); }
+
+  try{
+    const b = await fromOdesli(id);
+    if(b.artist) out.artist = b.artist;
+    if(!out.title && b.title) out.title = b.title;
+    if(!out.cover && b.cover) out.cover = b.cover;
+    if(b.artist || b.title) out.got = true;
+  }catch(e){ console.warn("Odesli:", e.message); }
+
+  if(!out.artist && out.title){
+    try{
+      const c = await fromItunes(out.title);
+      if(c.artist){ out.artist = c.artist; out.guessed = true; }
+      if(!out.cover && c.cover) out.cover = c.cover;
+    }catch(e){ console.warn("아이튠즈:", e.message); }
+  }
+  return out;
+}
+
+/* ────────── 복사 ────────── */
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(e2){}
+    ta.remove();
+  }
+}
+
+/* ────────── 소개 프롬프트 ────────── */
+function buildIntroPrompt(a){
+  const name = (a.artist ? a.artist + "의 《" + a.title + "》" : "《" + a.title + "》");
+  let p = "";
+  p += "오늘 하루 종일 들을 음반으로 " + name + "을 골랐습니다.\n";
+  p += openUrl(a.sid) + "\n";
+  if(a.why) p += "(당신이 이렇게 추천해 주었습니다: " + a.why + ")\n";
+  p += "\n지금 막 재생을 눌렀습니다. 듣는 내내 곁에 두고 읽을 안내를 써 주세요.\n";
+  p += "실재하는 음반인지, 사실관계가 맞는지 웹에서 확인해 주시고, 확실하지 않은 것은 확실하지 않다고 말해 주세요.\n";
+  p += "모르는 것을 그럴듯하게 지어내는 쪽보다, 모른다고 하는 쪽이 훨씬 낫습니다.\n\n";
+  p += "이 순서로 부탁합니다.\n\n";
+  p += "1. 아티스트\n";
+  p += "   어떤 사람이고 어디쯤에 서 있는 음악인지. 어떤 계보에서 왔고 무엇을 물려주었는지.\n\n";
+  p += "2. 이 음반\n";
+  p += "   언제 어떤 상황에서 만들어졌는지. 그의 다른 작품들 사이에서 어떤 자리에 놓이는지.\n";
+  p += "   당대에는 어떻게 받아들여졌고 지금은 어떻게 읽히는지.\n\n";
+  p += "3. 어떻게 들으면 좋을지\n";
+  p += "   전체를 관통하는 흐름이 있는지, 곡 순서가 뜻을 갖는지.\n";
+  p += "   귀를 어디에 두면 좋을지 — 연주, 편곡, 목소리, 가사, 녹음의 질감 가운데 무엇을.\n";
+  p += "   어떤 자리에서 어떤 소리 크기로 듣는 것이 어울리는지.\n\n";
+  p += "4. 곡을 따라가며\n";
+  p += "   재생을 눌러 두고 설명을 따라 들을 수 있도록, 곡 순서대로 짚어 주세요.\n";
+  p += "   각 곡이 무엇을 하는 곡인지, 앞뒤 곡과 어떻게 이어지는지.\n";
+  p += "   좋은 대목은 아끼지 말고 미리 알려 주세요. 몇 번째 곡의 몇 분쯤에\n";
+  p += "   무엇이 일어나는지, 시간까지 적어 주시면 가장 좋습니다.\n\n";
+  p += "5. 두 번째로 들을 때 달라지는 것\n\n";
+
+  const loved = db.albums
+    .filter(x => x.status==="logged" && x.rating>=4 && x.id!==a.id)
+    .sort((x,y)=>y.rating-x.rating).slice(0,8);
+  if(loved.length){
+    p += "제가 높게 매긴 음반들은 이렇습니다. 이 가운데 이어지는 것이 있다면 짚어 주세요.\n";
+    p += loved.map(x => "· " + (x.artist||"?") + " — " + (x.title||"?")).join("\n") + "\n\n";
+  }
+
+  p += "분량은 아끼지 말고 자세히 써 주세요. 종일 곁에 두고 읽을 것이니 길어도 괜찮습니다.\n";
+  return p;
+}
+
+/* ────────── 별점 ────────── */const starText = v => { // 목록용 문자 별
   let out="";
   for(let i=1;i<=5;i++){
     if(v>=i) out+="★";
@@ -418,19 +536,22 @@ async function addFromLink(){
     catchHint.textContent = "이미 목록에 있는 음반입니다.";
     catchHint.style.color = "#a3402c"; return;
   }
-  catchHint.textContent = "정보를 가져오는 중…"; catchHint.style.color = "";
+  catchHint.textContent = "앨범 정보를 찾는 중…"; catchHint.style.color = "";
   catchBtn.disabled = true;
   const meta = await fetchMeta(id);
   catchBtn.disabled = false;
   const a = {
-    id: uid(), sid:id, title: meta && meta.title ? meta.title : "", artist:"",
-    cover: meta && meta.cover ? meta.cover : "",
+    id: uid(), sid:id, title: meta.title, artist: meta.artist,
+    cover: meta.cover,
     source:"mine", status:"listening", rating:0, note:"",
     addedAt: today(), loggedAt:""
   };
   db.albums.unshift(a); save();
   linkInput.value = "";
-  catchHint.textContent = meta ? "올렸습니다. 아티스트 이름만 채워 주세요." : "올렸습니다. 아티스트와 앨범 이름을 적어 주세요.";
+  if(meta.artist && !meta.guessed) catchHint.textContent = "올렸습니다. 이름이 맞는지만 봐 주세요.";
+  else if(meta.guessed)            catchHint.textContent = "올렸습니다. 아티스트 이름은 앨범 제목으로 짐작한 것이니 확인해 주세요.";
+  else if(meta.title)              catchHint.textContent = "올렸습니다. 아티스트 이름은 못 찾았습니다. 직접 적어 주세요.";
+  else                             catchHint.textContent = "올렸습니다. 앨범 정보를 못 가져왔으니 두 칸을 직접 채워 주세요.";
   renderToday(); renderCounter();
 }
 
@@ -473,10 +594,8 @@ function todayCard(a){
   box.appendChild(head);
 
   // 이름 채우기 (비어 있을 때만 펼쳐 둠)
-  const needName = !a.artist || !a.title;
   const nameBox = document.createElement("div");
   nameBox.className = "grid2"; nameBox.style.marginTop = "18px";
-  nameBox.hidden = !needName;
   const ai = document.createElement("input"); ai.type="text"; ai.value=a.artist||""; ai.placeholder="아티스트";
   const ti = document.createElement("input"); ti.type="text"; ti.value=a.title||""; ti.placeholder="앨범";
   const wrapA = document.createElement("div"); wrapA.innerHTML='<label class="f">아티스트</label>'; wrapA.appendChild(ai);
@@ -485,6 +604,27 @@ function todayCard(a){
   ai.addEventListener("input",()=>{ a.artist=ai.value; save(); meta.querySelector(".t-artist").textContent=a.artist||"아티스트 미상"; renderCounter(); });
   ti.addEventListener("input",()=>{ a.title=ti.value; save(); meta.querySelector(".t-title").textContent=a.title||"제목 없음"; });
   box.appendChild(nameBox);
+
+  const refetchRow = document.createElement("div");
+  refetchRow.className = "row"; refetchRow.style.marginTop = "6px";
+  const refetch = document.createElement("button");
+  refetch.className = "btn quiet"; refetch.textContent = "앨범 정보 다시 가져오기";
+  const refetchMsg = document.createElement("span");
+  refetchMsg.className = "rate-num";
+  refetchRow.appendChild(refetch); refetchRow.appendChild(refetchMsg);
+  box.appendChild(refetchRow);
+
+  refetch.addEventListener("click", async ()=>{
+    refetch.disabled = true; refetchMsg.textContent = "찾는 중…";
+    const m = await fetchMeta(a.sid);
+    refetch.disabled = false;
+    if(!m.artist && !m.title){ refetchMsg.textContent = "찾지 못했습니다"; return; }
+    if(m.artist){ a.artist = m.artist; ai.value = m.artist; meta.querySelector(".t-artist").textContent = m.artist; }
+    if(m.title){ a.title = m.title; ti.value = m.title; meta.querySelector(".t-title").textContent = m.title; }
+    if(m.cover){ a.cover = m.cover; disc.style.backgroundImage = "url('"+m.cover+"')"; }
+    save(); renderCounter();
+    refetchMsg.textContent = m.guessed ? "아티스트는 짐작한 것입니다" : "가져왔습니다";
+  });
 
   // 재생
   const player = document.createElement("div");
@@ -527,6 +667,36 @@ function todayCard(a){
     playBtn.disabled = true;
     disc.classList.add("spin");
     pHint.hidden = false;
+  });
+
+  // 소개 프롬프트
+  const introRow = document.createElement("div");
+  introRow.className = "row"; introRow.style.marginTop = "18px";
+  const introBtn = document.createElement("button");
+  introBtn.className = "btn ghost"; introBtn.textContent = "이 음반 소개받기";
+  const introCopy = document.createElement("button");
+  introCopy.className = "btn quiet"; introCopy.textContent = "복사하기"; introCopy.hidden = true;
+  const introFlag = document.createElement("span");
+  introFlag.className = "saved"; introFlag.textContent = "복사됨";
+  introRow.appendChild(introBtn); introRow.appendChild(introCopy); introRow.appendChild(introFlag);
+  box.appendChild(introRow);
+
+  const introBox = document.createElement("div");
+  introBox.className = "prompt-box"; introBox.hidden = true;
+  const introPre = document.createElement("pre");
+  introBox.appendChild(introPre);
+  box.appendChild(introBox);
+
+  introBtn.addEventListener("click", ()=>{
+    if(!a.title){ alert("앨범 이름을 먼저 적어 주세요."); ti.focus(); return; }
+    introPre.textContent = buildIntroPrompt(a);
+    introBox.hidden = false;
+    introCopy.hidden = false;
+  });
+  introCopy.addEventListener("click", async ()=>{
+    await copyText(introPre.textContent);
+    introFlag.classList.add("on");
+    setTimeout(()=>introFlag.classList.remove("on"), 1500);
   });
 
   // 별점
@@ -719,12 +889,7 @@ byId("makePrompt").addEventListener("click", ()=>{
 });
 
 byId("copyPrompt").addEventListener("click", async ()=>{
-  const t = byId("promptText").textContent;
-  try{ await navigator.clipboard.writeText(t); }
-  catch(e){
-    const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta);
-    ta.select(); document.execCommand("copy"); ta.remove();
-  }
+  await copyText(byId("promptText").textContent);
   const f=byId("copied"); f.classList.add("on"); setTimeout(()=>f.classList.remove("on"),1500);
 });
 
@@ -831,9 +996,9 @@ function renderCands(){
       const meta = await fetchMeta(c.sid);
       db.albums.unshift({
         id:uid(), sid:c.sid,
-        title: c.title || (meta?meta.title:"") || "",
-        artist: c.artist || "",
-        cover: meta && meta.cover ? meta.cover : "",
+        title: c.title || meta.title || "",
+        artist: c.artist || meta.artist || "",
+        cover: meta.cover || "",
         source:"claude", status:"listening", rating:0, note:"",
         addedAt: today(), loggedAt:"", why: c.why||""
       });
