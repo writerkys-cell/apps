@@ -156,6 +156,22 @@
   .badge{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--brass);border:1px solid var(--brass-soft);border-radius:2px;padding:1px 5px;margin-left:7px;vertical-align:1.5px}
   .item-player{margin:14px 0 0}
 
+  /* ── 소개 글 ── */
+  details.intro{margin:12px 0 0}
+  details.intro summary{
+    font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);
+    cursor:pointer;list-style:none;display:inline-block;
+  }
+  details.intro summary::-webkit-details-marker{display:none}
+  details.intro summary:hover{color:var(--ink)}
+  details.intro[open] summary{color:var(--ink)}
+  .intro-body{
+    font-family:var(--serif);font-size:14.5px;line-height:1.9;color:var(--ink-2);
+    white-space:pre-wrap;word-break:keep-all;margin:10px 0 0;padding:15px 17px;
+    background:var(--surface);border:1px solid var(--rule-2);
+    border-left:2px solid var(--brass-soft);border-radius:2px;
+  }
+
   /* ── 추천 ── */
   .prompt-box{
     margin:14px 0 0;background:var(--surface);border:1px solid var(--rule);border-radius:2px;
@@ -543,7 +559,7 @@ async function addFromLink(){
   const a = {
     id: uid(), sid:id, title: meta.title, artist: meta.artist,
     cover: meta.cover,
-    source:"mine", status:"listening", rating:0, note:"",
+    source:"mine", status:"listening", rating:0, note:"", intro:"",
     addedAt: today(), loggedAt:""
   };
   db.albums.unshift(a); save();
@@ -687,11 +703,25 @@ function todayCard(a){
   introBox.appendChild(introPre);
   box.appendChild(introBox);
 
+  // 받아온 소개 붙여두기
+  const pasteWrap = document.createElement("div");
+  pasteWrap.className = "note-wrap";
+  pasteWrap.hidden = !a.intro;
+  pasteWrap.innerHTML = '<label class="f">받은 소개</label>';
+  const pasteTa = document.createElement("textarea");
+  pasteTa.value = a.intro || "";
+  pasteTa.placeholder = "클로드가 써 준 소개를 여기에 붙여넣으면 이 음반에 함께 남습니다.";
+  pasteTa.style.minHeight = "140px";
+  pasteTa.addEventListener("input", ()=>{ a.intro = pasteTa.value; save(); flash(); });
+  pasteWrap.appendChild(pasteTa);
+  box.appendChild(pasteWrap);
+
   introBtn.addEventListener("click", ()=>{
     if(!a.title){ alert("앨범 이름을 먼저 적어 주세요."); ti.focus(); return; }
     introPre.textContent = buildIntroPrompt(a);
     introBox.hidden = false;
     introCopy.hidden = false;
+    pasteWrap.hidden = false;
   });
   introCopy.addEventListener("click", async ()=>{
     await copyText(introPre.textContent);
@@ -769,7 +799,7 @@ function renderShelf(){
   if(filter==="high") list = list.filter(a=>a.rating>=4);
   if(filter==="mine") list = list.filter(a=>a.source==="mine");
   if(filter==="claude") list = list.filter(a=>a.source==="claude");
-  if(query) list = list.filter(a=>((a.artist||"")+" "+(a.title||"")+" "+(a.note||"")).toLowerCase().includes(query));
+  if(query) list = list.filter(a=>((a.artist||"")+" "+(a.title||"")+" "+(a.note||"")+" "+(a.intro||"")).toLowerCase().includes(query));
   list.sort((a,b)=> (b.loggedAt||"").localeCompare(a.loggedAt||""));
 
   host.innerHTML = "";
@@ -810,6 +840,19 @@ function shelfItem(a){
 
   const tools = document.createElement("div");
   tools.className="i-tools";
+
+  if(a.intro && a.intro.trim()){
+    const det = document.createElement("details");
+    det.className = "intro";
+    const sum = document.createElement("summary");
+    sum.textContent = "소개 펼치기";
+    const bd = document.createElement("div");
+    bd.className = "intro-body";
+    bd.textContent = a.intro.trim();
+    det.appendChild(sum); det.appendChild(bd);
+    det.addEventListener("toggle", ()=>{ sum.textContent = det.open ? "소개 접기" : "소개 펼치기"; });
+    body.appendChild(det);
+  }
   const again = document.createElement("button"); again.textContent="다시 듣기";
   const inApp = document.createElement("a"); inApp.textContent="앱에서 열기"; inApp.href=appUrl(a.sid);
   inApp.style.cssText="font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-decoration:none";
@@ -853,6 +896,9 @@ function shelfItem(a){
     rr.appendChild(nn); box.appendChild(rr);
     const nw=document.createElement("div"); nw.className="note-wrap"; nw.innerHTML='<label class="f">평</label>';
     const ta=document.createElement("textarea"); ta.value=a.note||""; nw.appendChild(ta); box.appendChild(nw);
+    const iw=document.createElement("div"); iw.className="note-wrap"; iw.innerHTML='<label class="f">받은 소개</label>';
+    const ita=document.createElement("textarea"); ita.value=a.intro||""; ita.style.minHeight="120px";
+    ita.placeholder="클로드가 써 준 소개"; iw.appendChild(ita); box.appendChild(iw);
     const row=document.createElement("div"); row.className="actions";
     const ok=document.createElement("button"); ok.className="btn"; ok.textContent="고쳐 두기";
     const no=document.createElement("button"); no.className="btn quiet"; no.textContent="그만두기";
@@ -861,7 +907,7 @@ function shelfItem(a){
     ok.addEventListener("click",()=>{
       a.artist=box.querySelector(".ea").value.trim();
       a.title=box.querySelector(".et").value.trim();
-      a.rating=nv; a.note=ta.value;
+      a.rating=nv; a.note=ta.value; a.intro=ita.value;
       save(); renderShelf(); renderCounter();
     });
     no.addEventListener("click",()=>{ box.remove(); delete li.dataset.editing; });
@@ -999,7 +1045,7 @@ function renderCands(){
         title: c.title || meta.title || "",
         artist: c.artist || meta.artist || "",
         cover: meta.cover || "",
-        source:"claude", status:"listening", rating:0, note:"",
+        source:"claude", status:"listening", rating:0, note:"", intro:"",
         addedAt: today(), loggedAt:"", why: c.why||""
       });
       db.candidates = db.candidates.filter(x=>x.id!==c.id);
