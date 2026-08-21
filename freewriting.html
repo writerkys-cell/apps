@@ -56,7 +56,7 @@ hr{border:none;border-top:1px solid var(--line);margin:22px 0}
 input[type=text],input[type=number],input[type=date],input[type=datetime-local],select{
   background:transparent;border:1px solid var(--line);border-radius:7px;
   padding:8px 11px;outline:none;min-width:0;height:41px;box-sizing:border-box}
-#newproj{height:41px;width:41px;padding:0;align-self:flex-end}
+#newproj,#delproj{height:41px;width:41px;padding:0;align-self:flex-end}
 input:focus,select:focus{border-color:var(--muted)}
 label.f{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted)}
 label.f>input,label.f>select{color:var(--fg)}
@@ -188,6 +188,7 @@ footer{padding:30px 0;font-size:12px;color:var(--faint);display:flex;gap:14px;fl
           <select id="wproj"></select>
         </label>
         <button class="btn" id="newproj" title="새 프로젝트">＋</button>
+        <button class="btn" id="delproj" title="선택한 프로젝트 삭제">－</button>
         <label class="f" style="min-width:180px">열리는 시각
           <select id="wlock">
             <option value="1">내일 아침</option>
@@ -375,6 +376,8 @@ function renderSetup(){
   $('#wproj').innerHTML=`<option value="">분류 없음</option>`+
     D.projects.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
   const lastP=localStorage.getItem('fw.lastproj'); if(lastP) $('#wproj').value=lastP;
+  $('#delproj').disabled=!$('#wproj').value;
+  $('#wproj').onchange=()=>{ $('#delproj').disabled=!$('#wproj').value; };
   renderPick(); showCont();
 
   $('#tNoDel').checked=noDel=S().noDel;
@@ -632,6 +635,17 @@ $('#newproj').onclick=()=>{
   D.projects.push(p); save();
   localStorage.setItem('fw.lastproj',p.id);
   renderSetup(); toast('프로젝트를 만들었습니다');
+};
+$('#delproj').onclick=()=>{
+  const id=$('#wproj').value;
+  if(!id){ toast('삭제할 프로젝트를 먼저 고르세요'); return; }
+  const p=proj(id), n=D.entries.filter(e=>e.projectId===id).length;
+  if(!confirm(`‘${p.name}’ 프로젝트를 삭제합니다.\n`+
+    (n?`이 프로젝트의 글 ${n}편은 남고 ‘분류 없음’이 됩니다.`:'이 프로젝트에는 글이 없습니다.'))) return;
+  D.entries.forEach(e=>{ if(e.projectId===id) e.projectId=null; });
+  D.projects=D.projects.filter(x=>x.id!==id);
+  localStorage.removeItem('fw.lastproj');
+  save(); renderSetup(); toast('삭제했습니다');
 };
 function projForm(id){
   const p=id?proj(id):{name:'',pages:'',deadline:'',counts:[]};
