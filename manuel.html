@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>일상 매뉴얼 아카이브 (Life Manual Archive)</title>
+  <!-- Markdown 파싱을 위한 경량 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     :root {
       --bg: #f8fafc;
@@ -255,15 +257,85 @@
       display: block;
     }
 
+    /* Markdown Viewer Styles */
     .solution-content {
-      font-size: 0.9rem;
-      white-space: pre-wrap;
+      font-size: 0.95rem;
       margin-bottom: 1rem;
       background: #fff;
       padding: 1.25rem;
       border: 1px solid var(--border);
       border-radius: 6px;
       line-height: 1.7;
+      color: #334155;
+    }
+
+    .solution-content h1, .solution-content h2, .solution-content h3, .solution-content h4 {
+      color: #0f172a;
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+      font-weight: 700;
+    }
+
+    .solution-content h1 { font-size: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    .solution-content h2 { font-size: 1.15rem; }
+    .solution-content h3 { font-size: 1.05rem; }
+
+    .solution-content p {
+      margin-bottom: 0.75rem;
+    }
+
+    .solution-content ul, .solution-content ol {
+      margin-left: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .solution-content li {
+      margin-bottom: 0.25rem;
+    }
+
+    .solution-content hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 1.25rem 0;
+    }
+
+    .solution-content blockquote {
+      border-left: 4px solid var(--primary);
+      padding-left: 0.75rem;
+      color: var(--text-muted);
+      margin: 0.75rem 0;
+      background: #f8fafc;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .solution-content code {
+      background: #f1f5f9;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: #be185d;
+      font-family: monospace;
+    }
+
+    .solution-content pre {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 0.75rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 0.75rem;
+    }
+
+    .solution-content pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .solution-content strong {
+      color: #0f172a;
+      font-weight: 600;
     }
 
     .edit-mode-container {
@@ -342,8 +414,8 @@
       </div>
 
       <div class="form-group" style="margin-top: 1rem;">
-        <label for="solutionInput">해결 매뉴얼 (AI 답변 또는 직접 정리한 내용)</label>
-        <textarea id="solutionInput" rows="8" placeholder="AI가 제안한 단계별 실행 지침이나 직접 정리한 해결 방법을 붙여넣으세요."></textarea>
+        <label for="solutionInput">해결 매뉴얼 (마크다운 지원)</label>
+        <textarea id="solutionInput" rows="8" placeholder="AI가 제안한 마크다운 형식의 지침이나 직접 정리한 해결 방법을 붙여넣으세요."></textarea>
       </div>
 
       <div class="grid-2">
@@ -371,6 +443,14 @@
 </div>
 
 <script>
+  // marked.js 줄바꿈 옵션 활성화
+  if (typeof marked !== 'undefined') {
+    marked.setOptions({
+      breaks: true,
+      gfm: true
+    });
+  }
+
   let manuals = JSON.parse(localStorage.getItem('life_manuals') || '[]');
   let editingId = null;
 
@@ -480,7 +560,15 @@
     return d;
   }
 
-  // 1. 고민 탭: 향후 30일 이내 임박 매뉴얼 렌더링 (클릭 시 아코디언 펼침 지원)
+  // 마크다운 렌더링 헬퍼 함수
+  function renderMarkdown(content) {
+    if (typeof marked !== 'undefined') {
+      return marked.parse(content || '');
+    }
+    return escapeHtml(content || '');
+  }
+
+  // 1. 고민 탭: 향후 30일 이내 임박 매뉴얼 렌더링
   function renderUpcomingList() {
     const container = document.getElementById('upcomingList');
     container.innerHTML = '';
@@ -552,7 +640,7 @@
           </div>
         </div>
         <div class="accordion-body">
-          <div class="solution-content">${escapeHtml(item.manual.solution)}</div>
+          <div class="solution-content">${renderMarkdown(item.manual.solution)}</div>
         </div>
       `;
       container.appendChild(div);
@@ -614,6 +702,7 @@
       item.className = 'accordion-item';
 
       if (isEditing) {
+        // 편집창에서는 원본 마크다운 텍스트 편집
         item.innerHTML = `
           <div style="padding: 1.5rem; background: #ffffff; border: 2px solid var(--primary); border-radius: 6px;">
             <div class="edit-mode-container">
@@ -622,7 +711,7 @@
                 <input type="text" id="editTrouble_${m.id}" value="${escapeHtml(m.trouble)}" style="font-weight: 600;">
               </div>
               <div class="form-group">
-                <label style="font-size: 0.95rem;">해결 매뉴얼 내용</label>
+                <label style="font-size: 0.95rem;">해결 매뉴얼 내용 (마크다운 원본)</label>
                 <textarea id="editSolution_${m.id}" class="edit-textarea">${escapeHtml(m.solution)}</textarea>
               </div>
               <div class="grid-2">
@@ -643,6 +732,7 @@
           </div>
         `;
       } else {
+        // 일반 뷰 모드에서는 마크다운을 파싱하여 렌더링
         item.innerHTML = `
           <div class="accordion-header" onclick="toggleAccordion(this)">
             <div class="accordion-header-left">
@@ -659,7 +749,7 @@
             </div>
           </div>
           <div class="accordion-body">
-            <div class="solution-content">${escapeHtml(m.solution)}</div>
+            <div class="solution-content">${renderMarkdown(m.solution)}</div>
             <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
               <button onclick="startEdit(${m.id})">수정</button>
               ${m.cycleDays > 0 ? `<button onclick="updateDoneDate(${m.id}, event)">오늘 완료로 갱신</button>` : ''}
@@ -758,7 +848,7 @@
   }
 
   function escapeHtml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
   renderUpcomingList();
