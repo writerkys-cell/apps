@@ -176,27 +176,7 @@
     .upcoming-list {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .upcoming-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem 1rem;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: #f8fafc;
-    }
-
-    .upcoming-item.overdue {
-      background: var(--danger-bg);
-      border-color: #fca5a5;
-    }
-
-    .upcoming-item.soon {
-      background: var(--warning-bg);
-      border-color: #fde68a;
+      gap: 0.75rem;
     }
 
     .badge {
@@ -212,13 +192,20 @@
     .badge.badge-danger { background: #fee2e2; color: var(--danger-text); }
     .badge.badge-warning { background: #fef3c7; color: var(--warning-text); }
 
-    /* Accordion Style in Manuals Tab */
+    /* Accordion Style Common */
     .accordion-item {
       border: 1px solid var(--border);
       border-radius: 6px;
-      margin-bottom: 0.75rem;
       background: #fff;
       overflow: hidden;
+    }
+
+    .accordion-item.overdue {
+      border-color: #fca5a5;
+    }
+
+    .accordion-item.soon {
+      border-color: #fde68a;
     }
 
     .accordion-header {
@@ -234,6 +221,14 @@
 
     .accordion-header:hover {
       background: #f8fafc;
+    }
+
+    .accordion-item.overdue .accordion-header {
+      background: var(--danger-bg);
+    }
+
+    .accordion-item.soon .accordion-header {
+      background: var(--warning-bg);
     }
 
     .accordion-header-left {
@@ -271,7 +266,6 @@
       line-height: 1.7;
     }
 
-    /* 확장된 수정 폼 컨테이너 */
     .edit-mode-container {
       display: flex;
       flex-direction: column;
@@ -280,7 +274,7 @@
     }
 
     .edit-textarea {
-      min-height: 380px; /* 상하로 넉넉한 편집 높이 */
+      min-height: 380px;
       resize: vertical;
       font-family: inherit;
       font-size: 0.95rem;
@@ -311,7 +305,7 @@
 
   <!-- Navigation Tabs -->
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('troubleTab')">고민 (홈)</button>
+    <button class="tab-btn active" onclick="switchTab('troubleTab')">고민</button>
     <button class="tab-btn" onclick="switchTab('manualTab')">매뉴얼 보관소</button>
   </div>
 
@@ -372,7 +366,7 @@
     <div class="search-bar">
       <input type="text" id="searchInput" placeholder="저장된 매뉴얼 검색..." oninput="renderManualList()">
     </div>
-    <div id="accordionList"></div>
+    <div id="accordionList" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
   </div>
 </div>
 
@@ -468,7 +462,8 @@
     renderManualList();
   }
 
-  function updateDoneDate(id) {
+  function updateDoneDate(id, event) {
+    if (event) event.stopPropagation();
     const manual = manuals.find(m => m.id === id);
     if (manual) {
       manual.lastDone = new Date().toISOString().split('T')[0];
@@ -485,6 +480,7 @@
     return d;
   }
 
+  // 1. 고민 탭: 향후 30일 이내 임박 매뉴얼 렌더링 (클릭 시 아코디언 펼침 지원)
   function renderUpcomingList() {
     const container = document.getElementById('upcomingList');
     container.innerHTML = '';
@@ -525,7 +521,7 @@
       const isToday = item.diffDays === 0;
 
       let statusBadge = '';
-      let itemClass = 'upcoming-item';
+      let itemClass = 'accordion-item';
 
       if (isOverdue) {
         statusBadge = `<span class="badge badge-danger">기한 초과 (${Math.abs(item.diffDays)}일 지남)</span>`;
@@ -543,20 +539,27 @@
       const div = document.createElement('div');
       div.className = itemClass;
       div.innerHTML = `
-        <div>
-          <div style="font-weight: 600; font-size: 0.95rem;">${escapeHtml(item.manual.trouble)}</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem;">
-            주기: ${item.manual.cycleDays}일 | 예정일: ${item.nextDue.toISOString().split('T')[0]} ${statusBadge}
+        <div class="accordion-header" onclick="toggleAccordion(this)">
+          <div class="accordion-header-left">
+            <div class="accordion-title">${escapeHtml(item.manual.trouble)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">
+              주기: ${item.manual.cycleDays}일 | 예정일: ${item.nextDue.toISOString().split('T')[0]} ${statusBadge}
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button onclick="updateDoneDate(${item.manual.id}, event)" title="오늘 완료로 갱신">오늘 완료</button>
+            <span style="font-size: 0.85rem; color: var(--text-muted); padding-left: 0.25rem;">▼</span>
           </div>
         </div>
-        <div class="btn-group">
-          <button onclick="updateDoneDate(${item.manual.id})" title="오늘 완료로 갱신">오늘 완료</button>
+        <div class="accordion-body">
+          <div class="solution-content">${escapeHtml(item.manual.solution)}</div>
         </div>
       `;
       container.appendChild(div);
     });
   }
 
+  // 2. 매뉴얼 탭: 전체 매뉴얼 렌더링
   function renderManualList() {
     const container = document.getElementById('accordionList');
     const query = document.getElementById('searchInput').value.toLowerCase();
@@ -659,7 +662,7 @@
             <div class="solution-content">${escapeHtml(m.solution)}</div>
             <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
               <button onclick="startEdit(${m.id})">수정</button>
-              ${m.cycleDays > 0 ? `<button onclick="updateDoneDate(${m.id})">오늘 완료로 갱신</button>` : ''}
+              ${m.cycleDays > 0 ? `<button onclick="updateDoneDate(${m.id}, event)">오늘 완료로 갱신</button>` : ''}
               <button class="danger" onclick="deleteManual(${m.id})">삭제</button>
             </div>
           </div>
