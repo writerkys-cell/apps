@@ -334,7 +334,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
 <div class="veil" id="vHelp"><div class="card">
   <h2>도 움 말</h2>
   <div class="keys">
-    <div><span>방금 친 글자 하나만 지우기</span><kbd>Backspace</kbd></div>
+    <div><span>마지막 어절 고치기</span><kbd>Backspace</kbd></div>
     <div><span>커서 옮기기</span><kbd>← → ↑ ↓</kbd></div>
     <div><span>들여쓰기 넣기 / 물리기</span><kbd>Tab</kbd> · <kbd>Backspace</kbd></div>
     <div><span>골라잡기</span><kbd>Shift</kbd> + 방향키 · 끌기</div>
@@ -347,7 +347,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
     <div><span>잠금 비상 해제</span><kbd>Esc</kbd> 3초 누르기</div>
   </div>
   <p class="hint">
-  <b>지워지지 않습니다.</b> 방금 친 글자 하나만 물릴 수 있습니다. 한글은 조합이 끝나기 전까지 지울 수 있고, 받침이 앉는 순간 확정됩니다.<br><br>
+  <b>마지막 어절까지만 물릴 수 있습니다.</b> 쓰던 낱말은 통째로 고칠 수 있고, 앞의 공백을 지나 되돌아갈 수도 있습니다. 하지만 <b>다음 낱말을 치기 시작하는 순간 앞 낱말은 굳습니다.</b> 「언제나 영화처럼 」까지 쳤다면 '영화처럼'을 지울 수 있지만, '흘'을 한 자 치는 순간 '영화처럼'은 종이에 박힙니다.<br><br>
   <b>줄을 긋습니다.</b> 지우는 대신 골라서 <kbd>⌘D</kbd>. 그은 자리는 붉게 남고, 그 뒤에 이어 친 글자는 <span class="ok">푸른색</span>으로 표시됩니다. 줄 그은 글자는 매수에서 빠지고, 복사할 때도 빠집니다. 인쇄에는 그대로 남습니다.<br><br>
   <b>아무 데나 끼워 넣을 수 없습니다.</b> 칠 수 있는 자리는 두 곳뿐입니다 — 원고의 맨 끝, 그리고 줄 그은 자리 바로 뒤. 그 밖의 자리에 커서를 두면 커서가 점선으로 바뀌고 자판이 먹지 않습니다. 문장 중간을 고치려면 먼저 그 부분에 줄을 그으세요.<br><br>
   <b>들여쓰기.</b> <kbd>Enter</kbd>를 치면 새 문단이 공백 네 칸으로 저절로 들어갑니다. 첫 문단이나 더 필요한 자리에는 <kbd>Tab</kbd>. 들여쓰기는 글자가 아니므로 <kbd>Backspace</kbd>로 언제든 통째로 물릴 수 있습니다.<br>
@@ -381,7 +381,7 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
 let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true,tfont:'',tsize:22};
-const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false,chain:null};
+const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false,chain:null,floor:0};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, bellLine=-1, saveTimer=null, escHold=null;
 let composing=false;   /* 한글 조합 중 — iOS는 isComposing을 못 믿는다 */
@@ -630,6 +630,16 @@ function mergeBack(){
   }
 }
 
+/* 새 어절이 시작된 자리를 바닥으로 삼는다. 그 앞은 굳는다. */
+function noteWord(from,to){
+  for(let n=from;n<to;n++){
+    const c=S.cells[n];
+    if(!c||c.d||c.k||/\s/.test(c.c)) continue;
+    const p=S.cells[n-1];
+    if(!p||p.d||p.k||/\s/.test(p.c)) S.floor=n;
+  }
+}
+
 /* 칠 수 있는 자리인가 — 원고의 끝, 또는 줄 그은 자리 바로 뒤(그 뒤에 이어 친 글자 포함) */
 function canType(){
   if(S.cur>=S.cells.length) return true;
@@ -681,7 +691,7 @@ function insertText(str,fromIME){
       }
     }
     S.cells.splice(S.cur,0,{c:toCompat(str),k:false,i:mark,d:false});
-    S.cur++; S.chain=S.cur-1; S.lastTyped=S.cur-1;
+    S.cur++; noteWord(S.cur-1,S.cur); S.chain=S.cur-1; S.lastTyped=S.cur-1;
     S.anchor=null; S.dirty=true;
     render(true); ringCheck(); autosave(); markTyping();
     return;
@@ -690,8 +700,10 @@ function insertText(str,fromIME){
 
   const add=[];
   for(const ch of str) add.push({c:ch,k:false,i:mark&&ch!=='\n',d:false});
+  const at=S.cur;
   S.cells.splice(S.cur,0,...add);
   S.cur+=add.length;
+  noteWord(at,S.cur);
   S.lastTyped=S.cur-1;
   mergeBack();
   S.anchor=null; S.dirty=true;
@@ -709,6 +721,7 @@ function newline(){
   beginSession();
   S.cells.splice(S.cur,0,{c:'\n',k:false,i:false,d:false});
   S.cur++; putIndent();
+  S.floor=S.cur;
   S.lastTyped=null; S.anchor=null; S.chain=null; S.insMode=false; S.dirty=true;
   carriage(); render(true); autosave(); markTyping();
 }
@@ -717,14 +730,18 @@ function backOne(){
   if(S.cur>0&&S.cells[S.cur-1]&&S.cells[S.cur-1].d){
     let a=S.cur; while(a>0&&S.cells[a-1].d) a--;
     S.cells.splice(a,S.cur-a); S.cur=a;
+    if(S.floor>S.cur) S.floor=S.cur;
     S.lastTyped=null; S.chain=null; S.anchor=null; S.dirty=true;
     render(true); autosave(); return true;
   }
-  if(S.lastTyped!==null&&S.cur===S.lastTyped+1&&S.cur>0){
-    S.cells.splice(S.cur-1,1); S.cur--; S.lastTyped=null; S.chain=null; S.anchor=null; S.dirty=true;
+  /* 마지막 어절 안에서만 지울 수 있다 */
+  const p=S.cur>0?S.cells[S.cur-1]:null;
+  if(canType()&&S.cur>S.floor&&p&&!p.k&&!p.d&&p.c!=='\n'){
+    S.cells.splice(S.cur-1,1); S.cur--;
+    S.lastTyped=null; S.chain=null; S.anchor=null; S.dirty=true;
     render(true); autosave(); return true;
   }
-  toast('확정된 글자는 지울 수 없습니다. 줄을 그으세요 — ⌘D');
+  toast('마지막 어절까지만 고칠 수 있습니다. 그 앞은 줄을 그으세요 — ⌘D');
   return false;
 }
 function toggleStrike(){
@@ -736,7 +753,7 @@ function toggleStrike(){
   let allK=true;
   for(let n=a;n<b;n++) if(!S.cells[n].k){allK=false;break;}
   for(let n=a;n<b;n++) S.cells[n].k=!allK;
-  S.anchor=null; S.cur=b; S.lastTyped=null; S.chain=null; S.insMode=!allK; S.dirty=true;
+  S.anchor=null; S.cur=b; S.lastTyped=null; S.chain=null; S.floor=b; S.insMode=!allK; S.dirty=true;
   document.body.classList.add('striking');
   setTimeout(()=>document.body.classList.remove('striking'),140);
   render(false); autosave();
@@ -770,7 +787,7 @@ function move(to,shift){
   to=Math.max(0,Math.min(S.cells.length,to));
   if(shift){ if(S.anchor===null) S.anchor=S.cur; }
   else S.anchor=null;
-  S.cur=to; S.lastTyped=null; S.chain=null;
+  S.cur=to; S.lastTyped=null; S.chain=null; S.floor=to;
   if(to>=S.cells.length) S.insMode=false;
   render(false);
 }
@@ -852,7 +869,7 @@ window.addEventListener('keydown',e=>{
     case 'Tab': e.preventDefault();
       if(!canType()){ refuse(); return; }
       beginSession(); putIndent();
-      S.lastTyped=null; S.anchor=null; S.chain=null; S.dirty=true;
+      S.floor=S.cur; S.lastTyped=null; S.anchor=null; S.chain=null; S.dirty=true;
       render(true); autosave(); markTyping(); return;
     case 'ArrowLeft': e.preventDefault(); move(S.cur-1,e.shiftKey); return;
     case 'ArrowRight': e.preventDefault(); move(S.cur+1,e.shiftKey); return;
@@ -873,7 +890,7 @@ sheet.addEventListener('mousedown',e=>{
   e.preventDefault();
   if(e.shiftKey){ if(S.anchor===null) S.anchor=S.cur; S.cur=i; }
   else { S.anchor=i; S.cur=i; }
-  S.lastTyped=null; S.chain=null; dragging=true; render(false); ime.focus();
+  S.lastTyped=null; S.chain=null; S.floor=S.cur; dragging=true; render(false); ime.focus();
 });
 window.addEventListener('mousemove',e=>{
   if(!dragging) return;
@@ -919,13 +936,13 @@ function saveDoc(loud){
 function openDoc(id){
   const d=DB.docs.find(x=>x.id===id); if(!d) return;
   S.id=d.id; S.cells=unpack(d); S.cur=S.cells.length; S.anchor=null;
-  S.lastTyped=null; S.chain=null; S.insMode=false; S.dirty=false; SESS=null;
+  S.lastTyped=null; S.chain=null; S.floor=S.cur; S.insMode=false; S.dirty=false; SESS=null;
   closeAll(); render(true); ime.focus();
   toast('불러왔습니다. 끝에서 이어 쓰면 됩니다.');
 }
 function newDoc(){
   if(S.dirty) saveDoc(false);
-  S.id=null; S.cells=[]; S.cur=0; S.anchor=null; S.lastTyped=null; S.chain=null;
+  S.id=null; S.cells=[]; S.cur=0; S.anchor=null; S.lastTyped=null; S.chain=null; S.floor=0;
   S.insMode=false; S.dirty=false; SESS=null;
   closeAll(); render(true); ime.focus();
 }
@@ -1198,7 +1215,7 @@ loadDB(); applyCFG();
 const last=DB.docs.slice().sort((a,b)=>b.updated-a.updated)[0];
 const p=new URLSearchParams(location.search);
 if(last&&!(p.get('새로')||p.get('new'))){
-  S.id=last.id; S.cells=unpack(last); S.cur=S.cells.length;
+  S.id=last.id; S.cells=unpack(last); S.cur=S.cells.length; S.floor=S.cur;
 }
 render(true); params(); ime.focus();
 setInterval(()=>{ if(S.dirty) saveDoc(false); },20000);
