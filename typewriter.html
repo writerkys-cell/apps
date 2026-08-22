@@ -6,7 +6,7 @@
 <title>타자기</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic+Coding:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
 <style>
 /* ── 활자 ───────────────────────────────────────────── */
 @font-face{
@@ -24,7 +24,7 @@
   --ink-3:#a9a69e;
   --strike:#8c2f2f;
   --insert:#1d4e6b;
-  --font-type:'환상','Nanum Gothic Coding','D2Coding','Courier New',monospace;
+  --font-type:'Apple SD Gothic Neo','Noto Sans KR','Pretendard','Malgun Gothic',system-ui,sans-serif;
   --font-ui:'Gowun Dodum','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
   --size:17px;
   --lh:1.9;
@@ -282,7 +282,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
 <!-- 설정 -->
 <div class="veil" id="vSet"><div class="card">
   <h2>설 정</h2>
-  <div class="row"><label>활자 이름</label><input type="text" id="fFont" spellcheck="false"></div>
+  <div class="row"><label>활자 이름</label><input type="text" id="fFont" spellcheck="false" placeholder="비워두면 기본 고딕"></div>
   <p class="hint" id="fontState"></p>
   <p class="sample">다람쥐 헌 쳇바퀴에 타고파 ABCdefg 0123 — 그 겨울의 문장</p>
   <div class="row"><label>타이핑 음악 단축어 이름</label><input type="text" id="fSC" spellcheck="false" placeholder="타이핑 음악"></div>
@@ -368,7 +368,7 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
-let CFG={font:'a환상',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true};
+let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true};
 const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, bellLine=-1, saveTimer=null, escHold=null;
@@ -393,7 +393,7 @@ function pack(cells){
 function unpack(d){
   const out=[];const t=d.t||'';
   for(let n=0;n<t.length;n++) out.push({c:t[n],k:(d.k||'')[n]==='1',i:(d.i||'')[n]==='1'});
-  return out;
+  return nfc(out);
 }
 
 /* ── 셈 ───────────────────────────────────────────── */
@@ -499,6 +499,31 @@ function markTyping(){
 function beginSession(){
   if(!SESS) SESS={start:Date.now(),from:liveChars(S.cells),escapes:0};
 }
+/* iOS는 한글을 자모로 풀어(NFD) 넘기는 일이 있다. 완성형으로 되돌린다. */
+function nfc(cells){
+  const out=[];
+  for(const c of cells){
+    const p=out[out.length-1];
+    if(p&&p.k===c.k&&p.i===c.i){
+      const m=(p.c+c.c).normalize('NFC');
+      if(m.length===1){ p.c=m; continue; }
+    }
+    out.push({c:c.c.normalize('NFC'),k:c.k,i:c.i});
+  }
+  return out;
+}
+/* 새로 친 글자를 앞 글자와 합칠 수 있으면 합친다 */
+function mergeBack(){
+  while(S.cur>1){
+    const a=S.cells[S.cur-2], b=S.cells[S.cur-1];
+    if(!a||!b||a.k!==b.k||a.i!==b.i) break;
+    const m=(a.c+b.c).normalize('NFC');
+    if(m.length!==1) break;
+    a.c=m; S.cells.splice(S.cur-1,1); S.cur--;
+    if(S.lastTyped!==null) S.lastTyped=S.cur-1;
+  }
+}
+
 /* 칠 수 있는 자리인가 — 원고의 끝, 또는 줄 그은 자리 바로 뒤(그 뒤에 이어 친 글자 포함) */
 function canType(){
   if(S.cur>=S.cells.length) return true;
@@ -528,7 +553,7 @@ function curl(str){
 function insertText(str){
   if(!str) return;
   if(!canType()){ ime.value=''; S.comp=''; render(false); refuse(); return; }
-  str=curl(str);
+  str=curl(str.normalize('NFC'));
   beginSession();
   const atEnd=S.cur>=S.cells.length;
   const afterStrike=S.cur>0&&S.cells[S.cur-1]&&S.cells[S.cur-1].k;
@@ -539,6 +564,7 @@ function insertText(str){
   S.cells.splice(S.cur,0,...add);
   S.cur+=add.length;
   S.lastTyped=S.cur-1;
+  mergeBack();
   S.anchor=null; S.dirty=true;
   render(true); ringCheck(); autosave(); markTyping();
 }
@@ -615,10 +641,10 @@ function lineEdge(dir){
 ime.addEventListener('compositionstart',()=>{S.comp='';});
 ime.addEventListener('compositionupdate',e=>{
   if(!canType()){ ime.value=''; S.comp=''; return; }
-  S.comp=e.data||''; render(true); markTyping();
+  S.comp=(e.data||'').normalize('NFC'); render(true); markTyping();
 });
 ime.addEventListener('compositionend',e=>{
-  S.comp=''; const d=e.data||''; ime.value='';
+  S.comp=''; const d=(e.data||'').normalize('NFC'); ime.value='';
   if(d) insertText(d); else render(true);
 });
 ime.addEventListener('input',e=>{
@@ -895,10 +921,12 @@ function fontOK(name){
   }
   return false;
 }
+const BASEFONT="'Apple SD Gothic Neo','Noto Sans KR','Pretendard','Malgun Gothic',system-ui,sans-serif";
 const PAGE={a5:[14.8,21],a4:[21,29.7],a5ona4:[14.8,21]};
 function applyCFG(){
   const R=document.documentElement.style;
-  R.setProperty('--font-type','"'+CFG.font+'", 환상, "Nanum Gothic Coding","D2Coding","Courier New",monospace');
+  const f=(CFG.font||'').trim();
+  R.setProperty('--font-type',(f?'"'+f+'",':'')+BASEFONT);
   R.setProperty('--size',CFG.size+'px');
   R.setProperty('--lh',CFG.lh);
   const pg=PAGE[CFG.paper]||PAGE.a5;
@@ -910,8 +938,9 @@ function applyCFG(){
   $('#fPaper').value=CFG.paper; $('#fLoose').checked=CFG.loose;
   $('#fSM').value=CFG.sm; $('#fPM').value=CFG.pm; $('#fSC').value=CFG.shortcut||'';
   const st=$('#fontState');
-  if(fontOK(CFG.font)) st.innerHTML='<span class="ok">'+esc(CFG.font)+' 활자를 찾았습니다.</span>';
-  else st.innerHTML='<span class="bad">'+esc(CFG.font)+'을(를) 찾지 못했습니다.</span> 나눔고딕코딩으로 대신 칩니다. 서체책에서 정확한 이름을 확인해 적어 주세요. (예: a환상, A환상)';
+  if(!f) st.innerHTML='기기의 기본 고딕으로 칩니다. 맥북의 <b>a환상</b>처럼 따로 쓰고 싶은 활자가 있으면 그 이름을 적으세요.';
+  else if(fontOK(f)) st.innerHTML='<span class="ok">'+esc(f)+' 활자를 찾았습니다.</span>';
+  else st.innerHTML='<span class="bad">'+esc(f)+'을(를) 이 기기에서 찾지 못했습니다.</span> 기본 고딕으로 칩니다. 아이패드에는 맥북의 활자가 없으니 비워두시는 편이 낫습니다.';
   render(false);
 }
 $('#fFont').addEventListener('input',e=>{CFG.font=e.target.value.trim(); saveCFG(); applyCFG();});
