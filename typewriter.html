@@ -31,6 +31,8 @@
   --pgw:14.8cm;   /* 화면 종이 너비 */
   --pgh:21cm;     /* 화면 종이 높이 */
   --sm:1cm;       /* 화면 좌우 여백 */
+  --font-title:'Apple SD Gothic Neo','Noto Sans KR','Pretendard','Malgun Gothic',system-ui,sans-serif;
+  --size-title:22px;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -51,13 +53,12 @@ body{
 body.typing #bar{opacity:.12}
 body.typing #bar:hover,body.typing #bar:focus-within{opacity:1}
 #mark{font-family:var(--font-type);font-size:13px;letter-spacing:.32em;color:var(--ink-2);user-select:none}
-#title{
-  flex:1;min-width:0;border:0;background:transparent;outline:none;
-  font-family:var(--font-ui);font-size:13px;color:var(--ink-2);
-  padding:4px 0;
+#titleView{
+  flex:1;min-width:0;font-family:var(--font-ui);font-size:13px;
+  color:var(--ink-2);padding:4px 0;user-select:none;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-#title:focus{color:var(--ink);border-bottom:1px solid var(--insert)}
-#title::placeholder{color:var(--ink-3)}
+#titleView.none{color:var(--ink-3)}
 .tools{display:flex;gap:2px}
 button.t{
   border:0;background:transparent;cursor:pointer;
@@ -100,6 +101,7 @@ button.t:focus-visible{outline:2px solid var(--insert);outline-offset:1px}
   user-select:none;-webkit-user-select:none;cursor:text;
   position:relative;z-index:1;
 }
+#sheet .ttl{font-family:var(--font-title);font-size:var(--size-title);line-height:1.5}
 #sheet .k{color:var(--strike);text-decoration:line-through;text-decoration-thickness:1px}
 #sheet .i{color:var(--insert)}
 #sheet .sel{background:rgba(29,78,107,.15)}
@@ -240,10 +242,11 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   #print.loose{line-height:2.5}
   #print .k{text-decoration:line-through;color:#000}
   #print .i{color:#12405c}
-  #print .hd{
-    display:block;font-size:8pt;letter-spacing:.2em;color:#666;
-    margin-bottom:2.2em;padding-bottom:.6em;border-bottom:.5pt solid #ccc;
+  #print .ttl{
+    font-family:var(--font-title);font-size:15pt;line-height:1.4;
+    margin:0 0 2em;white-space:pre-wrap;
   }
+  #print .bd{white-space:pre-wrap}
 }
 </style>
 </head>
@@ -251,7 +254,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
 
 <div id="bar">
   <span id="mark">타자기</span>
-  <input id="title" placeholder="제목 없음" autocomplete="off" spellcheck="false">
+  <span id="titleView">제목 없음</span>
   <div class="tools">
     <button class="t music" id="bMusic">타이핑 음악</button>
     <button class="t" id="bNew">새 종이</button>
@@ -291,6 +294,9 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <div class="row"><label>타이핑 음악 단축어 이름</label><input type="text" id="fSC" spellcheck="false" placeholder="타이핑 음악"></div>
   <p class="hint">단축어 앱에 만들어 둔 단축어의 이름을 그대로 적습니다. 상단의 <b>♪ 타이핑 음악</b>을 누르면 그 단축어가 실행됩니다. 음악이 끝나면 세션도 끝입니다.</p>
   <div class="row"><label>글자 크기</label><input type="number" id="fSize" min="11" max="30" step="1"> px</div>
+  <div class="row"><label>제목 줄 활자</label><input type="text" id="fTFont" spellcheck="false" placeholder="비워두면 기본 고딕"></div>
+  <div class="row"><label>제목 줄 크기</label><input type="number" id="fTSize" min="13" max="48" step="1"> px</div>
+  <p class="hint">본문 첫 줄이 제목 줄입니다. 여기에 친 글이 그대로 원고의 제목이 되고, <kbd>Enter</kbd>를 쳐야 본문이 시작됩니다.</p>
   <div class="row"><label>줄 간격</label><input type="number" id="fLh" min="1.2" max="3" step="0.1"></div>
   <div class="row"><label>따옴표 굽히기 <span style="font-family:var(--font-type);color:var(--ink-3)">“ ” ‘ ’</span></label><input type="checkbox" id="fSmart"></div>
   <div class="row"><label>타건음과 종소리</label><input type="checkbox" id="fSound"></div>
@@ -374,7 +380,7 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
-let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true};
+let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true,tfont:'',tsize:22};
 const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false,chain:null};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, bellLine=-1, saveTimer=null, escHold=null;
@@ -406,6 +412,17 @@ function unpack(d){
 /* ── 셈 ───────────────────────────────────────────── */
 function liveChars(cells){let n=0;for(const c of cells){if(!c.k&&!c.d&&c.c!=='\n'&&c.c!=='\t')n++;}return n;}
 function sheets(cells){return (liveChars(cells)/200);}
+/* 첫 줄바꿈 앞까지가 제목 줄이다 */
+function titleEnd(cells){
+  for(let n=0;n<cells.length;n++) if(cells[n].c==='\n') return n;
+  return cells.length;
+}
+function docTitle(cells){
+  let s='';
+  const e=titleEnd(cells);
+  for(let n=0;n<e;n++){ const c=cells[n]; if(!c.k&&!c.d) s+=c.c; }
+  return s.trim();
+}
 function plain(cells){
   let s='';
   for(const c of cells){ if(!c.k&&!c.d&&c.c!=='\t') s+=c.c; }
@@ -420,6 +437,7 @@ function selRange(){
 }
 function render(hold){
   const sr=selRange(), out=[]; let run=null;
+  const te=titleEnd(S.cells);
   const flush=()=>{ if(run){out.push('<span class="'+run.cls+'" data-s="'+run.s+'">'+esc(run.t)+'</span>'); run=null;} };
   for(let n=0;n<=S.cells.length;n++){
     if(n===S.cur){
@@ -430,12 +448,13 @@ function render(hold){
     if(n===S.cells.length) break;
     const c=S.cells[n];
     const inS=!!(sr&&n>=sr[0]&&n<sr[1]);
-    const cls=(c.k?'k':'')+(c.i?' i':'')+(inS?' sel':'');
+    const cls=(n<te?'ttl':'')+(c.k?' k':'')+(c.i?' i':'')+(inS?' sel':'');
     if(!run||run.cls!==cls){flush(); run={cls:cls,s:n,t:''};}
     run.t+=c.c;
   }
   flush();
   sheet.innerHTML=out.join('');
+  showTitle();
   gauge();
   place(hold);
 }
@@ -450,6 +469,11 @@ function place(hold){
   }else if(cr.top<dr.top+70||cr.bottom>dr.bottom-40){
     desk.scrollTop=Math.max(0,Math.min(max,desk.scrollTop+(cr.top-(dr.top+dr.height*0.4))));
   }
+}
+function showTitle(){
+  const t=docTitle(S.cells), el=$('#titleView');
+  el.textContent=t||'제목 없음';
+  el.classList.toggle('none',!t);
 }
 function gauge(){
   const m=sheets(S.cells);
@@ -811,7 +835,7 @@ window.addEventListener('keydown',e=>{
     if(k==='c'&&e.shiftKey){e.preventDefault(); copyPlain(S.cells); return;}
     if(k==='c'){const sr=selRange(); if(sr){e.preventDefault(); copyPlain(S.cells.slice(sr[0],sr[1]));} return;}
     if(k==='m'&&e.shiftKey){e.preventDefault(); runShortcut(); return;}
-    if(k==='p'){e.preventDefault(); doPrint(S.cells,$('#title').value); return;}
+    if(k==='p'){e.preventDefault(); doPrint(S.cells); return;}
     if(k==='v'||k==='x'){e.preventDefault(); toast('타자기에는 붙여넣거나 오려낼 수 없습니다.'); return;}
     return;
   }
@@ -872,8 +896,8 @@ function autosave(){
   saveTimer=setTimeout(()=>saveDoc(false),4000);
 }
 function saveDoc(loud){
-  if(!S.cells.length&&!S.id) { if(loud) toast('아직 아무것도 치지 않았습니다.'); return; }
-  const t=$('#title').value.trim();
+  if(!S.cells.length&&!S.id){ if(loud) toast('아직 아무것도 치지 않았습니다.'); return; }
+  const t=docTitle(S.cells);
   const p=pack(S.cells);
   let d=DB.docs.find(x=>x.id===S.id);
   if(!d){
@@ -896,14 +920,13 @@ function openDoc(id){
   const d=DB.docs.find(x=>x.id===id); if(!d) return;
   S.id=d.id; S.cells=unpack(d); S.cur=S.cells.length; S.anchor=null;
   S.lastTyped=null; S.chain=null; S.insMode=false; S.dirty=false; SESS=null;
-  $('#title').value=d.title||'';
   closeAll(); render(true); ime.focus();
   toast('불러왔습니다. 끝에서 이어 쓰면 됩니다.');
 }
 function newDoc(){
   if(S.dirty) saveDoc(false);
   S.id=null; S.cells=[]; S.cur=0; S.anchor=null; S.lastTyped=null; S.chain=null;
-  S.insMode=false; S.dirty=false; SESS=null; $('#title').value='';
+  S.insMode=false; S.dirty=false; SESS=null;
   closeAll(); render(true); ime.focus();
 }
 async function copyPlain(cells){
@@ -924,18 +947,23 @@ function delDoc(id){
 }
 
 /* ── 인쇄 ─────────────────────────────────────────── */
-function doPrint(cells,title){
-  const out=[]; let run=null;
-  const flush=()=>{ if(run){out.push('<span class="'+run.cls+'">'+esc(run.t)+'</span>'); run=null;} };
-  for(const c of cells){
-    const cls=(c.k?'k':'')+(c.i?' i':'');
-    if(!run||run.cls!==cls){flush(); run={cls:cls,t:''};}
-    run.t+=c.c;
-  }
-  flush();
-  const hd=title?'<span class="hd">'+esc(title)+'</span>':'';
+function doPrint(cells){
+  const te=titleEnd(cells);
+  const build=(from,to)=>{
+    const out=[]; let run=null;
+    const flush=()=>{ if(run){out.push('<span class="'+run.cls+'">'+esc(run.t)+'</span>'); run=null;} };
+    for(let n=from;n<to;n++){
+      const c=cells[n];
+      const cls=(c.k?'k':'')+(c.i?' i':'');
+      if(!run||run.cls!==cls){flush(); run={cls:cls,t:''};}
+      run.t+=c.c;
+    }
+    flush(); return out.join('');
+  };
+  const head=te?'<div class="ttl">'+build(0,te)+'</div>':'';
+  const body=build(te<cells.length?te+1:te,cells.length);
   const P=$('#print');
-  P.innerHTML=hd+out.join('');
+  P.innerHTML=head+'<div class="bd">'+body+'</div>';
   P.className=CFG.loose?'loose':'';
   let st=document.getElementById('pageRule');
   if(!st){st=document.createElement('style'); st.id='pageRule'; document.head.appendChild(st);}
@@ -1023,7 +1051,7 @@ $('#docs').addEventListener('click',e=>{
   const b=e.target.closest('[data-open],[data-copy],[data-print],[data-del]'); if(!b) return;
   if(b.dataset.open) openDoc(b.dataset.open);
   else if(b.dataset.copy){const d=DB.docs.find(x=>x.id===b.dataset.copy); copyPlain(unpack(d));}
-  else if(b.dataset.print){const d=DB.docs.find(x=>x.id===b.dataset.print); doPrint(unpack(d),d.title);}
+  else if(b.dataset.print){const d=DB.docs.find(x=>x.id===b.dataset.print); doPrint(unpack(d));}
   else if(b.dataset.del) delDoc(b.dataset.del);
 });
 
@@ -1072,6 +1100,9 @@ function applyCFG(){
   const f=(CFG.font||'').trim();
   R.setProperty('--font-type',(f?'"'+f+'",':'')+BASEFONT);
   R.setProperty('--size',CFG.size+'px');
+  const tf=(CFG.tfont||'').trim();
+  R.setProperty('--font-title',(tf?'"'+tf+'",':'')+BASEFONT);
+  R.setProperty('--size-title',CFG.tsize+'px');
   R.setProperty('--lh',CFG.lh);
   const pg=PAGE[CFG.paper]||PAGE.a5;
   R.setProperty('--pgw',pg[0]+'cm');
@@ -1080,6 +1111,7 @@ function applyCFG(){
   $('#fFont').value=CFG.font; $('#fSize').value=CFG.size; $('#fLh').value=CFG.lh;
   $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold; $('#fSmart').checked=CFG.smart;
   $('#fPaper').value=CFG.paper; $('#fLoose').checked=CFG.loose;
+  $('#fTFont').value=CFG.tfont||''; $('#fTSize').value=CFG.tsize;
   $('#fSM').value=CFG.sm; $('#fPM').value=CFG.pm; $('#fSC').value=CFG.shortcut||'';
   const st=$('#fontState');
   if(!f) st.innerHTML='기기의 기본 고딕으로 칩니다. 맥북의 <b>a환상</b>처럼 따로 쓰고 싶은 활자가 있으면 그 이름을 적으세요.';
@@ -1097,6 +1129,8 @@ $('#fPaper').addEventListener('change',e=>{CFG.paper=e.target.value; saveCFG(); 
 $('#fLoose').addEventListener('change',e=>{CFG.loose=e.target.checked; saveCFG();});
 $('#fSM').addEventListener('input',e=>{CFG.sm=Math.max(0,Math.min(6,+e.target.value||0)); saveCFG(); applyCFG();});
 $('#fPM').addEventListener('input',e=>{CFG.pm=Math.max(0,Math.min(6,+e.target.value||0)); saveCFG();});
+$('#fTFont').addEventListener('input',e=>{CFG.tfont=e.target.value.trim(); saveCFG(); applyCFG();});
+$('#fTSize').addEventListener('input',e=>{CFG.tsize=Math.max(13,Math.min(48,+e.target.value||22)); saveCFG(); applyCFG();});
 $('#fSC').addEventListener('input',e=>{CFG.shortcut=e.target.value; saveCFG();});
 
 /* ── 알림 ─────────────────────────────────────────── */
@@ -1146,15 +1180,12 @@ $('#presets').addEventListener('click',e=>{
   document.querySelectorAll('#presets button').forEach(x=>x.classList.toggle('on',x===b));
 });
 $('#bLockGo').addEventListener('click',()=>startLock(Math.max(1,+$('#fMin').value||25)));
-$('#title').addEventListener('input',()=>{S.dirty=true; autosave();});
-$('#title').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault(); saveDoc(true); ime.focus();} });
-$('#title').addEventListener('blur',()=>{ if(S.dirty) saveDoc(false); });
+
 
 /* ── 단축어로 열기 ────────────────────────────────── */
 function params(){
   const p=new URLSearchParams(location.search);
   const g=(...k)=>{for(const n of k){const v=p.get(n); if(v!==null) return v;} return null;};
-  const title=g('제목','title'); if(title) $('#title').value=title;
   const snd=g('소리','sound'); if(snd!==null){CFG.sound=!(snd==='0'||snd==='false'); saveCFG();}
   const min=parseInt(g('분','min')||'',10);
   const go=g('시작','start');
@@ -1167,7 +1198,7 @@ loadDB(); applyCFG();
 const last=DB.docs.slice().sort((a,b)=>b.updated-a.updated)[0];
 const p=new URLSearchParams(location.search);
 if(last&&!(p.get('새로')||p.get('new'))){
-  S.id=last.id; S.cells=unpack(last); S.cur=S.cells.length; $('#title').value=last.title||'';
+  S.id=last.id; S.cells=unpack(last); S.cur=S.cells.length;
 }
 render(true); params(); ime.focus();
 setInterval(()=>{ if(S.dirty) saveDoc(false); },20000);
