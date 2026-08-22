@@ -289,6 +289,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <p class="hint">단축어 앱에 만들어 둔 단축어의 이름을 그대로 적습니다. 상단의 <b>♪ 타이핑 음악</b>을 누르면 그 단축어가 실행됩니다. 음악이 끝나면 세션도 끝입니다.</p>
   <div class="row"><label>글자 크기</label><input type="number" id="fSize" min="11" max="30" step="1"> px</div>
   <div class="row"><label>줄 간격</label><input type="number" id="fLh" min="1.2" max="3" step="0.1"></div>
+  <div class="row"><label>따옴표 굽히기 <span style="font-family:var(--font-type);color:var(--ink-3)">“ ” ‘ ’</span></label><input type="checkbox" id="fSmart"></div>
   <div class="row"><label>타건음과 종소리</label><input type="checkbox" id="fSound"></div>
   <div class="row"><label>종이가 올라오게 (타이핑 줄을 화면 한자리에 고정)</label><input type="checkbox" id="fHold"></div>
   <div class="row"><label>화면 좌우 여백</label><input type="number" id="fSM" min="0" max="6" step="0.5"> cm</div>
@@ -367,7 +368,7 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
-let CFG={font:'a환상',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:''};
+let CFG={font:'a환상',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true};
 const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, bellLine=-1, saveTimer=null, escHold=null;
@@ -508,9 +509,26 @@ function refuse(){
   toast('여기엔 끼워 넣을 수 없습니다. 고칠 곳을 골라 ⌘D로 줄을 긋고, 그 뒤에서 치세요.');
   const c=$('#caret'); if(c){ c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
 }
+/* 곧은 따옴표를 문맥에 따라 굽힌다 */
+const OPENAFTER=/[\s(\[{<“‘"'\u2014\u2013\u2015·,;:]/;
+function curl(str){
+  if(!CFG.smart) return str;
+  let prev=S.cur>0&&S.cells[S.cur-1]?S.cells[S.cur-1].c:'';
+  let out='';
+  for(const ch of str){
+    let c=ch;
+    if(ch==='"'||ch==="'"){
+      const open=prev===''||OPENAFTER.test(prev);
+      c=ch==='"'?(open?'\u201C':'\u201D'):(open?'\u2018':'\u2019');
+    }
+    out+=c; prev=c;
+  }
+  return out;
+}
 function insertText(str){
   if(!str) return;
   if(!canType()){ ime.value=''; S.comp=''; render(false); refuse(); return; }
+  str=curl(str);
   beginSession();
   const atEnd=S.cur>=S.cells.length;
   const afterStrike=S.cur>0&&S.cells[S.cur-1]&&S.cells[S.cur-1].k;
@@ -888,7 +906,7 @@ function applyCFG(){
   R.setProperty('--pgh',pg[1]+'cm');
   R.setProperty('--sm',CFG.sm+'cm');
   $('#fFont').value=CFG.font; $('#fSize').value=CFG.size; $('#fLh').value=CFG.lh;
-  $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold;
+  $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold; $('#fSmart').checked=CFG.smart;
   $('#fPaper').value=CFG.paper; $('#fLoose').checked=CFG.loose;
   $('#fSM').value=CFG.sm; $('#fPM').value=CFG.pm; $('#fSC').value=CFG.shortcut||'';
   const st=$('#fontState');
@@ -900,6 +918,7 @@ $('#fFont').addEventListener('input',e=>{CFG.font=e.target.value.trim(); saveCFG
 $('#fSize').addEventListener('input',e=>{CFG.size=Math.max(11,Math.min(30,+e.target.value||17)); saveCFG(); applyCFG();});
 $('#fLh').addEventListener('input',e=>{CFG.lh=Math.max(1.2,Math.min(3,+e.target.value||1.9)); saveCFG(); applyCFG();});
 $('#fSound').addEventListener('change',e=>{CFG.sound=e.target.checked; saveCFG();});
+$('#fSmart').addEventListener('change',e=>{CFG.smart=e.target.checked; saveCFG();});
 $('#fHold').addEventListener('change',e=>{CFG.hold=e.target.checked; saveCFG();});
 $('#fPaper').addEventListener('change',e=>{CFG.paper=e.target.value; saveCFG(); applyCFG();});
 $('#fLoose').addEventListener('change',e=>{CFG.loose=e.target.checked; saveCFG();});
