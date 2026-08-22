@@ -95,6 +95,7 @@ button.t:focus-visible{outline:2px solid var(--insert);outline-offset:1px}
   font-family:var(--font-type);
   font-size:var(--size);line-height:var(--lh);
   white-space:pre-wrap;word-break:break-all;
+  tab-size:2;-moz-tab-size:2;
   color:var(--ink);min-height:1em;
   user-select:none;-webkit-user-select:none;cursor:text;
   position:relative;z-index:1;
@@ -234,6 +235,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
     font-family:var(--font-type);
     font-size:11.5pt;line-height:1.85;
     color:#000;white-space:pre-wrap;word-break:break-all;
+    tab-size:2;-moz-tab-size:2;
   }
   #print.loose{line-height:2.5}
   #print .k{text-decoration:line-through;color:#000}
@@ -328,6 +330,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <div class="keys">
     <div><span>방금 친 글자 하나만 지우기</span><kbd>Backspace</kbd></div>
     <div><span>커서 옮기기</span><kbd>← → ↑ ↓</kbd></div>
+    <div><span>새 문단 들여쓰기</span><kbd>Tab</kbd></div>
     <div><span>골라잡기</span><kbd>Shift</kbd> + 방향키 · 끌기</div>
     <div><span>줄 긋기 / 되돌리기</span><kbd>⌘ D</kbd></div>
     <div><span>전체 고르기</span><kbd>⌘ A</kbd></div>
@@ -341,6 +344,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>지워지지 않습니다.</b> 방금 친 글자 하나만 물릴 수 있습니다. 한글은 조합이 끝나기 전까지 지울 수 있고, 받침이 앉는 순간 확정됩니다.<br><br>
   <b>줄을 긋습니다.</b> 지우는 대신 골라서 <kbd>⌘D</kbd>. 그은 자리는 붉게 남고, 그 뒤에 이어 친 글자는 <span class="ok">푸른색</span>으로 표시됩니다. 줄 그은 글자는 매수에서 빠지고, 복사할 때도 빠집니다. 인쇄에는 그대로 남습니다.<br><br>
   <b>아무 데나 끼워 넣을 수 없습니다.</b> 칠 수 있는 자리는 두 곳뿐입니다 — 원고의 맨 끝, 그리고 줄 그은 자리 바로 뒤. 그 밖의 자리에 커서를 두면 커서가 점선으로 바뀌고 자판이 먹지 않습니다. 문장 중간을 고치려면 먼저 그 부분에 줄을 그으세요.<br><br>
+  <b>들여쓰기.</b> 새 문단은 <kbd>Tab</kbd>으로 한 칸 들입니다. 화면과 인쇄에는 그대로 나오지만, 클립보드로 복사할 때는 빠집니다. 편집기에서 따로 문단 서식을 줄 테니까요.<br><br>
   <b>타이핑 음악.</b> 설정에 단축어 이름을 적어두면 상단의 <span class="ok">♪ 타이핑 음악</span>이 그 단축어를 실행합니다. 음악이 곧 시계입니다. 곡이 끝나면 저장하고 일어서면 됩니다.<br><br>
   <b>잠금.</b> 시간으로 묶고 싶을 때만 씁니다. 음악을 쓰신다면 굳이 필요하지 않습니다.
   </p>
@@ -399,9 +403,13 @@ function unpack(d){
 }
 
 /* ── 셈 ───────────────────────────────────────────── */
-function liveChars(cells){let n=0;for(const c of cells){if(!c.k&&c.c!=='\n')n++;}return n;}
+function liveChars(cells){let n=0;for(const c of cells){if(!c.k&&c.c!=='\n'&&c.c!=='\t')n++;}return n;}
 function sheets(cells){return (liveChars(cells)/200);}
-function plain(cells){let s='';for(const c of cells){if(!c.k)s+=c.c;}return s;}
+function plain(cells){
+  let s='';
+  for(const c of cells){ if(!c.k&&c.c!=='\t') s+=c.c; }
+  return s;
+}
 
 /* ── 그리기 ───────────────────────────────────────── */
 const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -791,6 +799,7 @@ window.addEventListener('keydown',e=>{
     if(k==='v'||k==='x'){e.preventDefault(); toast('타자기에는 붙여넣거나 오려낼 수 없습니다.'); return;}
     return;
   }
+  if(document.activeElement!==ime) ime.focus();
   if(composing||e.isComposing) return;
   if(!canType()&&(e.key.length===1||e.key==='Process'||e.key==='Unidentified'||e.key==='Enter'||e.key==='Tab')){
     e.preventDefault(); refuse(); return;
@@ -800,7 +809,7 @@ window.addEventListener('keydown',e=>{
     case 'Backspace': e.preventDefault(); backOne(); return;
     case 'Delete': e.preventDefault(); toast('지우개는 없습니다. 줄을 그으세요 — ⌘D'); return;
     case 'Enter': e.preventDefault(); newline(); return;
-    case 'Tab': e.preventDefault(); insertText('    '); return;
+    case 'Tab': e.preventDefault(); insertText('\t',true); return;
     case 'ArrowLeft': e.preventDefault(); move(S.cur-1,e.shiftKey); return;
     case 'ArrowRight': e.preventDefault(); move(S.cur+1,e.shiftKey); return;
     case 'ArrowUp': {e.preventDefault(); const i=vertical(-1); move(i===null?0:i,e.shiftKey); return;}
@@ -815,6 +824,7 @@ window.addEventListener('keyup',e=>{ if(e.key==='Escape'&&escHold){clearTimeout(
 /* 마우스로 커서 옮기기 */
 let dragging=false;
 sheet.addEventListener('mousedown',e=>{
+  ime.focus();
   const i=idxFromPoint(e.clientX,e.clientY); if(i===null) return;
   e.preventDefault();
   if(e.shiftKey){ if(S.anchor===null) S.anchor=S.cur; S.cur=i; }
@@ -832,7 +842,9 @@ window.addEventListener('mouseup',()=>{
   if(S.cur>=S.cells.length) S.insMode=false;
   render(false);
 });
-desk.addEventListener('mousedown',e=>{ if(e.target===desk||e.target===paper){ e.preventDefault(); ime.focus(); }});
+desk.addEventListener('mousedown',e=>{
+  if(e.target===desk||e.target===paper){ e.preventDefault(); move(S.cells.length,false); ime.focus(); }
+});
 
 /* ── 원고 ─────────────────────────────────────────── */
 function autosave(){
