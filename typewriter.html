@@ -330,7 +330,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <div class="keys">
     <div><span>방금 친 글자 하나만 지우기</span><kbd>Backspace</kbd></div>
     <div><span>커서 옮기기</span><kbd>← → ↑ ↓</kbd></div>
-    <div><span>새 문단 들여쓰기</span><kbd>Tab</kbd></div>
+    <div><span>들여쓰기 넣기 / 물리기</span><kbd>Tab</kbd> · <kbd>Backspace</kbd></div>
     <div><span>골라잡기</span><kbd>Shift</kbd> + 방향키 · 끌기</div>
     <div><span>줄 긋기 / 되돌리기</span><kbd>⌘ D</kbd></div>
     <div><span>전체 고르기</span><kbd>⌘ A</kbd></div>
@@ -344,7 +344,8 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>지워지지 않습니다.</b> 방금 친 글자 하나만 물릴 수 있습니다. 한글은 조합이 끝나기 전까지 지울 수 있고, 받침이 앉는 순간 확정됩니다.<br><br>
   <b>줄을 긋습니다.</b> 지우는 대신 골라서 <kbd>⌘D</kbd>. 그은 자리는 붉게 남고, 그 뒤에 이어 친 글자는 <span class="ok">푸른색</span>으로 표시됩니다. 줄 그은 글자는 매수에서 빠지고, 복사할 때도 빠집니다. 인쇄에는 그대로 남습니다.<br><br>
   <b>아무 데나 끼워 넣을 수 없습니다.</b> 칠 수 있는 자리는 두 곳뿐입니다 — 원고의 맨 끝, 그리고 줄 그은 자리 바로 뒤. 그 밖의 자리에 커서를 두면 커서가 점선으로 바뀌고 자판이 먹지 않습니다. 문장 중간을 고치려면 먼저 그 부분에 줄을 그으세요.<br><br>
-  <b>들여쓰기.</b> 새 문단은 <kbd>Tab</kbd>으로 한 칸 들입니다. 화면과 인쇄에는 그대로 나오지만, 클립보드로 복사할 때는 빠집니다. 편집기에서 따로 문단 서식을 줄 테니까요.<br><br>
+  <b>들여쓰기.</b> <kbd>Enter</kbd>를 치면 새 문단이 공백 네 칸으로 저절로 들어갑니다. 첫 문단이나 더 필요한 자리에는 <kbd>Tab</kbd>. 들여쓰기는 글자가 아니므로 <kbd>Backspace</kbd>로 언제든 통째로 물릴 수 있습니다.<br>
+  화면과 인쇄에는 그대로 나오지만 <b>클립보드로 복사할 때는 빠집니다.</b> 편집기에서 문단 서식으로 다시 줄 테니까요. 매수에서도 빠집니다.<br><br>
   <b>타이핑 음악.</b> 설정에 단축어 이름을 적어두면 상단의 <span class="ok">♪ 타이핑 음악</span>이 그 단축어를 실행합니다. 음악이 곧 시계입니다. 곡이 끝나면 저장하고 일어서면 됩니다.<br><br>
   <b>잠금.</b> 시간으로 묶고 싶을 때만 씁니다. 음악을 쓰신다면 굳이 필요하지 않습니다.
   </p>
@@ -392,22 +393,22 @@ function saveDB(){
 function saveCFG(){try{localStorage.setItem(KEY+'.cfg',JSON.stringify(CFG));}catch(e){}}
 
 function pack(cells){
-  let t='',k='',i='';
-  for(const c of cells){t+=c.c;k+=c.k?'1':'0';i+=c.i?'1':'0';}
-  return {t,k,i};
+  let t='',k='',i='',d='';
+  for(const c of cells){t+=c.c;k+=c.k?'1':'0';i+=c.i?'1':'0';d+=c.d?'1':'0';}
+  return {t,k,i,d};
 }
 function unpack(d){
   const out=[];const t=d.t||'';
-  for(let n=0;n<t.length;n++) out.push({c:t[n],k:(d.k||'')[n]==='1',i:(d.i||'')[n]==='1'});
+  for(let n=0;n<t.length;n++) out.push({c:t[n],k:(d.k||'')[n]==='1',i:(d.i||'')[n]==='1',d:(d.d||'')[n]==='1'});
   return repair(out);
 }
 
 /* ── 셈 ───────────────────────────────────────────── */
-function liveChars(cells){let n=0;for(const c of cells){if(!c.k&&c.c!=='\n'&&c.c!=='\t')n++;}return n;}
+function liveChars(cells){let n=0;for(const c of cells){if(!c.k&&!c.d&&c.c!=='\n'&&c.c!=='\t')n++;}return n;}
 function sheets(cells){return (liveChars(cells)/200);}
 function plain(cells){
   let s='';
-  for(const c of cells){ if(!c.k&&c.c!=='\t') s+=c.c; }
+  for(const c of cells){ if(!c.k&&!c.d&&c.c!=='\t') s+=c.c; }
   return s;
 }
 
@@ -570,11 +571,11 @@ function repair(cells){
   const src=nfc(cells), out=[]; let chain=-1;
   for(const c of src){
     const p=out[out.length-1];
-    if(isJamo(c.c)&&p&&chain===out.length-1&&p.k===c.k&&p.i===c.i){
+    if(isJamo(c.c)&&p&&chain===out.length-1&&p.k===c.k&&p.i===c.i&&!p.d&&!c.d){
       const r=feed(p.c,c.c);
-      if(r){ p.c=r[0]; if(r[1]) out.push({c:r[1],k:c.k,i:c.i}); chain=out.length-1; continue; }
+      if(r){ p.c=r[0]; if(r[1]) out.push({c:r[1],k:c.k,i:c.i,d:false}); chain=out.length-1; continue; }
     }
-    out.push({c:isJamo(c.c)?toCompat(c.c):c.c,k:c.k,i:c.i});
+    out.push({c:isJamo(c.c)?toCompat(c.c):c.c,k:c.k,i:c.i,d:!!c.d});
     chain=isJamo(c.c)?out.length-1:-1;
   }
   return out;
@@ -585,11 +586,11 @@ function nfc(cells){
   const out=[];
   for(const c of cells){
     const p=out[out.length-1];
-    if(p&&p.k===c.k&&p.i===c.i){
+    if(p&&p.k===c.k&&p.i===c.i&&!p.d&&!c.d){
       const m=(p.c+c.c).normalize('NFC');
       if(m.length===1){ p.c=m; continue; }
     }
-    out.push({c:c.c.normalize('NFC'),k:c.k,i:c.i});
+    out.push({c:c.c.normalize('NFC'),k:c.k,i:c.i,d:!!c.d});
   }
   return out;
 }
@@ -597,7 +598,7 @@ function nfc(cells){
 function mergeBack(){
   while(S.cur>1){
     const a=S.cells[S.cur-2], b=S.cells[S.cur-1];
-    if(!a||!b||a.k!==b.k||a.i!==b.i) break;
+    if(!a||!b||a.k!==b.k||a.i!==b.i||a.d||b.d) break;
     const m=(a.c+b.c).normalize('NFC');
     if(m.length!==1) break;
     a.c=m; S.cells.splice(S.cur-1,1); S.cur--;
@@ -644,18 +645,18 @@ function insertText(str,fromIME){
   /* IME가 완성해 보낸 글자가 아니고, 낱자 하나가 홀로 왔다면 — 직접 조립한다 */
   if(!fromIME&&str.length===1&&isJamo(str)){
     const p=S.cells[S.cur-1];
-    if(S.chain===S.cur-1&&p&&p.k===false&&p.i===mark){
+    if(S.chain===S.cur-1&&p&&!p.d&&p.k===false&&p.i===mark){
       const r=feed(p.c,str);
       if(r){
         p.c=r[0];
-        if(r[1]){ S.cells.splice(S.cur,0,{c:r[1],k:false,i:mark}); S.cur++; }
+        if(r[1]){ S.cells.splice(S.cur,0,{c:r[1],k:false,i:mark,d:false}); S.cur++; }
         S.chain=S.cur-1; S.lastTyped=S.cur-1;
         S.anchor=null; S.dirty=true;
         render(true); ringCheck(); autosave(); markTyping();
         return;
       }
     }
-    S.cells.splice(S.cur,0,{c:toCompat(str),k:false,i:mark});
+    S.cells.splice(S.cur,0,{c:toCompat(str),k:false,i:mark,d:false});
     S.cur++; S.chain=S.cur-1; S.lastTyped=S.cur-1;
     S.anchor=null; S.dirty=true;
     render(true); ringCheck(); autosave(); markTyping();
@@ -664,7 +665,7 @@ function insertText(str,fromIME){
   S.chain=null;
 
   const add=[];
-  for(const ch of str) add.push({c:ch,k:false,i:mark&&ch!=='\n'});
+  for(const ch of str) add.push({c:ch,k:false,i:mark&&ch!=='\n',d:false});
   S.cells.splice(S.cur,0,...add);
   S.cur+=add.length;
   S.lastTyped=S.cur-1;
@@ -672,14 +673,29 @@ function insertText(str,fromIME){
   S.anchor=null; S.dirty=true;
   render(true); ringCheck(); autosave(); markTyping();
 }
+const INDENT='    ';   /* 공백 네 개 */
+function putIndent(){
+  const add=[];
+  for(const ch of INDENT) add.push({c:ch,k:false,i:false,d:true});
+  S.cells.splice(S.cur,0,...add);
+  S.cur+=add.length;
+}
 function newline(){
   if(!canType()){ refuse(); return; }
   beginSession();
-  S.cells.splice(S.cur,0,{c:'\n',k:false,i:false});
-  S.cur++; S.lastTyped=S.cur-1; S.anchor=null; S.chain=null; S.insMode=false; S.dirty=true;
+  S.cells.splice(S.cur,0,{c:'\n',k:false,i:false,d:false});
+  S.cur++; putIndent();
+  S.lastTyped=null; S.anchor=null; S.chain=null; S.insMode=false; S.dirty=true;
   carriage(); render(true); autosave(); markTyping();
 }
 function backOne(){
+  /* 들여쓰기는 글자가 아니므로 언제든 통째로 물릴 수 있다 */
+  if(S.cur>0&&S.cells[S.cur-1]&&S.cells[S.cur-1].d){
+    let a=S.cur; while(a>0&&S.cells[a-1].d) a--;
+    S.cells.splice(a,S.cur-a); S.cur=a;
+    S.lastTyped=null; S.chain=null; S.anchor=null; S.dirty=true;
+    render(true); autosave(); return true;
+  }
   if(S.lastTyped!==null&&S.cur===S.lastTyped+1&&S.cur>0){
     S.cells.splice(S.cur-1,1); S.cur--; S.lastTyped=null; S.chain=null; S.anchor=null; S.dirty=true;
     render(true); autosave(); return true;
@@ -809,7 +825,11 @@ window.addEventListener('keydown',e=>{
     case 'Backspace': e.preventDefault(); backOne(); return;
     case 'Delete': e.preventDefault(); toast('지우개는 없습니다. 줄을 그으세요 — ⌘D'); return;
     case 'Enter': e.preventDefault(); newline(); return;
-    case 'Tab': e.preventDefault(); insertText('\t',true); return;
+    case 'Tab': e.preventDefault();
+      if(!canType()){ refuse(); return; }
+      beginSession(); putIndent();
+      S.lastTyped=null; S.anchor=null; S.chain=null; S.dirty=true;
+      render(true); autosave(); markTyping(); return;
     case 'ArrowLeft': e.preventDefault(); move(S.cur-1,e.shiftKey); return;
     case 'ArrowRight': e.preventDefault(); move(S.cur+1,e.shiftKey); return;
     case 'ArrowUp': {e.preventDefault(); const i=vertical(-1); move(i===null?0:i,e.shiftKey); return;}
@@ -860,7 +880,7 @@ function saveDoc(loud){
     d={id:S.id||('d'+Date.now().toString(36)),created:Date.now(),sessions:[]};
     S.id=d.id; DB.docs.unshift(d);
   }
-  d.title=t; d.t=p.t; d.k=p.k; d.i=p.i; d.updated=Date.now();
+  d.title=t; d.t=p.t; d.k=p.k; d.i=p.i; d.d=p.d; d.updated=Date.now();
   if(SESS){
     const secs=Math.max(1,(Date.now()-SESS.start)/1000);
     const wrote=liveChars(S.cells)-SESS.from;
