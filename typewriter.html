@@ -179,7 +179,8 @@ button:focus-visible{outline:2px solid var(--insert);outline-offset:2px}
 .doc .nm:hover{color:var(--insert)}
 .doc .meta{font-family:var(--font-type);font-size:11px;color:var(--ink-3);white-space:nowrap}
 .doc .act{display:flex;gap:1px}
-.doc .act button{border:0;background:transparent;font-family:var(--font-ui);font-size:11.5px;color:var(--ink-3);cursor:pointer;padding:3px 6px;border-radius:2px}
+.doc .act button{border:0;background:transparent;font-family:var(--font-ui);font-size:11.5px;color:var(--ink-3);cursor:pointer;padding:3px 5px;border-radius:2px;white-space:nowrap}
+.doc .act button[data-tidy]:hover{color:var(--insert)}
 .doc .act button:hover{background:var(--desk-2);color:var(--ink)}
 .doc .act button.del:hover{color:var(--strike)}
 .empty{padding:34px 0;text-align:center;color:var(--ink-3);font-size:13px}
@@ -352,6 +353,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>아무 데나 끼워 넣을 수 없습니다.</b> 칠 수 있는 자리는 두 곳뿐입니다 — 원고의 맨 끝, 그리고 줄 그은 자리 바로 뒤. 그 밖의 자리에 커서를 두면 커서가 점선으로 바뀌고 자판이 먹지 않습니다. 문장 중간을 고치려면 먼저 그 부분에 줄을 그으세요.<br><br>
   <b>들여쓰기.</b> <kbd>Enter</kbd>를 치면 새 문단이 공백 네 칸으로 저절로 들어갑니다. 첫 문단이나 더 필요한 자리에는 <kbd>Tab</kbd>. 들여쓰기는 글자가 아니므로 <kbd>Backspace</kbd>로 언제든 통째로 물릴 수 있습니다.<br>
   화면과 인쇄에는 그대로 나오지만 <b>클립보드로 복사할 때는 빠집니다.</b> 편집기에서 문단 서식으로 다시 줄 테니까요. 매수에서도 빠집니다.<br><br>
+  <b>정리.</b> 서랍의 <b>정리</b>는 줄 그은 글자를 종이에서 아주 걷어냅니다. 그 자리에 남은 겹공백과 줄 끝 공백도 함께 다듬고, 고쳐 쓴 푸른 글자는 보통 글자가 됩니다. 되돌릴 수 없으니 백업을 받아두고 누르세요.<br><br>
   <b>타이핑 음악.</b> 설정에 단축어 이름을 적어두면 상단의 <span class="ok">♪ 타이핑 음악</span>이 그 단축어를 실행합니다. 음악이 곧 시계입니다. 곡이 끝나면 저장하고 일어서면 됩니다.<br><br>
   <b>잠금.</b> 시간으로 묶고 싶을 때만 씁니다. 음악을 쓰신다면 굳이 필요하지 않습니다.
   </p>
@@ -955,6 +957,46 @@ async function copyPlain(cells){
     ta.remove(); ime.focus();
   }
 }
+/* 줄 그은 글자를 걷어내고, 그 자리에 남은 겹공백을 다듬는다 */
+function tidy(cells){
+  const kept=[];
+  for(const c of cells) if(!c.k) kept.push({c:c.c,k:false,i:false,d:!!c.d});
+  const one=[];
+  for(const c of kept){
+    if(c.c===' '&&!c.d){
+      const p=one[one.length-1];
+      if(p&&p.c===' '&&!p.d) continue;      /* 겹친 공백은 하나로 */
+    }
+    one.push(c);
+  }
+  const out=[];
+  for(let n=0;n<one.length;n++){
+    const c=one[n];
+    if(c.c===' '&&!c.d&&(n+1>=one.length||one[n+1].c==='\n')) continue;  /* 줄 끝 공백 */
+    out.push(c);
+  }
+  return out;
+}
+function tidyDoc(id){
+  const d=DB.docs.find(x=>x.id===id); if(!d) return;
+  const cells=unpack(d);
+  const struck=cells.filter(c=>c.k).length;
+  const res=tidy(cells);
+  const spaces=(cells.length-struck)-res.length;
+  if(!struck&&!spaces){ toast('정리할 것이 없습니다'); return; }
+  if(!confirm('「'+(d.title||'제목 없음')+'」\n\n줄 그은 글자 '+struck+'자를 걷어내고, 겹친 공백 '+spaces+'군데를 다듬습니다.\n되돌릴 수 없습니다.')) return;
+  const p=pack(res);
+  d.t=p.t; d.k=p.k; d.i=p.i; d.d=p.d;
+  d.title=docTitle(res); d.updated=Date.now();
+  saveDB();
+  if(S.id===id){
+    S.cells=res; S.cur=S.cells.length; S.floor=S.cur;
+    S.anchor=null; S.chain=null; S.lastTyped=null; S.insMode=false; S.dirty=false;
+    render(true);
+  }
+  drawer();
+  toast('정리했습니다 · '+struck+'자를 걷어냈습니다');
+}
 function delDoc(id){
   const d=DB.docs.find(x=>x.id===id); if(!d) return;
   if(!confirm('"'+(d.title||'제목 없음')+'"을(를) 지웁니다. 되돌릴 수 없습니다.')) return;
@@ -1054,6 +1096,7 @@ function drawer(){
         +'<span class="meta">'+sheets(cells).toFixed(1)+'매 · '+day+'</span>'
         +'<span class="act">'
         +'<button data-open="'+d.id+'">열기</button>'
+        +'<button data-tidy="'+d.id+'">정리</button>'
         +'<button data-copy="'+d.id+'">복사</button>'
         +'<button data-print="'+d.id+'">인쇄</button>'
         +'<button class="del" data-del="'+d.id+'">삭제</button>'
@@ -1065,8 +1108,9 @@ function drawer(){
   open('#vDrawer');
 }
 $('#docs').addEventListener('click',e=>{
-  const b=e.target.closest('[data-open],[data-copy],[data-print],[data-del]'); if(!b) return;
+  const b=e.target.closest('[data-open],[data-tidy],[data-copy],[data-print],[data-del]'); if(!b) return;
   if(b.dataset.open) openDoc(b.dataset.open);
+  else if(b.dataset.tidy) tidyDoc(b.dataset.tidy);
   else if(b.dataset.copy){const d=DB.docs.find(x=>x.id===b.dataset.copy); copyPlain(unpack(d));}
   else if(b.dataset.print){const d=DB.docs.find(x=>x.id===b.dataset.print); doPrint(unpack(d));}
   else if(b.dataset.del) delDoc(b.dataset.del);
