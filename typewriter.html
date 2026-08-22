@@ -370,9 +370,10 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
 let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true};
-const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false};
+const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false,chain:null};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, bellLine=-1, saveTimer=null, escHold=null;
+let composing=false;   /* 한글 조합 중 — iOS는 isComposing을 못 믿는다 */
 
 /* ── 저장소 ───────────────────────────────────────── */
 function loadDB(){
@@ -394,7 +395,7 @@ function pack(cells){
 function unpack(d){
   const out=[];const t=d.t||'';
   for(let n=0;n<t.length;n++) out.push({c:t[n],k:(d.k||'')[n]==='1',i:(d.i||'')[n]==='1'});
-  return nfc(out);
+  return repair(out);
 }
 
 /* ── 셈 ───────────────────────────────────────────── */
@@ -500,6 +501,77 @@ function markTyping(){
 function beginSession(){
   if(!SESS) SESS={start:Date.now(),from:liveChars(S.cells),escapes:0};
 }
+/* ── 한글 조합기 ──────────────────────────────────────
+   iOS가 조합 신호 없이 낱자를 하나씩 확정해 보낼 때를 대비한 안전망.
+   앞 글자가 '이번에 조립 중인 낱자'일 때만 합친다. 그래서 맥에서
+   IME가 이미 완성해 보낸 글자에는 손대지 않는다. ─────────────── */
+const CHO='ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+const JUNG='ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ';
+const JONG=['','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const VCOMB={'ㅗㅏ':'ㅘ','ㅗㅐ':'ㅙ','ㅗㅣ':'ㅚ','ㅜㅓ':'ㅝ','ㅜㅔ':'ㅞ','ㅜㅣ':'ㅟ','ㅡㅣ':'ㅢ'};
+const TCOMB={'ㄱㅅ':'ㄳ','ㄴㅈ':'ㄵ','ㄴㅎ':'ㄶ','ㄹㄱ':'ㄺ','ㄹㅁ':'ㄻ','ㄹㅂ':'ㄼ','ㄹㅅ':'ㄽ','ㄹㅌ':'ㄾ','ㄹㅍ':'ㄿ','ㄹㅎ':'ㅀ','ㅂㅅ':'ㅄ'};
+const TSPLIT={'ㄳ':['ㄱ','ㅅ'],'ㄵ':['ㄴ','ㅈ'],'ㄶ':['ㄴ','ㅎ'],'ㄺ':['ㄹ','ㄱ'],'ㄻ':['ㄹ','ㅁ'],'ㄼ':['ㄹ','ㅂ'],'ㄽ':['ㄹ','ㅅ'],'ㄾ':['ㄹ','ㅌ'],'ㄿ':['ㄹ','ㅍ'],'ㅀ':['ㄹ','ㅎ'],'ㅄ':['ㅂ','ㅅ']};
+
+function toCompat(ch){
+  const u=ch.codePointAt(0);
+  if(u>=0x1100&&u<=0x1112) return CHO[u-0x1100];
+  if(u>=0x1161&&u<=0x1175) return JUNG[u-0x1161];
+  if(u>=0x11A8&&u<=0x11C2) return JONG[u-0x11A7];
+  return ch;
+}
+function isJamo(ch){
+  if(!ch||ch.length!==1) return false;
+  const u=ch.codePointAt(0);
+  return (u>=0x1100&&u<=0x11FF)||(u>=0x3131&&u<=0x3163);
+}
+function syl(L,V,T){
+  return String.fromCharCode(0xAC00+(CHO.indexOf(L)*21+JUNG.indexOf(V))*28+JONG.indexOf(T||''));
+}
+function decomp(ch){
+  const u=ch.codePointAt(0);
+  if(u<0xAC00||u>0xD7A3) return null;
+  const n=u-0xAC00;
+  return [CHO[Math.floor(n/588)],JUNG[Math.floor(n%588/28)],JONG[n%28]];
+}
+/* 앞 글자 prev 에 낱자 j 를 먹인다. 합쳐지면 [바뀐앞글자] 또는 [바뀐앞글자, 새글자] */
+function feed(prev,j){
+  j=toCompat(j);
+  const isV=JUNG.indexOf(j)>=0;
+  const isC=CHO.indexOf(j)>=0||JONG.indexOf(j)>0;
+  if(!isV&&!isC) return null;
+  const d=decomp(prev);
+  if(d){
+    const L=d[0],V=d[1],T=d[2];
+    if(isV){
+      if(!T){ const c=VCOMB[V+j]; return c?[syl(L,c,'')]:null; }
+      const sp=TSPLIT[T];
+      if(sp) return [syl(L,V,sp[0]),syl(sp[1],j,'')];
+      if(CHO.indexOf(T)>=0) return [syl(L,V,''),syl(T,j,'')];
+      return null;
+    }
+    if(!T) return JONG.indexOf(j)>0?[syl(L,V,j)]:null;
+    const c=TCOMB[T+j]; return c?[syl(L,V,c)]:null;
+  }
+  const p=toCompat(prev);
+  if(CHO.indexOf(p)>=0&&isV) return [syl(p,j,'')];
+  if(JUNG.indexOf(p)>=0&&isV){ const c=VCOMB[p+j]; return c?[c]:null; }
+  return null;
+}
+/* 이미 낱자로 저장돼 버린 원고를 되살린다 */
+function repair(cells){
+  const src=nfc(cells), out=[]; let chain=-1;
+  for(const c of src){
+    const p=out[out.length-1];
+    if(isJamo(c.c)&&p&&chain===out.length-1&&p.k===c.k&&p.i===c.i){
+      const r=feed(p.c,c.c);
+      if(r){ p.c=r[0]; if(r[1]) out.push({c:r[1],k:c.k,i:c.i}); chain=out.length-1; continue; }
+    }
+    out.push({c:isJamo(c.c)?toCompat(c.c):c.c,k:c.k,i:c.i});
+    chain=isJamo(c.c)?out.length-1:-1;
+  }
+  return out;
+}
+
 /* iOS는 한글을 자모로 풀어(NFD) 넘기는 일이 있다. 완성형으로 되돌린다. */
 function nfc(cells){
   const out=[];
@@ -551,15 +623,38 @@ function curl(str){
   }
   return out;
 }
-function insertText(str){
+function insertText(str,fromIME){
   if(!str) return;
-  if(!canType()){ ime.value=''; S.comp=''; render(false); refuse(); return; }
+  if(!canType()){ if(!composing) ime.value=''; S.comp=''; render(false); refuse(); return; }
   str=curl(str.normalize('NFC'));
   beginSession();
   const atEnd=S.cur>=S.cells.length;
   const afterStrike=S.cur>0&&S.cells[S.cur-1]&&S.cells[S.cur-1].k;
   if(!atEnd||afterStrike) S.insMode=true;
   const mark=S.insMode;
+
+  /* IME가 완성해 보낸 글자가 아니고, 낱자 하나가 홀로 왔다면 — 직접 조립한다 */
+  if(!fromIME&&str.length===1&&isJamo(str)){
+    const p=S.cells[S.cur-1];
+    if(S.chain===S.cur-1&&p&&p.k===false&&p.i===mark){
+      const r=feed(p.c,str);
+      if(r){
+        p.c=r[0];
+        if(r[1]){ S.cells.splice(S.cur,0,{c:r[1],k:false,i:mark}); S.cur++; }
+        S.chain=S.cur-1; S.lastTyped=S.cur-1;
+        S.anchor=null; S.dirty=true;
+        render(true); ringCheck(); autosave(); markTyping();
+        return;
+      }
+    }
+    S.cells.splice(S.cur,0,{c:toCompat(str),k:false,i:mark});
+    S.cur++; S.chain=S.cur-1; S.lastTyped=S.cur-1;
+    S.anchor=null; S.dirty=true;
+    render(true); ringCheck(); autosave(); markTyping();
+    return;
+  }
+  S.chain=null;
+
   const add=[];
   for(const ch of str) add.push({c:ch,k:false,i:mark&&ch!=='\n'});
   S.cells.splice(S.cur,0,...add);
@@ -573,12 +668,12 @@ function newline(){
   if(!canType()){ refuse(); return; }
   beginSession();
   S.cells.splice(S.cur,0,{c:'\n',k:false,i:false});
-  S.cur++; S.lastTyped=S.cur-1; S.anchor=null; S.insMode=false; S.dirty=true;
+  S.cur++; S.lastTyped=S.cur-1; S.anchor=null; S.chain=null; S.insMode=false; S.dirty=true;
   carriage(); render(true); autosave(); markTyping();
 }
 function backOne(){
   if(S.lastTyped!==null&&S.cur===S.lastTyped+1&&S.cur>0){
-    S.cells.splice(S.cur-1,1); S.cur--; S.lastTyped=null; S.anchor=null; S.dirty=true;
+    S.cells.splice(S.cur-1,1); S.cur--; S.lastTyped=null; S.chain=null; S.anchor=null; S.dirty=true;
     render(true); autosave(); return true;
   }
   toast('확정된 글자는 지울 수 없습니다. 줄을 그으세요 — ⌘D');
@@ -593,7 +688,7 @@ function toggleStrike(){
   let allK=true;
   for(let n=a;n<b;n++) if(!S.cells[n].k){allK=false;break;}
   for(let n=a;n<b;n++) S.cells[n].k=!allK;
-  S.anchor=null; S.cur=b; S.lastTyped=null; S.insMode=!allK; S.dirty=true;
+  S.anchor=null; S.cur=b; S.lastTyped=null; S.chain=null; S.insMode=!allK; S.dirty=true;
   document.body.classList.add('striking');
   setTimeout(()=>document.body.classList.remove('striking'),140);
   render(false); autosave();
@@ -627,7 +722,7 @@ function move(to,shift){
   to=Math.max(0,Math.min(S.cells.length,to));
   if(shift){ if(S.anchor===null) S.anchor=S.cur; }
   else S.anchor=null;
-  S.cur=to; S.lastTyped=null;
+  S.cur=to; S.lastTyped=null; S.chain=null;
   if(to>=S.cells.length) S.insMode=false;
   render(false);
 }
@@ -639,19 +734,21 @@ function lineEdge(dir){
 }
 
 /* ── 자판 ─────────────────────────────────────────── */
-ime.addEventListener('compositionstart',()=>{S.comp='';});
+ime.addEventListener('compositionstart',()=>{ composing=true; S.comp=''; S.chain=null; });
 ime.addEventListener('compositionupdate',e=>{
-  if(!canType()){ ime.value=''; S.comp=''; return; }
+  if(!canType()){ S.comp=''; return; }
   S.comp=(e.data||'').normalize('NFC'); render(true); markTyping();
 });
 ime.addEventListener('compositionend',e=>{
+  composing=false;
   S.comp=''; const d=(e.data||'').normalize('NFC'); ime.value='';
-  if(d) insertText(d); else render(true);
+  if(d) insertText(d,true); else render(true);
 });
 ime.addEventListener('input',e=>{
-  if(e.isComposing) return;
-  const v=ime.value; ime.value='';
-  if(v) insertText(v);
+  if(composing||e.isComposing) return;
+  const v=ime.value; if(!v) return;
+  ime.value='';
+  insertText(v,false);
 });
 ime.addEventListener('paste',e=>{e.preventDefault(); toast('타자기에는 붙여넣을 수 없습니다.');});
 ime.addEventListener('blur',()=>{ setTimeout(()=>{
@@ -694,10 +791,10 @@ window.addEventListener('keydown',e=>{
     if(k==='v'||k==='x'){e.preventDefault(); toast('타자기에는 붙여넣거나 오려낼 수 없습니다.'); return;}
     return;
   }
+  if(composing||e.isComposing) return;
   if(!canType()&&(e.key.length===1||e.key==='Process'||e.key==='Unidentified'||e.key==='Enter'||e.key==='Tab')){
-    e.preventDefault(); ime.value=''; refuse(); return;
+    e.preventDefault(); refuse(); return;
   }
-  if(e.isComposing) return;
 
   switch(e.key){
     case 'Backspace': e.preventDefault(); backOne(); return;
@@ -722,7 +819,7 @@ sheet.addEventListener('mousedown',e=>{
   e.preventDefault();
   if(e.shiftKey){ if(S.anchor===null) S.anchor=S.cur; S.cur=i; }
   else { S.anchor=i; S.cur=i; }
-  S.lastTyped=null; dragging=true; render(false); ime.focus();
+  S.lastTyped=null; S.chain=null; dragging=true; render(false); ime.focus();
 });
 window.addEventListener('mousemove',e=>{
   if(!dragging) return;
@@ -766,14 +863,14 @@ function saveDoc(loud){
 function openDoc(id){
   const d=DB.docs.find(x=>x.id===id); if(!d) return;
   S.id=d.id; S.cells=unpack(d); S.cur=S.cells.length; S.anchor=null;
-  S.lastTyped=null; S.insMode=false; S.dirty=false; SESS=null;
+  S.lastTyped=null; S.chain=null; S.insMode=false; S.dirty=false; SESS=null;
   $('#title').value=d.title||'';
   closeAll(); render(true); ime.focus();
   toast('불러왔습니다. 끝에서 이어 쓰면 됩니다.');
 }
 function newDoc(){
   if(S.dirty) saveDoc(false);
-  S.id=null; S.cells=[]; S.cur=0; S.anchor=null; S.lastTyped=null;
+  S.id=null; S.cells=[]; S.cur=0; S.anchor=null; S.lastTyped=null; S.chain=null;
   S.insMode=false; S.dirty=false; SESS=null; $('#title').value='';
   closeAll(); render(true); ime.focus();
 }
