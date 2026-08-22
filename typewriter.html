@@ -49,13 +49,14 @@ body{
   transition:opacity .5s;
 }
 body.typing #bar{opacity:.12}
-body.typing #bar:hover{opacity:1}
+body.typing #bar:hover,body.typing #bar:focus-within{opacity:1}
 #mark{font-family:var(--font-type);font-size:13px;letter-spacing:.32em;color:var(--ink-2);user-select:none}
 #title{
   flex:1;min-width:0;border:0;background:transparent;outline:none;
   font-family:var(--font-ui);font-size:13px;color:var(--ink-2);
   padding:4px 0;
 }
+#title:focus{color:var(--ink);border-bottom:1px solid var(--insert)}
 #title::placeholder{color:var(--ink-3)}
 .tools{display:flex;gap:2px}
 button.t{
@@ -653,11 +654,25 @@ ime.addEventListener('input',e=>{
   if(v) insertText(v);
 });
 ime.addEventListener('paste',e=>{e.preventDefault(); toast('타자기에는 붙여넣을 수 없습니다.');});
-ime.addEventListener('blur',()=>{ setTimeout(()=>{ if(!document.querySelector('.veil.on')) ime.focus(); },0); });
+ime.addEventListener('blur',()=>{ setTimeout(()=>{
+  if(document.querySelector('.veil.on')) return;
+  const a=document.activeElement;
+  /* 제목처럼 다른 입력란으로 초점이 갔다면 빼앗지 않는다 */
+  if(a&&a!==ime&&a!==document.body&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+  if(a&&a.isContentEditable) return;
+  ime.focus();
+},0); });
 
 window.addEventListener('keydown',e=>{
   if(document.querySelector('.veil.on')){
     if(e.key==='Escape'){ closeAll(); }
+    return;
+  }
+  /* 제목 등 다른 입력란에 있을 때는 손대지 않는다 */
+  const t=e.target;
+  if(t&&t!==ime&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName||'')){
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){ e.preventDefault(); saveDoc(true); }
+    else if(e.key==='Escape'){ t.blur(); ime.focus(); }
     return;
   }
   const cmd=e.metaKey||e.ctrlKey;
@@ -1003,7 +1018,8 @@ $('#presets').addEventListener('click',e=>{
 });
 $('#bLockGo').addEventListener('click',()=>startLock(Math.max(1,+$('#fMin').value||25)));
 $('#title').addEventListener('input',()=>{S.dirty=true; autosave();});
-$('#title').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault(); ime.focus();} });
+$('#title').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault(); saveDoc(true); ime.focus();} });
+$('#title').addEventListener('blur',()=>{ if(S.dirty) saveDoc(false); });
 
 /* ── 단축어로 열기 ────────────────────────────────── */
 function params(){
