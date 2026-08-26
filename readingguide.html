@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Reading Lens - 지능형 독서 가이드</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif; }
+    body { background-color: #f8fafc; color: #1e293b; display: flex; justify-content: center; padding: 40px 20px; }
+    .container { width: 100%; max-width: 760px; background: #ffffff; padding: 36px; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    h1 { font-size: 1.45rem; font-weight: 700; margin-bottom: 24px; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+    .input-group { margin-bottom: 18px; }
+    label { display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; color: #475569; }
+    input, textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+    input:focus, textarea:focus { border-color: #2563eb; }
+    textarea { resize: vertical; height: 105px; line-height: 1.5; }
+    .section-title { font-size: 0.9rem; font-weight: 600; color: #64748b; margin: 24px 0 12px; }
+    .btn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 24px; }
+    button.lens-btn { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 10px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 500; color: #334155; cursor: pointer; text-align: left; transition: all 0.15s ease; }
+    button.lens-btn:hover { background: #e2e8f0; color: #0f172a; }
+    button.lens-btn.active { background: #1e293b; color: #ffffff; border-color: #1e293b; }
+    .output-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px; position: relative; }
+    .output-text { font-size: 0.92rem; line-height: 1.65; white-space: pre-wrap; color: #1e293b; min-height: 110px; }
+    .copy-btn { margin-top: 14px; width: 100%; background: #2563eb; color: #ffffff; border: none; padding: 13px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: background 0.2s; }
+    .copy-btn:hover { background: #1d4ed8; }
+    .toast { display: none; text-align: center; margin-top: 8px; font-size: 0.85rem; color: #16a34a; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>📖 Reading Lens</h1>
+
+  <div class="input-group">
+    <label for="bookTitle">책 제목</label>
+    <input type="text" id="bookTitle" placeholder="예: 안나 카레니나, 눈먼 자들의 도시, 달과 6펜스, 듄..." oninput="updatePrompt()">
+  </div>
+
+  <div class="input-group">
+    <label for="bookQuery">구체적인 질문 / 인용 문장 / 분석하고 싶은 구간</label>
+    <textarea id="bookQuery" placeholder="특정 챕터, 플롯 전환점, 인물의 선택, 문체적 특징, 결말의 반전 등을 입력하세요." oninput="updatePrompt()"></textarea>
+  </div>
+
+  <div class="section-title">전문가 관점 및 프롬프트 선택</div>
+  <div class="btn-grid">
+    <button class="lens-btn active" onclick="setLens('storyAnalyst', this)">🖋️ 스토리·서사 아키텍트</button>
+    <button class="lens-btn" onclick="setLens('infographic', this)">📊 시각화/인포그래픽</button>
+    <button class="lens-btn" onclick="setLens('deep', this)">🔍 문학/학술 평론가</button>
+    <button class="lens-btn" onclick="setLens('analogy', this)">💡 지식 커뮤니케이터</button>
+    <button class="lens-btn" onclick="setLens('character', this)">👤 심리학자/인물분석</button>
+    <button class="lens-btn" onclick="setLens('critique', this)">⚖️ 비판적 사상가</button>
+    <button class="lens-btn" onclick="setLens('context', this)">🏛️ 역사/사상사학자</button>
+    <button class="lens-btn" onclick="setLens('nextBooks', this)">📚 도서관 큐레이터</button>
+  </div>
+
+  <div class="output-box">
+    <div class="output-text" id="output"></div>
+    <button class="copy-btn" onclick="copyPrompt()">프롬프트 복사하기</button>
+    <div class="toast" id="toast">클립보드에 복사되었습니다! AI에게 바로 붙여넣으세요.</div>
+  </div>
+</div>
+
+<script>
+  let currentLens = 'storyAnalyst';
+
+  const templates = {
+    storyAnalyst: (title, query) =>
+`[역할 부여]
+당신은 서사의 구조, 플롯 역학, 문학적 혁신성과 작법 메커니즘을 날카롭게 해부하는 '수석 스토리 분석가이자 서사 아키텍트(Senior Story Analyst & Narrative Architect)'입니다.
+
+[대상 도서 및 분석 구간]
+- 작품명: [${title}]
+- 집중 분석할 장면/플롯/의문점:
+${query}
+
+[요청 사항]
+작가의 서사적 설계와 작법 기술을 아래 5가지 관점에서 다층적으로 분석해줘:
+
+1. **서사적 혁신성(Narrative Innovation):** 기존 클리셰나 전통적 서사 관습을 어떻게 비틀고 탈피했는지, 이야기의 형식이나 시점 등에서 돋보이는 독창적 실험성
+2. **플롯 역학 및 복선(Plot Dynamics & Foreshadowing):** 인과관계의 정밀도, 텐션의 완급 조절, 그리고 복선(Setup)과 회수(Payoff)가 작동하는 치밀한 메커니즘
+3. **입체적 캐릭터 아크(Character Arc):** 인물의 내적 결함, 숨은 욕망, 그리고 서사적 위기 속에서 드러나는 인물 궤적의 독특함
+4. **반전 및 변곡점의 완성도(Twist & Climax Mechanics):** 반전이나 전환점이 단순한 충격을 넘어 이야기 전체의 맥락을 어떻게 재정의하고 깊이를 더하는지
+5. **문체와 호흡(Voice & Style):** 문장의 템포, 비유의 결, 서술 어조(Tone)가 작품의 분위기와 서사적 긴장감을 고조시키는 방식`,
+
+    infographic: (title, query) =>
+`[역할 부여]
+당신은 방대한 텍스트의 맥락을 직관적인 다이어그램과 도표로 요약해내는 '지식 정보 시각화 전문가(Information Architect)'입니다.
+
+[대상 도서 및 분석 대상]
+- 책 제목: [${title}]
+- 정리할 주제/내용:
+${query}
+
+[요청 사항]
+위 내용을 바탕으로 텍스트형 인포그래픽 구조를 작성해줘. 질문의 맥락에 맞추어 아래 3가지 형태 중 가장 적합한 방식을 골라 표현해줘:
+
+1. **사건/서사 연대기 (Timeline):** 주요 사건의 인과관계와 시간 순서 전개 (아스키 다이어그램 또는 단계별 플로우차트)
+2. **등장인물 관계도 (Relationship Matrix):** 핵심 인물 간의 대립/동맹/애증 관계 및 역학 구조 (마크다운 표 및 텍스트 맵)
+3. **핵심 개념 비교/구조도 (Concept Hierarchy):** 중심 개념과 하위 요소의 상호작용 및 차이점 정리 (구조화된 표 또는 계층형 트리)`,
+
+    deep: (title, query) =>
+`[역할 부여]
+당신은 작품의 숨은 상징과 작가의 의도를 날카롭게 짚어내는 '수석 문학/학술 평론가'입니다.
+
+[대상 도서 및 질문]
+- 책 제목: [${title}]
+- 질문/의문점:
+${query}
+
+[요청 사항]
+1. 저자가 이 대목에서 전달하고자 한 핵심 메시지와 의도를 짚어줘.
+2. 이 부분이 책 전체의 주제의식이나 클라이맥스와 어떻게 유기적으로 연결되는지 심층적으로 해설해줘.`,
+
+    analogy: (title, query) =>
+`[역할 부여]
+당신은 가장 난해한 이론도 일상의 언어로 쉽고 명쾌하게 풀어내는 '탁월한 과학/철학 커뮤니케이터'입니다.
+
+[대상 도서 및 질문]
+- 책 제목: [${title}]
+- 질문/어려운 내용:
+${query}
+
+[요청 사항]
+1. 비전공자나 초보자도 무릎을 탁 칠 수 있도록, 우리 주변의 친숙한 일상적 비유나 현실의 구체적 사례를 들어 설명해줘.
+2. 전문 용어나 추상적인 표현은 쉬운 말로 치환해서 직관적으로 이해시켜줘.`,
+
+    character: (title, query) =>
+`[역할 부여]
+당신은 인물의 무의식적 결핍과 내면 갈등을 집요하게 추적하는 '임상심리학자이자 서사 분석가'입니다.
+
+[대상 도서 및 질문]
+- 책 제목: [${title}]
+- 인물/행동:
+${query}
+
+[요청 사항]
+1. **내면 결핍과 무의식적 동기:** 인물이 그런 선택/행동을 하게 된 근원적 심리 분석
+2. **미니 바이오그래피(Mini Biography):** 작중 핵심 변곡점과 인물의 내적 변화 궤적
+3. **서사적 기능:** 작가가 이 인물을 통해 무엇을 드러내고자 했는지 상징성 서술 (스포일러 주의)`,
+
+    critique: (title, query) =>
+`[역할 부여]
+당신은 지적 도전을 즐기며 논리의 빈틈을 날카롭게 검증하는 '소크라테스식 비판적 사상가'입니다.
+
+[대상 도서 및 질문]
+- 책 제목: [${title}]
+- 검토할 주장:
+${query}
+
+[요청 사항]
+1. 저자가 내세우는 주장의 전제와 논리적 맹점을 분석해줘.
+2. 반대 진영이나 다른 학파에서 제기할 수 있는 가장 강력한 반론 2~3가지를 입체적으로 제시해줘.`,
+
+    context: (title, query) =>
+`[역할 부여]
+당신은 텍스트 이면의 시대상과 저자의 생애를 꿰뚫어 보는 '역사학자이자 사상사 연구자'입니다.
+
+[대상 도서 및 질문]
+- 책 제목: [${title}]
+- 분석할 대목:
+${query}
+
+[요청 사항]
+1. 저자가 이 책을 집필할 당시의 시대적/역사적 사건, 사회적 분위기와 철학적 사조를 설명해줘.
+2. 저자의 개인적 생애나 지적 여정이 이 구절에 어떤 영향을 미쳤는지 맥락을 복원해줘.`,
+
+    nextBooks: (title, query) =>
+`[역할 부여]
+당신은 전 세계 장서에 정통하며 출판 데이터베이스를 정확히 파악하고 있는 '전문 도서관 수석 사서 및 독서 큐레이터'입니다.
+
+[대상 도서 및 질문]
+- 책 제목: [${title}]
+- 확장할 관심사/주제:
+${query}
+
+[요청 사항]
+* 반드시 웹 검색을 통해 실제로 출판되어 유통 중인 실존 도서만 추천할 것 (환각/가짜 책 엄격히 금지)
+1. **심화서:** 이 질문/주제를 한 단계 더 깊고 학술적으로 파고드는 도서 1권 (이유 포함)
+2. **대척점 도서:** 정반대의 시각이나 다른 관점을 제시하는 도서 1권 (이유 포함)`
+  };
+
+  function setLens(lens, btn) {
+    currentLens = lens;
+    document.querySelectorAll('.lens-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updatePrompt();
+  }
+
+  function updatePrompt() {
+    const title = document.getElementById('bookTitle').value.trim() || '(책 제목)';
+    const query = document.getElementById('bookQuery').value.trim() || '(구체적인 질문이나 인용구)';
+    const generated = templates[currentLens](title, query);
+    document.getElementById('output').textContent = generated;
+  }
+
+  function copyPrompt() {
+    const text = document.getElementById('output').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const toast = document.getElementById('toast');
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 2000);
+    });
+  }
+
+  window.onload = updatePrompt;
+</script>
+
+</body>
+</html>
