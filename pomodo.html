@@ -45,6 +45,11 @@ body{
 .head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .headline{font-family:var(--serif);font-size:21px;letter-spacing:.01em}
 .headline i{color:var(--ink-3);font-size:16px;margin-left:6px;font-style:normal}
+.headtools{display:flex;align-items:center;gap:8px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--line);display:inline-block}
+.dot.on{background:var(--ju);opacity:.55}
+.dot.wait{background:var(--ink-3);opacity:.5;animation:breathe 1.6s ease-in-out infinite}
+.dot.bad{background:none;border:1.5px solid var(--ju);opacity:.6}
 .gear{border:0;background:none;color:var(--ink-3);font-family:var(--sans);font-size:13px;padding:6px 2px;cursor:pointer;letter-spacing:.02em}
 .gear:active{color:var(--ink)}
 
@@ -133,7 +138,7 @@ input[type=text],select{font-family:var(--sans);font-size:15px;color:var(--ink);
 <div class="wrap">
   <div class="head">
     <div class="headline" id="headline"></div>
-    <button class="gear" id="openSet">설정</button>
+    <div class="headtools"><span class="dot" id="dot" title="동기화 꺼짐"></span><button class="gear" id="openSet">설정</button></div>
   </div>
 
   <div class="board" id="board">
@@ -201,6 +206,31 @@ input[type=text],select{font-family:var(--sans);font-size:15px;color:var(--ink);
     <label>취소 단축어</label>
     <input type="text" id="scCancel" autocapitalize="off" autocorrect="off">
   </div>
+  <h2 style="margin:26px 0 12px">동기화</h2>
+  <div class="row">
+    <label>Supabase 주소</label>
+    <input type="text" id="sbUrl" autocapitalize="off" autocorrect="off" spellcheck="false">
+  </div>
+  <div class="row">
+    <label>키</label>
+    <input type="text" id="sbKey" autocapitalize="off" autocorrect="off" spellcheck="false">
+  </div>
+  <div class="row">
+    <label>계정</label>
+    <input type="text" id="sbEmail" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email">
+  </div>
+  <div class="row">
+    <label>비밀번호</label>
+    <input type="password" id="sbPw" placeholder="연결할 때만">
+  </div>
+  <div class="mini">
+    <button id="signin">연결</button>
+    <button id="syncnow">지금 맞추기</button>
+    <button id="signout" class="warn">연결 끊기</button>
+  </div>
+  <p class="note" id="syncNote">이 기기에서 한 번 연결하면 계속 유지됩니다. 비밀번호는 저장하지 않습니다.</p>
+
+  <h2 style="margin:26px 0 12px">파일로 주고받기</h2>
   <div class="mini">
     <button id="exp">이 기기 기록 내보내기</button>
     <button id="imp">다른 기기 기록 합치기</button>
@@ -211,7 +241,10 @@ input[type=text],select{font-family:var(--sans);font-size:15px;color:var(--ink);
 
 <script>
 var KEY='donggeurami.v1';
-var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scAdd:'추가',scRest:'휴식',scLong:'긴휴식',scCancel:'취소',devId:'',devName:''},days:{}};
+var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scAdd:'추가',scRest:'휴식',scLong:'긴휴식',scCancel:'취소',devId:'',devName:'',
+  sbUrl:'https://bcdgajhnxybpgxeytrap.supabase.co',
+  sbKey:'sb_publishable_wsV5RVe2oNG_1qq2oCMwiQ_efMnU-F5',
+  sbEmail:''},days:{}};
 var D=load(), viewY, viewM;
 
 function guessName(){
@@ -282,10 +315,10 @@ function render(){
   box.innerHTML='';
   t.logs.forEach(function(g,i){
     var b=document.createElement('button');
-    b.className='slot'+(g.dev!==D.settings.devId?' away':'');
+    b.className='slot'+(mineSlot(g)?'':' away');
     b.dataset.i=i;
     var when=(g.s||g.e)?(hhmm(g.s)+(g.e?'–'+hhmm(g.e):'')):'';
-    b.title=(i+1)+'번째 칸'+(when?' · '+when:'')+(g.dev!==D.settings.devId?' · 다른 기기':'');
+    b.title=(i+1)+'번째 칸'+(when?' · '+when:'')+(mineSlot(g)?'':' · '+(g.dev||'다른 기기'));
     b.setAttribute('aria-label',b.title);
     b.innerHTML='<svg viewBox="0 0 52 52"><circle class="ring" cx="26" cy="26" r="20"/></svg><span>'+(i+1)+'</span>';
     box.appendChild(b);
@@ -380,6 +413,7 @@ function closeSlot(shortcut){
   var g=t.pending||{id:D.settings.devId+'-'+Date.now().toString(36)+rnd(),dev:D.settings.devId,s:null};
   g.e=now; t.logs.push(g); t.pending=null;
   save(); render();
+  pushSlots([rowOf(todayKey(),g,t.target)]);
   runShortcut(shortcut);
 }
 document.getElementById('add').onclick=function(){ runShortcut(D.settings.scAdd); };
@@ -393,7 +427,10 @@ document.getElementById('slots').onclick=function(e){
   var b=e.target.closest ? e.target.closest('.slot') : null;
   if(!b || b.className.indexOf('ghost')>-1) return;
   var i=+b.dataset.i, t=today();
-  if(i<t.logs.length && confirm((i+1)+'번째 칸부터 지울까요?')){ t.logs=t.logs.slice(0,i); save(); render(); }
+  if(i<t.logs.length && confirm((i+1)+'번째 칸부터 지울까요?')){
+    var gone=t.logs.slice(i).map(function(g){ return g.id; });
+    t.logs=t.logs.slice(0,i); save(); render(); deleteSlots(gone);
+  }
 };
 
 /* 기기 사이 병합 */
@@ -430,6 +467,9 @@ function openSet(){
   document.getElementById('scCancel').value=D.settings.scCancel;
   document.getElementById('devName').value=D.settings.devName;
   document.getElementById('dayStart').value=D.settings.dayStart;
+  document.getElementById('sbUrl').value=D.settings.sbUrl||'';
+  document.getElementById('sbKey').value=D.settings.sbKey||'';
+  document.getElementById('sbEmail').value=D.settings.sbEmail||'';
   scrim.classList.add('on'); panel.classList.add('on');
 }
 function closeSet(){ scrim.classList.remove('on'); panel.classList.remove('on'); }
@@ -467,7 +507,8 @@ bindName('devName','devName',guessName());
 
 document.getElementById('clr').onclick=function(){
   if(!confirm('오늘 채운 칸을 모두 비웁니다.')) return;
-  var t=today(); t.logs=[]; t.pending=null; save(); render(); closeSet();
+  var t=today(); var gone=t.logs.map(function(g){ return g.id; });
+  t.logs=[]; t.pending=null; save(); render(); deleteSlots(gone); closeSet();
 };
 document.getElementById('exp').onclick=function(){
   var out={v:2,device:{id:D.settings.devId,name:D.settings.devName},settings:D.settings,days:D.days};
@@ -504,10 +545,187 @@ document.getElementById('prev').onclick=function(){
 document.getElementById('next').onclick=function(){
   viewM++; if(viewM>11){ viewM=0; viewY++; } renderMonth();
 };
-document.addEventListener('visibilitychange',function(){ if(!document.hidden) render(); });
-
 save();
 render();
+
+/* ───────── Supabase 동기화 ───────── */
+var AUTHKEY='donggeurami.auth', A=null, ws=null, hb=null, refN=1, pollT=null, retry=0;
+try{ A=JSON.parse(localStorage.getItem(AUTHKEY)); }catch(e){}
+
+function base(){ return (D.settings.sbUrl||'').replace(/\/+$/,''); }
+function ready(){ return !!(base() && D.settings.sbKey); }
+function mineSlot(g){ return (g.id||'').indexOf(D.settings.devId+'-')===0; }
+function setDot(cls,msg){
+  var d=document.getElementById('dot');
+  d.className='dot'+(cls?' '+cls:''); d.title=msg||'';
+  var n=document.getElementById('syncNote'); if(n&&msg) n.textContent=msg;
+}
+function setAuth(j){
+  A={access:j.access_token,refresh:j.refresh_token,exp:Date.now()+((j.expires_in||3600)-90)*1000};
+  localStorage.setItem(AUTHKEY,JSON.stringify(A));
+}
+function dropAuth(){ A=null; try{ localStorage.removeItem(AUTHKEY); }catch(e){} }
+
+function signIn(email,pw){
+  return fetch(base()+'/auth/v1/token?grant_type=password',{
+    method:'POST',
+    headers:{'apikey':D.settings.sbKey,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email,password:pw})
+  }).then(function(r){ return r.json().then(function(j){
+    if(!r.ok) throw new Error(j.error_description||j.msg||j.message||'로그인에 실패했습니다.');
+    setAuth(j); return true;
+  });});
+}
+function token(){
+  if(!A) return Promise.resolve(null);
+  if(Date.now()<A.exp) return Promise.resolve(A.access);
+  return fetch(base()+'/auth/v1/token?grant_type=refresh_token',{
+    method:'POST',
+    headers:{'apikey':D.settings.sbKey,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:A.refresh})
+  }).then(function(r){
+    if(!r.ok){ dropAuth(); return null; }
+    return r.json().then(function(j){ setAuth(j); return A.access; });
+  }).catch(function(){ return null; });
+}
+function rest(path,opts){
+  return token().then(function(t){
+    if(!t) throw new Error('연결이 풀렸습니다. 설정에서 다시 연결해 주세요.');
+    opts=opts||{};
+    opts.headers=Object.assign({'apikey':D.settings.sbKey,'Authorization':'Bearer '+t,'Content-Type':'application/json'},opts.headers||{});
+    return fetch(base()+'/rest/v1/'+path,opts);
+  }).then(function(r){
+    if(!r.ok) return r.text().then(function(x){ throw new Error(x||('오류 '+r.status)); });
+    return r;
+  });
+}
+
+function rowOf(k,g,target){
+  return {id:g.id,day:k,dev:D.settings.devName,started_at:g.s||null,ended_at:g.e||null,target:target||D.settings.perDay};
+}
+function pushSlots(rows){
+  if(!rows.length || !ready() || !A) return Promise.resolve();
+  return rest('slots?on_conflict=id',{
+    method:'POST',
+    headers:{'Prefer':'resolution=merge-duplicates,return=minimal'},
+    body:JSON.stringify(rows),
+    keepalive:rows.length<4
+  }).then(function(){ setDot('on','맞춰져 있습니다.'); })
+    .catch(function(e){ setDot('bad','아직 올리지 못한 칸이 있습니다. 다음에 열 때 다시 시도합니다.'); });
+}
+function deleteSlots(ids){
+  if(!ids.length || !ready() || !A) return Promise.resolve();
+  return rest('slots?id=in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'})
+    .catch(function(){});
+}
+function applyRows(rows){
+  var incoming={};
+  rows.forEach(function(x){
+    if(!x || !x.day) return;
+    if(!incoming[x.day]) incoming[x.day]={target:x.target||D.settings.perDay,logs:[],pending:null};
+    incoming[x.day].logs.push({id:x.id,dev:x.dev,s:x.started_at,e:x.ended_at});
+  });
+  var got=mergeInto(incoming);
+  if(got.logs) { save(); render(); }
+  return rows.map(function(x){ return x.id; });
+}
+function removeRemoteId(id){
+  for(var k in D.days){
+    var rec=D.days[k], before=rec.logs.length;
+    rec.logs=rec.logs.filter(function(g){ return g.id!==id; });
+    if(rec.logs.length!==before){ save(); render(); return; }
+  }
+}
+function windowStart(days){
+  var d=new Date(); d.setDate(d.getDate()-days);
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+}
+function sync(){
+  if(!ready()){ setDot('','동기화 꺼짐'); return Promise.resolve(); }
+  if(!A){ setDot('bad','설정에서 계정을 연결해 주세요.'); return Promise.resolve(); }
+  setDot('wait','맞추는 중…');
+  var since=windowStart(150);
+  return rest('slots?select=id,day,dev,started_at,ended_at,target&day=gte.'+since)
+    .then(function(r){ return r.json(); })
+    .then(function(rows){
+      var have={};
+      applyRows(rows).forEach(function(id){ have[id]=1; });
+      var out=[];
+      for(var k in D.days){
+        if(k<since) continue;
+        var rec=D.days[k];
+        rec.logs.forEach(function(g){ if(mineSlot(g) && !have[g.id]) out.push(rowOf(k,g,rec.target)); });
+      }
+      return out.length?pushSlots(out):null;
+    })
+    .then(function(){ setDot('on','맞춰져 있습니다.'); openSocket(); })
+    .catch(function(e){ setDot('bad',(e&&e.message)||'서버에 닿지 못했습니다.'); });
+}
+
+/* 실시간 */
+function openSocket(){
+  if(!ready() || !A || ws) return;
+  token().then(function(t){
+    if(!t) return;
+    try{
+      ws=new WebSocket(base().replace(/^http/,'ws')+'/realtime/v1/websocket?apikey='+encodeURIComponent(D.settings.sbKey)+'&vsn=1.0.0');
+    }catch(e){ ws=null; return; }
+    ws.onopen=function(){
+      retry=0;
+      ws.send(JSON.stringify({topic:'realtime:slots',event:'phx_join',ref:String(refN++),payload:{
+        config:{broadcast:{self:false},presence:{key:''},postgres_changes:[{event:'*',schema:'public',table:'slots'}]},
+        access_token:t
+      }}));
+      hb=setInterval(function(){
+        if(ws&&ws.readyState===1) ws.send(JSON.stringify({topic:'phoenix',event:'heartbeat',payload:{},ref:String(refN++)}));
+      },25000);
+    };
+    ws.onmessage=function(ev){
+      var m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+      if(m.event!=='postgres_changes' || !m.payload || !m.payload.data) return;
+      var d=m.payload.data;
+      if(d.type==='INSERT'||d.type==='UPDATE'){ applyRows([d.record]); }
+      else if(d.type==='DELETE'&&d.old_record){ removeRemoteId(d.old_record.id); }
+    };
+    ws.onclose=function(){
+      clearInterval(hb); ws=null;
+      if(!document.hidden && retry<6){ retry++; setTimeout(openSocket,3000*retry); }
+    };
+    ws.onerror=function(){ try{ ws.close(); }catch(e){} };
+  });
+}
+function closeSocket(){ clearInterval(hb); if(ws){ try{ ws.close(); }catch(e){} ws=null; } }
+
+/* 앱이 앞으로 나올 때마다 맞춘다 */
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden){ closeSocket(); if(pollT) clearInterval(pollT); pollT=null; }
+  else { sync(); if(!pollT) pollT=setInterval(function(){ if(!ws) sync(); },45000); }
+});
+window.addEventListener('online',function(){ sync(); });
+
+/* 설정 단추 */
+document.getElementById('signin').onclick=function(){
+  var email=document.getElementById('sbEmail').value.trim();
+  var pw=document.getElementById('sbPw').value;
+  D.settings.sbUrl=document.getElementById('sbUrl').value.trim();
+  D.settings.sbKey=document.getElementById('sbKey').value.trim();
+  D.settings.sbEmail=email; save();
+  if(!email||!pw){ setDot('bad','계정과 비밀번호를 넣어 주세요.'); return; }
+  setDot('wait','연결하는 중…');
+  signIn(email,pw).then(function(){
+    document.getElementById('sbPw').value='';
+    return sync();
+  }).catch(function(e){ setDot('bad',(e&&e.message)||'연결에 실패했습니다.'); });
+};
+document.getElementById('syncnow').onclick=function(){ sync(); };
+document.getElementById('signout').onclick=function(){
+  if(!confirm('이 기기의 연결을 끊습니다. 기록은 그대로 남습니다.')) return;
+  closeSocket(); dropAuth(); setDot('','동기화 꺼짐');
+};
+
+if(ready()&&A){ sync(); pollT=setInterval(function(){ if(!ws&&!document.hidden) sync(); },45000); }
+else setDot(ready()?'bad':'', ready()?'설정에서 계정을 연결해 주세요.':'동기화 꺼짐');
+
 </script>
 </body>
 </html>
