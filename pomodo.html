@@ -257,7 +257,7 @@ var KEY='donggeurami.v1';
 var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scAdd:'추가',scRest:'휴식',scLong:'긴휴식',scCancel:'취소',devId:'',devName:'',
   sbUrl:'https://bcdgajhnxybpgxeytrap.supabase.co',
   sbKey:'sb_publishable_wsV5RVe2oNG_1qq2oCMwiQ_efMnU-F5',
-  sbEmail:''},days:{}};
+  sbEmail:''},days:{},tombs:{}};
 var D=load(), viewY, viewM;
 
 function guessName(){
@@ -271,9 +271,10 @@ function load(){
   var d;
   try{
     var r=JSON.parse(localStorage.getItem(KEY));
-    d=(r&&r.settings)?{settings:Object.assign({},DEF.settings,r.settings),days:r.days||{}}
+    d=(r&&r.settings)?{settings:Object.assign({},DEF.settings,r.settings),days:r.days||{},tombs:r.tombs||{}}
                      :JSON.parse(JSON.stringify(DEF));
   }catch(e){ d=JSON.parse(JSON.stringify(DEF)); }
+  if(!d.tombs) d.tombs={};
   if(!d.settings.devId) d.settings.devId=rnd();
   if(!d.settings.devName) d.settings.devName=guessName();
   for(var k in d.days) d.days[k]=normalize(d.days[k],k,d.settings.devId,d.settings.perDay);
@@ -614,7 +615,8 @@ function rest(path,opts){
 }
 
 function rowOf(k,g,target){
-  return {id:g.id,day:k,dev:D.settings.devName,started_at:g.s||null,ended_at:g.e||null,target:target||D.settings.perDay};
+  var name=mineSlot(g)?D.settings.devName:(g.dev||D.settings.devName);
+  return {id:g.id,day:k,dev:name,started_at:g.s||null,ended_at:g.e||null,target:target||D.settings.perDay};
 }
 function pushSlots(rows){
   if(!rows.length || !ready() || !A) return Promise.resolve();
@@ -627,14 +629,16 @@ function pushSlots(rows){
     .catch(function(e){ setDot('bad','아직 올리지 못한 칸이 있습니다. 다음에 열 때 다시 시도합니다.'); });
 }
 function deleteSlots(ids){
-  if(!ids.length || !ready() || !A) return Promise.resolve();
+  if(!ids.length) return Promise.resolve();
+  ids.forEach(function(id){ D.tombs[id]=1; }); save();
+  if(!ready() || !A) return Promise.resolve();
   return rest('slots?id=in.('+ids.map(encodeURIComponent).join(',')+')',{method:'DELETE'})
     .catch(function(){});
 }
 function applyRows(rows){
   var incoming={};
   rows.forEach(function(x){
-    if(!x || !x.day) return;
+    if(!x || !x.day || D.tombs[x.id]) return;
     if(!incoming[x.day]) incoming[x.day]={target:x.target||D.settings.perDay,logs:[],pending:null};
     incoming[x.day].logs.push({id:x.id,dev:x.dev,s:x.started_at,e:x.ended_at});
   });
@@ -643,6 +647,7 @@ function applyRows(rows){
   return rows.map(function(x){ return x.id; });
 }
 function removeRemoteId(id){
+  D.tombs[id]=1;
   for(var k in D.days){
     var rec=D.days[k], before=rec.logs.length;
     rec.logs=rec.logs.filter(function(g){ return g.id!==id; });
@@ -667,11 +672,20 @@ function sync(){
       for(var k in D.days){
         if(k<since) continue;
         var rec=D.days[k];
-        rec.logs.forEach(function(g){ if(mineSlot(g) && !have[g.id]) out.push(rowOf(k,g,rec.target)); });
+        rec.logs.forEach(function(g){
+          if(!have[g.id] && !D.tombs[g.id]) out.push(rowOf(k,g,rec.target));
+        });
       }
-      return out.length?pushSlots(out):null;
+      var chunks=[];
+      for(var i=0;i<out.length;i+=200) chunks.push(out.slice(i,i+200));
+      return chunks.reduce(function(p,c){ return p.then(function(){ return pushSlots(c); }); },Promise.resolve())
+        .then(function(){ return {up:out.length,down:rows.length}; });
     })
-    .then(function(){ setDot('on','맞춰져 있습니다.'); openSocket(); })
+    .then(function(r){
+      r=r||{up:0,down:0};
+      setDot('on','맞춰져 있습니다. (올림 '+r.up+' · 서버 '+r.down+')');
+      openSocket();
+    })
     .catch(function(e){ setDot('bad',(e&&e.message)||'서버에 닿지 못했습니다.'); });
 }
 
