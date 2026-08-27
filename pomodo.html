@@ -68,7 +68,11 @@ body{
 @keyframes pop{from{opacity:0;transform:rotate(-4deg) scale(.86)}to{opacity:.85;transform:rotate(-1.1deg) scale(1.02)}}
 
 /* 단추 */
-.acts{display:flex;gap:8px;margin:18px 0 0}
+.acts{display:flex;flex-direction:column;gap:8px;margin:18px 0 0}
+.acts-row{display:flex;gap:8px}
+.btn.wide{width:100%}
+.btn.long{letter-spacing:.02em}
+.btn.due{border-width:2px;box-shadow:0 0 0 3px rgba(179,36,48,.09)}
 .btn{flex:1;padding:16px 8px;border:1px solid var(--ink);background:none;color:var(--ink);font-family:var(--serif);font-size:17px;border-radius:2px;cursor:pointer;letter-spacing:.04em}
 .btn:active{background:var(--ink);color:var(--paper)}
 .btn.rest{border-color:var(--ju);color:var(--ju)}
@@ -139,9 +143,12 @@ input[type=text],select{font-family:var(--sans);font-size:15px;color:var(--ink);
   </div>
 
   <div class="acts">
-    <button class="btn" id="work">포모도로</button>
-    <button class="btn rest" id="rest">휴식</button>
-    <button class="btn cancel" id="cancel">취소</button>
+    <button class="btn wide" id="work">포모도로</button>
+    <div class="acts-row">
+      <button class="btn rest" id="rest">휴식</button>
+      <button class="btn rest long" id="long">긴 휴식</button>
+      <button class="btn cancel" id="cancel">취소</button>
+    </div>
   </div>
 
   <div class="month">
@@ -181,6 +188,10 @@ input[type=text],select{font-family:var(--sans);font-size:15px;color:var(--ink);
     <input type="text" id="scRest" autocapitalize="off" autocorrect="off">
   </div>
   <div class="row">
+    <label>긴 휴식 단축어</label>
+    <input type="text" id="scLong" autocapitalize="off" autocorrect="off">
+  </div>
+  <div class="row">
     <label>취소 단축어</label>
     <input type="text" id="scCancel" autocapitalize="off" autocorrect="off">
   </div>
@@ -194,7 +205,7 @@ input[type=text],select{font-family:var(--sans);font-size:15px;color:var(--ink);
 
 <script>
 var KEY='donggeurami.v1';
-var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scRest:'휴식',scCancel:'취소',devId:'',devName:''},days:{}};
+var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scRest:'휴식',scLong:'긴휴식',scCancel:'취소',devId:'',devName:''},days:{}};
 var D=load(), viewY, viewM;
 
 function guessName(){
@@ -294,6 +305,8 @@ function render(){
   }
 
   document.getElementById('work').textContent=t.pending?'포모도로 다시':'포모도로';
+  var nth=t.logs.length+(t.pending?1:0);
+  document.getElementById('long').className='btn rest long'+((nth>0&&nth%4===0)?' due':'');
   document.getElementById('perVal').textContent=D.settings.perDay;
   renderMonth();
 }
@@ -356,13 +369,15 @@ document.getElementById('work').onclick=function(){
   save(); render();
   runShortcut(D.settings.scWork);
 };
-document.getElementById('rest').onclick=function(){
+function closeSlot(shortcut){
   var t=today(), now=new Date().toISOString();
   var g=t.pending||{id:D.settings.devId+'-'+Date.now().toString(36)+rnd(),dev:D.settings.devId,s:null};
   g.e=now; t.logs.push(g); t.pending=null;
   save(); render();
-  runShortcut(D.settings.scRest);
-};
+  runShortcut(shortcut);
+}
+document.getElementById('rest').onclick=function(){ closeSlot(D.settings.scRest); };
+document.getElementById('long').onclick=function(){ closeSlot(D.settings.scLong); };
 document.getElementById('cancel').onclick=function(){
   var t=today(); t.pending=null; save(); render();
   runShortcut(D.settings.scCancel);
@@ -403,6 +418,7 @@ var scrim=document.getElementById('scrim'), panel=document.getElementById('panel
 function openSet(){
   document.getElementById('scWork').value=D.settings.scWork;
   document.getElementById('scRest').value=D.settings.scRest;
+  document.getElementById('scLong').value=D.settings.scLong;
   document.getElementById('scCancel').value=D.settings.scCancel;
   document.getElementById('devName').value=D.settings.devName;
   document.getElementById('dayStart').value=D.settings.dayStart;
@@ -436,6 +452,7 @@ function bindName(id,key,fallback){
 }
 bindName('scWork','scWork','포모도로');
 bindName('scRest','scRest','휴식');
+bindName('scLong','scLong','긴휴식');
 bindName('scCancel','scCancel','취소');
 bindName('devName','devName',guessName());
 
