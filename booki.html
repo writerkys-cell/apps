@@ -86,9 +86,10 @@
   }
   .bottombar .send {
     flex: 1; padding: 15px 0; border-radius: 13px; border: none; background: var(--ink);
-    color: #fff; font-size: 16px; font-weight: 800; font-family: inherit;
+    color: #fff; font-size: 15px; font-weight: 800; font-family: inherit;
   }
-  .bottombar .send:disabled { background: var(--line); color: var(--sub); }
+  .bottombar .send.alt { background: var(--card); color: var(--ink); border: 1.5px solid var(--ink); }
+  .bottombar .send:disabled { background: var(--line); color: var(--sub); border-color: var(--line); }
   .bottombar .clear {
     padding: 0 16px; border-radius: 13px; border: 1px solid var(--line);
     background: var(--card); color: #dc2626; font-size: 14px; font-weight: 700; font-family: inherit;
@@ -125,14 +126,15 @@
 
 <header>
   <h1>📱 서가 입력</h1>
-  <p>칸 ID와 분류를 정하고, 책등을 보며 쭉 입력하세요. 증정본은 저자가 증정자로 기록돼요.</p>
+  <p>칸 ID와 분류를 정하고, 책등을 보며 쭉 입력하세요. 증정본은 저자가 증정자로 기록돼요. 다 되면 <b>복사</b>(→붙여넣기로 병합) 또는 <b>파일 전송</b>(→파일로 병합).</p>
 </header>
 
 <div id="cards"></div>
 
 <div class="bottombar">
   <button class="clear" onclick="clearAll()">비우기</button>
-  <button class="send" id="sendbtn" onclick="sendData()">컴퓨터로 보내기</button>
+  <button class="send alt" id="copybtn" onclick="copyData()">📋 복사</button>
+  <button class="send" id="filebtn" onclick="saveFile()">📤 파일 전송</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -226,9 +228,11 @@ function render() {
   });
 
   const total = state.cards.reduce((s,c) => s + c.books.length, 0);
-  const btn = document.getElementById('sendbtn');
-  btn.textContent = total ? `컴퓨터로 보내기 (${total}권)` : '컴퓨터로 보내기';
-  btn.disabled = !total;
+  const cb = document.getElementById('copybtn');
+  const fb = document.getElementById('filebtn');
+  cb.textContent = total ? `📋 복사 (${total})` : '📋 복사';
+  fb.textContent = total ? `📤 파일 전송 (${total})` : '📤 파일 전송';
+  cb.disabled = !total; fb.disabled = !total;
 }
 
 function setSlot(ci, v) {
@@ -273,32 +277,47 @@ function buildExport() {
   return { type: 'shelfapp-mobile', date: new Date().toISOString().slice(0,10), books };
 }
 
-async function sendData() {
+function currentJSON() {
   const data = buildExport();
-  if (!data.books.length) return;
-  const json = JSON.stringify(data, null, 2);
-  const fname = `서가입력_${data.date}.json`;
+  if (!data.books.length) { toast('입력한 책이 없어요'); return null; }
+  return { json: JSON.stringify(data, null, 2), fname: `서가입력_${data.date}.json` };
+}
 
-  // 1순위: iOS 공유 시트 (AirDrop으로 맥에 바로 전송)
-  if (navigator.share) {
+// 📋 복사: JSON 텍스트를 클립보드로 → 데스크톱 "붙여넣기로 병합"
+async function copyData() {
+  const c = currentJSON(); if (!c) return;
+  try {
+    await navigator.clipboard.writeText(c.json);
+    toast('복사됨 — 데스크톱 앱에서 "붙여넣은 데이터 병합"에 붙여넣으세요');
+  } catch(e) {
+    // 클립보드 API가 막히면 텍스트를 띄워 직접 복사
+    document.getElementById('fbtext').value = c.json;
+    document.getElementById('fallback').classList.add('on');
+  }
+}
+
+// 📤 파일 전송: JSON 파일로 저장/AirDrop → 데스크톱 "파일로 병합"
+async function saveFile() {
+  const c = currentJSON(); if (!c) return;
+  const file = new File([c.json], c.fname, { type: 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      const file = new File([json], fname, { type: 'application/json' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: '서가 입력 데이터' });
-        toast('보냈어요! 데스크톱 앱에서 "파일로 병합"하세요');
-        return;
-      }
+      await navigator.share({ files: [file] });  // 제목 없이 파일만 → 공유 시트에서 "파일에 저장"/AirDrop
+      toast('전송됨 — 데스크톱 앱에서 "파일로 병합"하세요');
+      return;
     } catch(e) { if (e.name === 'AbortError') return; }
   }
-  // 2순위: 텍스트 복사
-  document.getElementById('fbtext').value = json;
-  document.getElementById('fallback').classList.add('on');
+  // 폴백: 브라우저 다운로드
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([c.json], { type: 'application/json' }));
+  a.download = c.fname; a.click();
+  toast('파일로 저장됨 — 데스크톱 앱에서 "파일로 병합"하세요');
 }
 async function copyText() {
   const txt = document.getElementById('fbtext').value;
   try {
     await navigator.clipboard.writeText(txt);
-    toast('복사했어요! 메모/메시지로 컴퓨터에 보내세요');
+    toast('복사됨 — 데스크톱 앱에서 "붙여넣은 데이터 병합"에 붙여넣으세요');
   } catch(e) {
     document.getElementById('fbtext').select();
     document.execCommand('copy');
