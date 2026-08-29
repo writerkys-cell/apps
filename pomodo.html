@@ -733,11 +733,24 @@ function openSocket(){
 }
 function closeSocket(){ clearInterval(hb); if(ws){ try{ ws.close(); }catch(e){} ws=null; } }
 
-/* 앱이 앞으로 나올 때마다 맞춘다 */
+/* 앱이 앞으로 나올 때마다 날짜를 다시 보고 서버와 맞춘다 */
+var lastKey=todayKey();
+function wake(){
+  var k=todayKey();
+  if(k!==lastKey){ lastKey=k; viewY=undefined; }   /* 날이 바뀌면 달력도 이번 달로 */
+  render();
+  sync();
+}
 document.addEventListener('visibilitychange',function(){
-  if(document.hidden){ closeSocket(); if(pollT) clearInterval(pollT); pollT=null; }
-  else { sync(); if(!pollT) pollT=setInterval(function(){ if(!ws) sync(); },45000); }
+  if(document.hidden){
+    closeSocket();
+    if(pollT) clearInterval(pollT); pollT=null;
+  }else{
+    wake();
+    if(!pollT) pollT=setInterval(function(){ if(!ws) sync(); },45000);
+  }
 });
+window.addEventListener('pageshow',function(){ wake(); });
 window.addEventListener('online',function(){ sync(); });
 
 /* 설정 단추 */
