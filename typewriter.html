@@ -95,15 +95,17 @@ button.t:focus-visible{outline:2px solid var(--insert);outline-offset:1px}
   user-select:none;-webkit-user-select:none;cursor:text;
   position:relative;z-index:1;
 }
+/* 눈금은 글의 흐름에 끼어들지 않는다. 자리만 표시하고 줄은 종이 위에 따로 긋는다 */
 #sheet .tkr{
-  float:left;font-size:0;height:0;
-  margin-left:calc(-1 * min(var(--sm),9vw));
-  width:calc(100% + 2 * min(var(--sm),9vw));
-  border-bottom:1px solid rgba(0,0,0,.10);
+  display:inline-block;width:0;height:0;overflow:hidden;
+  font-size:0;line-height:0;vertical-align:top;
 }
-#sheet .tkr.ghost{border-bottom:0}
 #nums{position:absolute;inset:0;pointer-events:none}
 #nums.hide{display:none}
+#nums u{
+  position:absolute;left:0;right:0;height:0;text-decoration:none;
+  border-top:1px solid rgba(0,0,0,.10);
+}
 #nums i{
   position:absolute;right:100%;margin-right:12px;
   transform:translateY(-50%);
@@ -396,6 +398,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   코멘트 안에서도 <kbd>⌘D</kbd>로 줄을 긋고 고쳐 쓸 수 있습니다. 색만 달라지고 서체는 그대로입니다. 코멘트는 <b>매수에도 복사에도 들어가지 않습니다.</b> 원고가 아니라 원고에 붙인 쪽지니까요. 인쇄하면 표시한 대목이 괄호로 묶이고 그 뒤에 코멘트가 작게 따라붙습니다.<br><br>
   <b>줄바꿈은 자유롭습니다.</b> 글자는 지울 수 없지만 줄은 마음대로 나누고 붙일 수 있습니다. 줄을 나눠도 붙여도 글자는 하나도 사라지지 않으니까요. 원고 한가운데서 <kbd>Enter</kbd>를 치면 그 자리에서 행이 갈립니다. 줄 맨 앞에서 <kbd>Backspace</kbd>를 치면 앞 줄 끝에 공백 하나를 두고 붙습니다. 시의 행갈이와 연 나누기를 이걸로 하시면 됩니다.<br>
   <kbd>Enter</kbd>는 어디서 치든 새 문단이라 들여쓰기가 딸리고, <kbd>⇧Enter</kbd>는 어디서 치든 들여쓰기 없이 행만 바꿉니다. 시의 행갈이는 <kbd>⇧Enter</kbd>가 손에 맞을 겁니다.<br><br>
+  <b>쇄.</b> 인쇄할 때마다 그 원고의 쇄가 하나씩 올라가 머리글에 <b>3쇄</b>처럼 찍힙니다. 원고마다 따로 셉니다. 서랍에도 표시되니 어느 원고를 몇 번 뽑았는지 알 수 있습니다. 인쇄 대화상자에서 취소해도 한 쇄가 올라가니, 미리보기만 하실 때는 감안해 주세요.<br><br>
   <b>분량 눈금.</b> 왼쪽 여백의 작은 숫자는 <b>글자 수로 재는 자</b>입니다. 한 장을 공백 포함 1,333자로 잡고 반 장마다 숫자를, 한 장마다 가로줄을 놓습니다. 종이 크기나 활자, 여백과는 아무 상관이 없습니다. 인쇄물 한 장이 여기서 끊긴다는 뜻이 <b>아니라</b>, 원고 분량이 거기까지 왔다는 뜻입니다. 줄 그은 글자와 줄바꿈은 세지 않습니다.<br><br>
   <b>소리.</b> 자판을 두드릴 때마다 활자대 소리가 납니다. 한글은 자모 하나하나가 한 번의 타건이므로 한 글자에 두세 번 울립니다. 손의 움직임과 소리가 맞아떨어지도록 그렇게 두었습니다. <kbd>Backspace</kbd>는 캐리지가 한 칸 물러나는 낮고 둔한 소리가 나고, 물릴 것이 없으면 울리지 않습니다. 줄 끝이 여섯 자쯤 남으면 마진벨이 한 번 울리고, 줄이 넘어가면 캐리지 리턴이 울립니다. 손으로 <kbd>Enter</kbd>를 쳤을 때든 글이 저절로 넘어갔을 때든 같습니다. 잠금이 끝날 때도 종이 울립니다. 설정에서 모두 끌 수 있습니다.<br><br>
   <b>정리.</b> <kbd>⌘⇧D</kbd> 또는 서랍의 <b>정리</b>는 줄 그은 글자를 종이에서 아주 걷어냅니다. 그 자리에 남은 겹공백과 줄 끝 공백도 함께 다듬고, 고쳐 쓴 푸른 글자는 보통 글자가 됩니다. 되돌릴 수 없으니 백업을 받아두고 누르세요.<br><br>
@@ -482,12 +485,14 @@ function tickHTML(v){
 function drawNums(){
   const layer=$('#nums'); if(!layer) return;
   const pr=paper.getBoundingClientRect(), dr=desk.getBoundingClientRect();
-  if(pr.left-dr.left<38){ layer.className='hide'; layer.innerHTML=''; return; }
+  const room=(pr.left-dr.left>=38);   /* 종이 왼편이 좁으면 숫자는 접는다. 줄은 그대로 긋는다 */
   layer.className='';
   const lr=layer.getBoundingClientRect();
   let s='';
   sheet.querySelectorAll('.tkr').forEach(el=>{
-    s+='<i style="top:'+(el.getBoundingClientRect().top-lr.top).toFixed(1)+'px">'+el.dataset.t+'</i>';
+    const y=(el.getBoundingClientRect().top-lr.top).toFixed(1);
+    if(!el.classList.contains('ghost')) s+='<u style="top:'+y+'px"></u>';
+    if(room) s+='<i style="top:'+y+'px">'+el.dataset.t+'</i>';
   });
   layer.innerHTML=s;
 }
@@ -1137,7 +1142,7 @@ window.addEventListener('keydown',e=>{
     if(e.key==='/'){e.preventDefault(); openMemo(); return;}
     if(k==='g'){e.preventDefault(); nextHL(); return;}
     if(k==='m'&&e.shiftKey){e.preventDefault(); runShortcut(); return;}
-    if(k==='p'){e.preventDefault(); doPrint(S.cells); return;}
+    if(k==='p'){e.preventDefault(); saveDoc(false); doPrint(S.cells,S.id); return;}
     if(k==='x'){e.preventDefault(); toast('타자기에는 오려낼 수 없습니다.'); return;}
     if(k==='v'){
       if(inCorrection()) return;                 /* 붙여넣기 사건으로 넘긴다 */
@@ -1310,7 +1315,11 @@ function delDoc(id){
 }
 
 /* ── 인쇄 ─────────────────────────────────────────── */
-function doPrint(cells){
+function doPrint(cells,docId){
+  /* 찍을 때마다 쇄를 올린다 */
+  const rec=docId?DB.docs.find(x=>x.id===docId):null;
+  let pr=1;
+  if(rec){ rec.pr=(rec.pr||0)+1; pr=rec.pr; saveDB(); }
   const te=titleEnd(cells);
   const build=(from,to)=>{
     const out=[]; let run=null;
@@ -1331,7 +1340,7 @@ function doPrint(cells){
   const now=new Date(), pad=n=>String(n).padStart(2,'0');
   const stamp=now.getFullYear()+'.'+pad(now.getMonth()+1)+'.'+pad(now.getDate())+' '+pad(now.getHours())+':'+pad(now.getMinutes());
   let chars=0; for(const c of cells) if(!c.k&&!c.m&&c.c!=='\n') chars++;
-  const meta='<div class="meta">'+stamp+' &nbsp;·&nbsp; 원고지 '+(liveChars(cells)/200).toFixed(1)+'매 &nbsp;·&nbsp; 공백 포함 '+chars.toLocaleString()+'자</div>';
+  const meta='<div class="meta">'+stamp+' &nbsp;·&nbsp; '+pr+'쇄 &nbsp;·&nbsp; 원고지 '+(liveChars(cells)/200).toFixed(1)+'매 &nbsp;·&nbsp; 공백 포함 '+chars.toLocaleString()+'자</div>';
   const head='<div class="ttl">'+build(0,te)+'</div>';
   const body=build(te<cells.length?te+1:te,cells.length);
   const P=$('#print');
@@ -1408,7 +1417,7 @@ function drawer(){
       const day=(dt.getMonth()+1)+'.'+dt.getDate();
       return '<div class="doc">'
         +'<span class="nm" data-open="'+d.id+'">'+esc(d.title||'제목 없음')+'</span>'
-        +'<span class="meta">'+sheets(cells).toFixed(1)+'매 · '+day+'</span>'
+        +'<span class="meta">'+sheets(cells).toFixed(1)+'매'+(d.pr?' · '+d.pr+'쇄':'')+' · '+day+'</span>'
         +'<span class="act">'
         +'<button data-open="'+d.id+'">열기</button>'
         +'<button data-tidy="'+d.id+'">정리</button>'
@@ -1430,7 +1439,7 @@ $('#docs').addEventListener('click',e=>{
   if(b.dataset.open) openDoc(b.dataset.open);
   else if(b.dataset.tidy) tidyDoc(b.dataset.tidy);
   else if(b.dataset.copy){const d=DB.docs.find(x=>x.id===b.dataset.copy); copyPlain(unpack(d));}
-  else if(b.dataset.print){const d=DB.docs.find(x=>x.id===b.dataset.print); doPrint(unpack(d));}
+  else if(b.dataset.print){const d=DB.docs.find(x=>x.id===b.dataset.print); doPrint(unpack(d),d.id); drawer();}
   else if(b.dataset.del) delDoc(b.dataset.del);
 });
 
