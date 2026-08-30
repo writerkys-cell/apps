@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초고</title>
+<style>
+:root{
+  --paper:#F2F2ED;
+  --paper-deep:#EAEAE3;
+  --ink:#2A2B30;
+  --ink-soft:#55565C;
+  --muted:#8B8E94;
+  --line:#D9D9CF;
+  --dawn:#5C6E8E;
+  --dawn-faint:#DCE1E9;
+  --vermilion:#A93A2B;
+  --vermilion-faint:#F2E2DE;
+  --serif:"Noto Serif KR","Source Han Serif K",AppleMyungjo,"Nanum Myeongjo",Batang,serif;
+  --sans:"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--serif);
+  line-height:1.9;
+}
+button{font-family:var(--sans);cursor:pointer;background:none;border:none;color:inherit}
+button:focus-visible,textarea:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--dawn);outline-offset:2px}
+
+/* ---------- frame ---------- */
+.wrap{max-width:700px;margin:0 auto;padding:0 24px 120px}
+header.top{
+  display:flex;align-items:baseline;justify-content:space-between;
+  padding:28px 0 10px;font-family:var(--sans);
+}
+.brand{font-size:13px;letter-spacing:.35em;color:var(--muted)}
+.top-actions{display:flex;gap:14px;font-size:12.5px;color:var(--ink-soft);flex-wrap:wrap;justify-content:flex-end}
+.top-actions button{padding:2px 0;border-bottom:1px solid transparent}
+.top-actions button:hover{border-bottom-color:var(--ink-soft)}
+.top-actions button.on{color:var(--dawn);border-bottom-color:var(--dawn)}
+
+/* ---------- horizon progress (signature) ---------- */
+.horizon{
+  position:relative;height:3px;background:var(--line);border-radius:2px;
+  margin:6px 0 34px;overflow:hidden;
+}
+.horizon .sun{
+  position:absolute;inset:0;width:0%;
+  background:linear-gradient(90deg,var(--dawn) 0%,#8496B3 70%,#C8A15A 100%);
+  transition:width .4s ease;
+}
+.horizon.done .sun{background:linear-gradient(90deg,#C8A15A,#D9B35E)}
+
+/* ---------- title heading ---------- */
+.titlehead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+input#titleInput{
+  flex:1;border:none;background:transparent;color:var(--ink);
+  font-family:var(--serif);font-size:21px;font-weight:600;letter-spacing:.02em;
+  border-bottom:1px solid var(--line);padding:2px 0 6px;
+}
+input#titleInput::placeholder{color:#B4B6B0;font-weight:400}
+.titlehead .sub{font-family:var(--sans);font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* pages indicator: 세 쪽 */
+.pages{display:flex;gap:8px;align-items:center;margin:14px 0 22px;font-family:var(--sans)}
+.page{
+  width:22px;height:30px;border:1px solid var(--line);border-radius:2px;
+  background:linear-gradient(to top,var(--dawn-faint) var(--fill,0%),transparent var(--fill,0%));
+  position:relative;transition:background .3s;
+}
+.page.full{border-color:var(--dawn);background:linear-gradient(to top,var(--dawn) 100%,transparent 0)}
+.pages .count{font-size:12.5px;color:var(--ink-soft);margin-left:6px}
+.pages .count b{color:var(--ink);font-weight:600}
+
+/* ---------- writing area ---------- */
+textarea#editor{
+  width:100%;min-height:52vh;resize:vertical;
+  border:none;background:transparent;color:var(--ink);
+  font-family:var(--serif);font-size:17px;line-height:2.05;
+  padding:4px 0;
+}
+textarea#editor::placeholder{color:#B4B6B0}
+
+.statusline{
+  display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--sans);font-size:12px;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:10px;margin-top:8px;
+}
+.saverow{
+  display:flex;justify-content:flex-end;align-items:center;gap:10px;
+  margin-top:16px;font-family:var(--sans);
+}
+.saverow button{font-size:13px;padding:8px 18px;border-radius:3px}
+.saverow .ghost{color:var(--muted);border:1px solid var(--line)}
+.saverow .ghost:hover{color:var(--ink);border-color:var(--muted)}
+.saverow .primary{background:var(--dawn);color:#fff}
+
+/* completion banner */
+.doneNote{
+  display:none;margin:26px 0 8px;padding:18px 20px;
+  border-left:3px solid #C8A15A;background:var(--paper-deep);
+  font-size:15px;color:var(--ink-soft);
+}
+.doneNote.show{display:block}
+.doneNote b{color:var(--ink);font-weight:600}
+.doneNote button{
+  margin-top:10px;font-size:13px;color:var(--dawn);
+  border-bottom:1px solid var(--dawn);padding-bottom:1px;
+}
+
+/* ---------- board (지난 초고) ---------- */
+#boardView,#readView{display:none}
+.boardbar{
+  display:flex;align-items:center;gap:12px;margin:2px 0 18px;font-family:var(--sans);
+}
+.boardbar input{
+  flex:1;font-family:var(--sans);font-size:13px;color:var(--ink);
+  background:transparent;border:none;border-bottom:1px solid var(--line);padding:6px 2px;
+}
+.boardbar input::placeholder{color:var(--muted)}
+.boardbar select{
+  font-family:var(--sans);font-size:12px;color:var(--ink-soft);
+  background:transparent;border:none;border-bottom:1px solid var(--line);padding:6px 2px;
+}
+.boardhead{
+  display:flex;align-items:center;gap:14px;font-family:var(--sans);
+  font-size:11.5px;letter-spacing:.1em;color:var(--muted);
+  border-top:1px solid var(--ink);border-bottom:1px solid var(--line);padding:9px 2px;
+}
+.board{border-bottom:1px solid var(--line)}
+.item{
+  display:flex;align-items:center;gap:14px;
+  padding:15px 2px;border-bottom:1px solid var(--line);cursor:pointer;
+}
+.item:last-child{border-bottom:none}
+.item:hover{background:var(--paper-deep)}
+.item .t{flex:1;font-size:17px;font-weight:600;line-height:1.6;word-break:break-word}
+.item .t .peek{
+  display:block;font-family:var(--sans);font-size:12px;font-weight:400;
+  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;
+}
+.item .col{font-family:var(--sans);font-size:12px;color:var(--ink-soft);white-space:nowrap;text-align:right}
+.col.w{width:64px}
+.col.r{width:56px}
+.col.d{width:92px;color:var(--muted)}
+.col.x{width:38px}
+.item .del{font-family:var(--sans);font-size:11.5px;color:var(--muted);border-bottom:1px dotted var(--muted)}
+.item .del:hover{color:var(--vermilion);border-bottom-color:var(--vermilion)}
+.item .r b{color:var(--vermilion);font-weight:600}
+.boardfoot{
+  font-family:var(--sans);font-size:12px;color:var(--muted);
+  padding-top:12px;display:flex;justify-content:space-between;
+}
+
+/* ---------- read view ---------- */
+.nav{
+  display:flex;align-items:center;justify-content:space-between;
+  margin:2px 0 26px;font-family:var(--sans);
+}
+.nav button.arrow{
+  font-size:20px;line-height:1;padding:8px 14px;color:var(--ink-soft);
+  border:1px solid var(--line);border-radius:3px;background:var(--paper-deep);
+}
+.nav button.arrow:hover:not(:disabled){color:var(--ink);border-color:var(--muted)}
+.nav button.arrow:disabled{opacity:.3;cursor:default}
+.nav .navmid{text-align:center;flex:1;padding:0 12px}
+.nav .navmid .ago{font-size:12px;letter-spacing:.2em;color:var(--vermilion)}
+.nav .navmid h2{font-size:18px;font-weight:600;font-family:var(--serif);word-break:break-word}
+select#draftJump{
+  font-family:var(--sans);font-size:12px;color:var(--ink-soft);
+  background:transparent;border:none;border-bottom:1px solid var(--line);
+  margin-top:4px;max-width:220px;
+}
+
+.entryBody{font-size:16.5px;line-height:2.1;white-space:pre-wrap;word-break:break-word}
+.entryBody .struck{
+  text-decoration:line-through;
+  text-decoration-color:var(--vermilion);
+  text-decoration-thickness:1.5px;
+  color:var(--muted);
+  background:var(--vermilion-faint);
+  cursor:default;
+}
+.entryBody .rev{
+  color:var(--vermilion);font-size:15px;
+  white-space:normal;
+}
+.entryBody .rev .rmark{font-family:var(--sans);font-size:12px;opacity:.8}
+.entryBody .rev .rdate{
+  font-family:var(--sans);font-size:11px;letter-spacing:.05em;
+  color:var(--vermilion);opacity:.75;
+}
+.entryBody .rev .rdel{
+  font-family:var(--sans);font-size:11px;color:var(--muted);
+  margin-left:6px;border-bottom:1px dotted var(--muted);
+}
+.entryBody .rev .rdel:hover{color:var(--vermilion)}
+
+.emptyDay{
+  padding:60px 0;text-align:center;color:var(--muted);
+  font-family:var(--sans);font-size:14px;line-height:2;
+}
+.emptyDay button{color:var(--dawn);border-bottom:1px solid var(--dawn);font-size:13px}
+
+.archMeta{
+  font-family:var(--sans);font-size:12px;color:var(--muted);
+  border-top:1px solid var(--line);padding-top:10px;margin-top:34px;
+}
+.readActions{
+  display:flex;gap:16px;margin-top:16px;font-family:var(--sans);font-size:12.5px;color:var(--ink-soft);
+}
+.readActions button{border-bottom:1px solid var(--line);padding-bottom:1px}
+.readActions button:hover{border-bottom-color:var(--ink-soft)}
+.readActions button.danger{color:var(--vermilion);border-bottom-color:var(--vermilion-faint)}
+.readActions button.danger:hover{border-bottom-color:var(--vermilion)}
+
+/* selection popover */
+#revPop{
+  position:absolute;display:none;z-index:20;
+  background:var(--ink);color:var(--paper);
+  font-family:var(--sans);font-size:12.5px;
+  padding:6px 12px;border-radius:3px;
+}
+#revPop:after{
+  content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+  border:5px solid transparent;border-bottom:none;border-top-color:var(--ink);
+}
+
+/* revision input dialog */
+#revBox{
+  display:none;position:fixed;inset:0;z-index:30;
+  background:rgba(42,43,48,.35);
+  align-items:center;justify-content:center;padding:20px;
+}
+#revBox.show{display:flex}
+#revBox .card{
+  background:var(--paper);width:100%;max-width:520px;
+  padding:26px 28px;border-top:3px solid var(--vermilion);
+  box-shadow:0 12px 40px rgba(0,0,0,.18);
+}
+#revBox .quoted{
+  font-size:14px;color:var(--ink-soft);border-left:2px solid var(--line);
+  padding-left:12px;margin-bottom:14px;max-height:90px;overflow:auto;
+  text-decoration:line-through;text-decoration-color:var(--vermilion);
+}
+#revBox textarea{
+  width:100%;min-height:90px;resize:vertical;
+  font-family:var(--serif);font-size:15px;line-height:1.9;color:var(--vermilion);
+  background:transparent;border:1px solid var(--line);border-radius:3px;padding:10px 12px;
+}
+#revBox .row{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-family:var(--sans)}
+#revBox .row .today{font-size:12px;color:var(--muted)}
+#revBox .row .btns button{font-size:13px;padding:7px 16px;border-radius:3px}
+#revBox .row .btns .save{background:var(--vermilion);color:#fff}
+#revBox .row .btns .cancel{color:var(--muted);margin-right:6px}
+
+/* toast */
+#toast{
+  position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:var(--paper);font-family:var(--sans);font-size:13px;
+  padding:10px 20px;border-radius:3px;opacity:0;pointer-events:none;
+  transition:opacity .3s,transform .3s;z-index:40;
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important}
+}
+@media (max-width:520px){
+  .wrap{padding:0 16px 100px}
+  textarea#editor{font-size:16px}
+  input#titleInput{font-size:19px}
+  .col.d{display:none}
+  .col.w{width:52px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">초고</div>
+    <nav class="top-actions">
+      <button id="btnWrite" class="on">초고 쓰기</button>
+      <button id="btnBoard">지난 초고</button>
+      <button id="btnSound" title="750단어 도달 시 알림음">🔔</button>
+      <button id="btnExport">내보내기</button>
+      <button id="btnImport">가져오기</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+    </nav>
+  </header>
+  <div class="horizon" id="horizon"><div class="sun" id="sun"></div></div>
+
+  <!-- ===== 초고 쓰기 ===== -->
+  <section id="writeView">
+    <div class="titlehead">
+      <input id="titleInput" type="text" placeholder="제목을 붙여 주세요" spellcheck="false" autocomplete="off">
+      <span class="sub">단숨에 750단어</span>
+    </div>
+    <div class="pages" id="pagesInd">
+      <div class="page" data-i="0"></div>
+      <div class="page" data-i="1"></div>
+      <div class="page" data-i="2"></div>
+      <span class="count"><b id="wc">0</b> / 750 단어</span>
+    </div>
+    <textarea id="editor" placeholder="고치지 말고, 멈추지 말고, 그냥 쓰세요." spellcheck="false"></textarea>
+    <div class="doneNote" id="doneNote">
+      <b>초고 한 편이 다 찼습니다.</b> 750단어를 넘겼으니 이제 제목을 붙여 저장하세요.<br>
+      <button id="goSave">제목 붙여 저장하기 →</button>
+    </div>
+    <div class="statusline">
+      <span id="saveStat">아직 저장된 초고 없음</span>
+      <span id="charStat"></span>
+    </div>
+    <div class="saverow">
+      <button class="ghost" id="btnNew">새 초고</button>
+      <button class="primary" id="btnSave">제목으로 저장</button>
+    </div>
+  </section>
+
+  <!-- ===== 지난 초고 (게시판) ===== -->
+  <section id="boardView">
+    <div class="boardbar">
+      <input id="q" type="text" placeholder="제목으로 찾기" autocomplete="off">
+      <select id="sortSel">
+        <option value="new">최근에 쓴 순</option>
+        <option value="old">오래된 순</option>
+        <option value="title">제목 순</option>
+        <option value="rev">수정 많은 순</option>
+      </select>
+    </div>
+    <div class="boardhead">
+      <span style="flex:1">제목</span>
+      <span class="col w">단어</span>
+      <span class="col r">수정</span>
+      <span class="col d">쓴 날</span>
+      <span class="col x"></span>
+    </div>
+    <div class="board" id="boardList"></div>
+    <div class="boardfoot">
+      <span id="boardCount"></span>
+      <span>제목을 누르면 초고가 펼쳐집니다</span>
+    </div>
+  </section>
+
+  <!-- ===== 초고 읽기 · 수정 ===== -->
+  <section id="readView">
+    <div class="nav">
+      <button class="arrow" id="navPrev" title="이전 초고">←</button>
+      <div class="navmid">
+        <div class="ago" id="readAgo"></div>
+        <h2 id="readTitle"></h2>
+        <select id="draftJump" title="저장된 다른 초고로 이동"></select>
+      </div>
+      <button class="arrow" id="navNext" title="다음 초고">→</button>
+    </div>
+    <div id="entryHost"></div>
+    <div class="archMeta" id="archMeta"></div>
+    <div class="readActions">
+      <button id="backList">← 목록으로</button>
+      <button id="btnContinue">이어 쓰기</button>
+      <button class="danger" id="btnDelete">이 초고 지우기</button>
+    </div>
+  </section>
+</div>
+
+<div id="revPop"><button id="revPopBtn">줄 긋고 고치기</button></div>
+
+<div id="revBox" role="dialog" aria-modal="true">
+  <div class="card">
+    <div class="quoted" id="revQuoted"></div>
+    <textarea id="revText" placeholder="이 자리에 들어갈 새 문장을."></textarea>
+    <div class="row">
+      <span class="today" id="revToday"></span>
+      <span class="btns">
+        <button class="cancel" id="revCancel">취소</button>
+        <button class="save" id="revSave">수정 저장</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ================= storage ================= */
+const KEY = "chogo_v1";
+let db = { drafts:{}, working:{ id:null, title:"", text:"" }, soundOn:true };
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw){ const p = JSON.parse(raw); if(p && typeof p === "object") db = Object.assign(db, p); }
+} catch(e){}
+if(!db.drafts) db.drafts = {};
+if(!db.working) db.working = { id:null, title:"", text:"" };
+function persist(){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch(e){ toast("저장 공간이 가득 찼습니다"); }
+}
+
+/* ================= dates ================= */
+const pad = n => String(n).padStart(2,"0");
+const WD = ["일","월","화","수","목","금","토"];
+function fmt(d){ return d.getFullYear()+"년 "+(d.getMonth()+1)+"월 "+d.getDate()+"일 ("+WD[d.getDay()]+")"; }
+function fmtShort(d){ return d.getFullYear()+". "+(d.getMonth()+1)+". "+d.getDate()+"."; }
+function fmtTiny(d){ return String(d.getFullYear()).slice(2)+". "+(d.getMonth()+1)+". "+d.getDate()+"."; }
+function timeNow(){ const n=new Date(); return pad(n.getHours())+":"+pad(n.getMinutes())+":"+pad(n.getSeconds()); }
+const today = new Date();
+const todayKey = today.getFullYear()+"-"+pad(today.getMonth()+1)+"-"+pad(today.getDate());
+function uid(){ return Date.now()+"-"+Math.random().toString(36).slice(2,7); }
+
+/* ================= word count ================= */
+function countWords(t){
+  const m = (t||"").trim().match(/\S+/g);
+  return m ? m.length : 0;
+}
+const GOAL = 750;
+
+/* ================= elements ================= */
+const $ = id => document.getElementById(id);
+const editor=$("editor"), titleInput=$("titleInput"), wc=$("wc"), sun=$("sun"), horizon=$("horizon"),
+      doneNote=$("doneNote"), saveStat=$("saveStat"), charStat=$("charStat"),
+      writeView=$("writeView"), boardView=$("boardView"), readView=$("readView"),
+      btnWrite=$("btnWrite"), btnBoard=$("btnBoard");
+
+/* ================= sound (gentle two-note chime) ================= */
+let soundOn = db.soundOn !== false;
+function drawSoundBtn(){ $("btnSound").textContent = soundOn ? "🔔" : "🔕"; }
+drawSoundBtn();
+$("btnSound").onclick = () => { soundOn=!soundOn; db.soundOn=soundOn; persist(); drawSoundBtn();
+  toast(soundOn ? "750단어 도달 시 조용한 종소리가 울립니다" : "알림음을 껐습니다"); };
+function chime(){
+  if(!soundOn) return;
+  try{
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [[523.25,0],[783.99,.28]].forEach(([f,t])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type="sine"; o.frequency.value=f;
+      g.gain.setValueAtTime(0,ctx.currentTime+t);
+      g.gain.linearRampToValueAtTime(.18,ctx.currentTime+t+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+t+1.4);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+1.5);
+    });
+  }catch(e){}
+}
+
+/* ================= toast ================= */
+let toastT;
+function toast(msg){
+  const el=$("toast"); el.textContent=msg; el.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("show"),2600);
+}
+
+/* ================= write & autosave(임시 보관) ================= */
+let reached = false;
+(function initWrite(){
+  titleInput.value = db.working.title || "";
+  editor.value = db.working.text || "";
+  reached = countWords(editor.value) >= GOAL;
+  refreshProgress(false);
+  if(db.working.id && db.drafts[db.working.id]){
+    saveStat.textContent = "「"+db.drafts[db.working.id].title+"」에 이어 쓰는 중";
+  } else if(editor.value.trim()){
+    saveStat.textContent = "임시 보관된 초고 · 아직 제목으로 저장되지 않음";
+  }
+})();
+
+let saveT;
+function stash(){
+  db.working.title = titleInput.value;
+  db.working.text = editor.value;
+  persist();
+  saveStat.textContent = "임시 보관됨 · "+timeNow()+
+    (db.working.id && db.drafts[db.working.id] ? " · 「"+db.drafts[db.working.id].title+"」에 이어 쓰는 중" : " · 아직 저장 전");
+}
+editor.addEventListener("input", ()=>{
+  refreshProgress(true);
+  clearTimeout(saveT); saveT = setTimeout(stash, 500);
+});
+titleInput.addEventListener("input", ()=>{
+  clearTimeout(saveT); saveT = setTimeout(stash, 500);
+});
+titleInput.addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); editor.focus(); } });
+
+function refreshProgress(live){
+  const n = countWords(editor.value);
+  wc.textContent = n;
+  charStat.textContent = editor.value.length ? editor.value.length.toLocaleString()+"자" : "";
+  const ratio = Math.min(n/GOAL, 1);
+  sun.style.width = (ratio*100)+"%";
+  horizon.classList.toggle("done", n>=GOAL);
+  document.querySelectorAll(".page").forEach((p,i)=>{
+    const seg = Math.max(0, Math.min(1, (n - i*250)/250));
+    p.style.setProperty("--fill", (seg*100)+"%");
+    p.classList.toggle("full", seg>=1);
+  });
+  document.title = n>=GOAL ? "초고 · 완성" : (n>0 ? "초고 · "+n+"/750" : "초고");
+  const done = n>=GOAL;
+  doneNote.classList.toggle("show", done);
+  if(done && !reached){ reached=true; if(live){ chime(); toast("750단어. 초고 한 편이 끝났습니다."); } }
+  if(!done) reached=false;
+}
+
+/* ================= 제목으로 저장 ================= */
+function remapRevisions(revs, oldText, newText){
+  const out=[];
+  (revs||[]).forEach(r=>{
+    const q = r.quote != null ? r.quote : oldText.slice(r.start, r.end);
+    if(!q) return;
+    let s;
+    if(newText.slice(r.start, r.end) === q) s = r.start;
+    else { const i = newText.indexOf(q); if(i < 0) return; s = i; }
+    out.push(Object.assign({}, r, { start:s, end:s+q.length, quote:q }));
+  });
+  out.sort((a,b)=>a.start-b.start);
+  const clean=[]; let last=-1;
+  out.forEach(r=>{ if(r.start>=last){ clean.push(r); last=r.end; } });
+  return clean;
+}
+
+function saveDraft(){
+  const title = titleInput.value.trim();
+  const text = editor.value;
+  if(!text.trim()){ toast("아직 쓴 내용이 없습니다"); editor.focus(); return; }
+  if(!title){ toast("제목을 붙여 주세요"); titleInput.focus(); return; }
+  const now = new Date().toISOString();
+  let id = db.working.id;
+
+  if(id && db.drafts[id]){
+    const d = db.drafts[id];
+    if(d.text !== text) d.revisions = remapRevisions(d.revisions, d.text, text);
+    d.title = title; d.text = text; d.words = countWords(text); d.updatedAt = now;
+  } else {
+    const dup = Object.values(db.drafts).find(d => d.title === title);
+    if(dup){
+      const over = confirm("같은 제목의 초고가 있습니다.\n\n확인 = 그 초고에 덮어쓰기\n취소 = 다른 초고로 따로 저장");
+      if(over){
+        id = dup.id;
+        const d = db.drafts[id];
+        if(d.text !== text) d.revisions = remapRevisions(d.revisions, d.text, text);
+        d.text = text; d.words = countWords(text); d.updatedAt = now;
+      }
+    }
+    if(!id || !db.drafts[id]){
+      id = uid();
+      db.drafts[id] = { id, title, text, words:countWords(text), createdAt:now, updatedAt:now, revisions:[] };
+    }
+  }
+  db.working.id = id; db.working.title = title; db.working.text = text;
+  persist();
+  saveStat.textContent = "「"+title+"」 저장됨 · "+timeNow();
+  toast("「"+title+"」 초고를 저장했습니다");
+}
+$("btnSave").onclick = saveDraft;
+$("goSave").onclick = ()=>{ if(!titleInput.value.trim()){ titleInput.focus(); toast("제목을 붙여 주세요"); } else saveDraft(); };
+document.addEventListener("keydown", e=>{
+  if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==="s"){
+    if(writeView.style.display!=="none"){ e.preventDefault(); saveDraft(); }
+  }
+});
+
+$("btnNew").onclick = ()=>{
+  const dirty = editor.value.trim() &&
+    (!db.working.id || !db.drafts[db.working.id] || db.drafts[db.working.id].text !== editor.value);
+  if(dirty && !confirm("저장하지 않은 내용이 있습니다.\n그대로 두고 새 초고를 시작할까요?")) return;
+  db.working = { id:null, title:"", text:"" };
+  titleInput.value=""; editor.value="";
+  persist(); refreshProgress(false);
+  saveStat.textContent = "아직 저장된 초고 없음";
+  titleInput.focus();
+  toast("새 초고를 시작합니다");
+};
+
+/* ================= view switching ================= */
+function show(view){
+  writeView.style.display = view==="write" ? "block":"none";
+  boardView.style.display = view==="board" ? "block":"none";
+  readView.style.display  = view==="read"  ? "block":"none";
+  btnWrite.classList.toggle("on", view==="write");
+  btnBoard.classList.toggle("on", view!=="write");
+  if(view==="board") renderBoard();
+  if(view==="write") refreshProgress(false);
+  window.scrollTo(0,0);
+}
+btnWrite.onclick = ()=>show("write");
+btnBoard.onclick = ()=>show("board");
+$("backList").onclick = ()=>show("board");
+
+/* ================= board (지난 초고) ================= */
+function listDrafts(useFilter){
+  let arr = Object.values(db.drafts);
+  if(useFilter){
+    const q = ($("q").value||"").trim().toLowerCase();
+    if(q) arr = arr.filter(d => (d.title||"").toLowerCase().includes(q) || (d.text||"").toLowerCase().includes(q));
+  }
+  const s = $("sortSel").value;
+  arr.sort((a,b)=>{
+    if(s==="old") return (a.createdAt||"").localeCompare(b.createdAt||"");
+    if(s==="title") return (a.title||"").localeCompare(b.title||"","ko");
+    if(s==="rev") return ((b.revisions||[]).length - (a.revisions||[]).length) || (b.createdAt||"").localeCompare(a.createdAt||"");
+    return (b.createdAt||"").localeCompare(a.createdAt||"");
+  });
+  return arr;
+}
+
+function renderBoard(){
+  const host = $("boardList");
+  host.innerHTML = "";
+  const arr = listDrafts(true);
+  const total = Object.keys(db.drafts).length;
+
+  if(!arr.length){
+    const div = document.createElement("div");
+    div.className = "emptyDay";
+    div.innerHTML = total ? "찾는 제목의 초고가 없습니다.<br><br>" : "아직 저장된 초고가 없습니다.<br><br>";
+    const b = document.createElement("button");
+    b.textContent = total ? "찾기 지우기" : "첫 초고를 쓰러 가기 →";
+    b.onclick = ()=>{ if(total){ $("q").value=""; renderBoard(); } else show("write"); };
+    div.appendChild(b);
+    host.appendChild(div);
+    $("boardCount").textContent = total ? "저장된 초고 "+total+"편" : "";
+    return;
+  }
+
+  arr.forEach(d=>{
+    const row = document.createElement("div");
+    row.className = "item";
+    row.onclick = ()=>openDraft(d.id);
+
+    const t = document.createElement("div");
+    t.className = "t";
+    t.textContent = d.title || "제목 없음";
+    const peek = document.createElement("span");
+    peek.className = "peek";
+    peek.textContent = (d.text||"").replace(/\s+/g," ").trim().slice(0,70);
+    t.appendChild(peek);
+    row.appendChild(t);
+
+    const w = document.createElement("span");
+    w.className = "col w";
+    w.textContent = (d.words != null ? d.words : countWords(d.text))+"단어";
+    row.appendChild(w);
+
+    const r = document.createElement("span");
+    r.className = "col r";
+    const rn = (d.revisions||[]).length;
+    r.innerHTML = rn ? "<b>"+rn+"</b>" : "—";
+    row.appendChild(r);
+
+    const dt = document.createElement("span");
+    dt.className = "col d";
+    dt.textContent = d.createdAt ? fmtTiny(new Date(d.createdAt)) : "";
+    row.appendChild(dt);
+
+    const x = document.createElement("span");
+    x.className = "col x";
+    const del = document.createElement("button");
+    del.className = "del";
+    del.textContent = "지움";
+    del.onclick = ev=>{ ev.stopPropagation(); deleteDraft(d.id); };
+    x.appendChild(del);
+    row.appendChild(x);
+
+    host.appendChild(row);
+  });
+  $("boardCount").textContent = "저장된 초고 "+total+"편"+(arr.length!==total ? " · 찾은 것 "+arr.length+"편" : "");
+}
+$("q").addEventListener("input", renderBoard);
+$("sortSel").addEventListener("change", ()=>{ renderBoard(); if(readView.style.display==="block") buildJump(); });
+
+function deleteDraft(id){
+  const d = db.drafts[id];
+  if(!d) return;
+  if(!confirm("「"+(d.title||"제목 없음")+"」 초고를 지울까요?\n수정한 내용까지 함께 사라지고, 되돌릴 수 없습니다.")) return;
+  delete db.drafts[id];
+  if(db.working.id === id) db.working.id = null;
+  persist();
+  toast("초고를 지웠습니다");
+  if(readView.style.display==="block") show("board");
+  else renderBoard();
+}
+
+/* ================= read & revise ================= */
+let curId = null;
+
+function openDraft(id){
+  const d = db.drafts[id];
+  if(!d) return;
+  curId = id;
+  renderRead();
+  show("read");
+}
+
+function renderRead(){
+  const d = db.drafts[curId];
+  if(!d){ show("board"); return; }
+  const created = d.createdAt ? new Date(d.createdAt) : null;
+  $("readAgo").textContent = created ? "쓴 날 · "+fmtShort(created) : "초고";
+  $("readTitle").textContent = d.title || "제목 없음";
+  const order = listDrafts(false).map(x=>x.id);
+  const i = order.indexOf(curId);
+  $("navPrev").disabled = i <= 0;
+  $("navNext").disabled = i < 0 || i >= order.length-1;
+  buildJump();
+  renderEntry($("entryHost"), curId, d);
+  const w = d.words != null ? d.words : countWords(d.text);
+  const rn = (d.revisions||[]).length;
+  $("archMeta").textContent = w+"단어 · 수정 "+rn+"곳 · 본문은 그대로 두고, 고칠 자리에 줄을 그어 새 문장을 답니다. 문장을 드래그해 보세요.";
+}
+
+function buildJump(){
+  const sel = $("draftJump");
+  sel.innerHTML = "";
+  const opt0 = document.createElement("option");
+  opt0.value=""; opt0.textContent="저장된 초고로 이동…";
+  sel.appendChild(opt0);
+  listDrafts(false).forEach(d=>{
+    const o = document.createElement("option");
+    o.value = d.id;
+    const rn = (d.revisions||[]).length;
+    o.textContent = (d.title||"제목 없음")+" ("+(rn ? "수정 "+rn : (d.words!=null?d.words:countWords(d.text))+"단어")+")";
+    if(d.id===curId) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = ()=>{ if(sel.value) openDraft(sel.value); };
+}
+
+$("navPrev").onclick = ()=>{
+  const order = listDrafts(false).map(x=>x.id);
+  const i = order.indexOf(curId);
+  if(i>0) openDraft(order[i-1]);
+};
+$("navNext").onclick = ()=>{
+  const order = listDrafts(false).map(x=>x.id);
+  const i = order.indexOf(curId);
+  if(i>=0 && i<order.length-1) openDraft(order[i+1]);
+};
+document.addEventListener("keydown", e=>{
+  if(readView.style.display==="block" && !$("revBox").classList.contains("show")){
+    if(e.target.tagName==="SELECT"||e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA") return;
+    if(e.key==="ArrowLeft") $("navPrev").click();
+    if(e.key==="ArrowRight") $("navNext").click();
+  }
+});
+
+$("btnDelete").onclick = ()=>deleteDraft(curId);
+$("btnContinue").onclick = ()=>{
+  const d = db.drafts[curId];
+  if(!d) return;
+  const dirty = editor.value.trim() &&
+    (!db.working.id || !db.drafts[db.working.id] || db.drafts[db.working.id].text !== editor.value);
+  if(dirty && !confirm("쓰던 초고에 저장하지 않은 내용이 있습니다.\n그래도 이 초고를 불러올까요?")) return;
+  db.working = { id:d.id, title:d.title, text:d.text };
+  titleInput.value = d.title; editor.value = d.text;
+  persist(); reached = countWords(d.text)>=GOAL; refreshProgress(false);
+  saveStat.textContent = "「"+d.title+"」에 이어 쓰는 중";
+  show("write");
+  toast("본문을 고치면 줄 그은 자리를 다시 찾아 수정을 이어 붙입니다");
+};
+
+/* ================= entry rendering with revisions ================= */
+function renderEntry(host, id, d){
+  host.innerHTML = "";
+  const body = document.createElement("div");
+  body.className = "entryBody";
+  body.dataset.id = id;
+
+  const text = d.text;
+  const revs = (d.revisions||[]).slice().sort((a,b)=>a.start-b.start);
+  let pos = 0;
+  revs.forEach(a=>{
+    if(a.start > pos) body.appendChild(document.createTextNode(text.slice(pos, a.start)));
+    const struck = document.createElement("span");
+    struck.className = "struck";
+    struck.appendChild(document.createTextNode(text.slice(a.start, a.end)));
+    body.appendChild(struck);
+
+    const rev = document.createElement("span");
+    rev.className = "rev";
+    rev.contentEditable = "false";
+    const mark = document.createElement("span");
+    mark.className = "rmark";
+    mark.textContent = " → ";
+    rev.appendChild(mark);
+    rev.appendChild(document.createTextNode(a.note+" "));
+    const rd = document.createElement("span");
+    rd.className = "rdate";
+    rd.textContent = "〔"+a.date+"〕";
+    rev.appendChild(rd);
+    const del = document.createElement("button");
+    del.className = "rdel";
+    del.textContent = "지움";
+    del.onclick = ev=>{
+      ev.stopPropagation();
+      if(confirm("이 수정을 지울까요?")){
+        d.revisions = (d.revisions||[]).filter(x=>x.id!==a.id);
+        persist(); renderRead();
+      }
+    };
+    rev.appendChild(del);
+    body.appendChild(rev);
+    pos = a.end;
+  });
+  if(pos < text.length) body.appendChild(document.createTextNode(text.slice(pos)));
+  host.appendChild(body);
+
+  body.addEventListener("mouseup", ()=>maybeShowPop(body));
+  body.addEventListener("touchend", ()=>setTimeout(()=>maybeShowPop(body),10));
+}
+
+/* --- selection offset relative to original text (skip .rev contents) --- */
+function offsetInBody(body, node, nodeOffset){
+  let acc = 0;
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      return n.parentElement && n.parentElement.closest(".rev")
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  let cur;
+  while((cur = walker.nextNode())){
+    if(cur === node) return acc + nodeOffset;
+    acc += cur.nodeValue.length;
+  }
+  return null;
+}
+
+let pendingSel = null;
+function maybeShowPop(body){
+  const pop = $("revPop");
+  const sel = window.getSelection();
+  pop.style.display = "none";
+  pendingSel = null;
+  if(!sel || sel.isCollapsed || sel.rangeCount===0) return;
+  const range = sel.getRangeAt(0);
+  if(!body.contains(range.startContainer) || !body.contains(range.endContainer)) return;
+  if(range.startContainer.nodeType!==3 || range.endContainer.nodeType!==3) return;
+  if(range.startContainer.parentElement.closest(".rev") || range.endContainer.parentElement.closest(".rev")) return;
+
+  const s = offsetInBody(body, range.startContainer, range.startOffset);
+  const eo = offsetInBody(body, range.endContainer, range.endOffset);
+  if(s==null || eo==null || eo<=s) return;
+
+  const id = body.dataset.id;
+  const d = db.drafts[id];
+  const overlap = (d.revisions||[]).some(a => s < a.end && eo > a.start);
+  if(overlap){ toast("이미 줄을 그은 부분과 겹칩니다"); return; }
+
+  pendingSel = { id, start:s, end:eo, text: d.text.slice(s,eo) };
+  const rect = range.getBoundingClientRect();
+  pop.style.display = "block";
+  pop.style.left = Math.max(12, rect.left + rect.width/2 - pop.offsetWidth/2 + window.scrollX) + "px";
+  pop.style.top = (rect.top + window.scrollY - pop.offsetHeight - 10) + "px";
+}
+document.addEventListener("mousedown", e=>{
+  if(!e.target.closest("#revPop")) $("revPop").style.display="none";
+});
+
+$("revPopBtn").onclick = ()=>{
+  if(!pendingSel) return;
+  $("revPop").style.display="none";
+  $("revQuoted").textContent = "“"+ (pendingSel.text.length>160 ? pendingSel.text.slice(0,160)+"…" : pendingSel.text) +"”";
+  $("revText").value = "";
+  $("revToday").textContent = "수정한 날 · "+fmtShort(new Date());
+  $("revBox").classList.add("show");
+  setTimeout(()=>$("revText").focus(), 30);
+};
+$("revCancel").onclick = ()=>$("revBox").classList.remove("show");
+$("revBox").addEventListener("mousedown", e=>{ if(e.target===$("revBox")) $("revBox").classList.remove("show"); });
+$("revSave").onclick = ()=>{
+  if(!pendingSel) return;
+  const note = $("revText").value.trim();
+  if(!note){ $("revText").focus(); return; }
+  const d = db.drafts[pendingSel.id];
+  if(!d) return;
+  if(!d.revisions) d.revisions = [];
+  d.revisions.push({
+    id: uid(),
+    start: pendingSel.start, end: pendingSel.end,
+    quote: pendingSel.text,
+    note, date: fmtShort(new Date())
+  });
+  persist();
+  $("revBox").classList.remove("show");
+  renderRead();
+  toast("줄을 긋고 새 문장을 달았습니다");
+  pendingSel = null;
+};
+
+/* ================= export / import ================= */
+$("btnExport").onclick = ()=>{
+  const blob = new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "초고_백업_"+todayKey+".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("백업 파일을 내려받았습니다");
+};
+$("btnImport").onclick = ()=>$("importFile").click();
+$("importFile").addEventListener("change", ev=>{
+  const f = ev.target.files[0];
+  if(!f) return;
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      const data = JSON.parse(r.result);
+      if(!data.drafts) throw 0;
+      const mode = confirm("확인 = 합치기(기존 초고 유지, 새 초고만 추가)\n취소 = 전체 덮어쓰기");
+      if(mode){
+        Object.keys(data.drafts).forEach(k=>{ if(!db.drafts[k]) db.drafts[k]=data.drafts[k]; });
+      } else {
+        db = Object.assign({ drafts:{}, working:{id:null,title:"",text:""}, soundOn:true }, data);
+        if(!db.drafts) db.drafts={};
+        if(!db.working) db.working={id:null,title:"",text:""};
+        titleInput.value = db.working.title||"";
+        editor.value = db.working.text||"";
+        refreshProgress(false);
+      }
+      persist();
+      toast("가져오기 완료");
+      if(boardView.style.display==="block") renderBoard();
+      if(readView.style.display==="block"){ if(db.drafts[curId]) renderRead(); else show("board"); }
+    }catch(e){ alert("올바른 백업 파일이 아닙니다."); }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+});
+</script>
+</body>
+</html>
