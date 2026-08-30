@@ -75,6 +75,9 @@ h2.sec{font-size:15px;font-weight:400;color:var(--ink-soft);letter-spacing:.14em
 .now-p{margin-top:12px}
 .today-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:2px}
 .today-day{font-size:15px;color:var(--seal)}
+.datehead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:24px}
+.datehead .day{font-size:19px;letter-spacing:.02em}
+.datehead .nth{font-size:13px;color:var(--ink-soft)}
 
 .field{margin-bottom:14px}
 .field label{display:block;font-size:13px;color:var(--ink-soft);letter-spacing:.08em;margin-bottom:5px}
@@ -207,7 +210,8 @@ function save(){ localStorage.setItem(KEY,JSON.stringify({books:S.books,order:S.
 function touch(b){ b.updated=new Date().toISOString(); }
 function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function dayOfYear(){ const d=new Date(), s=new Date(d.getFullYear(),0,0); return Math.min(365,Math.floor((d-s)/86400000)); }
-function dayLabel(){ const d=new Date(); return (d.getMonth()+1)+'월 '+d.getDate()+'일'; }
+function fullDayLabel(){ const d=new Date(), w=['일','월','화','수','목','금','토'][d.getDay()];
+  return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+w+'요일'; }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function book(id){ return S.books.find(b=>b.id===id); }
@@ -288,7 +292,8 @@ function render(reset){
 
 /* 한눈에 */
 function vHome(){
-  if(!S.books.length) return `<div class="empty" style="border:none;padding-top:40px">
+  if(!S.books.length) return `<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>
+    <div class="empty" style="border:none;padding-top:10px">
     <b>아직 담긴 책이 없습니다.</b><br>‘담기’에서 책을 적고, 읽은 책인지 읽을 책인지 고른 뒤 꽂을 자리를 적으면 됩니다.
     <div class="rowbtns"><button class="primary" onclick="go('add')">첫 책 담기</button></div></div>`;
   const b=ordered('best'),n=ordered('next'),g=gifts(),u=undecided(),c=candidates();
@@ -297,7 +302,8 @@ function vHome(){
       ${list.length?`<div class="rows">${list.map((x,i)=>rowHTML(x,rank?i+1:null,!rank)).join('')}</div>`:`<div class="empty">아직 없습니다.</div>`}
       ${more?`<div class="rowbtns"><button class="ghost" onclick="go('list','${more}')">모두 보기</button></div>`:''}
     </section>`;
-  return nowReading(n) + todayBest(b) + candidateLine(c)
+  const head=`<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>`;
+  return head + nowReading(n) + todayBest(b) + candidateLine(c)
     + sec(`최근에 받은 증정본${g.length>5?` · ${g.length}권 중 5권`:''}`,'d-gift',g.slice(0,5),false,g.length>5?'gift':'')
     + (u.length?sec(`분류하지 않은 책 ${u.length}권`,'d-none',u.slice(0,5),false,'undecided'):'');
 }
@@ -323,7 +329,7 @@ function todayBest(b){
     const x=b[d-1];
     return `<section style="margin-bottom:34px">
       <div class="today-h"><h2 class="sec" style="margin:0"><span class="tagdot d-best"></span>오늘의 베스트</h2>
-        <div class="today-day">${dayLabel()} · ${d}위</div></div>
+        <div class="today-day">${d}위</div></div>
       <div class="now-book" onclick="findBook('${x.id}')">
         <div class="now-t">${esc(x.title)}${badges(x,d)}</div>
         <div class="now-a">${[x.author,x.publisher].filter(Boolean).map(esc).join(' · ')}</div>
