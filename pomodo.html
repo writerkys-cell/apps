@@ -123,6 +123,10 @@ body{
 .row:first-of-type{border-top:0}
 .row label{font-size:14px;color:var(--ink-2)}
 .step{display:flex;align-items:center;gap:14px}
+.toggle{width:52px;height:30px;border-radius:15px;border:1px solid var(--line);background:none;position:relative;cursor:pointer;flex:0 0 auto;padding:0}
+.toggle::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--ink-3);transition:transform .2s,background .2s}
+.toggle[aria-pressed="true"]{border-color:var(--ju)}
+.toggle[aria-pressed="true"]::after{transform:translateX(22px);background:var(--ju)}
 .step button{width:34px;height:34px;border:1px solid var(--line);background:none;color:var(--ink);font-size:17px;border-radius:50%;cursor:pointer}
 .step span{font-family:var(--serif);font-size:18px;min-width:26px;text-align:center}
 input[type=text],input[type=password],input[type=email],select{
@@ -204,8 +208,16 @@ input[type=text],input[type=password],input[type=email],select{
     <input type="text" id="devName" autocapitalize="off" autocorrect="off">
   </div>
   <div class="row">
-    <label>포모도로 단축어</label>
+    <label>음악</label>
+    <button class="toggle" id="music" aria-pressed="true" aria-label="음악"></button>
+  </div>
+  <div class="row">
+    <label>포모도로 단축어 (음악 켬)</label>
     <input type="text" id="scWork" autocapitalize="off" autocorrect="off">
+  </div>
+  <div class="row">
+    <label>포모도로 단축어 (음악 끔)</label>
+    <input type="text" id="scWork2" autocapitalize="off" autocorrect="off">
   </div>
   <div class="row">
     <label>휴식 단축어</label>
@@ -262,7 +274,7 @@ input[type=text],input[type=password],input[type=email],select{
 
 <script>
 var KEY='donggeurami.v1';
-var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scDone:'완료',scAdd:'추가',scRest:'휴식',scLong:'긴휴식',scCancel:'취소',devId:'',devName:'',
+var DEF={settings:{perDay:4,dayStart:4,scWork:'포모도로',scWork2:'포모도로1',music:true,scDone:'완료',scAdd:'추가',scRest:'휴식',scLong:'긴휴식',scCancel:'취소',devId:'',devName:'',
   sbUrl:'https://bcdgajhnxybpgxeytrap.supabase.co',
   sbKey:'sb_publishable_wsV5RVe2oNG_1qq2oCMwiQ_efMnU-F5',
   sbEmail:'',closing:'오늘 몫을 채웠습니다.'},days:{},tombs:{}};
@@ -425,7 +437,7 @@ document.getElementById('work').onclick=function(){
   var t=today();
   t.pending={id:D.settings.devId+'-'+Date.now().toString(36)+rnd(),dev:D.settings.devId,s:new Date().toISOString()};
   save(); render();
-  runShortcut(D.settings.scWork);
+  runShortcut(D.settings.music?D.settings.scWork:D.settings.scWork2);
 };
 function closeSlot(shortcut){
   var t=today(), now=new Date().toISOString();
@@ -481,6 +493,8 @@ function mergeInto(incoming){
 var scrim=document.getElementById('scrim'), panel=document.getElementById('panel');
 function openSet(){
   document.getElementById('scWork').value=D.settings.scWork;
+  document.getElementById('scWork2').value=D.settings.scWork2;
+  document.getElementById('music').setAttribute('aria-pressed',D.settings.music?'true':'false');
   document.getElementById('scRest').value=D.settings.scRest;
   document.getElementById('scDone').value=D.settings.scDone;
   document.getElementById('scAdd').value=D.settings.scAdd;
@@ -520,7 +534,13 @@ function bindName(id,key,fallback){
     e.target.value=D.settings[key]; save(); render();
   };
 }
+document.getElementById('music').onclick=function(){
+  D.settings.music=!D.settings.music;
+  this.setAttribute('aria-pressed',D.settings.music?'true':'false');
+  save();
+};
 bindName('scWork','scWork','포모도로');
+bindName('scWork2','scWork2','포모도로1');
 bindName('scRest','scRest','휴식');
 bindName('scDone','scDone','완료');
 bindName('scAdd','scAdd','추가');
