@@ -202,6 +202,21 @@ button:focus-visible{outline:2px solid var(--insert);outline-offset:2px}
 .doc .act button.del:hover{color:var(--strike)}
 .empty{padding:34px 0;text-align:center;color:var(--ink-3);font-size:13px}
 
+/* 동기화 표시등 */
+button.t.sync::before{
+  content:'';display:inline-block;width:5px;height:5px;border-radius:50%;
+  background:var(--ink-3);margin-right:6px;vertical-align:1px;transition:background .3s;
+}
+button.t.sync.live::before{background:#3f8f5f}
+button.t.sync.busy::before{background:var(--mark)}
+button.t.sync.bad::before{background:var(--strike)}
+.row input[type=password]{
+  font-family:var(--font-ui);font-size:13px;padding:5px 8px;width:170px;
+  border:1px solid var(--edge);background:#fff;border-radius:2px;color:var(--ink);
+}
+#syncState{font-size:12.5px;line-height:1.8;color:var(--ink-2);margin:0 0 18px}
+#syncState b{font-weight:400;color:var(--ink)}
+
 button.t.music{color:var(--insert);margin-right:6px}
 button.t.music::before{content:'♪';margin-right:5px;font-size:12px}
 button.t.music:hover{background:rgba(29,78,107,.09);color:var(--insert)}
@@ -285,6 +300,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
     <button class="t" id="bNew">새 종이</button>
     <button class="t" id="bSave">저장</button>
     <button class="t" id="bDrawer">서랍</button>
+    <button class="t sync" id="bSync">동기화</button>
     <button class="t" id="bLock">잠금</button>
     <button class="t" id="bSet">설정</button>
     <button class="t" id="bHelp">도움말</button>
@@ -308,6 +324,32 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
     <button class="s" id="bImport">전체 바꾸기</button>
     <button class="p" data-close>닫기</button>
   </div>
+</div></div>
+
+<!-- 동기화 -->
+<div class="veil" id="vSync"><div class="card">
+  <h2>동 기 화</h2>
+  <p id="syncState">…</p>
+  <div id="syncIn">
+    <div class="row"><label>메일</label><input type="email" id="fMail" spellcheck="false" autocomplete="username" placeholder="수파베이스에 만든 계정"></div>
+    <div class="row"><label>비밀번호</label><input type="password" id="fPw" autocomplete="current-password"></div>
+    <div class="actions"><button class="p" id="bLogin">들어가기</button></div>
+  </div>
+  <div id="syncOn" style="display:none">
+    <div class="row"><label>이 기기의 이름</label><input type="text" id="fDev" spellcheck="false"></div>
+    <div class="actions">
+      <button class="s" id="bPushAll">이 기기 것을 모두 올리기</button>
+      <button class="s" id="bPull">지금 맞추기</button>
+      <button class="s" id="bLogout">나가기</button>
+    </div>
+  </div>
+  <p class="hint">
+  원고는 이 기기에도 그대로 남고, 수파베이스는 그 거울입니다. 연결이 끊겨도 계속 쓸 수 있고, 이어지면 밀린 것이 올라갑니다.<br><br>
+  <b>한 번에 한 기기.</b> 쓰던 기기를 덮거나 다른 창으로 넘어가는 순간 밀어 올리고, 돌아오는 기기는 열릴 때 받아옵니다. 그러니 <b>떠날 때 창을 한 번 덮어 주십시오.</b> 그것이 바통을 넘기는 동작입니다.<br><br>
+  두 기기에서 같은 원고를 동시에 고치면 나중 것을 덮어쓰지 않고 <b>사본</b>으로 서랍에 따로 세웁니다. 원고는 잃어버리면 안 되니까요.<br><br>
+  <b>처음 한 번만.</b> 원고가 들어 있는 기기(맥북)에서 <b>이 기기 것을 모두 올리기</b>를 누르십시오. 아이패드에서는 들어가기만 하면 저절로 받아옵니다. 순서를 거꾸로 하시면 빈 서랍이 올라갑니다.
+  </p>
+  <div class="actions"><button class="p" data-close>닫기</button></div>
 </div></div>
 
 <!-- 설정 -->
@@ -1230,7 +1272,9 @@ function saveDoc(loud){
     const rec={start:SESS.start,end:Date.now(),chars:wrote,cpm:Math.round(wrote/(secs/60)),escapes:SESS.escapes};
     if(last&&last.start===SESS.start) d.sessions[d.sessions.length-1]=rec; else d.sessions.push(rec);
   }
+  d.cur=S.cur;
   saveDB(); S.dirty=false;
+  syncPush(d.id,!!loud);
   if(loud) toast('저장했습니다');
 }
 function openDoc(id){
@@ -1286,7 +1330,7 @@ function tidyDoc(id){
   const p=pack(res);
   d.t=p.t; d.k=p.k; d.i=p.i; d.d=p.d; d.g=p.g; d.c=p.c;
   d.title=docTitle(res); d.updated=Date.now();
-  saveDB();
+  saveDB(); syncPush(id,true);
   if(S.id===id){
     S.cells=res; S.cur=S.cells.length; S.floor=S.cur;
     S.anchor=null; S.chain=null; S.lastTyped=null; S.insMode=false; S.dirty=false;
@@ -1310,6 +1354,7 @@ function delDoc(id){
   const d=DB.docs.find(x=>x.id===id); if(!d) return;
   if(!confirm('"'+(d.title||'제목 없음')+'"을(를) 지웁니다. 되돌릴 수 없습니다.')) return;
   DB.docs=DB.docs.filter(x=>x.id!==id); saveDB();
+  syncDelete(id);
   if(S.id===id){S.id=null;}
   drawer();
 }
@@ -1398,6 +1443,7 @@ $('#bBack').addEventListener('click',()=>{
   ime.focus();
 });
 window.addEventListener('beforeunload',e=>{
+  syncHandoff();
   if(LOCK.on||S.dirty){ saveDoc(false); e.preventDefault(); e.returnValue=''; }
 });
 
@@ -1417,7 +1463,7 @@ function drawer(){
       const day=(dt.getMonth()+1)+'.'+dt.getDate();
       return '<div class="doc">'
         +'<span class="nm" data-open="'+d.id+'">'+esc(d.title||'제목 없음')+'</span>'
-        +'<span class="meta">'+sheets(cells).toFixed(1)+'매'+(d.pr?' · '+d.pr+'쇄':'')+' · '+day+'</span>'
+        +'<span class="meta">'+sheets(cells).toFixed(1)+'매'+(d.pr?' · '+d.pr+'쇄':'')+' · '+day+(d.note?' · '+esc(d.note):'')+'</span>'
         +'<span class="act">'
         +'<button data-open="'+d.id+'">열기</button>'
         +'<button data-tidy="'+d.id+'">정리</button>'
@@ -1429,7 +1475,8 @@ function drawer(){
   }
   const total=DB.docs.reduce((s,d)=>s+(d.t||'').length,0);
   const ex=DB.exported?new Date(DB.exported).toLocaleString('ko-KR'):null;
-  $('#drawerHint').innerHTML='원고 '+DB.docs.length+'편 · '+total.toLocaleString()+'자가 이 기기에만 있습니다.<br>'
+  const sy=SY.user?('<b>'+esc(SY.user.email)+'</b>로 이어져 있습니다. 두 기기가 저절로 맞춰집니다.'):'이 기기에만 있습니다.';
+  $('#drawerHint').innerHTML='원고 '+DB.docs.length+'편 · '+total.toLocaleString()+'자 — '+sy+'<br>'
     +(ex?'마지막으로 내보낸 때 : '+ex:'아직 한 번도 내보내지 않았습니다.')
     +'<br><b>전체 바꾸기</b>는 이 기기의 원고를 파일의 것으로 통째로 갈아 끼웁니다. 다른 기기로 건너갈 때 쓰세요.';
   open('#vDrawer');
@@ -1618,6 +1665,290 @@ function params(){
   else if(min>0) $('#fMin').value=min;
 }
 
+/* ── 동기화 ───────────────────────────────────────────
+   한 번에 한 기기만 쓴다는 전제 위에 섰다. 그러므로 병합하지 않는다.
+   원고를 통째로 갈아 끼우되, rev가 어긋나면 덮어쓰는 대신 사본을 세운다.
+   이 기기의 localStorage가 여전히 원본이고 서버는 그 거울이다.
+   끊겨도 계속 쓸 수 있어야 하니까. ─────────────────────── */
+const SB_URL='https://qhwtlhzyxnlvrljlcndv.supabase.co';
+const SB_KEY='sb_publishable_JEZTEzfpFuB_LwvbVTl9PQ_p4aiUOe-';
+const PUSH_GAP=8000;                      /* 쓰는 동안 밀어 올리는 간격 */
+const SY={sb:null,user:null,ch:null,rt:'',busy:0,err:'',pend:new Set(),last:0,timer:null,pullT:null,boot:false,seeded:false};
+
+function devName(){
+  let n=localStorage.getItem('타자기.dev');
+  if(!n){
+    const u=navigator.userAgent, mac=/Macintosh/.test(u)&&!navigator.maxTouchPoints;
+    n=(mac?'맥북':/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1)?'아이패드':/iPhone/.test(u)?'아이폰':'기기')
+      +'-'+Math.random().toString(36).slice(2,5);
+    localStorage.setItem('타자기.dev',n);
+  }
+  return n;
+}
+let DEV=devName();
+const hhmm=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+
+async function sbGet(){
+  if(SY.sb) return SY.sb;
+  const m=await import('https://esm.sh/@supabase/supabase-js@2');
+  SY.sb=m.createClient(SB_URL,SB_KEY,{
+    auth:{persistSession:true,autoRefreshToken:true,storageKey:'typewriter-auth'},
+    realtime:{params:{eventsPerSecond:2}}
+  });
+  return SY.sb;
+}
+function syncMark(){
+  const b=$('#bSync'); if(!b) return;
+  b.classList.toggle('live',!!SY.user&&SY.rt==='SUBSCRIBED'&&!SY.err);
+  b.classList.toggle('busy',SY.busy>0);
+  b.classList.toggle('bad',!!SY.err);
+}
+function syncUI(){
+  const st=$('#syncState'); if(!st) return;
+  const n=DB.docs.length, ch=DB.docs.reduce((s,d)=>s+(d.t||'').length,0);
+  if(!SY.user){
+    st.innerHTML='아직 이 기기 안에만 있습니다. 원고 '+n+'편 · '+ch.toLocaleString()+'자.';
+    $('#syncIn').style.display=''; $('#syncOn').style.display='none';
+  }else{
+    const p=SY.pend.size;
+    st.innerHTML='<b>'+SY.user.email+'</b> · '+DEV+'<br>'
+      +'원고 '+n+'편 · '+ch.toLocaleString()+'자<br>'
+      +(SY.err?'<span class="bad">'+esc(SY.err)+'</span>'
+        :SY.rt==='SUBSCRIBED'?'<span class="ok">실시간으로 이어져 있습니다.</span>':'잇는 중입니다…')
+      +(p?'<br>올릴 것 '+p+'편이 밀려 있습니다.':'');
+    $('#syncIn').style.display='none'; $('#syncOn').style.display='';
+    $('#fDev').value=DEV;
+  }
+  syncMark();
+}
+function syncOff(msg){ SY.err=msg||''; syncMark(); syncUI(); }
+
+/* ── 올리기 ─────────────────────────────────────────── */
+function syncPush(id,now){
+  if(!id||!SY.user) return;
+  SY.pend.add(id);
+  clearTimeout(SY.timer);
+  const wait=now?0:Math.max(0,PUSH_GAP-(Date.now()-SY.last));
+  SY.timer=setTimeout(syncFlush,wait);
+  syncMark();
+}
+async function syncFlush(){
+  if(!SY.user||!SY.pend.size||SY.busy) return;
+  const ids=[...SY.pend]; SY.pend.clear();
+  SY.busy++; SY.last=Date.now(); syncMark();
+  try{ for(const id of ids) await pushOne(id); SY.err=''; }
+  catch(e){ ids.forEach(i=>SY.pend.add(i)); SY.err='올리지 못했습니다 · '+(e.message||e); }
+  SY.busy--; syncMark(); syncUI();
+}
+async function pushOne(id){
+  const d=DB.docs.find(x=>x.id===id); if(!d) return;
+  const sb=await sbGet();
+  const cells=unpack(d);
+  const {data,error}=await sb.rpc('push_doc',{
+    p_id:d.id, p_rev:(d.rev==null?null:d.rev),
+    p_title:d.title||'', p_chars:liveChars(cells),
+    p_cur:(S.id===d.id?S.cur:(d.cur||0)), p_pr:d.pr||0,
+    p_created:d.created||Date.now(), p_updated:d.updated||Date.now(), p_device:DEV,
+    p_t:d.t||'', p_k:d.k||'', p_i:d.i||'', p_d:d.d||'', p_g:d.g||'', p_c:d.c||''
+  });
+  if(error) throw error;
+  if(data===-1){
+    /* 아직 한 번도 맞춰보지 않은 원고라면 시각으로 겨룬다 */
+    if(d.rev==null){
+      const {data:r}=await sb.from('docs').select('rev,updated').eq('id',d.id).maybeSingle();
+      if(r&&(d.updated||0)>=(r.updated||0)){ d.rev=r.rev; saveDB(); return await pushOne(d.id); }
+    }
+    await forkLocal(d); return;                 /* 저쪽이 먼저 만졌다 */
+  }
+  d.rev=data; d.dev=DEV; d.pushed=d.updated; saveDB();
+  await pushSessions(d);
+}
+async function pushSessions(d){
+  const list=d.sessions||[]; if(!list.length) return;
+  const from=Math.max(0,(d.spush||0)-1);        /* 마지막 것은 자라므로 다시 올린다 */
+  const rows=list.slice(from).map(s=>({doc_id:d.id,start:s.start,end:s.end,chars:s.chars,cpm:s.cpm,escapes:s.escapes}));
+  if(!rows.length) return;
+  const sb=await sbGet();
+  const {error}=await sb.from('sessions').upsert(rows,{onConflict:'doc_id,start'});
+  if(!error){ d.spush=list.length; saveDB(); }
+}
+/* 어긋난 원고는 사본으로 따로 세운다. 덮어쓰지 않는다 */
+async function forkLocal(d){
+  const nid='d'+Date.now().toString(36);
+  const copy=Object.assign({},d,{id:nid,rev:null,spush:0,note:'사본 '+DEV+' '+hhmm(Date.now()),updated:Date.now()});
+  DB.docs.unshift(copy);
+  if(S.id===d.id) S.id=nid;
+  DB.docs=DB.docs.filter(x=>x.id!==d.id||x===copy);
+  d.rev=null;
+  saveDB();
+  toast('저쪽에서 먼저 고쳤습니다. 이 기기의 것은 사본으로 두었습니다.');
+  await pushOne(nid);
+  syncPullSoon();
+}
+async function syncPushAll(){
+  if(!SY.user) return;
+  SY.busy++; syncMark();
+  try{
+    const sb=await sbGet();
+    const {data,error}=await sb.from('docs').select('id,rev'); if(error) throw error;
+    const rv=new Map((data||[]).map(r=>[r.id,r.rev]));
+    for(const d of DB.docs){ d.rev=rv.has(d.id)?rv.get(d.id):null; }
+    saveDB();
+    for(const d of DB.docs.slice()) await pushOne(d.id);
+    toast('원고 '+DB.docs.length+'편을 모두 올렸습니다');
+    SY.err='';
+  }catch(e){ SY.err='올리지 못했습니다 · '+(e.message||e); }
+  SY.busy--; syncUI();
+}
+
+/* ── 받아오기 ───────────────────────────────────────── */
+function syncPullSoon(){ clearTimeout(SY.pullT); SY.pullT=setTimeout(syncPull,600); }
+async function syncPull(){
+  if(!SY.user||SY.busy) return;
+  SY.busy++; syncMark();
+  try{
+    const sb=await sbGet();
+    const {data,error}=await sb.from('docs').select('*'); if(error) throw error;
+    let touched=false, adopted=null;
+    for(const r of data||[]){
+      const local=DB.docs.find(x=>x.id===r.id);
+      if(r.deleted){
+        if(local){
+          DB.docs=DB.docs.filter(x=>x.id!==r.id); touched=true;
+          if(S.id===r.id){ S.id=null; S.dirty=true; toast('이 원고는 다른 기기에서 지웠습니다. 화면의 글은 새 원고로 남습니다.'); }
+        }
+        continue;
+      }
+      if(local&&local.rev===r.rev) continue;            /* 그대로다 */
+      if(local&&local.rev==null&&local.updated>r.updated) continue;  /* 아직 못 올린 내 것이 새롭다 */
+      const {data:b}=await sb.from('bodies').select('*').eq('id',r.id).maybeSingle();
+      if(!b) continue;
+      let rec=local, mine=(S.id===r.id);
+      if(rec&&mine&&S.dirty){ await forkLocal(rec); rec=null; mine=false; }  /* 손댄 것은 사본으로 떼어둔다 */
+      if(!rec){ rec={id:r.id,sessions:[]}; DB.docs.unshift(rec); }
+      Object.assign(rec,{
+        title:r.title,created:r.created,updated:r.updated,pr:Math.max(rec.pr||0,r.pr||0),
+        cur:r.cur,rev:r.rev,dev:r.device,pushed:r.updated,
+        t:b.t,k:b.k,i:b.i,d:b.d,g:b.g,c:b.c
+      });
+      const {data:ss}=await sb.from('sessions').select('*').eq('doc_id',r.id);
+      if(ss&&ss.length){
+        const m=new Map((rec.sessions||[]).map(s=>[s.start,s]));
+        for(const s of ss) m.set(s.start,{start:s.start,end:s.end,chars:s.chars,cpm:s.cpm,escapes:s.escapes});
+        rec.sessions=[...m.values()].sort((a,b2)=>a.start-b2.start);
+        rec.spush=rec.sessions.length;
+      }
+      touched=true;
+      if(mine) adopted=rec;
+    }
+    const live=(data||[]).filter(r=>!r.deleted);
+    if(!live.length&&DB.docs.length&&!SY.seeded){
+      SY.seeded=true; SY.busy--; syncMark();
+      toast('서버가 비어 있어 이 기기의 원고를 올립니다');
+      await syncPushAll(); return;
+    }
+    if(touched){
+      saveDB();
+      if(adopted){
+        S.cells=unpack(adopted);
+        S.cur=Math.min(adopted.cur==null?S.cells.length:adopted.cur,S.cells.length);
+        S.floor=S.cur; S.anchor=null; S.chain=null; S.lastTyped=null;
+        S.insMode=false; S.dirty=false; SESS=null;
+        render(true);
+        toast(( adopted.dev||'저쪽')+'에서 고친 것을 받았습니다');
+      }else render(false);
+      if($('#vDrawer').classList.contains('on')) drawer();
+    }
+    SY.err='';
+  }catch(e){ SY.err='받아오지 못했습니다 · '+(e.message||e); }
+  SY.busy--; syncMark(); syncUI();
+}
+async function syncDelete(id){
+  if(!SY.user) return;
+  try{ const sb=await sbGet(); await sb.rpc('trash_doc',{p_id:id,p_updated:Date.now(),p_device:DEV}); }catch(e){}
+}
+
+/* ── 이어붙이기 ─────────────────────────────────────── */
+async function syncWatch(){
+  const sb=await sbGet();
+  if(SY.ch){ try{ sb.removeChannel(SY.ch); }catch(e){} SY.ch=null; }
+  SY.ch=sb.channel('typewriter')
+    .on('postgres_changes',{event:'*',schema:'public',table:'docs'},p=>{
+      const r=p.new||{};
+      if(r.device===DEV) return;               /* 내가 올린 것이 돌아왔다 */
+      syncPullSoon();
+    })
+    .subscribe(st=>{ SY.rt=st; syncMark(); syncUI(); });
+}
+async function syncBoot(){
+  if(SY.boot) return; SY.boot=true;
+  try{
+    const sb=await sbGet();
+    const {data}=await sb.auth.getSession();
+    SY.user=data&&data.session?data.session.user:null;
+    sb.auth.onAuthStateChange((_e,s)=>{ SY.user=s?s.user:null; syncUI(); });
+    if(SY.user){
+      await syncWatch(); await syncPull();
+      DB.docs.forEach(d=>{ if(!d.pushed||(d.updated||0)>d.pushed) syncPush(d.id); });
+      await syncFlush();
+    }
+  }catch(e){ SY.err='동기화를 켜지 못했습니다 · '+(e.message||e); }
+  syncUI();
+}
+async function syncLogin(){
+  const mail=$('#fMail').value.trim(), pw=$('#fPw').value;
+  if(!mail||!pw){ toast('메일과 비밀번호를 적어 주세요'); return; }
+  SY.busy++; syncMark();
+  try{
+    const sb=await sbGet();
+    const {data,error}=await sb.auth.signInWithPassword({email:mail,password:pw});
+    if(error) throw error;
+    SY.user=data.user; SY.err=''; $('#fPw').value='';
+    await syncWatch(); await syncPull();
+    DB.docs.forEach(d=>{ if(!d.pushed||(d.updated||0)>d.pushed) syncPush(d.id); });
+    syncFlush();
+    toast('이어졌습니다');
+  }catch(e){ SY.err='들어가지 못했습니다 · '+(e.message||e); }
+  SY.busy--; syncUI();
+}
+async function syncLogout(){
+  try{
+    const sb=await sbGet();
+    if(SY.ch){ sb.removeChannel(SY.ch); SY.ch=null; }
+    await sb.auth.signOut();
+  }catch(e){}
+  SY.user=null; SY.rt=''; SY.err=''; syncUI();
+  toast('나왔습니다. 원고는 이 기기에 그대로 있습니다.');
+}
+/* 자리를 뜰 때 바통을 넘긴다 */
+function syncHandoff(){
+  if(!SY.user) return;
+  clearTimeout(saveTimer);
+  if(S.dirty) saveDoc(false);
+  if(SY.pend.size) syncFlush();
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) syncHandoff();
+  else if(SY.user){ syncPull(); }
+});
+window.addEventListener('pagehide',syncHandoff);
+window.addEventListener('blur',syncHandoff);
+window.addEventListener('online',()=>{ if(SY.user){ syncFlush(); syncPull(); } });
+
+$('#bSync').addEventListener('click',()=>{ syncUI(); open('#vSync'); setTimeout(()=>{ if(!SY.user)$('#fMail').focus(); },50); });
+$('#bLogin').addEventListener('click',syncLogin);
+$('#fPw').addEventListener('keydown',e=>{ if(e.key==='Enter') syncLogin(); });
+$('#bLogout').addEventListener('click',syncLogout);
+$('#bPull').addEventListener('click',()=>syncPull());
+$('#bPushAll').addEventListener('click',()=>{
+  if(!confirm('이 기기의 원고 '+DB.docs.length+'편을 모두 올립니다.\n같은 이름의 원고가 서버에 있으면 이 기기의 것으로 덮습니다.\n\n원고가 든 기기에서만 누르십시오.')) return;
+  syncPushAll();
+});
+$('#fDev').addEventListener('change',e=>{
+  const v=e.target.value.trim(); if(!v) return;
+  DEV=v; localStorage.setItem('타자기.dev',v); syncUI();
+});
+
 /* ── 켜기 ─────────────────────────────────────────── */
 loadDB(); applyCFG();
 const last=DB.docs.slice().sort((a,b)=>b.updated-a.updated)[0];
@@ -1626,6 +1957,7 @@ if(last&&!(p.get('새로')||p.get('new'))){
   S.id=last.id; S.cells=unpack(last); S.cur=S.cells.length; S.floor=S.cur;
 }
 render(true); params(); ime.focus();
+syncBoot();
 setInterval(()=>{ if(S.dirty) saveDoc(false); },20000);
 window.addEventListener('resize',()=>render(false));
 })();
