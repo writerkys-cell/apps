@@ -137,6 +137,14 @@ input:focus{outline:none;border-bottom-color:var(--seal)}
 .duel-foot{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:10px;flex-wrap:wrap}
 .linkish{background:none;border:none;color:var(--ink-soft);font-size:14px;text-decoration:underline;text-underline-offset:3px;padding:4px}
 
+.pagemark{font-size:12.5px;color:var(--ink-soft);margin-left:10px}
+.pagebar{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:70;display:flex;align-items:center;gap:10px;
+  background:var(--ink);color:var(--paper);padding:10px 14px;border-radius:var(--radius);max-width:94vw;flex-wrap:wrap;justify-content:center}
+.pagebar .pl{font-size:14px;opacity:.85;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pagebar input{width:86px;background:none;border:none;border-bottom:1px solid rgba(242,237,225,.5);color:var(--paper);font-size:17px;padding:3px 2px;text-align:center}
+.pagebar input:focus{outline:none;border-bottom-color:var(--paper)}
+.pagebar button{border:1px solid rgba(242,237,225,.45);background:none;color:var(--paper);font-size:14px;padding:5px 12px;border-radius:var(--radius)}
+.pagebar .pgo{background:var(--paper);color:var(--ink);border-color:var(--paper)}
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:var(--radius);font-size:14.5px;z-index:80;opacity:0;pointer-events:none;transition:opacity .18s;max-width:90vw;text-align:center}
 #toast.on{opacity:1}
 .stat{display:flex;gap:26px;flex-wrap:wrap}
@@ -184,7 +192,7 @@ const CAT={
 
 let S=load();
 let view='home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
-let openShelves=new Set();
+let openShelves=new Set(), homeOpen=false, pageFor=null;
 let draft=blankDraft();
 function blankDraft(loc){ return {title:'',author:'',publisher:'',category:null,gift:false,received:today(),location:loc||'',step:1}; }
 
@@ -200,6 +208,8 @@ function load(){
     if(typeof b.toDiscard!=='boolean') b.toDiscard=false;
     if(!b.discardedAt) b.discardedAt='';
     if(!b.updated) b.updated=b.added||new Date().toISOString();
+    if(typeof b.page!=='number') b.page=0;
+    if(!b.pageAt) b.pageAt='';
   });
   const alive=new Set(s.books.filter(b=>!b.discarded).map(b=>b.id));
   s.order.best=s.order.best.filter(id=>alive.has(id));
@@ -286,6 +296,12 @@ function render(reset){
   document.querySelectorAll('.veil').forEach(v=>v.remove());
   if(cmp) document.body.insertAdjacentHTML('beforeend',compareHTML());
   if(editId){ document.body.insertAdjacentHTML('beforeend',editHTML()); bindEdit(); }
+  document.querySelectorAll('.pagebar').forEach(p=>p.remove());
+  if(pageFor&&!cmp&&!editId){
+    document.body.insertAdjacentHTML('beforeend',pageBarHTML());
+    const i=document.getElementById('pg');
+    if(i){ i.focus(); i.select(); i.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); savePage(); } }); }
+  }
   if(view==='add') bindAdd();
   window.scrollTo(0, reset?0:y);
 }
@@ -309,19 +325,21 @@ function vHome(){
 }
 function nowReading(n){
   const b=n[0];
-  const foot=`<div class="rowbtns"><button class="ghost" onclick="go('list','next')">모두 보기${n.length>1?` · 뒤에 ${n.length-1}권`:''}</button></div>`;
   if(!b) return `<section><h2 class="sec"><span class="tagdot d-next"></span>지금 읽는 책</h2>
-      <div class="empty">다음 읽을 책의 1위가 여기 놓입니다.</div>${n.length?foot:''}</section><hr class="hr">`;
-  return `<section><h2 class="sec"><span class="tagdot d-next"></span>지금 읽는 책</h2>
-      <div class="now-book" onclick="findBook('${b.id}')">
+      <div class="empty">다음 읽을 책의 1위가 여기 놓입니다.</div></section><hr class="hr">`;
+  return `<section><h2 class="sec"><span class="tagdot d-next"></span>지금 읽는 책${n.length>1?` <span style="letter-spacing:0">· 뒤에 ${n.length-1}권</span>`:''}</h2>
+      <div class="now-book" onclick="toggleNow()">
         <div class="now-t">${esc(b.title)}${badges(b,1)}</div>
         <div class="now-a">${[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')}</div>
-        <div class="now-p"><span class="${b.location?'place':'place none'}">${b.location?esc(b.location):'자리 없음'}</span></div>
+        <div class="now-p"><span class="${b.location?'place':'place none'}">${b.location?esc(b.location):'자리 없음'}</span>${
+          b.page?`<span class="pagemark">${b.page}쪽까지${b.pageAt?' · '+esc(b.pageAt.slice(5).replace('-','월 '))+'일':''}</span>`:''}</div>
       </div>
-      <div class="acts" style="margin-top:14px">
-        <button onclick="event.stopPropagation();moveTo('${b.id}','best')">다 읽었다</button>
-        <button onclick="event.stopPropagation();reRank('${b.id}')">견주기</button>
-      </div>${foot}</section><hr class="hr">`;
+      ${homeOpen?`<div class="acts" style="margin-top:14px">
+        <button onclick="moveTo('${b.id}','best')">다 읽었다</button>
+        <button onclick="reRank('${b.id}')">견주기</button>
+        <button onclick="askPage('${b.id}')">${b.page?'쪽 고치기':'쪽 적기'}</button>
+        <button onclick="go('list','next')">모두 보기${n.length>1?` · 뒤에 ${n.length-1}권`:''}</button>
+      </div>`:''}</section><hr class="hr">`;
 }
 function todayBest(b){
   const d=dayOfYear();
@@ -451,7 +469,7 @@ function addSave(again){
   const now=new Date().toISOString();
   const b={id:uid(),title:d.title.trim(),author:d.author.trim(),publisher:d.publisher.trim(),
     category:d.category,gift:d.gift,received:d.gift?(d.received||today()):'',location:d.location.trim(),
-    discarded:false,toDiscard:false,discardedAt:'',added:now,updated:now,note:''};
+    discarded:false,toDiscard:false,discardedAt:'',page:0,pageAt:'',added:now,updated:now,note:''};
   S.books.push(b);
   if(b.location) S.lastLocation=b.location;
   const cat=b.category, loc=b.location;
@@ -519,10 +537,10 @@ function detailHTML(b){
       <button onclick="edit('${b.id}')">고치기</button>
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div></div>`;
   return `<div class="detail">
-    <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):'가지고 있지 않음'}${b.note?'<br>'+esc(b.note):''}</div>
+    <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):'가지고 있지 않음'}${b.page?' · '+b.page+'쪽까지':''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
       ${b.category?`<button onclick="reRank('${b.id}')">견주기</button>`:''}
-      ${b.category==='next'?`<button onclick="moveTo('${b.id}','best')">다 읽었다</button>`:''}
+      ${b.category==='next'?`<button onclick="moveTo('${b.id}','best')">다 읽었다</button><button onclick="askPage('${b.id}')">${b.page?'쪽 고치기':'쪽 적기'}</button>`:''}
       ${b.category!=='best'?`<button onclick="moveTo('${b.id}','best')">읽은 책으로</button>`:''}
       ${b.category!=='next'?`<button onclick="moveTo('${b.id}','next')">읽을 책으로</button>`:''}
       ${b.category?`<button onclick="moveTo('${b.id}','')">분류 미루기</button>`:''}
@@ -536,7 +554,8 @@ function detailHTML(b){
 function toggle(id){ openId=openId===id?null:id; if(view==='list') refreshList(); else render(); }
 function reRank(id){ removeFromOrder(id); if(!startCompare(id)){ save(); toast('견줄 상대가 아직 없습니다'); render(); } }
 function moveTo(id,cat){
-  const b=book(id); b.category=cat; touch(b); removeFromOrder(id); save();
+  const b=book(id); if(cat==='best'){ b.page=0; b.pageAt=''; }
+  b.category=cat; touch(b); removeFromOrder(id); save();
   if(!cat){ openId=null; toast('미정으로 옮겼습니다'); view='list'; listTab='undecided'; shown=PAGE; render(true); return; }
   S.order[cat].push(id); save();
   if(!startCompare(id)){ save(); view='list'; listTab=cat; openId=null; toast(CAT[cat].name+'의 첫 책이 되었습니다'); render(true); }
@@ -690,6 +709,23 @@ function expText(){
 }
 function wipe(){ if(!confirm('담은 책과 순서를 모두 지웁니다. 되돌릴 수 없습니다.')) return;
   S={books:[],order:{best:[],next:[]},lastLocation:''}; save(); view='home'; render(true); toast('모두 지웠습니다'); }
+
+/* 지금 읽는 책 펼치기 · 쪽 적기 */
+function toggleNow(){ homeOpen=!homeOpen; render(); }
+function askPage(id){ pageFor=id; render(); }
+function pageBarHTML(){
+  const b=book(pageFor); if(!b) return '';
+  return `<div class="pagebar">
+    <span class="pl">${esc(b.title)} · 지금 몇 쪽입니까?</span>
+    <input type="number" inputmode="numeric" id="pg" value="${b.page||''}" placeholder="쪽">
+    <button class="pgo" onclick="savePage()">적기</button>
+    <button onclick="pageFor=null;render()">그만</button></div>`;
+}
+function savePage(){
+  const b=book(pageFor), v=parseInt(document.getElementById('pg').value,10);
+  if(!isNaN(v)&&v>0){ b.page=v; b.pageAt=today(); touch(b); save(); pageFor=null; render(); toast(v+'쪽까지 읽었습니다'); }
+  else { b.page=0; b.pageAt=''; touch(b); save(); pageFor=null; render(); toast('쪽 기록을 비웠습니다'); }
+}
 
 /* 견주기 */
 function compareHTML(){
