@@ -214,7 +214,7 @@
 <aside class="drawer" id="drawer" aria-hidden="true">
   <header>
     <span id="dcount">서랍</span>
-    <span><button id="clearAll" type="button">전체 비우기</button> &nbsp; <button id="close" type="button">닫기</button></span>
+    <span><button id="tidy" type="button">중복 정리</button> &nbsp; <button id="clearAll" type="button">전체 비우기</button> &nbsp; <button id="close" type="button">닫기</button></span>
   </header>
   <div class="list" id="list"></div>
 </aside>
@@ -347,13 +347,19 @@
     el.stash.textContent = "서랍에 넣기";
   }
 
-  function archive(text){
+  function samePiece(text){
+    var t = text.trim();
+    return state.drawer.some(function(p){ return !p.deleted_at && p.text.trim() === t; });
+  }
+
+  function archive(text, auto){
     state.drawer.unshift({
       id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
           : Date.now() + "-" + Math.random().toString(36).slice(2,9),
       text: text,
       at: new Date().toISOString(),
       chars: text.length,
+      auto: !!auto,
       deleted_at: null,
       updated_at: new Date().toISOString()
     });
@@ -554,6 +560,7 @@
       if(!localP || (r.updated_at || "") > (localP.updated_at || "")){
         byId[r.id] = {
           id: r.id, text: r.text, chars: r.chars, at: r.at,
+          auto: localP ? !!localP.auto : false,
           deleted_at: r.deleted_at || null,
           updated_at: r.updated_at || r.at
         };
@@ -576,7 +583,9 @@
     }
     var localText = fullText().trim();
     var remoteText = ((d.sentences || []).join(" ") + " " + (d.line || "")).trim();
-    if(localText && localText !== remoteText) archive(localText);
+    // 같은 글의 이전 단계이거나 이미 서랍에 있는 글이면 그냥 버립니다
+    var ancestor = !localText || remoteText.indexOf(localText) === 0;
+    if(localText && !ancestor && !samePiece(localText)) archive(localText, true);
     state.sentences = Array.isArray(d.sentences) ? d.sentences : [];
     el.input.value = d.line || "";
     state.draft = el.input.value;
@@ -689,6 +698,34 @@
     clearBtn.textContent = "전체 비우기";
     var now = new Date().toISOString();
     state.drawer.forEach(function(p){ if(!p.deleted_at){ p.deleted_at = now; p.updated_at = now; } });
+    save(); renderDrawer(); syncSoon(200);
+  });
+
+  var tidyBtn = document.getElementById("tidy"), tidyArmed = false, tidyT = null;
+  tidyBtn.addEventListener("click", function(){
+    var items = live().slice().sort(function(a,b){ return b.text.length - a.text.length; });
+    var kept = [], doomed = [];
+    items.forEach(function(p){
+      var t = p.text.trim();
+      var covered = kept.some(function(k){ return k.text.trim().indexOf(t) === 0; });
+      if(covered) doomed.push(p); else kept.push(p);
+    });
+    if(!doomed.length){
+      tidyBtn.textContent = "겹치는 글 없음";
+      setTimeout(function(){ tidyBtn.textContent = "중복 정리"; }, 1800);
+      return;
+    }
+    if(!tidyArmed){
+      tidyArmed = true;
+      tidyBtn.textContent = doomed.length + "편 지웁니다 · 한 번 더";
+      tidyT = setTimeout(function(){ tidyArmed = false; tidyBtn.textContent = "중복 정리"; }, 4000);
+      return;
+    }
+    clearTimeout(tidyT);
+    tidyArmed = false;
+    tidyBtn.textContent = "중복 정리";
+    var now = new Date().toISOString();
+    doomed.forEach(function(p){ p.deleted_at = now; p.updated_at = now; });
     save(); renderDrawer(); syncSoon(200);
   });
 
