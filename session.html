@@ -290,9 +290,10 @@
     <input type="number" id="setGoal" min="1" step="1">
   </div>
   <div class="field">
-    <label class="f" for="setLink">페이지스 단축어 실행 링크</label>
-    <input type="url" id="setLink" placeholder="shortcuts://run-shortcut?name=페이지스">
-    <p class="hint">애플 단축어 앱에서 단축어를 길게 눌러 ‘링크 복사’로 얻은 주소를 넣습니다. 2·3단계의 페이지스 버튼이 이 링크를 엽니다.</p>
+    <label class="f" for="setLink">페이지스 단축어</label>
+    <input type="text" id="setLink" placeholder="페이지스">
+    <p class="hint">단축어 이름만 적으면 됩니다. 단축어 앱에 보이는 이름과 똑같이 적으세요. 단축어 앱에서 ‘링크 복사’로 얻은 전체 주소를 붙여 넣어도 되고, 다른 앱을 열고 싶으면 그 앱의 주소를 넣어도 됩니다.</p>
+    <p class="hint" id="linkPreview"></p>
   </div>
 
   <div class="block">
@@ -361,9 +362,16 @@ function legacyCopy(text){
   try{document.execCommand("copy");}catch(e){}
   document.body.removeChild(ta);
 }
+function resolveLink(v){
+  v=(v||"").trim();
+  if(!v)return "";
+  if(v.indexOf("://")>=0)return v;              // 전체 주소를 넣은 경우
+  return "shortcuts://run-shortcut?name="+encodeURIComponent(v);  // 단축어 이름만 넣은 경우
+}
 function openLink(){
-  if(!db.link){toast("설정에서 페이지스 링크를 먼저 등록하세요");return false;}
-  window.location.href=db.link;return true;
+  var url=resolveLink(db.link);
+  if(!url){toast("설정에서 페이지스 단축어를 먼저 등록하세요");return false;}
+  window.location.href=url;return true;
 }
 function sheets(c){return (c/200);}
 function fmtS(n){return n.toFixed(1)+"매";}
@@ -474,6 +482,11 @@ function renderSettings(){
   $("setName").value=P.name;
   $("setGoal").value=P.goal;
   $("setLink").value=db.link||"";
+  renderLinkPreview();
+}
+function renderLinkPreview(){
+  var url=resolveLink(db.link);
+  $("linkPreview").textContent=url?"버튼이 여는 주소 — "+url:"";
 }
 function renderAll(){renderHeader();renderCycle();renderLog();renderSettings();}
 
@@ -582,7 +595,7 @@ function bind(){
   $("setGoal").addEventListener("input",function(){
     var n=parseInt(this.value,10);P.goal=(isNaN(n)||n<1)?1:n;save();renderHeader();
   });
-  $("setLink").addEventListener("input",function(){db.link=this.value.trim();save();});
+  $("setLink").addEventListener("input",function(){db.link=this.value.trim();save();renderLinkPreview();});
 
   $("mkPrompt").addEventListener("click",buildPrompt);
   $("cpPrompt").addEventListener("click",function(){
