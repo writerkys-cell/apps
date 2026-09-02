@@ -381,6 +381,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <p class="hint">본문 첫 줄이 제목 줄입니다. 여기에 친 글이 그대로 원고의 제목이 되고, <kbd>Enter</kbd>를 쳐야 본문이 시작됩니다.</p>
   <div class="row"><label>줄 간격</label><input type="number" id="fLh" min="1.2" max="3" step="0.1"></div>
   <div class="row"><label>따옴표 굽히기 <span style="font-family:var(--font-type);color:var(--ink-3)">“ ” ‘ ’</span></label><input type="checkbox" id="fSmart"></div>
+  <div class="row"><label>스페이스 두 번에 마침표</label><input type="checkbox" id="fDot"></div>
   <div class="row"><label>타건음 · 마진벨 · 캐리지 리턴</label><input type="checkbox" id="fSound"></div>
   <div class="row"><label>종이가 올라오게 (타이핑 줄을 화면 한자리에 고정)</label><input type="checkbox" id="fHold"></div>
   <div class="row"><label>화면 좌우 여백</label><input type="number" id="fSM" min="0" max="6" step="0.5"> cm</div>
@@ -487,7 +488,7 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
-let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true,tfont:'',tsize:22};
+let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true,dot:true,tfont:'',tsize:22};
 const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false,chain:null,floor:0,pasteOK:false,memo:false};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, saveTimer=null, escHold=null;
@@ -868,11 +869,26 @@ function curl(str){
   }
   return out;
 }
+/* 앞이 이런 글자일 때만 마침표를 찍는다 — 공백도 문장부호도 아닌 것 */
+const DOTAFTER=/[^\s.,!?;:\u2026\u00b7'"\u201c\u201d\u2018\u2019()\[\]{}\u300c\u300d\u300e\u300f]/;
 function insertText(str,fromIME){
   if(!str) return;
   if(!canType()){ if(!composing) ime.value=''; S.comp=''; render(false); refuse(); return; }
   str=curl(str.normalize('NFC'));
   beginSession();
+
+  /* 스페이스 두 번이면 마침표. 손에 밴 버릇을 그대로 둔다 */
+  if(CFG.dot&&str===' '&&S.cur>1&&S.lastTyped===S.cur-1&&!composing){
+    const p1=S.cells[S.cur-1], p2=S.cells[S.cur-2];
+    if(p1&&p2&&!p1.d&&!p2.d&&!p1.k&&!p2.k&&p1.c===' '&&DOTAFTER.test(p2.c)){
+      p1.c='.';
+      S.cells.splice(S.cur,0,{c:' ',k:false,i:p1.i,d:false,h:false,m:p1.m});
+      S.cur++; S.lastTyped=S.cur-1; S.chain=null;
+      S.anchor=null; S.dirty=true;
+      wrapSound=true; render(true); autosave(); markTyping();
+      return;
+    }
+  }
   /* 원고 끝에서는 늘 검정. 문장 속을 고칠 때만 푸른색이다 */
   const prevC=S.cur>0?S.cells[S.cur-1]:null;
   const mem=S.memo||!!(prevC&&prevC.m);
@@ -1596,7 +1612,7 @@ function applyCFG(){
   R.setProperty('--pgh',pg[1]+'cm');
   R.setProperty('--sm',CFG.sm+'cm');
   $('#fFont').value=CFG.font; $('#fSize').value=CFG.size; $('#fLh').value=CFG.lh;
-  $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold; $('#fSmart').checked=CFG.smart;
+  $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold; $('#fSmart').checked=CFG.smart; $('#fDot').checked=CFG.dot!==false;
   $('#fPaper').value=CFG.paper; $('#fLoose').checked=CFG.loose;
   $('#fTFont').value=CFG.tfont||''; $('#fTSize').value=CFG.tsize;
   $('#fSM').value=CFG.sm; $('#fPM').value=CFG.pm; $('#fSC').value=CFG.shortcut||'';
@@ -1611,6 +1627,7 @@ $('#fSize').addEventListener('input',e=>{CFG.size=Math.max(11,Math.min(30,+e.tar
 $('#fLh').addEventListener('input',e=>{CFG.lh=Math.max(1.2,Math.min(3,+e.target.value||1.9)); saveCFG(); applyCFG();});
 $('#fSound').addEventListener('change',e=>{CFG.sound=e.target.checked; saveCFG();});
 $('#fSmart').addEventListener('change',e=>{CFG.smart=e.target.checked; saveCFG();});
+$('#fDot').addEventListener('change',e=>{CFG.dot=e.target.checked; saveCFG();});
 $('#fHold').addEventListener('change',e=>{CFG.hold=e.target.checked; saveCFG();});
 $('#fPaper').addEventListener('change',e=>{CFG.paper=e.target.value; saveCFG(); applyCFG();});
 $('#fLoose').addEventListener('change',e=>{CFG.loose=e.target.checked; saveCFG();});
