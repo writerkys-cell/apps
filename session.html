@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>김연수 글쓰기 세션</title>
+<style>
+  :root{
+    --paper:#f4f1e9;
+    --paper-2:#fbf9f4;
+    --rule:#ddd6c6;
+    --ink:#232019;
+    --ink-2:#6b6355;
+    --ink-3:#9a9284;
+    --seal:#9d2f27;
+    --seal-soft:#f0e2df;
+    --sans:"Apple SD Gothic Neo","AppleGothic","Noto Sans KR",system-ui,-apple-system,sans-serif;
+    --serif:"Gowun Batang","고운바탕","GowunBatang","AppleMyungjo","Apple SD Gothic Neo",serif;
+    --r:3px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:56px;
+  }
+  .wrap{max-width:720px;margin:0 auto;padding:0 20px}
+
+  /* ── 머리 ── */
+  header{padding:34px 0 18px}
+  h1{
+    font-family:var(--serif);
+    font-size:23px;font-weight:400;letter-spacing:.04em;
+    margin:0 0 18px;
+  }
+  .projbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  select,input,textarea,button{font-family:inherit;font-size:15px;color:var(--ink)}
+  select#projSel{
+    flex:1 1 180px;min-width:0;
+    background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--r);
+    padding:8px 10px;appearance:none;
+  }
+  .mini{
+    background:none;border:1px solid var(--rule);border-radius:var(--r);
+    padding:8px 11px;color:var(--ink-2);cursor:pointer;white-space:nowrap;font-size:14px;
+  }
+  .mini:hover{border-color:var(--ink-3);color:var(--ink)}
+
+  .gauge{margin-top:16px}
+  .gauge-top{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;color:var(--ink-2)}
+  .gauge-top b{font-family:var(--serif);font-size:19px;font-weight:400;color:var(--ink)}
+  .bar{height:3px;background:var(--rule);margin-top:8px;position:relative;overflow:hidden}
+  .bar span{position:absolute;left:0;top:0;bottom:0;background:var(--seal);width:0;transition:width .5s ease}
+
+  /* ── 탭 ── */
+  nav{border-bottom:1px solid var(--rule);margin-top:22px}
+  nav .wrap{display:flex;gap:22px}
+  .tab{
+    background:none;border:0;padding:12px 0 10px;cursor:pointer;
+    color:var(--ink-3);font-size:15px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  }
+  .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
+
+  main{padding-top:26px}
+  .view{display:none}
+  .view.on{display:block}
+
+  /* ── 순환 표시 ── */
+  .loop{display:flex;align-items:center;gap:0;margin-bottom:26px}
+  .loop .node{flex:1;text-align:center;position:relative;padding-top:20px}
+  .loop .node::before{
+    content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);
+    width:9px;height:9px;border-radius:50%;border:1px solid var(--ink-3);background:var(--paper);
+  }
+  .loop .node.done::before{background:var(--ink-3);border-color:var(--ink-3)}
+  .loop .node.now::before{background:var(--seal);border-color:var(--seal);width:11px;height:11px;top:5px}
+  .loop .node span{font-size:13px;color:var(--ink-3)}
+  .loop .node.now span{color:var(--seal)}
+  .loop .link{height:1px;background:var(--rule);flex:0 0 auto;width:14%;margin-top:20px}
+  .round{
+    font-family:var(--serif);font-size:15px;color:var(--ink-2);
+    margin-bottom:10px;letter-spacing:.02em;
+  }
+
+  /* ── 카드 ── */
+  .card{background:var(--paper-2);border:1px solid var(--rule);border-radius:var(--r);padding:24px 22px 22px}
+  .stage-title{font-family:var(--serif);font-size:21px;margin:0 0 6px;font-weight:400}
+  .guide{font-family:var(--serif);font-size:17px;line-height:1.85;color:var(--ink-2);margin:0 0 20px}
+  .hintbox{
+    border-left:2px solid var(--seal);background:var(--seal-soft);
+    padding:12px 14px;margin:0 0 20px;border-radius:0 var(--r) var(--r) 0;
+  }
+  .hintbox h4{margin:0 0 4px;font-size:13px;font-weight:400;color:var(--seal)}
+  .hintbox p{margin:0;font-family:var(--serif);font-size:16px;line-height:1.8;white-space:pre-wrap}
+
+  label.f{display:block;font-size:13px;color:var(--ink-2);margin:18px 0 6px}
+  textarea,input[type=number],input[type=text],input[type=url]{
+    width:100%;background:#fff;border:1px solid var(--rule);border-radius:var(--r);
+    padding:11px 12px;font-family:var(--serif);font-size:16px;line-height:1.8;resize:vertical;
+  }
+  input[type=number],input[type=url],input[type=text]{font-family:var(--sans);font-size:16px}
+  textarea:focus,input:focus,select:focus,button:focus-visible{outline:2px solid var(--seal);outline-offset:1px}
+  textarea{min-height:96px}
+
+  .pages-btn{
+    display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--rule);
+    border-radius:var(--r);padding:14px 16px;cursor:pointer;margin-bottom:4px;
+  }
+  .pages-btn:hover{border-color:var(--ink-3)}
+  .pages-btn b{display:block;font-size:15px;font-weight:600;margin-bottom:2px}
+  .pages-btn i{font-style:normal;font-size:13px;color:var(--ink-2);font-family:var(--serif)}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{
+    background:#fff;border:1px solid var(--rule);border-radius:20px;padding:7px 13px;
+    font-size:14px;color:var(--ink-2);cursor:pointer;
+  }
+  .chip[aria-pressed="true"]{background:var(--seal);border-color:var(--seal);color:#fff}
+
+  .readout{
+    display:flex;gap:22px;flex-wrap:wrap;margin-top:12px;padding:14px 0 2px;
+    border-top:1px dashed var(--rule);
+  }
+  .readout div{font-size:13px;color:var(--ink-3)}
+  .readout b{display:block;font-family:var(--serif);font-size:22px;font-weight:400;color:var(--ink);line-height:1.3}
+
+  .go{
+    display:block;width:100%;margin-top:26px;background:var(--seal);color:#fff;border:0;
+    border-radius:var(--r);padding:19px 16px;font-size:17px;letter-spacing:.02em;cursor:pointer;
+    box-shadow:0 1px 0 rgba(0,0,0,.12);
+  }
+  .go:hover{background:#8a2822}
+  .go small{display:block;font-size:12px;opacity:.72;margin-top:4px;letter-spacing:.06em}
+  .go.shake{animation:shake .3s}
+  @keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  @media (prefers-reduced-motion:reduce){.go.shake{animation:none}.bar span{transition:none}}
+
+  /* ── 로그 ── */
+  .today{display:flex;gap:26px;flex-wrap:wrap;padding-bottom:18px;border-bottom:1px solid var(--rule)}
+  .today div{font-size:13px;color:var(--ink-3)}
+  .today b{display:block;font-family:var(--serif);font-size:24px;font-weight:400;color:var(--ink);line-height:1.35}
+  .tablewrap{overflow-x:auto;margin-top:18px}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:600px}
+  th{
+    text-align:left;font-weight:400;font-size:12px;color:var(--ink-3);
+    padding:0 10px 8px 0;border-bottom:1px solid var(--rule);white-space:nowrap;
+  }
+  td{padding:12px 10px 12px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  td .why{font-family:var(--serif);color:var(--ink-2);font-size:14px}
+  td .why em{font-style:normal;color:var(--ink)}
+  .del{background:none;border:0;color:var(--ink-3);cursor:pointer;font-size:14px;padding:2px 4px}
+  .del:hover{color:var(--seal)}
+  .empty{font-family:var(--serif);color:var(--ink-3);padding:40px 0;text-align:center}
+  .plus{color:var(--seal)}
+
+  .block{margin-top:34px;padding-top:24px;border-top:1px solid var(--rule)}
+  .block h3{font-family:var(--serif);font-size:18px;font-weight:400;margin:0 0 6px}
+  .block p{font-family:var(--serif);color:var(--ink-2);font-size:15px;margin:0 0 14px;line-height:1.8}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+
+  /* ── 설정 ── */
+  .field{margin-bottom:22px}
+  .field p.hint{font-family:var(--serif);font-size:14px;color:var(--ink-3);margin:6px 0 0;line-height:1.7}
+  .danger{color:var(--seal);border-color:var(--seal)}
+
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:var(--r);
+    font-size:14px;opacity:0;pointer-events:none;transition:.22s;z-index:20;
+  }
+  #toast.on{opacity:1;transform:translate(-50%,0)}
+  footer{padding:40px 0 10px;font-size:12px;color:var(--ink-3);font-family:var(--serif)}
+</style>
+</head>
+<body>
+
+<header><div class="wrap">
+  <h1>김연수 글쓰기 세션</h1>
+  <div class="projbar">
+    <select id="projSel" aria-label="프로젝트"></select>
+    <button class="mini" id="newProj">새 프로젝트</button>
+  </div>
+  <div class="gauge">
+    <div class="gauge-top">
+      <span><b id="gNow">0.0</b> / <span id="gGoal">80</span>매</span>
+      <span id="gPct">0%</span>
+    </div>
+    <div class="bar"><span id="gBar"></span></div>
+  </div>
+</div></header>
+
+<nav><div class="wrap">
+  <button class="tab" id="tab-cycle" aria-selected="true">글쓰기 순환</button>
+  <button class="tab" id="tab-log" aria-selected="false">로그</button>
+  <button class="tab" id="tab-set" aria-selected="false">설정</button>
+</div></nav>
+
+<main><div class="wrap">
+
+<!-- ══ 글쓰기 순환 ══ -->
+<section class="view on" id="view-cycle">
+  <div class="round" id="roundLabel">제 1 회차</div>
+  <div class="loop">
+    <div class="node" id="n1"><span>손글씨</span></div><div class="link"></div>
+    <div class="node" id="n2"><span>타이핑</span></div><div class="link"></div>
+    <div class="node" id="n3"><span>종이 퇴고</span></div>
+  </div>
+
+  <!-- 1단계 -->
+  <div class="card" id="stage1">
+    <div id="hintSlot"></div>
+    <h2 class="stage-title">2매 쓰기</h2>
+    <p class="guide">손으로 400자를 종이에 씁니다.</p>
+    <label class="f" for="s1sum">쓴 것을 요약합니다 — 다음 단계에서 이 글이 타이핑의 출발점이 됩니다</label>
+    <textarea id="s1sum" placeholder="종이에 쓴 2매의 내용을 몇 문장으로"></textarea>
+    <button class="go" id="go1">손글씨를 마치고 타이핑으로<small>⌘ + Enter</small></button>
+  </div>
+
+  <!-- 2단계 -->
+  <div class="card" id="stage2" hidden>
+    <h2 class="stage-title">페이지스 타이핑</h2>
+    <p class="guide">손으로 쓴 2매를 페이지스에서 타이핑하며 확장합니다.</p>
+    <button class="pages-btn" id="openPages2">
+      <b>페이지스 열기</b>
+      <i>요약을 클립보드에 담습니다. 페이지스에 먼저 붙여 넣고, 그 문장부터 이어 쓰세요.</i>
+    </button>
+    <label class="f" for="s2chars">지금까지 쓴 총 글자수 (공백 포함)</label>
+    <input type="number" id="s2chars" min="0" step="1" inputmode="numeric" placeholder="예: 12400">
+    <div class="readout">
+      <div>원고지<b id="r2sheet">0.0매</b></div>
+      <div>직전 대비 순증<b id="r2delta">+0.0매</b></div>
+      <div>늘어난 글자<b id="r2char">0자</b></div>
+    </div>
+    <label class="f">글쓰기 중단 이유</label>
+    <div class="chips" id="whyChips"></div>
+    <label class="f" for="s2note">자세한 내용</label>
+    <textarea id="s2note" placeholder="어디에서, 왜 멈췄는지"></textarea>
+    <button class="go" id="go2">타이핑을 마치고 종이 퇴고로<small>⌘ + Enter</small></button>
+  </div>
+
+  <!-- 3단계 -->
+  <div class="card" id="stage3" hidden>
+    <h2 class="stage-title">프린트 교정</h2>
+    <p class="guide">초고를 프린트한 뒤, 초고 위에서 작업합니다.</p>
+    <button class="pages-btn" id="openPages3">
+      <b>중단 이유 복사하고 페이지스 열기</b>
+      <i>프린트하기 전에 원고 맨 위에 붙여 넣으세요. 멈춘 자리를 눈으로 보면서 고칩니다.</i>
+    </button>
+    <label class="f" for="s3hint">다음 회차의 손글씨를 위한 집필 힌트</label>
+    <textarea id="s3hint" placeholder="내일 종이 앞에 앉은 나에게 건네는 한 줄"></textarea>
+    <button class="go" id="go3">회차를 마치고 다음 2매 쓰기로<small>⌘ + Enter</small></button>
+  </div>
+</section>
+
+<!-- ══ 로그 ══ -->
+<section class="view" id="view-log">
+  <div class="today">
+    <div>오늘 회차<b id="tRounds">0</b></div>
+    <div>오늘 쓴 글자<b id="tChars">0자</b></div>
+    <div>오늘 쓴 매수<b id="tSheets">0.0매</b></div>
+    <div>누적<b id="tTotal">0.0매</b></div>
+  </div>
+  <div class="tablewrap" id="logWrap"></div>
+
+  <div class="block">
+    <h3>기록을 AI에게 맡기기</h3>
+    <p>회차별 기록을 분석용 프롬프트로 만듭니다. 복사해서 대화창에 붙여 넣으세요.</p>
+    <div class="row">
+      <button class="mini" id="mkPrompt">프롬프트 만들기</button>
+      <button class="mini" id="cpPrompt">복사</button>
+    </div>
+    <textarea id="promptOut" style="margin-top:12px;min-height:180px" placeholder="여기에 프롬프트가 만들어집니다"></textarea>
+  </div>
+</section>
+
+<!-- ══ 설정 ══ -->
+<section class="view" id="view-set">
+  <div class="field">
+    <label class="f" for="setName">프로젝트 이름</label>
+    <input type="text" id="setName">
+  </div>
+  <div class="field">
+    <label class="f" for="setGoal">목표 원고지 매수</label>
+    <input type="number" id="setGoal" min="1" step="1">
+  </div>
+  <div class="field">
+    <label class="f" for="setLink">페이지스 단축어 실행 링크</label>
+    <input type="url" id="setLink" placeholder="shortcuts://run-shortcut?name=페이지스">
+    <p class="hint">애플 단축어 앱에서 단축어를 길게 눌러 ‘링크 복사’로 얻은 주소를 넣습니다. 2·3단계의 페이지스 버튼이 이 링크를 엽니다.</p>
+  </div>
+
+  <div class="block">
+    <h3>백업</h3>
+    <p>모든 프로젝트와 회차 기록을 파일 하나로 내보내고, 다른 기기에서 되살립니다.</p>
+    <div class="row">
+      <button class="mini" id="btnExport">백업 파일 내보내기</button>
+      <button class="mini" id="btnImport">백업 파일 불러오기</button>
+      <input type="file" id="fileIn" accept="application/json" hidden>
+    </div>
+  </div>
+
+  <div class="block">
+    <h3>프로젝트 지우기</h3>
+    <p>지금 선택한 프로젝트의 회차 기록이 모두 사라집니다. 되돌릴 수 없습니다.</p>
+    <button class="mini danger" id="btnDelProj">이 프로젝트 지우기</button>
+  </div>
+
+  <footer>모든 기록은 이 브라우저 안에만 저장됩니다.</footer>
+</section>
+
+</div></main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+var KEY="kys-writing-session-v1";
+var WHYS=["흐름이 막힘","다음 문장이 생각 안 남","자료의 부족","납득 못할 전개","피로","딴생각"];
+var db, P;
+
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function blankCurrent(){return {stage:1,summary:"",chars:"",why:[],note:"",hint:""};}
+function newProject(name){
+  return {id:uid(),name:name||"새 프로젝트",goal:80,createdAt:Date.now(),
+          pendingHint:"",sessions:[],current:blankCurrent()};
+}
+function load(){
+  try{db=JSON.parse(localStorage.getItem(KEY));}catch(e){db=null;}
+  if(!db||!db.projects||!db.projects.length){
+    var p=newProject("장편");
+    db={v:1,activeId:p.id,link:"",projects:[p]};
+  }
+  if(!db.projects.some(function(x){return x.id===db.activeId;})) db.activeId=db.projects[0].id;
+  db.projects.forEach(function(p){
+    if(!p.current) p.current=blankCurrent();
+    if(!p.sessions) p.sessions=[];
+    if(typeof p.goal!=="number") p.goal=80;
+  });
+  P=db.projects.filter(function(x){return x.id===db.activeId;})[0];
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(db));}
+var $=function(id){return document.getElementById(id);};
+function toast(m){var t=$("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("on");},1900);}
+
+function copy(text){
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(text).catch(function(){legacyCopy(text);});
+  }else legacyCopy(text);
+}
+function legacyCopy(text){
+  var ta=document.createElement("textarea");
+  ta.value=text;ta.style.position="fixed";ta.style.opacity="0";
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand("copy");}catch(e){}
+  document.body.removeChild(ta);
+}
+function openLink(){
+  if(!db.link){toast("설정에서 페이지스 링크를 먼저 등록하세요");return false;}
+  window.location.href=db.link;return true;
+}
+function sheets(c){return (c/200);}
+function fmtS(n){return n.toFixed(1)+"매";}
+function lastChars(p){var s=p.sessions;return s.length?s[s.length-1].chars:0;}
+function roundNo(p){return p.sessions.length+1;}
+function whyText(s){
+  var t=(s.why||[]).join(", ");
+  if(s.note) t=t?t+" — "+s.note:s.note;
+  return t;
+}
+function dayKey(ts){var d=new Date(ts);return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();}
+function fmtTime(ts){
+  var d=new Date(ts),p=function(n){return n<10?"0"+n:""+n;};
+  return (d.getMonth()+1)+"월 "+d.getDate()+"일 "+p(d.getHours())+":"+p(d.getMinutes());
+}
+
+/* ── 그리기 ── */
+function renderHeader(){
+  var sel=$("projSel");sel.innerHTML="";
+  db.projects.forEach(function(p){
+    var o=document.createElement("option");o.value=p.id;o.textContent=p.name;
+    if(p.id===P.id)o.selected=true;sel.appendChild(o);
+  });
+  var now=sheets(lastChars(P)),pct=Math.min(100,P.goal?now/P.goal*100:0);
+  $("gNow").textContent=now.toFixed(1);
+  $("gGoal").textContent=P.goal;
+  $("gPct").textContent=Math.round(pct)+"%";
+  $("gBar").style.width=pct+"%";
+}
+function renderCycle(){
+  var c=P.current;
+  $("roundLabel").textContent="제 "+roundNo(P)+" 회차";
+  [1,2,3].forEach(function(i){
+    var n=$("n"+i);n.className="node"+(c.stage===i?" now":(c.stage>i?" done":""));
+    $("stage"+i).hidden=(c.stage!==i);
+  });
+  // 1단계
+  var slot=$("hintSlot");
+  if(P.pendingHint){
+    slot.innerHTML='<div class="hintbox"><h4>지난 회차의 집필 힌트</h4><p></p></div>';
+    slot.querySelector("p").textContent=P.pendingHint;
+  }else slot.innerHTML="";
+  $("s1sum").value=c.summary;
+  // 2단계
+  $("s2chars").value=c.chars;
+  $("s2note").value=c.note;
+  var chips=$("whyChips");
+  if(!chips.children.length){
+    WHYS.forEach(function(w){
+      var b=document.createElement("button");
+      b.className="chip";b.type="button";b.textContent=w;b.dataset.why=w;
+      b.setAttribute("aria-pressed","false");
+      b.addEventListener("click",function(){
+        var i=P.current.why.indexOf(w);
+        if(i<0)P.current.why.push(w);else P.current.why.splice(i,1);
+        save();renderCycle();
+      });
+      chips.appendChild(b);
+    });
+  }
+  Array.prototype.forEach.call(chips.children,function(b){
+    b.setAttribute("aria-pressed",c.why.indexOf(b.dataset.why)>=0?"true":"false");
+  });
+  renderReadout();
+  // 3단계
+  $("s3hint").value=c.hint;
+}
+function renderReadout(){
+  var n=parseInt(P.current.chars,10);if(isNaN(n)||n<0)n=0;
+  var prev=lastChars(P),d=n-prev;
+  $("r2sheet").textContent=fmtS(sheets(n));
+  $("r2delta").textContent=(d>=0?"+":"")+sheets(d).toFixed(1)+"매";
+  $("r2char").textContent=(d>=0?"+":"")+d+"자";
+}
+function renderLog(){
+  var s=P.sessions,today=dayKey(Date.now()),tr=0,tc=0;
+  s.forEach(function(x,i){
+    if(dayKey(x.at)===today){tr++;tc+=x.chars-(i?s[i-1].chars:0);}
+  });
+  $("tRounds").textContent=tr;
+  $("tChars").textContent=tc+"자";
+  $("tSheets").textContent=fmtS(sheets(tc));
+  $("tTotal").textContent=fmtS(sheets(lastChars(P)));
+
+  var w=$("logWrap");
+  if(!s.length){w.innerHTML='<p class="empty">아직 마친 회차가 없습니다. 첫 2매를 손으로 써 보세요.</p>';return;}
+  var h='<table><thead><tr><th>회차</th><th>적은 시각</th><th>누적 글자수</th><th>원고지 매수</th><th>글쓰기 중단 이유</th><th></th></tr></thead><tbody>';
+  for(var i=s.length-1;i>=0;i--){
+    var x=s[i],d=x.chars-(i?s[i-1].chars:0),t=whyText(x);
+    h+='<tr><td class="num">'+x.round+'</td>'
+      +'<td class="num">'+fmtTime(x.at)+'</td>'
+      +'<td class="num">'+x.chars.toLocaleString()+'자</td>'
+      +'<td class="num">'+fmtS(sheets(x.chars))+' <span class="plus">'+(d>=0?"+":"")+sheets(d).toFixed(1)+'</span></td>'
+      +'<td><span class="why">'+(t?escapeHtml(t):"—")+'</span></td>'
+      +'<td><button class="del" data-id="'+x.id+'" title="지우기">지움</button></td></tr>';
+  }
+  w.innerHTML=h+"</tbody></table>";
+  Array.prototype.forEach.call(w.querySelectorAll(".del"),function(b){
+    b.addEventListener("click",function(){
+      if(!confirm("이 회차 기록을 지웁니다."))return;
+      P.sessions=P.sessions.filter(function(z){return z.id!==b.dataset.id;});
+      save();renderAll();toast("지웠습니다");
+    });
+  });
+}
+function escapeHtml(t){return t.replace(/[&<>"]/g,function(c){return({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c];});}
+function renderSettings(){
+  $("setName").value=P.name;
+  $("setGoal").value=P.goal;
+  $("setLink").value=db.link||"";
+}
+function renderAll(){renderHeader();renderCycle();renderLog();renderSettings();}
+
+/* ── 단계 넘기기 ── */
+function shake(btn){btn.classList.add("shake");setTimeout(function(){btn.classList.remove("shake");},320);}
+function advance(){
+  var c=P.current;
+  if(c.stage===1){
+    if(!$("s1sum").value.trim()){shake($("go1"));$("s1sum").focus();toast("쓴 것을 한두 문장으로 남겨 주세요");return;}
+    c.summary=$("s1sum").value;c.stage=2;save();renderAll();
+    copy(c.summary);toast("요약을 클립보드에 담았습니다");
+    window.scrollTo({top:0,behavior:"smooth"});
+    return;
+  }
+  if(c.stage===2){
+    var n=parseInt($("s2chars").value,10);
+    if(isNaN(n)||n<=0){shake($("go2"));$("s2chars").focus();toast("총 글자수를 넣어 주세요");return;}
+    c.chars=n;c.note=$("s2note").value;c.stage=3;save();renderAll();
+    window.scrollTo({top:0,behavior:"smooth"});
+    return;
+  }
+  // 3단계 → 회차 마감
+  c.hint=$("s3hint").value.trim();
+  P.sessions.push({
+    id:uid(),round:roundNo(P),at:Date.now(),
+    chars:parseInt(c.chars,10)||0,
+    summary:c.summary,why:c.why.slice(),note:c.note,hint:c.hint
+  });
+  P.pendingHint=c.hint;
+  P.current=blankCurrent();
+  save();renderAll();
+  window.scrollTo({top:0,behavior:"smooth"});
+  toast("제 "+(roundNo(P)-1)+" 회차를 마쳤습니다");
+}
+
+/* ── 프롬프트 ── */
+function buildPrompt(){
+  var s=P.sessions;
+  if(!s.length){toast("기록이 아직 없습니다");return;}
+  var L=[];
+  L.push("나는 소설을 쓰는 사람이고, '손글씨 2매 → 페이지스 타이핑 → 프린트 교정'을 한 회차로 하는 순환으로 작업한다.");
+  L.push("아래는 「"+P.name+"」의 회차별 기록이다. 목표는 원고지 "+P.goal+"매, 현재 "+fmtS(sheets(lastChars(P)))+"까지 왔다.");
+  L.push("");
+  L.push("회차 | 시각 | 누적 글자수 | 매수(순증) | 중단 이유 | 다음 회차 힌트");
+  s.forEach(function(x,i){
+    var d=x.chars-(i?s[i-1].chars:0);
+    L.push([x.round,fmtTime(x.at),x.chars+"자",
+      sheets(x.chars).toFixed(1)+"매(+"+sheets(d).toFixed(1)+")",
+      whyText(x)||"—",(x.hint||"—").replace(/\n/g," ")].join(" | "));
+  });
+  L.push("");
+  L.push("이 기록을 보고 알려줘.");
+  L.push("1. 중단 이유에 반복되는 패턴이 있는지, 그것이 회차별 순증과 어떻게 맞물리는지.");
+  L.push("2. 순증이 큰 회차와 작은 회차 사이에 무엇이 달랐는지.");
+  L.push("3. 집필 힌트가 다음 회차의 분량에 실제로 도움이 됐는지.");
+  L.push("4. 목표 "+P.goal+"매까지 남은 분량을 지금 속도로 언제쯤 채울지, 그리고 이 순환에서 무엇을 하나만 바꾸면 좋을지.");
+  $("promptOut").value=L.join("\n");
+  toast("프롬프트를 만들었습니다");
+}
+
+/* ── 묶기 ── */
+function bind(){
+  $("projSel").addEventListener("change",function(){db.activeId=this.value;save();load();renderAll();});
+  $("newProj").addEventListener("click",function(){
+    var n=prompt("새 프로젝트 이름");if(n===null)return;
+    var p=newProject(n.trim()||"새 프로젝트");
+    db.projects.push(p);db.activeId=p.id;save();load();renderAll();
+    toast("프로젝트를 만들었습니다");
+  });
+
+  [["tab-cycle","view-cycle"],["tab-log","view-log"],["tab-set","view-set"]].forEach(function(t){
+    $(t[0]).addEventListener("click",function(){
+      [["tab-cycle","view-cycle"],["tab-log","view-log"],["tab-set","view-set"]].forEach(function(u){
+        $(u[0]).setAttribute("aria-selected",u[0]===t[0]?"true":"false");
+        $(u[1]).classList.toggle("on",u[1]===t[1]);
+      });
+      if(t[1]==="view-log")renderLog();
+    });
+  });
+
+  $("s1sum").addEventListener("input",function(){P.current.summary=this.value;save();});
+  $("s2note").addEventListener("input",function(){P.current.note=this.value;save();});
+  $("s3hint").addEventListener("input",function(){P.current.hint=this.value;save();});
+  $("s2chars").addEventListener("input",function(){P.current.chars=this.value;save();renderReadout();});
+
+  $("go1").addEventListener("click",advance);
+  $("go2").addEventListener("click",advance);
+  $("go3").addEventListener("click",advance);
+
+  $("openPages2").addEventListener("click",function(){
+    copy(P.current.summary||"");toast("요약을 복사했습니다");openLink();
+  });
+  $("openPages3").addEventListener("click",function(){
+    var t=whyText(P.current);
+    copy(t?"[지난 회차에 멈춘 자리] "+t:"[지난 회차에 멈춘 자리] 기록 없음");
+    toast("중단 이유를 복사했습니다");openLink();
+  });
+
+  document.addEventListener("keydown",function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key==="Enter"){
+      if($("view-cycle").classList.contains("on")){e.preventDefault();advance();}
+    }
+  });
+
+  $("setName").addEventListener("input",function(){P.name=this.value;save();renderHeader();});
+  $("setGoal").addEventListener("input",function(){
+    var n=parseInt(this.value,10);P.goal=(isNaN(n)||n<1)?1:n;save();renderHeader();
+  });
+  $("setLink").addEventListener("input",function(){db.link=this.value.trim();save();});
+
+  $("mkPrompt").addEventListener("click",buildPrompt);
+  $("cpPrompt").addEventListener("click",function(){
+    var v=$("promptOut").value;
+    if(!v){toast("먼저 프롬프트를 만드세요");return;}
+    copy(v);toast("복사했습니다");
+  });
+
+  $("btnExport").addEventListener("click",function(){
+    var b=new Blob([JSON.stringify(db,null,2)],{type:"application/json"});
+    var a=document.createElement("a"),d=new Date();
+    a.href=URL.createObjectURL(b);
+    a.download="글쓰기세션-"+d.getFullYear()+("0"+(d.getMonth()+1)).slice(-2)+("0"+d.getDate()).slice(-2)+".json";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(a.href);},1000);
+  });
+  $("btnImport").addEventListener("click",function(){$("fileIn").click();});
+  $("fileIn").addEventListener("change",function(){
+    var f=this.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var o=JSON.parse(r.result);
+        if(!o.projects||!o.projects.length)throw 0;
+        if(!confirm("지금 기록을 백업 파일로 덮어씁니다. 계속할까요?"))return;
+        localStorage.setItem(KEY,JSON.stringify(o));
+        load();renderAll();toast("복원했습니다");
+      }catch(e){toast("읽을 수 없는 파일입니다");}
+    };
+    r.readAsText(f);this.value="";
+  });
+  $("btnDelProj").addEventListener("click",function(){
+    if(db.projects.length<2){toast("프로젝트가 하나뿐입니다");return;}
+    if(!confirm("「"+P.name+"」의 기록을 모두 지웁니다."))return;
+    db.projects=db.projects.filter(function(x){return x.id!==P.id;});
+    db.activeId=db.projects[0].id;save();load();renderAll();toast("지웠습니다");
+  });
+}
+
+load();bind();renderAll();
+})();
+</script>
+</body>
+</html>
