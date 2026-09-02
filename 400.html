@@ -105,6 +105,8 @@
   .foot .mid{flex:1;text-align:center;}
   .count b{font-weight:400;color:var(--ink);opacity:.55;}
   body.full .count b{color:var(--mark);opacity:1;}
+  #sync{margin-left:10px;cursor:pointer;}
+  #sync:hover{color:var(--ink);}
   #toScriv{
     color:var(--mark);font-size:13px;letter-spacing:-.01em;
     opacity:0;transform:translateY(3px);
@@ -115,9 +117,6 @@
   #toScriv:hover{text-decoration:underline;text-underline-offset:4px;}
   @media (prefers-reduced-motion:reduce){#toScriv{transition:none;}}
   .foot .right{flex:1;text-align:right;}
-  #stash{color:var(--faint);transition:color .3s;}
-  body.full #stash{color:var(--mark);}
-  #stash:hover{color:var(--ink);}
 
   /* ── 서랍 ── */
   .drawer{
@@ -155,6 +154,24 @@
   }
   .scrim.on{opacity:1;pointer-events:auto;}
 
+  /* ── 열쇠말 ── */
+  .gate{
+    position:fixed;inset:0;background:var(--paper);z-index:20;
+    display:none;flex-direction:column;justify-content:center;align-items:center;
+    padding:24px;text-align:center;
+  }
+  .gate.on{display:flex;}
+  .gate p{max-width:26em;font-size:14px;line-height:1.9;color:var(--faint);margin:0 0 1.8em;}
+  .gate input{
+    width:min(22em,100%);background:none;border:0;border-bottom:1px solid var(--line);
+    font:inherit;font-size:17px;color:var(--ink);padding:.4em 0;text-align:center;
+  }
+  .gate input:focus{outline:none;border-bottom-color:var(--mark);}
+  .gate .row{margin-top:2em;display:flex;gap:24px;font-size:13px;color:var(--faint);}
+  .gate .row button:hover{color:var(--ink);}
+  .gate .go{color:var(--mark);}
+  .gate .note{margin-top:1.4em;font-size:12px;color:var(--faint);min-height:1.4em;}
+
   @media (max-width:640px){
     :root{--size:17px;}
     main{padding:88px 20px 108px;}
@@ -179,7 +196,7 @@
 </main>
 
 <div class="foot">
-  <div class="count">공백 포함 <b id="c1">0</b>자 · <b id="c2">0.0</b>매</div>
+  <div class="count">공백 포함 <b id="c1">0</b>자 · <b id="c2">0.0</b>매<span id="sync">동기화 꺼짐</span></div>
   <div class="mid"><button id="toScriv" type="button" disabled>스크리브너로</button></div>
   <div class="right"><button id="stash" type="button">서랍에 넣기</button></div>
 </div>
@@ -194,11 +211,23 @@
   <div class="list" id="list"></div>
 </aside>
 
+<div class="gate" id="gate">
+  <p>세 기기에 같은 열쇠말을 넣으면 쓰던 글과 서랍이 따라옵니다.<br>여덟 자 이상, 잊지 않을 문장으로.</p>
+  <input id="secretInput" type="password" placeholder="열쇠말" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <div class="note" id="gateNote"></div>
+  <div class="row">
+    <button class="go" id="gateOk" type="button">연결</button>
+    <button id="gateSkip" type="button">이 기기에만 저장</button>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
-  var KEY = "hanmunjang.v1";
+  var KEY  = "hanmunjang.v1";
   var GOAL = 400;
+  var SB_URL = "https://uohlhyqopsljymxwlfnj.supabase.co";
+  var SB_KEY = "sb_publishable_btYdJmNqhQqdhe4THIgRRA_O9qqzrU2";
 
   var el = {
     acc: document.getElementById("acc"),
@@ -206,17 +235,21 @@
     fill: document.getElementById("fill"),
     c1: document.getElementById("c1"),
     c2: document.getElementById("c2"),
+    sync: document.getElementById("sync"),
     stash: document.getElementById("stash"),
     toScriv: document.getElementById("toScriv"),
     drawer: document.getElementById("drawer"),
     scrim: document.getElementById("scrim"),
     list: document.getElementById("list"),
     dcount: document.getElementById("dcount"),
-    themeBtn: document.getElementById("themeBtn")
+    themeBtn: document.getElementById("themeBtn"),
+    gate: document.getElementById("gate"),
+    secretInput: document.getElementById("secretInput"),
+    gateNote: document.getElementById("gateNote")
   };
 
-  var state = { sentences: [], draft: "", drawer: [], theme: "light" };
-  var confirmTimer = null;
+  var state = { sentences:[], draft:"", draftAt:null, drawer:[], theme:"light", secret:null };
+  var confirmTimer = null, lastKey = 0, syncing = false, pending = null, pendingTimer = null;
 
   /* ── 저장 ── */
   function load(){
@@ -226,17 +259,21 @@
       var d = JSON.parse(raw);
       if(Array.isArray(d.sentences)) state.sentences = d.sentences;
       if(typeof d.draft === "string") state.draft = d.draft;
+      if(typeof d.draftAt === "string") state.draftAt = d.draftAt;
       if(Array.isArray(d.drawer)) state.drawer = d.drawer;
       if(d.theme === "dark" || d.theme === "light") state.theme = d.theme;
+      if(typeof d.secret === "string") state.secret = d.secret;
     }catch(e){}
   }
   var saveTimer = null;
+  function writeNow(){
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  }
   function save(){
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function(){
-      try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
-    }, 120);
+    saveTimer = setTimeout(writeNow, 120);
   }
+  function touch(){ state.draftAt = new Date().toISOString(); }
 
   /* ── 계산 ── */
   function accText(){ return state.sentences.join(" "); }
@@ -245,8 +282,8 @@
     if(!b) return a;
     return a ? a + " " + b : b;
   }
-
   function sheets(n){ return (n / 200).toFixed(1); }
+  function live(){ return state.drawer.filter(function(x){ return !x.deleted_at; }); }
 
   /* ── 그리기 ── */
   function paint(){
@@ -280,21 +317,22 @@
     state.sentences.push(s);
     el.input.value = "";
     state.draft = "";
+    touch();
     resetConfirm();
-    paint(); save();
+    paint(); save(); syncSoon(400);
   }
 
-  /* 빈 입력줄에서 백스페이스 → 마지막 문장 되돌리기 */
   function pull(){
     if(!state.sentences.length) return;
     el.input.value = state.sentences.pop();
     state.draft = el.input.value;
-    paint(); save();
+    touch();
+    paint(); save(); syncSoon(1500);
     var n = el.input.value.length;
     el.input.setSelectionRange(n, n);
   }
 
-  /* ── 서랍에 넣기 ── */
+  /* ── 서랍 ── */
   function resetConfirm(){
     clearTimeout(confirmTimer);
     confirmTimer = null;
@@ -303,16 +341,20 @@
 
   function archive(text){
     state.drawer.unshift({
-      id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+      id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : Date.now() + "-" + Math.random().toString(36).slice(2,9),
       text: text,
       at: new Date().toISOString(),
-      chars: text.length
+      chars: text.length,
+      deleted_at: null,
+      updated_at: new Date().toISOString()
     });
     state.sentences = [];
     el.input.value = "";
     state.draft = "";
+    touch();
     resetConfirm();
-    paint(); save(); renderDrawer();
+    paint(); save(); renderDrawer(); syncSoon(200);
   }
 
   function stash(){
@@ -338,25 +380,26 @@
     setTimeout(function(){ if(!confirmTimer) node.textContent = back; }, 1600);
   }
 
-  /* ── 서랍 ── */
   function fmt(iso){
     var d = new Date(iso);
     var p = function(n){ return n < 10 ? "0" + n : "" + n; };
-    return d.getFullYear() + "." + p(d.getMonth() + 1) + "." + p(d.getDate()) +
+    return d.getFullYear() + "." + p(d.getMonth()+1) + "." + p(d.getDate()) +
            " " + p(d.getHours()) + ":" + p(d.getMinutes());
   }
 
   function renderDrawer(){
-    el.dcount.textContent = state.drawer.length ? "서랍 " + state.drawer.length + "편" : "서랍";
+    var items = live();
+    el.dcount.textContent = items.length ? "서랍 " + items.length + "편" : "서랍";
     el.list.innerHTML = "";
-    if(!state.drawer.length){
+    if(!items.length){
       var e = document.createElement("p");
       e.className = "empty";
       e.textContent = "아직 비어 있습니다. 400자를 채우면 한 편이 여기 쌓입니다.";
       el.list.appendChild(e);
       return;
     }
-    state.drawer.forEach(function(item){
+    items.sort(function(a,b){ return a.at < b.at ? 1 : -1; });
+    items.forEach(function(item){
       var card = document.createElement("article");
       card.className = "card";
 
@@ -385,8 +428,8 @@
 
       var send = document.createElement("button");
       send.type = "button";
-      send.textContent = "스크리브너로";
       send.className = "send";
+      send.textContent = "스크리브너로";
       send.addEventListener("click", function(){
         toScrivener(item.text, function(ok){
           send.textContent = ok ? "보냈습니다" : "복사 실패";
@@ -406,8 +449,9 @@
           return;
         }
         clearTimeout(t);
-        state.drawer = state.drawer.filter(function(x){ return x.id !== item.id; });
-        save(); renderDrawer();
+        item.deleted_at = new Date().toISOString();
+        item.updated_at = item.deleted_at;
+        save(); renderDrawer(); syncSoon(200);
       });
 
       acts.appendChild(copy);
@@ -420,6 +464,7 @@
     });
   }
 
+  /* ── 클립보드 · 단축어 ── */
   function toScrivener(text, done){
     toClipboard(text, function(ok){
       if(ok) window.location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent("스크리브너");
@@ -429,12 +474,12 @@
 
   function toClipboard(text, done){
     if(navigator.clipboard && window.isSecureContext){
-      navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ legacy(); });
+      navigator.clipboard.writeText(text).then(function(){ done(true); }, legacy);
     }else{ legacy(); }
     function legacy(){
       var ta = document.createElement("textarea");
       ta.value = text;
-      ta.setAttribute("readonly", "");
+      ta.setAttribute("readonly","");
       ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;";
       document.body.appendChild(ta);
       ta.select();
@@ -445,12 +490,120 @@
     }
   }
 
-  function openDrawer(v){
-    el.drawer.classList.toggle("open", v);
-    el.scrim.classList.toggle("on", v);
-    el.drawer.setAttribute("aria-hidden", v ? "false" : "true");
-    if(!v) el.input.focus();
+  /* ── 동기화 ── */
+  function status(msg){ el.sync.textContent = " · " + msg; }
+
+  function syncSoon(ms){
+    if(!state.secret) return;
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(function(){ syncNow(false); }, ms || 1200);
   }
+
+  function syncNow(closing){
+    if(!state.secret) return Promise.resolve();
+    if(syncing && !closing) return Promise.resolve();
+    syncing = true;
+    if(!closing) status("동기화 중");
+    var payload = {
+      secret: state.secret,
+      draft: { sentences: state.sentences, line: state.draft, updated_at: state.draftAt },
+      pieces: state.drawer
+    };
+    var opts = {
+      method: "POST",
+      headers: {
+        "apikey": SB_KEY,
+        "Authorization": "Bearer " + SB_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    };
+    if(closing) opts.keepalive = true;
+    return fetch(SB_URL + "/rest/v1/rpc/sync", opts)
+      .then(function(r){
+        if(!r.ok) return r.text().then(function(t){ throw new Error(t); });
+        return r.json();
+      })
+      .then(function(data){
+        syncing = false;
+        if(closing) return;
+        mergePieces(data.pieces || []);
+        applyDraft(data.draft || {});
+        status("동기화 " + fmt(new Date().toISOString()).slice(11));
+      })
+      .catch(function(err){
+        syncing = false;
+        if(!closing) status(navigator.onLine ? "동기화 실패" : "오프라인");
+        console.warn("sync:", err && err.message);
+      });
+  }
+
+  function mergePieces(remote){
+    var byId = {};
+    state.drawer.forEach(function(p){ byId[p.id] = p; });
+    remote.forEach(function(r){
+      var localP = byId[r.id];
+      if(!localP || (r.updated_at || "") > (localP.updated_at || "")){
+        byId[r.id] = {
+          id: r.id, text: r.text, chars: r.chars, at: r.at,
+          deleted_at: r.deleted_at || null,
+          updated_at: r.updated_at || r.at
+        };
+      }else if(r.deleted_at && !localP.deleted_at){
+        localP.deleted_at = r.deleted_at;
+      }
+    });
+    state.drawer = Object.keys(byId).map(function(k){ return byId[k]; })
+      .sort(function(a,b){ return a.at < b.at ? 1 : -1; });
+    save(); renderDrawer();
+  }
+
+  function applyDraft(d){
+    if(!d || !d.updated_at) return;
+    if(state.draftAt && d.updated_at <= state.draftAt) return;
+    if(el.input.value.trim() || Date.now() - lastKey < 4000){
+      pending = d;
+      setTimeout(function(){ if(pending){ var p = pending; pending = null; applyDraft(p); } }, 5000);
+      return;
+    }
+    var localText = fullText().trim();
+    var remoteText = ((d.sentences || []).join(" ") + " " + (d.line || "")).trim();
+    if(localText && localText !== remoteText) archive(localText);
+    state.sentences = Array.isArray(d.sentences) ? d.sentences : [];
+    el.input.value = d.line || "";
+    state.draft = el.input.value;
+    state.draftAt = d.updated_at;
+    paint(); save();
+  }
+
+  /* ── 열쇠말 ── */
+  function openGate(){
+    el.gate.classList.add("on");
+    el.gateNote.textContent = "";
+    el.secretInput.value = state.secret || "";
+    setTimeout(function(){ el.secretInput.focus(); }, 60);
+  }
+  function closeGate(){
+    el.gate.classList.remove("on");
+    el.input.focus();
+  }
+  document.getElementById("gateOk").addEventListener("click", function(){
+    var v = el.secretInput.value.trim();
+    if(v.length < 8){ el.gateNote.textContent = "여덟 자 이상이어야 합니다."; return; }
+    state.secret = v;
+    writeNow();
+    closeGate();
+    status("동기화 중");
+    syncNow(false);
+  });
+  document.getElementById("gateSkip").addEventListener("click", function(){
+    closeGate();
+    status(state.secret ? "동기화 켜짐" : "동기화 꺼짐");
+  });
+  el.secretInput.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); document.getElementById("gateOk").click(); }
+  });
+  el.sync.addEventListener("click", openGate);
 
   /* ── 테마 ── */
   function applyTheme(){
@@ -460,11 +613,10 @@
 
   /* ── 이벤트 ── */
   el.input.addEventListener("keydown", function(e){
-    if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){
-      e.preventDefault(); stash(); return;
-    }
+    lastKey = Date.now();
+    if(e.key === "Enter" && (e.metaKey || e.ctrlKey)){ e.preventDefault(); stash(); return; }
     if(e.key === "Enter"){
-      if(e.isComposing || e.keyCode === 229) return;  // 한글 조합 중 중복 방지
+      if(e.isComposing || e.keyCode === 229) return;
       e.preventDefault(); push(); return;
     }
     if(e.key === "Backspace" && el.input.value === "" && state.sentences.length){
@@ -473,9 +625,11 @@
   });
 
   el.input.addEventListener("input", function(){
+    lastKey = Date.now();
     state.draft = el.input.value;
+    touch();
     resetConfirm();
-    paint(); save();
+    paint(); save(); syncSoon(2000);
   });
 
   document.getElementById("field").addEventListener("mousedown", function(e){
@@ -484,6 +638,12 @@
     setTimeout(function(){ el.input.focus(); }, 0);
   });
 
+  function openDrawer(v){
+    el.drawer.classList.toggle("open", v);
+    el.scrim.classList.toggle("on", v);
+    el.drawer.setAttribute("aria-hidden", v ? "false" : "true");
+    if(!v) el.input.focus();
+  }
   document.getElementById("drawerBtn").addEventListener("click", function(){ openDrawer(true); });
   document.getElementById("close").addEventListener("click", function(){ openDrawer(false); });
   el.scrim.addEventListener("click", function(){ openDrawer(false); });
@@ -509,7 +669,7 @@
 
   var clearBtn = document.getElementById("clearAll"), clearArmed = false, clearT = null;
   clearBtn.addEventListener("click", function(){
-    if(!state.drawer.length) return;
+    if(!live().length) return;
     if(!clearArmed){
       clearArmed = true;
       clearBtn.textContent = "한 번 더 누르면 비웁니다";
@@ -519,8 +679,9 @@
     clearTimeout(clearT);
     clearArmed = false;
     clearBtn.textContent = "전체 비우기";
-    state.drawer = [];
-    save(); renderDrawer();
+    var now = new Date().toISOString();
+    state.drawer.forEach(function(p){ if(!p.deleted_at){ p.deleted_at = now; p.updated_at = now; } });
+    save(); renderDrawer(); syncSoon(200);
   });
 
   el.themeBtn.addEventListener("click", function(){
@@ -529,16 +690,25 @@
   });
 
   document.addEventListener("keydown", function(e){
-    if(e.key === "Escape" && el.drawer.classList.contains("open")) openDrawer(false);
+    if(e.key === "Escape"){
+      if(el.gate.classList.contains("on")) closeGate();
+      else if(el.drawer.classList.contains("open")) openDrawer(false);
+    }
     if((e.metaKey || e.ctrlKey) && e.key === "Enter" && document.activeElement !== el.input){
       e.preventDefault(); stash();
     }
   });
 
-  window.addEventListener("resize", grow);
-  window.addEventListener("beforeunload", function(){
-    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+  document.addEventListener("visibilitychange", function(){
+    if(document.hidden){ writeNow(); syncNow(true); }
+    else syncNow(false);
   });
+  window.addEventListener("focus", function(){ syncNow(false); });
+  window.addEventListener("online", function(){ syncNow(false); });
+  window.addEventListener("pagehide", function(){ writeNow(); syncNow(true); });
+  window.addEventListener("beforeunload", writeNow);
+  setInterval(function(){ if(!document.hidden) syncNow(false); }, 30000);
+  window.addEventListener("resize", grow);
 
   /* ── 시작 ── */
   load();
@@ -546,7 +716,8 @@
   el.input.value = state.draft || "";
   paint();
   renderDrawer();
-  el.input.focus();
+  if(state.secret){ status("동기화 중"); syncNow(false); el.input.focus(); }
+  else { status("동기화 꺼짐"); openGate(); }
 })();
 </script>
 </body>
