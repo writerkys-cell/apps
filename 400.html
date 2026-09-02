@@ -298,6 +298,20 @@
     el.stash.textContent = "서랍에 넣기";
   }
 
+  function archive(text){
+    state.drawer.unshift({
+      id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
+      text: text,
+      at: new Date().toISOString(),
+      chars: text.length
+    });
+    state.sentences = [];
+    el.input.value = "";
+    state.draft = "";
+    resetConfirm();
+    paint(); save(); renderDrawer();
+  }
+
   function stash(){
     push();
     var text = accText();
@@ -311,17 +325,7 @@
       confirmTimer = setTimeout(resetConfirm, 4000);
       return;
     }
-    state.drawer.unshift({
-      id: Date.now() + "-" + Math.random().toString(36).slice(2, 7),
-      text: text,
-      at: new Date().toISOString(),
-      chars: chars
-    });
-    state.sentences = [];
-    el.input.value = "";
-    state.draft = "";
-    resetConfirm();
-    paint(); save(); renderDrawer();
+    archive(text);
     flash(el.stash, "서랍에 넣었습니다", "서랍에 넣기");
     el.input.focus();
   }
@@ -468,9 +472,15 @@
     var text = accText();
     if(text.length < GOAL) return;
     toClipboard(text, function(ok){
-      el.toScriv.textContent = ok ? "복사됨 · 스크리브너 실행" : "복사 실패";
+      if(!ok){
+        el.toScriv.textContent = "복사 실패";
+        setTimeout(function(){ el.toScriv.textContent = "스크리브너로"; }, 2000);
+        return;
+      }
+      archive(text);
+      el.toScriv.textContent = "서랍에 넣고 스크리브너로";
       setTimeout(function(){ el.toScriv.textContent = "스크리브너로"; }, 2000);
-      if(ok) window.location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent("스크리브너");
+      window.location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent("스크리브너");
     });
     el.input.focus();
   });
