@@ -157,7 +157,51 @@ ol.list li .body{flex:1;padding:.42rem .3rem .5rem 0;line-height:1.6}
 ol.list li.done .body{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft);text-decoration-thickness:1px}
 ol.list li.act .body{font-weight:700}
 ol.list li .del{color:var(--ink-faint);font-size:.85rem;padding:.45rem .35rem;visibility:hidden;flex:none}
-ol.list li:hover .del,ol.list li:focus-within .del{visibility:visible}
+ol.list li .mv{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
+ol.list li .lost{
+  font-size:.75rem;color:var(--ink-faint);flex:none;padding:.55rem .1rem 0;
+  min-width:1.3rem;text-align:right;
+}
+ol.list li:hover .del,ol.list li:focus-within .del,
+ol.list li:hover .mv,ol.list li:focus-within .mv{visibility:visible}
+@media (hover:none){
+  ol.list li .del,ol.list li .mv,.fixed li button.x{visibility:visible}
+}
+
+/* ── 뿌리 한 바퀴 ── */
+.lapnote{
+  border:1px solid var(--seal-soft);background:var(--seal-wash);
+  color:var(--seal);padding:.7rem .9rem;border-radius:2px;
+  font-size:.9rem;line-height:1.6;margin-bottom:1.4rem;
+}
+.lapnote span{display:block;color:var(--ink-soft);font-size:.83rem;margin-top:.15rem}
+
+/* ── 매듭 ── */
+.knot .day{border-bottom:1px solid var(--rule);padding:0 0 1.4rem;margin-bottom:1.4rem}
+.knot .day.today{border-bottom-width:2px;border-bottom-color:var(--ink)}
+.knot h3{font-size:.95rem;font-weight:700;margin:0 0 .7rem;letter-spacing:.04em}
+.knot h3 span{font-weight:400;color:var(--ink-faint);margin-left:.4rem}
+.knot h3 em{font-style:normal;color:var(--seal);font-size:.82rem;margin-left:.5rem}
+.knot .none{color:var(--ink-faint);font-size:.9rem;margin:0}
+ol.did{list-style:none;margin:0;padding:0;counter-reset:d}
+ol.did li{display:flex;gap:.7rem;padding:.16rem 0;line-height:1.65;align-items:baseline}
+ol.did li::before{
+  counter-increment:d;content:counter(d);
+  flex:none;width:1.1rem;text-align:right;
+  font-size:.75rem;color:var(--seal-soft);
+}
+ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
+.laps{display:flex;align-items:center;gap:.35rem;margin-top:.9rem}
+.laps i{width:13px;height:13px;border:2px solid var(--seal);border-radius:50%;display:block}
+.laps span{font-size:.82rem;color:var(--seal);margin-left:.3rem}
+.knotbtn{
+  display:block;width:100%;margin-top:1.2rem;padding:.75rem 0;
+  border:1px solid var(--ink);border-radius:2px;background:var(--ink);color:var(--paper);font-size:.95rem;
+}
+.knot .hint{font-size:.8rem;color:var(--ink-faint);margin:.5rem 0 0;text-align:center}
+
+.set label.row{display:flex;align-items:center;gap:.5rem;margin-top:1rem;color:var(--ink)}
+.set label.row input{width:1rem;height:1rem;accent-color:var(--seal)}
 .addrow{display:flex;gap:.6rem;margin-top:1.2rem;padding-left:var(--gut)}
 #todayAdd{padding-left:0;margin-top:2.4rem;border-top:1px solid var(--rule);padding-top:1rem}
 .addrow input{flex:1;background:none;border:none;border-bottom:1px solid var(--rule);padding:.4rem 0}
@@ -217,6 +261,7 @@ ol.list li:hover .del,ol.list li:focus-within .del{visibility:visible}
 <nav>
   <button data-v="today" class="sel">오늘</button>
   <button data-v="list">목록</button>
+  <button data-v="knot">매듭</button>
   <button data-v="set">설정</button>
 </nav>
 
@@ -246,8 +291,12 @@ ol.list li:hover .del,ol.list li:focus-within .del{visibility:visible}
   </div>
   <div class="listfoot">
     <button id="btnReset">선별 폐기</button>
-    <button id="btnPurge">끝낸 항목 치우기</button>
   </div>
+</div>
+
+<!-- ─────────── 매듭 ─────────── -->
+<div class="view knot" id="v-knot">
+  <div id="knotBox"></div>
 </div>
 
 <!-- ─────────── 설정 ─────────── -->
@@ -259,6 +308,8 @@ ol.list li:hover .del,ol.list li:focus-within .del{visibility:visible}
     <input type="text" id="sDevice" placeholder="맥북">
     <label for="sShortcut">실행 화면에 띄울 단축어</label>
     <input type="text" id="sShortcut" placeholder="포모도로">
+    <label class="row"><input type="checkbox" id="sLost"> 목록에 진 횟수 보이기</label>
+    <p style="margin-top:.4rem">훑기에서 밀린 횟수입니다. 자꾸 지는 항목은 게으름이 아니라 잘못 적힌 항목일 때가 많습니다. 숫자가 신경 쓰이면 꺼두세요.</p>
   </section>
 
   <section>
@@ -333,8 +384,8 @@ cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',shortcut:'포모도
 if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
 const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
 
-const blank = () => ({v:1, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', updatedAt:now()});
-let S = JSON.parse(LS.get('bangjeom.state') || 'null') || blank();
+const blank = () => ({v:2, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], updatedAt:now()});
+let S = Object.assign(blank(), JSON.parse(LS.get('bangjeom.state') || 'null') || {});
 
 /* ══════════ 알고리즘 ══════════ */
 const byId = id => S.tasks.find(t => t.id === id);
@@ -365,21 +416,44 @@ const benchmark = () => byId(S.chain[S.chain.length - 1]);
 function answer(yes){
   const c = candidate(); if(!c) return;
   if(yes) S.chain.push(c.id);
+  else c.lost = (c.lost || 0) + 1;        // 몇 번이나 밀렸는지 세어둔다
   S.cursor = c.id;
   commit();
 }
 
+let lapFlash = false;
+
 function finish(taskId, reentryText){
   const t = byId(taskId); if(!t) return;
+  const wasRoot = S.chain.length === 1 && S.chain[0] === taskId;   // 뿌리까지 내려왔다
   t.done = true; t.doneAt = now();
   S.chain = S.chain.filter(id => id !== taskId);
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
   if(reentryText && reentryText.trim()){
-    const re = {id:uid(), text:reentryText.trim(), done:false, doneAt:null, createdAt:now()};
-    S.tasks.push(re);
-    S.cursor = re.id;                      // 방금 미룬 것은 다시 견주지 않고 다음 방점으로
+    S.tasks.push({id:uid(), text:reentryText.trim(), done:false, doneAt:null, createdAt:now(), lost:0});
   }
+  if(wasRoot){ S.laps.push(now()); S.laps = S.laps.slice(-300); lapFlash = true; }
   commit();
+}
+
+// 포스터의 유일한 우선순위 조작: 급해진 것은 점을 지우고 끝으로 옮긴다
+function moveEnd(id){
+  const i = idxOf(id); if(i < 0) return;
+  const t = S.tasks[i];
+  if(t.done) return;
+  if(S.cursor === id) S.cursor = i > 0 ? S.tasks[i-1].id : null;
+  S.chain = S.chain.filter(x => x !== id);
+  S.tasks.splice(i,1);
+  S.tasks.push(t);
+  commit();
+}
+
+// 사라질 항목을 커서가 가리키고 있으면 앞쪽의 살아남는 항목으로 옮긴다
+function rescueCursor(ids){
+  if(!S.cursor || !ids.has(S.cursor)) return;
+  let i = idxOf(S.cursor);
+  while(i >= 0 && ids.has(S.tasks[i].id)) i--;
+  S.cursor = i >= 0 ? S.tasks[i].id : null;
 }
 
 function drop(taskId){
@@ -393,7 +467,7 @@ function drop(taskId){
 function addTask(text){
   if(!text.trim()) return;
   const wasReady = !candidate();           // 실행 중이었다면 화면을 흔들지 않는다
-  const t = {id:uid(), text:text.trim(), done:false, doneAt:null, createdAt:now()};
+  const t = {id:uid(), text:text.trim(), done:false, doneAt:null, createdAt:now(), lost:0};
   S.tasks.push(t);
   if(wasReady && S.chain.length) S.cursor = t.id;
   commit();
@@ -401,11 +475,35 @@ function addTask(text){
 
 function resetChain(){ S.chain = []; S.cursor = null; commit(); }
 
-function purgeDone(){
-  const keep = new Set(S.chain);
-  S.tasks = S.tasks.filter(t => !t.done || keep.has(t.id));
-  if(S.cursor && !byId(S.cursor)) S.cursor = null;
+// 하루의 매듭: 끝낸 항목을 날짜별로 갈무리하고 목록에서 걷어낸다
+function knot(){
+  const done = S.tasks.filter(t => t.done);
+  if(!done.length) return 0;
+  const bucket = {};
+  done.forEach(t => {
+    const d = localDate(t.doneAt ? new Date(t.doneAt) : null);
+    (bucket[d] = bucket[d] || []).push(t);
+  });
+  Object.keys(bucket).forEach(d => {
+    const items = bucket[d]
+      .sort((a,b) => (a.doneAt||'').localeCompare(b.doneAt||''))
+      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0}));
+    const laps = S.laps.filter(x => localDate(new Date(x)) === d).length;
+    const prev = S.log.find(e => e.date === d);
+    if(prev){
+      prev.items = prev.items.concat(items);
+      prev.laps = Math.max(prev.laps||0, laps);
+    } else {
+      S.log.push({date:d, items, laps});
+    }
+  });
+  S.log.sort((a,b) => b.date.localeCompare(a.date));
+  S.log = S.log.slice(0,90);
+  const ids = new Set(done.map(t => t.id));
+  rescueCursor(ids);
+  S.tasks = S.tasks.filter(t => !ids.has(t.id));
   commit();
+  return done.length;
 }
 
 /* ══════════ 고정 블록 ══════════ */
@@ -464,6 +562,7 @@ function render(){
   renderFixed();
   renderStage();
   renderList();
+  renderKnot();
 }
 
 function renderFixed(){
@@ -480,8 +579,12 @@ function renderStage(){
   const box = $('#stage');
   ensureChain();
 
+  const lap = lapFlash
+    ? `<div class="lapnote">사슬이 목록의 첫 항목까지 내려갔습니다. 한 바퀴 돌았습니다.
+       <span>여기서부터 새 사슬이 시작됩니다.</span></div>` : '';
+
   if(!S.tasks.some(t => !t.done)){
-    box.innerHTML = `<div class="empty"><strong>목록이 비어 있습니다</strong>
+    box.innerHTML = lap + `<div class="empty"><strong>목록이 비어 있습니다</strong>
       지금 마음에 걸리는 일 예닐곱 개로 시작하세요.<br>한꺼번에 채우면 오래 못 씁니다.</div>`;
     return;
   }
@@ -490,7 +593,7 @@ function renderStage(){
 
   if(c){ // ── 훑는 중
     const b = benchmark();
-    box.innerHTML = `
+    box.innerHTML = lap + `
       <div class="bench"><span class="lab">지금 기준</span><span class="txt">${esc(b.text)}</span></div>
       <div class="q">이걸 더 하고 싶은가?</div>
       <div class="cand">${esc(c.text)}</div>
@@ -499,20 +602,20 @@ function renderStage(){
         <button class="yes" id="ansYes">더 하고 싶다</button>
       </div>
       <button class="skip" id="skipAll">훑기 그만두고 지금 사슬로</button>`;
-    $('#ansYes').onclick = () => answer(true);
-    $('#ansNo').onclick  = () => answer(false);
-    $('#skipAll').onclick = () => { S.cursor = S.tasks[S.tasks.length-1].id; commit(); };
+    $('#ansYes').onclick = () => { lapFlash = false; answer(true); };
+    $('#ansNo').onclick  = () => { lapFlash = false; answer(false); };
+    $('#skipAll').onclick = () => { lapFlash = false; S.cursor = S.tasks[S.tasks.length-1].id; commit(); };
     return;
   }
 
   // ── 사슬 완성, 실행
   const a = benchmark();
-  if(!a){ box.innerHTML = `<div class="empty">끝났습니다.</div>`; return; }
+  if(!a){ box.innerHTML = lap + `<div class="empty">끝났습니다.</div>`; return; }
 
   const trail = S.chain.map((id,i) =>
     (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text))).join('');
 
-  box.innerHTML = `
+  box.innerHTML = lap + `
     <div class="chainbar" style="text-align:center">${trail}</div>
     <div class="now">
       <span class="lab">지금 할 일</span>
@@ -529,9 +632,9 @@ function renderStage(){
   if(cfg.shortcut) $('#btnSc').onclick = () =>
     location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(cfg.shortcut);
 
-  $('#actDone').onclick = () => { reentryOpen = null; finish(a.id, null); };
-  $('#actDrop').onclick = () => { reentryOpen = null; drop(a.id); };
-  $('#actPart').onclick = () => { reentryOpen = a.id; reentryTag = -1; renderReentry(a); };
+  $('#actDone').onclick = () => { reentryOpen = null; lapFlash = false; finish(a.id, null); };
+  $('#actDrop').onclick = () => { reentryOpen = null; lapFlash = false; drop(a.id); };
+  $('#actPart').onclick = () => { lapFlash = false; reentryOpen = a.id; reentryTag = -1; renderReentry(a); };
 
   if(reentryOpen === a.id) renderReentry(a);
 }
@@ -575,16 +678,54 @@ function renderList(){
     const dot = k >= 0
       ? `<span class="ord">${k+1}</span><span class="dot ${t.id===act?'head':''}"></span>`
       : (t.done ? '<span class="ord">✓</span>' : '');
+    const lost = (!t.done && cfg.showLost !== false && t.lost)
+      ? `<span class="lost" title="${t.lost}번 밀렸습니다">${t.lost}</span>` : '';
+    const mv = t.done ? '' : `<button class="mv" data-end="${t.id}">끝으로</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''}">
       <span class="gutter">${dot}</span>
       <span class="body">${esc(t.text)}</span>
+      ${lost}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>`;
   }).join('') || `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`;
 }
 
+function renderKnot(){
+  const today = localDate();
+  const doneAll = S.tasks.filter(t => t.done);
+  const mine = doneAll
+    .filter(t => localDate(t.doneAt ? new Date(t.doneAt) : null) === today)
+    .sort((a,b) => (a.doneAt||'').localeCompare(b.doneAt||''));
+  const lapsToday = S.laps.filter(x => localDate(new Date(x)) === today).length;
+  const hh = iso => { const d = new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+
+  let h = `<div class="day today"><h3>오늘 한 일 <span>${mine.length}</span></h3>`;
+  h += mine.length
+    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${esc(t.text)}</span></li>`).join('')}</ol>`
+    : `<p class="none">아직 없습니다.</p>`;
+  if(lapsToday) h += `<div class="laps">${'<i></i>'.repeat(Math.min(lapsToday,12))}<span>뿌리까지 ${lapsToday}바퀴</span></div>`;
+  if(doneAll.length) h += `<button class="knotbtn" id="btnKnot">하루를 매듭짓다</button>
+    <p class="hint">끝낸 항목 ${doneAll.length}개를 목록에서 걷어내 아래에 남깁니다.</p>`;
+  h += `</div>`;
+
+  h += S.log.slice(0,20).map(e => `
+    <div class="day">
+      <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span>${e.laps?`<em>${e.laps}바퀴</em>`:''}</h3>
+      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${esc(i.text)}</span></li>`).join('')}</ol>
+    </div>`).join('');
+
+  if(!mine.length && !doneAll.length && !S.log.length)
+    h = `<div class="empty"><strong>아직 매듭지을 게 없습니다</strong>일을 끝내면 여기 순서대로 쌓입니다.</div>`;
+
+  $('#knotBox').innerHTML = h;
+  const b = $('#btnKnot');
+  if(b) b.onclick = () => { const n = knot(); if(n) toast(n + '개를 갈무리했습니다'); };
+}
+
 /* ══════════ 클릭 ══════════ */
 document.addEventListener('click', e => {
+  const m = e.target.closest('[data-end]');
+  if(m){ moveEnd(m.dataset.end); return; }
   const d = e.target.closest('[data-del]');
   if(d){ drop(d.dataset.del); return; }
   const f = e.target.closest('[data-fix]');
@@ -631,7 +772,6 @@ wireEnter($('#fixedIn'), v => {
   commit();
 });
 $('#btnReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
-$('#btnPurge').onclick = () => { if(confirm('끝낸 항목을 목록에서 치웁니까?')) purgeDone(); };
 
 /* ══════════ 설정 ══════════ */
 const fields = {sUrl:'url', sKey:'key', sList:'list', sDevice:'device', sShortcut:'shortcut'};
@@ -640,6 +780,8 @@ Object.entries(fields).forEach(([el,k]) => {
   n.value = cfg[k] || '';
   n.addEventListener('change', () => { cfg[k] = n.value.trim(); saveCfg(); render(); });
 });
+$('#sLost').checked = cfg.showLost !== false;
+$('#sLost').addEventListener('change', e => { cfg.showLost = e.target.checked; saveCfg(); render(); });
 
 $('#btnSql').onclick = async () => {
   try{ await navigator.clipboard.writeText($('#sql').textContent); toast('복사했습니다'); }
