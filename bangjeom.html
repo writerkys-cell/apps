@@ -121,7 +121,8 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .acts button{padding:.8rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.98rem}
 .acts .done{grid-column:1/-1;background:var(--seal);border-color:var(--seal);color:#fff8f2}
 .acts .drop{border-color:var(--rule);color:var(--ink-soft)}
-.shortcut{display:block;margin:1.1rem auto 0;color:var(--seal);font-size:.9rem;border-bottom:1px solid var(--seal-wash);padding-bottom:2px}
+.scrow{display:flex;justify-content:center;gap:1.6rem;margin-top:1.1rem}
+.shortcut{color:var(--seal);font-size:.92rem;border-bottom:1px solid var(--seal-wash);padding-bottom:2px}
 
 /* ── 다시 적기 ── */
 .reentry{margin-top:1.6rem;border-top:1px solid var(--rule);padding-top:1.3rem}
@@ -306,8 +307,10 @@ ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
     <p>기기 이름은 어느 쪽에서 고쳤는지 표시하는 데만 씁니다.</p>
     <label for="sDevice">이 기기</label>
     <input type="text" id="sDevice" placeholder="맥북">
-    <label for="sShortcut">실행 화면에 띄울 단축어</label>
+    <label for="sShortcut">실행 화면의 단축어 두 개</label>
     <input type="text" id="sShortcut" placeholder="포모도로">
+    <input type="text" id="sShortcut2" placeholder="추가" style="margin-top:.4rem">
+    <p style="margin-top:.4rem">적어둔 이름 그대로 버튼이 됩니다. 비워두면 그 버튼은 나오지 않습니다.</p>
     <label class="row"><input type="checkbox" id="sLost"> 목록에 진 횟수 보이기</label>
     <p style="margin-top:.4rem">훑기에서 밀린 횟수입니다. 자꾸 지는 항목은 게으름이 아니라 잘못 적힌 항목일 때가 많습니다. 숫자가 신경 쓰이면 꺼두세요.</p>
   </section>
@@ -325,8 +328,10 @@ ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
       <button class="primary" id="btnConnect">연결하기</button>
       <button id="btnPull">지금 받아오기</button>
       <button id="btnPush">지금 올리기</button>
+      <button id="btnRestore">직전으로 되돌리기</button>
     </div>
     <div class="note" id="syncNote"></div>
+    <p style="margin-top:.7rem">새로 설정한 기기가 빈 목록으로 서버를 덮어쓰지 않도록 막아둡니다. 목록이 크게 줄어드는 변경을 올릴 때는 직전 상태를 서버에 한 벌 남기니, 사고가 나면 되돌리기로 살릴 수 있습니다.</p>
   </section>
 
   <section>
@@ -380,7 +385,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 const now = () => new Date().toISOString();
 
 let cfg = JSON.parse(LS.get('bangjeom.cfg') || '{}');
-cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',shortcut:'포모도로'}, cfg);
+cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',shortcut:'포모도로',shortcut2:'추가'}, cfg);
 if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
 const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
 
@@ -615,12 +620,14 @@ function renderStage(){
   const trail = S.chain.map((id,i) =>
     (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text))).join('');
 
+  const sc = [cfg.shortcut, cfg.shortcut2].filter(s => s && s.trim());
   box.innerHTML = lap + `
     <div class="chainbar" style="text-align:center">${trail}</div>
     <div class="now">
       <span class="lab">지금 할 일</span>
       <div><span class="txt">${esc(a.text)}</span></div>
-      ${cfg.shortcut ? `<button class="shortcut" id="btnSc">${esc(cfg.shortcut)} 실행</button>` : ''}
+      ${sc.length ? `<div class="scrow">${sc.map((s,i) =>
+        `<button class="shortcut" data-sc="${i}">${esc(s)}</button>`).join('')}</div>` : ''}
     </div>
     <div class="acts">
       <button class="done" id="actDone">끝냈다</button>
@@ -629,8 +636,8 @@ function renderStage(){
     </div>
     <div id="reBox"></div>`;
 
-  if(cfg.shortcut) $('#btnSc').onclick = () =>
-    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(cfg.shortcut);
+  box.querySelectorAll('[data-sc]').forEach(b => b.onclick = () =>
+    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(sc[+b.dataset.sc]));
 
   $('#actDone').onclick = () => { reentryOpen = null; lapFlash = false; finish(a.id, null); };
   $('#actDrop').onclick = () => { reentryOpen = null; lapFlash = false; drop(a.id); };
@@ -774,7 +781,7 @@ wireEnter($('#fixedIn'), v => {
 $('#btnReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
 
 /* ══════════ 설정 ══════════ */
-const fields = {sUrl:'url', sKey:'key', sList:'list', sDevice:'device', sShortcut:'shortcut'};
+const fields = {sUrl:'url', sKey:'key', sList:'list', sDevice:'device', sShortcut:'shortcut', sShortcut2:'shortcut2'};
 Object.entries(fields).forEach(([el,k]) => {
   const n = $('#'+el);
   n.value = cfg[k] || '';
@@ -808,6 +815,10 @@ $('#fileIn').onchange = async e => {
 /* ══════════ 동기화 ══════════ */
 let sb = null, chan = null, lastRemote = '';
 
+// 목록·고정 블록·매듭 기록을 합친 개수. 덮어쓰기 사고를 가리는 잣대로 쓴다
+const total = st => (st.tasks||[]).length + (st.fixed||[]).length
+  + (st.log||[]).reduce((n,e) => n + ((e.items||[]).length), 0);
+
 function setSync(cls, txt){
   const el = $('#sync'); el.className = 'sync ' + cls; $('#syncTxt').textContent = txt;
 }
@@ -835,45 +846,84 @@ async function connect(silent){
   }
 }
 
+function adopt(remote, from){
+  S = Object.assign(blank(), remote);
+  LS.set('bangjeom.state', JSON.stringify(S));
+  reentryOpen = null; lapFlash = false;
+  render();
+  if(from) toast(from + '에서 받아왔습니다');
+}
+
 function apply(row){
   if(!row || !row.data) return;
   if(row.updated_at === lastRemote) return;
   if(row.device === cfg.device && row.updated_at <= (S.updatedAt||'')) return;
-  if((row.data.updatedAt||'') <= (S.updatedAt||'')) return;
+  // 이 기기가 빈 상태라면 시각과 상관없이 서버 것을 따른다
+  const fresh = total(S) === 0 && total(row.data) > 0;
+  if(!fresh && (row.data.updatedAt||'') <= (S.updatedAt||'')) return;
   lastRemote = row.updated_at;
-  S = Object.assign(blank(), row.data);
-  LS.set('bangjeom.state', JSON.stringify(S));
-  reentryOpen = null;
-  render();
-  toast((row.device||'다른 기기') + '에서 고침');
+  adopt(row.data, row.device || '다른 기기');
 }
 
-async function pull(quiet){
+async function pull(quiet, force){
   if(!sb) return;
   const { data, error } = await sb.from('bangjeom').select('*').eq('id', cfg.list).maybeSingle();
   if(error){ if(!quiet) toast('받아오지 못했습니다'); return; }
-  if(!data){ await push(); return; }
+  if(!data){ if(total(S)) await push(); return; }
   lastRemote = '';
-  if((data.data.updatedAt||'') > (S.updatedAt||'')){
+  const newer = (data.data.updatedAt||'') > (S.updatedAt||'');
+  const fresh = total(S) === 0 && total(data.data) > 0;   // 새로 설정한 기기
+  if(force || newer || fresh){
     lastRemote = data.updated_at;
-    S = Object.assign(blank(), data.data);
-    LS.set('bangjeom.state', JSON.stringify(S));
-    render();
-    if(!quiet) toast('받아왔습니다');
+    adopt(data.data, quiet ? null : (data.device || '서버'));
   } else if(!quiet) toast('이미 최신입니다');
 }
 
 async function push(){
   if(!sb) return;
   setSync('busy','올리는 중');
+  const { data: cur } = await sb.from('bangjeom')
+    .select('data,device,updated_at').eq('id', cfg.list).maybeSingle();
+
+  if(cur && cur.data){
+    const there = total(cur.data), here = total(S);
+    // 내용이 있던 자리를 빈 것으로, 또는 절반 아래로 줄여 덮어쓰려 할 때는 묻는다
+    if(there > 0 && (here === 0 || (there >= 6 && here < there/2))){
+      const ok = confirm(
+        `서버에는 ${there}개, 이 기기에는 ${here}개가 있습니다.\n` +
+        `이대로 올리면 서버 쪽이 이 기기 상태로 덮어씌워집니다.\n\n` +
+        `확인 — 그대로 올립니다\n취소 — 올리지 않고 서버 것을 받아옵니다`);
+      if(!ok){ await pull(false, true); return; }
+    }
+    // 줄어드는 변경이면 직전 상태를 한 벌 남겨둔다
+    if(there > here){
+      await sb.from('bangjeom').upsert({
+        id: cfg.list + ':backup', data: cur.data,
+        device: (cur.device||'') + ' 직전', updated_at: now()});
+    }
+  }
+
   const { error } = await sb.from('bangjeom')
     .upsert({id:cfg.list, data:S, device:cfg.device, updated_at:now()});
   setSync(error ? 'err' : 'on', error ? '올리지 못함' : cfg.device + ' · 연결됨');
 }
 
+async function restore(){
+  if(!sb) return toast('먼저 연결하세요');
+  const { data } = await sb.from('bangjeom')
+    .select('data,device,updated_at').eq('id', cfg.list + ':backup').maybeSingle();
+  if(!data || !data.data) return toast('남겨둔 것이 없습니다');
+  const when = new Date(data.updated_at).toLocaleString('ko-KR');
+  if(!confirm(`${when}에 남긴 ${total(data.data)}개짜리 목록으로 되돌립니다.\n지금 목록은 사라집니다.`)) return;
+  adopt(data.data, null);
+  await push();
+  toast('되돌렸습니다');
+}
+
 $('#btnConnect').onclick = () => connect(false);
 $('#btnPull').onclick = () => sb ? pull(false) : toast('먼저 연결하세요');
 $('#btnPush').onclick = () => sb ? push().then(() => toast('올렸습니다')) : toast('먼저 연결하세요');
+$('#btnRestore').onclick = restore;
 
 // 아이폰에서 앱을 다시 열 때 최신 상태를 당겨오고, 날짜가 넘어갔는지도 본다
 document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); if(sb) pull(true); } });
