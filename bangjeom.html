@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="방점">
+<meta name="theme-color" content="#f4efe3">
+<title>방점</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%23f2ead9'/><g stroke='%23cfc3ab' stroke-width='5' stroke-linecap='round'><path d='M28 62h124'/><path d='M28 100h124'/><path d='M28 138h124'/></g><path d='M56 94 76 114 134 56' fill='none' stroke='%239b2c25' stroke-width='16' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4efe3;
+  --paper-2:#ece4d3;
+  --paper-3:#e3d9c4;
+  --ink:#26221f;
+  --ink-soft:#6d6459;
+  --ink-faint:#9a9084;
+  --rule:#d6cbb5;
+  --seal:#9b2c25;
+  --seal-soft:#bf6d64;
+  --seal-wash:#f0dcd8;
+  --gut:44px;
+  --w:38rem;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Gowun Batang',serif;
+  font-size:17px;
+  line-height:1.75;
+  -webkit-text-size-adjust:100%;
+  padding-env:0;
+}
+button,input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none;padding:0}
+:focus-visible{outline:2px solid var(--seal);outline-offset:2px}
+
+.wrap{max-width:var(--w);margin:0 auto;padding:0 1.1rem calc(3rem + env(safe-area-inset-bottom))}
+
+/* ── 머리 ── */
+header{
+  display:flex;align-items:baseline;gap:.7rem;
+  padding:calc(1.4rem + env(safe-area-inset-top)) 0 .5rem;
+}
+.logo{font-size:1.45rem;font-weight:700;letter-spacing:.22em;margin:0}
+.logo b{color:var(--seal);font-weight:700}
+.sync{margin-left:auto;font-size:.78rem;color:var(--ink-faint);display:flex;align-items:center;gap:.4rem;line-height:1}
+.sync i{width:7px;height:7px;border-radius:50%;background:var(--ink-faint);display:block}
+.sync.on i{background:#4a7c4e}
+.sync.busy i{background:var(--seal-soft)}
+.sync.err i{background:var(--seal)}
+
+nav{display:flex;gap:1.4rem;border-bottom:1px solid var(--rule);margin-bottom:1.6rem}
+nav button{padding:.45rem 0 .55rem;color:var(--ink-faint);font-size:.95rem;letter-spacing:.06em;border-bottom:2px solid transparent;margin-bottom:-1px}
+nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
+
+.view{display:none}
+.view.sel{display:block}
+
+/* ── 고정 블록 ── */
+.fixed{border-left:3px double var(--seal-soft);padding:.1rem 0 .1rem .85rem;margin-bottom:2rem}
+.fixed h2{font-size:.82rem;font-weight:400;color:var(--ink-faint);letter-spacing:.14em;margin:0 0 .45rem}
+.fixed h2 span{letter-spacing:0;margin-left:.6rem;font-size:.78rem;color:var(--ink-faint);opacity:.8}
+.fixed ul{list-style:none;margin:0;padding:0}
+.fixed li{display:flex;align-items:flex-start;gap:.55rem;padding:.12rem 0}
+.fixed li button.chk{
+  width:1.05rem;height:1.05rem;flex:none;margin-top:.42rem;position:relative;
+  border:1px solid var(--ink-faint);border-radius:2px;background:var(--paper);
+}
+.fixed li.done button.chk{background:var(--seal);border-color:var(--seal)}
+.fixed li.done button.chk::after{
+  content:'✓';position:absolute;inset:0;color:var(--paper);
+  font-size:.72rem;line-height:1rem;text-align:center;
+}
+.fixed li.done span{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft)}
+.fixed li span{flex:1}
+.fixed li button.x{color:var(--ink-faint);font-size:.85rem;padding:0 .3rem;visibility:hidden}
+.fixed li:hover button.x,.fixed li:focus-within button.x{visibility:visible}
+.fixed .add{display:flex;gap:.5rem;margin-top:.5rem}
+.fixed .add input{flex:1;background:none;border:none;border-bottom:1px dotted var(--rule);padding:.2rem 0;font-size:.92rem}
+.fixed .add input::placeholder{color:var(--ink-faint)}
+
+/* ── 훑기 ── */
+.stage{padding:.5rem 0 0}
+.bench{
+  border:1px solid var(--rule);background:var(--paper-2);
+  padding:.9rem 1.05rem;border-radius:2px;
+}
+.bench .lab{font-size:.78rem;color:var(--ink-soft);letter-spacing:.1em;display:block;margin-bottom:.15rem}
+.bench .txt{font-size:1.05rem;line-height:1.5}
+.q{text-align:center;color:var(--ink-soft);font-size:.95rem;margin:1.5rem 0 1.1rem;position:relative}
+.q::before,.q::after{content:'';position:absolute;top:50%;width:2.2rem;height:1px;background:var(--rule)}
+.q::before{left:0}.q::after{right:0}
+.cand{
+  border:1px solid var(--ink);border-left:4px solid var(--seal);
+  padding:1.3rem 1.15rem;border-radius:2px;background:#fbf8f1;
+  font-size:1.35rem;line-height:1.5;
+}
+.answers{display:flex;gap:.7rem;margin-top:1.3rem}
+.answers button{flex:1;padding:.85rem 0;border-radius:2px;font-size:1rem;letter-spacing:.05em;border:1px solid var(--ink)}
+.answers .yes{background:var(--seal);border-color:var(--seal);color:#fff8f2}
+.answers .no{background:none;color:var(--ink)}
+.skip{display:block;margin:1.1rem auto 0;color:var(--ink-faint);font-size:.85rem;border-bottom:1px dotted var(--rule);padding-bottom:1px}
+
+/* ── 실행 ── */
+.now{text-align:center;padding:.4rem 0 0}
+.now .lab{font-size:.8rem;color:var(--ink-soft);letter-spacing:.16em}
+.now .txt{
+  font-size:1.6rem;line-height:1.45;margin:.7rem auto 0;max-width:22ch;
+  border-bottom:2px solid var(--seal);display:inline-block;padding-bottom:.35rem;
+}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-top:1.9rem}
+.acts button{padding:.8rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.98rem}
+.acts .done{grid-column:1/-1;background:var(--seal);border-color:var(--seal);color:#fff8f2}
+.acts .drop{border-color:var(--rule);color:var(--ink-soft)}
+.shortcut{display:block;margin:1.1rem auto 0;color:var(--seal);font-size:.9rem;border-bottom:1px solid var(--seal-wash);padding-bottom:2px}
+
+/* ── 다시 적기 ── */
+.reentry{margin-top:1.6rem;border-top:1px solid var(--rule);padding-top:1.3rem}
+.reentry h3{font-size:.95rem;font-weight:400;margin:0 0 .2rem}
+.reentry p{font-size:.85rem;color:var(--ink-soft);margin:0 0 .8rem;line-height:1.6}
+.tags{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.9rem}
+.tags button{
+  font-size:.85rem;padding:.28rem .6rem;border:1px solid var(--rule);
+  border-radius:999px;color:var(--ink-soft);background:var(--paper-2);
+}
+.tags button.sel{background:var(--seal-wash);border-color:var(--seal-soft);color:var(--seal)}
+.reentry textarea{
+  width:100%;min-height:3.6rem;resize:vertical;padding:.6rem .7rem;
+  background:#fbf8f1;border:1px solid var(--rule);border-radius:2px;line-height:1.6;
+}
+.reentry .row{display:flex;gap:.6rem;margin-top:.7rem}
+.reentry .row button{flex:1;padding:.65rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.93rem}
+.reentry .row .go{background:var(--ink);color:var(--paper)}
+
+/* ── 목록 ── */
+.chainbar{font-size:.83rem;color:var(--ink-soft);margin-bottom:1.1rem;line-height:1.7}
+.chainbar em{font-style:normal;color:var(--seal)}
+ol.list{list-style:none;margin:0;padding:0}
+ol.list li{display:flex;align-items:flex-start;min-height:2rem;border-bottom:1px dotted var(--rule)}
+ol.list li .gutter{
+  width:var(--gut);flex:none;padding-top:.52rem;
+  display:flex;align-items:center;justify-content:center;gap:.18rem;
+}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--seal);display:block}
+.dot.head{box-shadow:0 0 0 3px var(--seal-wash)}
+.ord{font-size:.7rem;color:var(--seal-soft);line-height:1}
+ol.list li .body{flex:1;padding:.42rem .3rem .5rem 0;line-height:1.6}
+ol.list li.done .body{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft);text-decoration-thickness:1px}
+ol.list li.act .body{font-weight:700}
+ol.list li .del{color:var(--ink-faint);font-size:.85rem;padding:.45rem .35rem;visibility:hidden;flex:none}
+ol.list li:hover .del,ol.list li:focus-within .del{visibility:visible}
+.addrow{display:flex;gap:.6rem;margin-top:1.2rem;padding-left:var(--gut)}
+#todayAdd{padding-left:0;margin-top:2.4rem;border-top:1px solid var(--rule);padding-top:1rem}
+.addrow input{flex:1;background:none;border:none;border-bottom:1px solid var(--rule);padding:.4rem 0}
+.addrow input::placeholder{color:var(--ink-faint)}
+.addrow button{color:var(--seal);padding:0 .3rem;font-size:.95rem}
+.listfoot{display:flex;gap:1.2rem;margin-top:1.8rem;font-size:.85rem;color:var(--ink-faint)}
+.listfoot button{color:var(--ink-faint);border-bottom:1px dotted var(--rule);padding-bottom:1px}
+
+/* ── 빈 화면 ── */
+.empty{text-align:center;padding:2.5rem 0 1rem;color:var(--ink-soft);line-height:1.9}
+.empty strong{display:block;color:var(--ink);font-weight:400;font-size:1.1rem;margin-bottom:.5rem}
+
+/* ── 설정 ── */
+.set section{margin-bottom:2.1rem}
+.set h2{font-size:.95rem;font-weight:700;margin:0 0 .5rem;letter-spacing:.05em}
+.set p{font-size:.87rem;color:var(--ink-soft);margin:0 0 .8rem;line-height:1.7}
+.set label{display:block;font-size:.82rem;color:var(--ink-soft);margin:.7rem 0 .2rem}
+.set input[type=text],.set input[type=password]{
+  width:100%;padding:.5rem .6rem;background:#fbf8f1;
+  border:1px solid var(--rule);border-radius:2px;font-size:.92rem;
+}
+.set .btns{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.9rem}
+.set .btns button{padding:.55rem 1rem;border:1px solid var(--ink);border-radius:2px;font-size:.9rem}
+.set .btns .primary{background:var(--ink);color:var(--paper)}
+.set pre{
+  background:var(--paper-2);border:1px solid var(--rule);border-radius:2px;
+  padding:.8rem;font-size:.76rem;line-height:1.6;overflow-x:auto;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;
+}
+.note{font-size:.82rem;color:var(--seal);margin-top:.6rem;min-height:1.2em}
+
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(1.4rem + env(safe-area-inset-bottom));
+  background:var(--ink);color:var(--paper);padding:.55rem 1.1rem;border-radius:2px;
+  font-size:.88rem;opacity:0;pointer-events:none;transition:opacity .18s;z-index:9;
+}
+.toast.on{opacity:1}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media (max-width:480px){
+  body{font-size:16px}
+  :root{--gut:38px}
+  .cand{font-size:1.2rem}
+  .now .txt{font-size:1.35rem}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1 class="logo">방<b>점</b></h1>
+  <div class="sync" id="sync"><i></i><span id="syncTxt">혼자 씀</span></div>
+</header>
+
+<nav>
+  <button data-v="today" class="sel">오늘</button>
+  <button data-v="list">목록</button>
+  <button data-v="set">설정</button>
+</nav>
+
+<!-- ─────────── 오늘 ─────────── -->
+<div class="view sel" id="v-today">
+  <div class="fixed" id="fixedBox">
+    <h2>고정 블록 <span>매일 밤 다시 채워집니다</span></h2>
+    <ul id="fixedList"></ul>
+    <div class="add">
+      <input id="fixedIn" placeholder="목록에 올리지 않고 그냥 하는 일" enterkeyhint="done">
+    </div>
+  </div>
+  <div class="stage" id="stage"></div>
+  <div class="addrow" id="todayAdd">
+    <input id="todayIn" placeholder="떠오른 일을 목록 끝에 적어둡니다" enterkeyhint="done">
+    <button id="todayAddBtn">더하기</button>
+  </div>
+</div>
+
+<!-- ─────────── 목록 ─────────── -->
+<div class="view" id="v-list">
+  <div class="chainbar" id="chainbar"></div>
+  <ol class="list" id="listBox"></ol>
+  <div class="addrow">
+    <input id="taskIn" placeholder="할 일을 적습니다" enterkeyhint="done">
+    <button id="taskAdd">더하기</button>
+  </div>
+  <div class="listfoot">
+    <button id="btnReset">선별 폐기</button>
+    <button id="btnPurge">끝낸 항목 치우기</button>
+  </div>
+</div>
+
+<!-- ─────────── 설정 ─────────── -->
+<div class="view set" id="v-set">
+  <section>
+    <h2>기기</h2>
+    <p>기기 이름은 어느 쪽에서 고쳤는지 표시하는 데만 씁니다.</p>
+    <label for="sDevice">이 기기</label>
+    <input type="text" id="sDevice" placeholder="맥북">
+    <label for="sShortcut">실행 화면에 띄울 단축어</label>
+    <input type="text" id="sShortcut" placeholder="포모도로">
+  </section>
+
+  <section>
+    <h2>동기화</h2>
+    <p>Supabase 프로젝트의 주소와 anon 키를 넣으면 맥북과 아이폰이 같은 목록을 봅니다. 한쪽에서 고치면 다른 쪽에 바로 옵니다.</p>
+    <label for="sUrl">프로젝트 URL</label>
+    <input type="text" id="sUrl" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="sKey">anon 키</label>
+    <input type="password" id="sKey" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="sList">목록 이름</label>
+    <input type="text" id="sList" placeholder="bangjeom" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="btns">
+      <button class="primary" id="btnConnect">연결하기</button>
+      <button id="btnPull">지금 받아오기</button>
+      <button id="btnPush">지금 올리기</button>
+    </div>
+    <div class="note" id="syncNote"></div>
+  </section>
+
+  <section>
+    <h2>표 만들기</h2>
+    <p>Supabase의 SQL Editor에 한 번만 붙여넣고 실행하면 됩니다.</p>
+    <pre id="sql">create table if not exists bangjeom (
+  id text primary key,
+  data jsonb not null,
+  device text,
+  updated_at timestamptz not null default now()
+);
+
+alter table bangjeom enable row level security;
+
+create policy "anon read"  on bangjeom for select using (true);
+create policy "anon write" on bangjeom for insert with check (true);
+create policy "anon edit"  on bangjeom for update using (true) with check (true);
+
+alter publication supabase_realtime add table bangjeom;</pre>
+    <div class="btns"><button id="btnSql">복사하기</button></div>
+  </section>
+
+  <section>
+    <h2>백업</h2>
+    <p>목록 전체를 JSON으로 내려받거나 되돌립니다.</p>
+    <div class="btns">
+      <button id="btnExport">내려받기</button>
+      <button id="btnImport">불러오기</button>
+      <input type="file" id="fileIn" accept="application/json" hidden>
+    </div>
+  </section>
+
+  <section>
+    <h2>규칙</h2>
+    <p>맨 위 항목에 점을 찍고, 아래로 내려가며 “이걸 더 하고 싶은가”를 묻습니다. 그렇다면 점을 찍고 그 항목이 새 기준이 됩니다. 끝까지 가면 마지막에 점 찍은 것부터 합니다. 하나를 끝내면 방금 한 자리 이후만 다시 훑습니다. 다 못 해도 됩니다. 조금이라도 했으면 끝에 다시 적습니다.</p>
+  </section>
+</div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ══════════ 저장소 ══════════ */
+const mem = {};
+const LS = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return k in mem ? mem[k] : null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){ mem[k]=v; } }
+};
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const now = () => new Date().toISOString();
+
+let cfg = JSON.parse(LS.get('bangjeom.cfg') || '{}');
+cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',shortcut:'포모도로'}, cfg);
+if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
+const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
+
+const blank = () => ({v:1, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', updatedAt:now()});
+let S = JSON.parse(LS.get('bangjeom.state') || 'null') || blank();
+
+/* ══════════ 알고리즘 ══════════ */
+const byId = id => S.tasks.find(t => t.id === id);
+const idxOf = id => S.tasks.findIndex(t => t.id === id);
+
+// 사슬이 비어 있으면 첫 미실행 항목을 뿌리로 삼는다
+function ensureChain(){
+  S.chain = S.chain.filter(id => { const t = byId(id); return t && !t.done; });
+  if(S.chain.length) return;
+  const root = S.tasks.find(t => !t.done);
+  if(!root){ S.cursor = null; return; }
+  S.chain = [root.id];
+  S.cursor = root.id;
+}
+
+// 다음 후보: 커서 다음 위치부터, 안 끝났고 점 안 찍힌 첫 항목
+function candidate(){
+  const start = S.cursor ? idxOf(S.cursor) + 1 : 0;
+  for(let i = Math.max(start,0); i < S.tasks.length; i++){
+    const t = S.tasks[i];
+    if(!t.done && !S.chain.includes(t.id)) return t;
+  }
+  return null;
+}
+
+const benchmark = () => byId(S.chain[S.chain.length - 1]);
+
+function answer(yes){
+  const c = candidate(); if(!c) return;
+  if(yes) S.chain.push(c.id);
+  S.cursor = c.id;
+  commit();
+}
+
+function finish(taskId, reentryText){
+  const t = byId(taskId); if(!t) return;
+  t.done = true; t.doneAt = now();
+  S.chain = S.chain.filter(id => id !== taskId);
+  S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
+  if(reentryText && reentryText.trim()){
+    const re = {id:uid(), text:reentryText.trim(), done:false, doneAt:null, createdAt:now()};
+    S.tasks.push(re);
+    S.cursor = re.id;                      // 방금 미룬 것은 다시 견주지 않고 다음 방점으로
+  }
+  commit();
+}
+
+function drop(taskId){
+  const i = idxOf(taskId); if(i < 0) return;
+  if(S.cursor === taskId) S.cursor = i > 0 ? S.tasks[i-1].id : null;
+  S.tasks.splice(i,1);
+  S.chain = S.chain.filter(id => id !== taskId);
+  commit();
+}
+
+function addTask(text){
+  if(!text.trim()) return;
+  const wasReady = !candidate();           // 실행 중이었다면 화면을 흔들지 않는다
+  const t = {id:uid(), text:text.trim(), done:false, doneAt:null, createdAt:now()};
+  S.tasks.push(t);
+  if(wasReady && S.chain.length) S.cursor = t.id;
+  commit();
+}
+
+function resetChain(){ S.chain = []; S.cursor = null; commit(); }
+
+function purgeDone(){
+  const keep = new Set(S.chain);
+  S.tasks = S.tasks.filter(t => !t.done || keep.has(t.id));
+  if(S.cursor && !byId(S.cursor)) S.cursor = null;
+  commit();
+}
+
+/* ══════════ 고정 블록 ══════════ */
+const localDate = d => {
+  d = d || new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+};
+// 날짜가 바뀌면 체크가 전부 풀린다. 매일 다시 하는 일이라는 뜻이다.
+function rollFixed(){
+  const today = localDate();
+  if(S.fixedDate === today) return false;
+  S.fixedDate = today;
+  S.fixed.forEach(f => f.done = false);
+  return true;
+}
+
+/* ══════════ 상태 저장 · 그리기 ══════════ */
+let pushTimer = null;
+function commit(local){
+  ensureChain();
+  S.updatedAt = now();
+  LS.set('bangjeom.state', JSON.stringify(S));
+  render();
+  if(!local && sb){
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(push, 500);
+  }
+}
+
+const $ = s => document.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let toastTimer;
+function toast(msg){
+  const el = $('#toast'); el.textContent = msg; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 1900);
+}
+
+/* ── 중단 이유 → 다시 적을 항목 ── */
+const REASONS = [
+  ['흐름이 막힘',        t => `${t} — 앞 문단 소리 내어 읽기`],
+  ['다음 문장이 안 남',  t => `${t} — 다음 장면 세 줄로 적기`],
+  ['자료의 부족',        t => `${t} 자료 찾기`],
+  ['납득 못할 전개',     t => `${t} — 인물이 왜 그러는지 적어보기`],
+  ['피로',               t => t],
+  ['딴생각',             t => t],
+];
+let reentryOpen = null, reentryTag = -1;
+
+function render(){
+  if(rollFixed()){                          // 자정을 넘겼으면 그 사실을 저장해둔다
+    S.updatedAt = now();
+    LS.set('bangjeom.state', JSON.stringify(S));
+    if(sb){ clearTimeout(pushTimer); pushTimer = setTimeout(push, 500); }
+  }
+  renderFixed();
+  renderStage();
+  renderList();
+}
+
+function renderFixed(){
+  $('#fixedList').innerHTML = S.fixed.map((f,i) => `
+    <li class="${f.done?'done':''}">
+      <button class="chk" data-fix="${i}" aria-label="했음"></button>
+      <span>${esc(f.text)}</span>
+      <button class="x" data-fixdel="${i}" aria-label="지우기">지움</button>
+    </li>`).join('')
+    || `<li><span style="color:var(--ink-faint);font-size:.9rem">협상 없이 그냥 하는 일만 여기에.</span></li>`;
+}
+
+function renderStage(){
+  const box = $('#stage');
+  ensureChain();
+
+  if(!S.tasks.some(t => !t.done)){
+    box.innerHTML = `<div class="empty"><strong>목록이 비어 있습니다</strong>
+      지금 마음에 걸리는 일 예닐곱 개로 시작하세요.<br>한꺼번에 채우면 오래 못 씁니다.</div>`;
+    return;
+  }
+
+  const c = candidate();
+
+  if(c){ // ── 훑는 중
+    const b = benchmark();
+    box.innerHTML = `
+      <div class="bench"><span class="lab">지금 기준</span><span class="txt">${esc(b.text)}</span></div>
+      <div class="q">이걸 더 하고 싶은가?</div>
+      <div class="cand">${esc(c.text)}</div>
+      <div class="answers">
+        <button class="no"  id="ansNo">아니다</button>
+        <button class="yes" id="ansYes">더 하고 싶다</button>
+      </div>
+      <button class="skip" id="skipAll">훑기 그만두고 지금 사슬로</button>`;
+    $('#ansYes').onclick = () => answer(true);
+    $('#ansNo').onclick  = () => answer(false);
+    $('#skipAll').onclick = () => { S.cursor = S.tasks[S.tasks.length-1].id; commit(); };
+    return;
+  }
+
+  // ── 사슬 완성, 실행
+  const a = benchmark();
+  if(!a){ box.innerHTML = `<div class="empty">끝났습니다.</div>`; return; }
+
+  const trail = S.chain.map((id,i) =>
+    (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text))).join('');
+
+  box.innerHTML = `
+    <div class="chainbar" style="text-align:center">${trail}</div>
+    <div class="now">
+      <span class="lab">지금 할 일</span>
+      <div><span class="txt">${esc(a.text)}</span></div>
+      ${cfg.shortcut ? `<button class="shortcut" id="btnSc">${esc(cfg.shortcut)} 실행</button>` : ''}
+    </div>
+    <div class="acts">
+      <button class="done" id="actDone">끝냈다</button>
+      <button id="actPart">조금 했다</button>
+      <button class="drop" id="actDrop">이제 필요 없다</button>
+    </div>
+    <div id="reBox"></div>`;
+
+  if(cfg.shortcut) $('#btnSc').onclick = () =>
+    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(cfg.shortcut);
+
+  $('#actDone').onclick = () => { reentryOpen = null; finish(a.id, null); };
+  $('#actDrop').onclick = () => { reentryOpen = null; drop(a.id); };
+  $('#actPart').onclick = () => { reentryOpen = a.id; reentryTag = -1; renderReentry(a); };
+
+  if(reentryOpen === a.id) renderReentry(a);
+}
+
+function renderReentry(a){
+  const box = $('#reBox');
+  const val = reentryTag >= 0 ? REASONS[reentryTag][1](a.text) : a.text;
+  box.innerHTML = `
+    <div class="reentry">
+      <h3>어디서 멈췄습니까?</h3>
+      <p>막힌 자리를 그대로 다시 적으면 다음에도 집니다. 하고 싶어질 만한 다음 걸음으로 바꿔 적으세요.</p>
+      <div class="tags">${REASONS.map((r,i) =>
+        `<button data-tag="${i}" class="${i===reentryTag?'sel':''}">${r[0]}</button>`).join('')}</div>
+      <textarea id="reTxt" rows="2">${esc(val)}</textarea>
+      <div class="row">
+        <button id="reCancel">그만두기</button>
+        <button class="go" id="reGo">끝에 다시 적기</button>
+      </div>
+    </div>`;
+  box.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => {
+    reentryTag = +b.dataset.tag; renderReentry(a);
+  });
+  $('#reCancel').onclick = () => { reentryOpen = null; renderStage(); };
+  $('#reGo').onclick = () => {
+    const t = $('#reTxt').value;
+    reentryOpen = null; reentryTag = -1;
+    finish(a.id, t);
+  };
+}
+
+function renderList(){
+  ensureChain();
+  const act = S.chain[S.chain.length-1];
+  $('#chainbar').innerHTML = S.chain.length
+    ? '점 찍힌 순서 · ' + S.chain.map((id,i) =>
+        (i===S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text))).join(' › ')
+    : '<span style="color:var(--ink-faint)">아직 점이 없습니다</span>';
+
+  $('#listBox').innerHTML = S.tasks.map(t => {
+    const k = S.chain.indexOf(t.id);
+    const dot = k >= 0
+      ? `<span class="ord">${k+1}</span><span class="dot ${t.id===act?'head':''}"></span>`
+      : (t.done ? '<span class="ord">✓</span>' : '');
+    return `<li class="${t.done?'done':''} ${t.id===act?'act':''}">
+      <span class="gutter">${dot}</span>
+      <span class="body">${esc(t.text)}</span>
+      <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
+    </li>`;
+  }).join('') || `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`;
+}
+
+/* ══════════ 클릭 ══════════ */
+document.addEventListener('click', e => {
+  const d = e.target.closest('[data-del]');
+  if(d){ drop(d.dataset.del); return; }
+  const f = e.target.closest('[data-fix]');
+  if(f){ const i = +f.dataset.fix; S.fixed[i].done = !S.fixed[i].done; commit(); return; }
+  const fd = e.target.closest('[data-fixdel]');
+  if(fd){ S.fixed.splice(+fd.dataset.fixdel,1); commit(); return; }
+});
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('sel', x===b));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('sel', v.id === 'v-'+b.dataset.v));
+});
+
+// 한글 조합 중에는 엔터가 글자를 확정하는 키라, 조합이 끝난 뒤의 값으로 처리한다
+function wireEnter(input, fn){
+  let composing = false;
+  input.addEventListener('compositionstart', () => composing = true);
+  input.addEventListener('compositionend',   () => composing = false);
+  const take = () => {
+    const v = input.value;
+    input.value = '';
+    if(v.trim()) fn(v);
+  };
+  input.addEventListener('keydown', e => {
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    if(composing || e.isComposing || e.keyCode === 229){
+      setTimeout(take, 0);   // 조합이 확정된 뒤에 읽는다
+    } else {
+      take();
+    }
+  });
+  return take;
+}
+
+const takeTask = wireEnter($('#taskIn'), addTask);
+$('#taskAdd').onclick = takeTask;
+
+const takeToday = wireEnter($('#todayIn'), v => { addTask(v); toast('목록 끝에 넣었습니다'); });
+$('#todayAddBtn').onclick = takeToday;
+
+wireEnter($('#fixedIn'), v => {
+  S.fixed.push({text:v.trim(), done:false});
+  commit();
+});
+$('#btnReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
+$('#btnPurge').onclick = () => { if(confirm('끝낸 항목을 목록에서 치웁니까?')) purgeDone(); };
+
+/* ══════════ 설정 ══════════ */
+const fields = {sUrl:'url', sKey:'key', sList:'list', sDevice:'device', sShortcut:'shortcut'};
+Object.entries(fields).forEach(([el,k]) => {
+  const n = $('#'+el);
+  n.value = cfg[k] || '';
+  n.addEventListener('change', () => { cfg[k] = n.value.trim(); saveCfg(); render(); });
+});
+
+$('#btnSql').onclick = async () => {
+  try{ await navigator.clipboard.writeText($('#sql').textContent); toast('복사했습니다'); }
+  catch(e){ toast('직접 선택해 복사하세요'); }
+};
+$('#btnExport').onclick = () => {
+  const b = new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b);
+  a.download = `방점-${localDate()}.json`;
+  a.click();
+};
+$('#btnImport').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = async e => {
+  const f = e.target.files[0]; if(!f) return;
+  try{
+    const d = JSON.parse(await f.text());
+    if(!Array.isArray(d.tasks)) throw 0;
+    S = Object.assign(blank(), d); commit(); toast('불러왔습니다');
+  }catch(err){ toast('읽을 수 없는 파일입니다'); }
+  e.target.value = '';
+};
+
+/* ══════════ 동기화 ══════════ */
+let sb = null, chan = null, lastRemote = '';
+
+function setSync(cls, txt){
+  const el = $('#sync'); el.className = 'sync ' + cls; $('#syncTxt').textContent = txt;
+}
+
+async function connect(silent){
+  if(!cfg.url || !cfg.key){ if(!silent) $('#syncNote').textContent = '주소와 키를 넣어주세요.'; return; }
+  setSync('busy','잇는 중');
+  try{
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    sb = createClient(cfg.url, cfg.key, {realtime:{params:{eventsPerSecond:4}}});
+    await pull(true);
+    if(chan) sb.removeChannel(chan);
+    chan = sb.channel('bangjeom-' + cfg.list)
+      .on('postgres_changes',
+        {event:'*', schema:'public', table:'bangjeom', filter:'id=eq.'+cfg.list},
+        p => apply(p.new))
+      .subscribe(st => {
+        if(st === 'SUBSCRIBED') setSync('on', cfg.device + ' · 연결됨');
+        if(st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') setSync('err','끊김');
+      });
+    $('#syncNote').textContent = '';
+  }catch(err){
+    sb = null; setSync('err','연결 실패');
+    $('#syncNote').textContent = '연결하지 못했습니다. 주소와 키, 표가 만들어졌는지 확인하세요.';
+  }
+}
+
+function apply(row){
+  if(!row || !row.data) return;
+  if(row.updated_at === lastRemote) return;
+  if(row.device === cfg.device && row.updated_at <= (S.updatedAt||'')) return;
+  if((row.data.updatedAt||'') <= (S.updatedAt||'')) return;
+  lastRemote = row.updated_at;
+  S = Object.assign(blank(), row.data);
+  LS.set('bangjeom.state', JSON.stringify(S));
+  reentryOpen = null;
+  render();
+  toast((row.device||'다른 기기') + '에서 고침');
+}
+
+async function pull(quiet){
+  if(!sb) return;
+  const { data, error } = await sb.from('bangjeom').select('*').eq('id', cfg.list).maybeSingle();
+  if(error){ if(!quiet) toast('받아오지 못했습니다'); return; }
+  if(!data){ await push(); return; }
+  lastRemote = '';
+  if((data.data.updatedAt||'') > (S.updatedAt||'')){
+    lastRemote = data.updated_at;
+    S = Object.assign(blank(), data.data);
+    LS.set('bangjeom.state', JSON.stringify(S));
+    render();
+    if(!quiet) toast('받아왔습니다');
+  } else if(!quiet) toast('이미 최신입니다');
+}
+
+async function push(){
+  if(!sb) return;
+  setSync('busy','올리는 중');
+  const { error } = await sb.from('bangjeom')
+    .upsert({id:cfg.list, data:S, device:cfg.device, updated_at:now()});
+  setSync(error ? 'err' : 'on', error ? '올리지 못함' : cfg.device + ' · 연결됨');
+}
+
+$('#btnConnect').onclick = () => connect(false);
+$('#btnPull').onclick = () => sb ? pull(false) : toast('먼저 연결하세요');
+$('#btnPush').onclick = () => sb ? push().then(() => toast('올렸습니다')) : toast('먼저 연결하세요');
+
+// 아이폰에서 앱을 다시 열 때 최신 상태를 당겨오고, 날짜가 넘어갔는지도 본다
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); if(sb) pull(true); } });
+window.addEventListener('focus', () => { render(); if(sb) pull(true); });
+
+/* ══════════ 시작 ══════════ */
+ensureChain();
+render();
+if(cfg.url && cfg.key) connect(true); else setSync('','혼자 씀');
+</script>
+</body>
+</html>
