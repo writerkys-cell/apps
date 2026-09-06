@@ -339,7 +339,7 @@ ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
       <button id="btnRestore">직전으로 되돌리기</button>
     </div>
     <div class="note" id="syncNote"></div>
-    <p style="margin-top:.7rem">새로 설정한 기기가 빈 목록으로 서버를 덮어쓰지 않도록 막아둡니다. 목록이 크게 줄어드는 변경을 올릴 때는 직전 상태를 서버에 한 벌 남기니, 사고가 나면 되돌리기로 살릴 수 있습니다.</p>
+    <p style="margin-top:.7rem">어느 쪽이 최신인지는 기기 시계가 아니라 서버 문서의 판번호로 가립니다. 기기끼리 시각이 어긋나도 판정이 뒤집히지 않습니다. 양쪽에 서로 다른 변경이 있으면 어느 쪽을 살릴지 묻고, 버리는 쪽은 백업에 남겨 「직전으로 되돌리기」로 살릴 수 있습니다.</p>
   </section>
 
   <section>
@@ -397,7 +397,7 @@ cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',shortcut:'포모도
 if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
 const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
 
-const blank = () => ({v:2, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], updatedAt:now()});
+const blank = () => ({v:2, rev:0, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], updatedAt:now()});
 let S = Object.assign(blank(), JSON.parse(LS.get('bangjeom.state') || 'null') || {});
 
 /* ══════════ 알고리즘 ══════════ */
@@ -540,9 +540,9 @@ function commit(local){
   S.updatedAt = now();
   LS.set('bangjeom.state', JSON.stringify(S));
   render();
-  if(!local && sb){
-    clearTimeout(pushTimer);
-    pushTimer = setTimeout(push, 500);
+  if(!local){
+    setDirty(true);
+    if(sb){ clearTimeout(pushTimer); pushTimer = setTimeout(push, 500); }
   }
 }
 
@@ -567,10 +567,8 @@ const REASONS = [
 let reentryOpen = null, reentryTag = -1;
 
 function render(){
-  if(rollFixed()){                          // 자정을 넘겼으면 그 사실을 저장해둔다
-    S.updatedAt = now();
+  if(rollFixed()){                          // 자정을 넘겼으면 그 사실만 이 기기에 저장한다
     LS.set('bangjeom.state', JSON.stringify(S));
-    if(sb){ clearTimeout(pushTimer); pushTimer = setTimeout(push, 500); }
   }
   renderFixed();
   renderStage();
@@ -831,15 +829,28 @@ $('#fileIn').onchange = async e => {
 };
 
 /* ══════════ 동기화 ══════════ */
-let sb = null, chan = null, lastRemote = '';
+/* 기기 시계는 승패를 가리는 데 쓰지 않는다. 서버 문서의 판번호(rev)만 본다.
+   seenRev — 이 기기가 마지막으로 맞춰본 판번호. null이면 한 번도 맞춘 적 없음.
+   dirty   — 아직 서버에 올리지 못한 변경이 있음.                            */
+let sb = null, chan = null;
+let seenRev = LS.get('bangjeom.rev');
+seenRev = (seenRev === null || seenRev === undefined) ? null : (+seenRev || 0);
+let dirty = LS.get('bangjeom.dirty') === '1';
+
+const setSeen  = r => { seenRev = r; LS.set('bangjeom.rev', String(r)); };
+const setDirty = v => { dirty = v; LS.set('bangjeom.dirty', v ? '1' : '0'); };
+const revOf = d => +(d && d.rev) || 0;
 
 // 목록·고정 블록·매듭 기록을 합친 개수. 덮어쓰기 사고를 가리는 잣대로 쓴다
 const total = st => (st.tasks||[]).length + (st.fixed||[]).length
   + (st.log||[]).reduce((n,e) => n + ((e.items||[]).length), 0);
 
 function setSync(cls, txt){
-  const el = $('#sync'); el.className = 'sync ' + cls; $('#syncTxt').textContent = txt;
+  const el = $('#sync');
+  el.className = 'sync ' + cls;
+  $('#syncTxt').textContent = txt;
 }
+const okLabel = () => cfg.device + (dirty ? ' · 올릴 것 있음' : ' · 연결됨');
 
 async function connect(silent){
   if(!cfg.url || !cfg.key){ if(!silent) $('#syncNote').textContent = '주소와 키를 넣어주세요.'; return; }
@@ -854,7 +865,7 @@ async function connect(silent){
         {event:'*', schema:'public', table:'bangjeom', filter:'id=eq.'+cfg.list},
         p => apply(p.new))
       .subscribe(st => {
-        if(st === 'SUBSCRIBED') setSync('on', cfg.device + ' · 연결됨');
+        if(st === 'SUBSCRIBED') setSync('on', okLabel());
         if(st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') setSync('err','끊김');
       });
     $('#syncNote').textContent = '';
@@ -869,43 +880,69 @@ function adopt(remote, from){
   LS.set('bangjeom.state', JSON.stringify(S));
   reentryOpen = null; lapFlash = false;
   render();
+  setSync('on', okLabel());
   if(from) toast(from + '에서 받아왔습니다');
 }
 
-function apply(row){
-  if(!row || !row.data) return;
-  if(row.updated_at === lastRemote) return;
-  if(row.device === cfg.device && row.updated_at <= (S.updatedAt||'')) return;
-  // 이 기기가 빈 상태라면 시각과 상관없이 서버 것을 따른다
-  const fresh = total(S) === 0 && total(row.data) > 0;
-  if(!fresh && (row.data.updatedAt||'') <= (S.updatedAt||'')) return;
-  lastRemote = row.updated_at;
-  adopt(row.data, row.device || '다른 기기');
+async function backup(d, label){
+  if(!sb || !d) return;
+  try{
+    await sb.from('bangjeom').upsert({id:cfg.list + ':backup', data:d, device:label, updated_at:now()});
+  }catch(e){}
+}
+
+// 양쪽에 다른 변경이 있을 때. 어느 쪽을 살릴지 묻고, 버리는 쪽은 백업에 남긴다
+async function conflict(remote, rev){
+  const keepRemote = confirm(
+    `이 기기에 아직 올리지 않은 변경이 있고, 다른 기기에서도 고친 것이 있습니다.\n\n` +
+    `확인 — 다른 기기 것(${total(remote)}개)을 받습니다\n` +
+    `취소 — 이 기기 것(${total(S)}개)을 올립니다\n\n` +
+    `버리는 쪽은 백업에 남으니 「직전으로 되돌리기」로 살릴 수 있습니다.`);
+  if(keepRemote){
+    await backup(S, cfg.device + ' 미반영');
+    setSeen(rev); setDirty(false);
+    adopt(remote, '다른 기기');
+  } else {
+    await backup(remote, '다른 기기');
+    setSeen(rev);
+    await push(true);
+    toast('이 기기 것을 올렸습니다');
+  }
 }
 
 async function pull(quiet, force){
   if(!sb) return;
   const { data, error } = await sb.from('bangjeom').select('*').eq('id', cfg.list).maybeSingle();
   if(error){ if(!quiet) toast('받아오지 못했습니다'); return; }
-  if(!data){ if(total(S)) await push(); return; }
-  lastRemote = '';
-  const newer = (data.data.updatedAt||'') > (S.updatedAt||'');
-  const fresh = total(S) === 0 && total(data.data) > 0;   // 새로 설정한 기기
-  if(force || newer || fresh){
-    lastRemote = data.updated_at;
-    adopt(data.data, quiet ? null : (data.device || '서버'));
-  } else if(!quiet) toast('이미 최신입니다');
+  if(!data || !data.data){ if(total(S)) await push(true); return; }
+
+  const rev   = revOf(data.data);
+  const first = seenRev === null;                          // 새로 설정한 기기
+  const fresh = total(S) === 0 && total(data.data) > 0;    // 이쪽이 텅 비었다
+  const same  = !first && rev === seenRev;
+
+  if(same && !force){ if(!quiet) toast('이미 최신입니다'); return; }
+  if(!force && !fresh && dirty && total(S) > 0) return conflict(data.data, rev);
+
+  setSeen(rev); setDirty(false);
+  adopt(data.data, quiet ? null : (data.device || '서버'));
 }
 
-async function push(){
+async function push(force){
   if(!sb) return;
   setSync('busy','올리는 중');
-  const { data: cur } = await sb.from('bangjeom')
+  const { data: cur, error: readErr } = await sb.from('bangjeom')
     .select('data,device,updated_at').eq('id', cfg.list).maybeSingle();
+  if(readErr){ setSync('err','올리지 못함'); return; }
+
+  const serverRev = cur ? revOf(cur.data) : 0;
+
+  // 내가 마지막으로 맞춘 판보다 서버가 앞서 있다면 다른 기기가 먼저 고친 것이다
+  if(!force && cur && cur.data && seenRev !== null && serverRev > seenRev)
+    return conflict(cur.data, serverRev);
 
   if(cur && cur.data){
     const there = total(cur.data), here = total(S);
-    // 내용이 있던 자리를 빈 것으로, 또는 절반 아래로 줄여 덮어쓰려 할 때는 묻는다
     if(there > 0 && (here === 0 || (there >= 6 && here < there/2))){
       const ok = confirm(
         `서버에는 ${there}개, 이 기기에는 ${here}개가 있습니다.\n` +
@@ -913,17 +950,25 @@ async function push(){
         `확인 — 그대로 올립니다\n취소 — 올리지 않고 서버 것을 받아옵니다`);
       if(!ok){ await pull(false, true); return; }
     }
-    // 줄어드는 변경이면 직전 상태를 한 벌 남겨둔다
-    if(there > here){
-      await sb.from('bangjeom').upsert({
-        id: cfg.list + ':backup', data: cur.data,
-        device: (cur.device||'') + ' 직전', updated_at: now()});
-    }
+    if(there > here) await backup(cur.data, (cur.device||'') + ' 직전');
   }
 
+  const rev = serverRev + 1;
+  S.rev = rev;
+  LS.set('bangjeom.state', JSON.stringify(S));
   const { error } = await sb.from('bangjeom')
     .upsert({id:cfg.list, data:S, device:cfg.device, updated_at:now()});
-  setSync(error ? 'err' : 'on', error ? '올리지 못함' : cfg.device + ' · 연결됨');
+  if(!error){ setSeen(rev); setDirty(false); }
+  setSync(error ? 'err' : 'on', error ? '올리지 못함' : okLabel());
+}
+
+function apply(row){
+  if(!row || !row.data) return;
+  const rev = revOf(row.data);
+  if(seenRev !== null && rev === seenRev) return;          // 내가 가진 판과 같다
+  if(dirty && seenRev !== null && rev > seenRev) return conflict(row.data, rev);
+  setSeen(rev); setDirty(false);
+  adopt(row.data, row.device || '다른 기기');
 }
 
 async function restore(){
@@ -934,13 +979,13 @@ async function restore(){
   const when = new Date(data.updated_at).toLocaleString('ko-KR');
   if(!confirm(`${when}에 남긴 ${total(data.data)}개짜리 목록으로 되돌립니다.\n지금 목록은 사라집니다.`)) return;
   adopt(data.data, null);
-  await push();
+  await push(true);
   toast('되돌렸습니다');
 }
 
 $('#btnConnect').onclick = () => connect(false);
 $('#btnPull').onclick = () => sb ? pull(false) : toast('먼저 연결하세요');
-$('#btnPush').onclick = () => sb ? push().then(() => toast('올렸습니다')) : toast('먼저 연결하세요');
+$('#btnPush').onclick = () => sb ? push(true).then(() => toast('올렸습니다')) : toast('먼저 연결하세요');
 $('#btnRestore').onclick = restore;
 
 // 아이폰에서 앱을 다시 열 때 최신 상태를 당겨오고, 날짜가 넘어갔는지도 본다
