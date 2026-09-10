@@ -321,7 +321,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   </div>
   <div class="cal" id="cal"></div>
   <div class="legend">
-    <span><i class="d"></i>다섯 매를 채운 날</span>
+    <span><i class="d"></i>목표를 채운 날</span>
     <span><i class="o"></i>더 쓴 날</span>
     <span><i></i>미달한 날</span>
   </div>
@@ -379,6 +379,9 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <div class="row"><label>글자 크기</label><input type="number" id="fSize" min="11" max="30" step="1"> px</div>
   <div class="row"><label>줄 간격</label><input type="number" id="fLh" min="1.2" max="3" step="0.1"></div>
   <div class="row"><label>화면 좌우 여백</label><input type="number" id="fSM" min="0" max="6" step="0.5"> cm</div>
+  <div class="row"><label>따옴표 굽히기 <span style="font-family:var(--font-type);color:var(--ink-3)">“ ” ‘ ’</span></label><input type="checkbox" id="fSmart"></div>
+  <div class="row"><label>엔터를 치면 한 줄 띄우기</label><input type="checkbox" id="fPara"></div>
+  <p class="hint" style="margin-top:6px">한 줄 띄우기를 켜면 <kbd>Enter</kbd>가 문단 사이를 한 줄 비우고, <kbd>⇧ Enter</kbd>는 행만 바꿉니다. 빈 줄은 글자로 세지 않습니다.</p>
   <div class="row"><label>쓰는 동안 상단 막대 흐리기</label><input type="checkbox" id="fDim"></div>
   <div class="actions"><button class="p" data-close>닫기</button></div>
 </div></div>
@@ -392,6 +395,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>자정.</b> 자정이 되면 그 자리에서 종이가 갈립니다. 쓰던 중이었다면 거기까지가 어제 몫이고, 이어 치는 글자는 새 날의 빈 종이에 놓입니다.<br><br>
   <b>미달한 날.</b> 못 채운 원고는 지워지지 않고 기록에 그대로 남습니다. 다음 날 <b>기록</b>에서 그 날짜를 눌러 열고 복사해 가시면 됩니다. 채운 날의 원고는 최근 세 편까지만 본문을 남기고, 그보다 오래된 것은 숫자만 남습니다.<br><br>
   <b>세 기기.</b> 맥북·아이폰·아이패드 어디서 열어도 오늘 종이는 같습니다. 내보내기도 불러오기도 없습니다. 상단 동그라미가 초록이면 이어져 있는 것입니다.<br><br>
+  <b>따옴표와 문단.</b> 곧은 따옴표를 치면 앞 글자를 보고 <span style="font-family:var(--font-type)">“ ” ‘ ’</span>로 굽혀 넣습니다. <kbd>Enter</kbd>는 문단 사이를 한 줄 비우고, <kbd>⇧ Enter</kbd>는 행만 바꿉니다. 시의 행갈이는 <kbd>⇧ Enter</kbd>가 손에 맞을 것입니다. 둘 다 설정에서 끌 수 있습니다.<br><br>
   <b>편집은 자유입니다.</b> 되돌리기, 붙여넣기, 커서 옮기기 모두 됩니다. 여기는 초고를 흘려 쓰는 자리이고, 고치는 일은 스크리브너에서 합니다.
   </p>
   <div style="font-size:12.5px;line-height:2.1;color:var(--ink-2)">
@@ -414,7 +418,7 @@ const STEP=200;                       /* 한 매 */
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,days:{}};
-let CFG={goal:1000,font:'',size:17,lh:1.9,sm:1,dim:true};
+let CFG={goal:1000,font:'',size:17,lh:1.9,sm:1,dim:true,smart:true,para:true};
 let CUR=null;                         /* 지금 펼쳐진 날짜 */
 let saveT=null, midT=null, typingT=null, readCur=null;
 let MONTH=null;                       /* 기록 화면이 보고 있는 달 */
@@ -427,6 +431,7 @@ const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const WD=['일','월','화','수','목','금','토'];
 function count(t){let n=0;for(const ch of t) if(ch!=='\n'&&ch!=='\t') n++;return n;}
 function mae(n){return n/STEP;}
+function maeStr(n){return Number.isInteger(n)?String(n):n.toFixed(1);}
 function goalOf(r){return (r&&r.goal)||CFG.goal||1000;}
 function isDone(r){return !!r && r.chars>=goalOf(r);}
 function toast(m,ms){
@@ -541,7 +546,7 @@ function onInput(){
   if(add) r.devchars[DEV]=(r.devchars[DEV]||0)+add;
   if(!was && n>=goal){
     if(!r.doneAt) r.doneAt=Date.now();
-    toast('다섯 매를 채웠습니다. 텍스트 복사를 눌러 옮기십시오.',4200);
+    toast(maeStr(mae(goal))+'매를 채웠습니다. 텍스트 복사를 눌러 옮기십시오.',4200);
   }
   paint(); nudge();
   clearTimeout(saveT);
@@ -552,6 +557,24 @@ function flush(now){
   const r=DB.days[CUR];
   if(r && r.body!==sheet.value){ r.body=sheet.value; r.chars=count(sheet.value); r.updated=Date.now(); r.dev=DEV; }
   saveDB(); syncPush(CUR,now);
+}
+function insert(t){
+  let ok=false;
+  try{ ok=document.execCommand('insertText',false,t); }catch(e){}
+  if(!ok){
+    const a=sheet.selectionStart,b=sheet.selectionEnd,v=sheet.value;
+    sheet.value=v.slice(0,a)+t+v.slice(b);
+    const p=a+t.length;
+    try{ sheet.setSelectionRange(p,p); }catch(e){}
+  }
+  onInput();
+}
+/* 앞 글자를 보고 여는 따옴표인지 닫는 따옴표인지 가린다 */
+function curly(q){
+  const a=sheet.selectionStart;
+  const prev=a>0?sheet.value[a-1]:'';
+  const open=!prev||/[\s\n\t([{<“‘'"—–\-·]/.test(prev);
+  return q==='"' ? (open?'\u201C':'\u201D') : (open?'\u2018':'\u2019');
 }
 function nudge(){
   if(!CFG.dim) return;
@@ -613,6 +636,7 @@ function fillCFG(){
   $('#fGoal').value=CFG.goal; $('#fFont').value=CFG.font;
   $('#fSize').value=CFG.size; $('#fLh').value=CFG.lh;
   $('#fSM').value=CFG.sm; $('#fDim').checked=!!CFG.dim;
+  $('#fSmart').checked=!!CFG.smart; $('#fPara').checked=!!CFG.para;
 }
 
 /* ── 기록 ─────────────────────────────────────────── */
@@ -668,7 +692,7 @@ function drawStats(){
   s+=row('올해',sum(inYear).toFixed(1)+'매 · 쓴 날 '+inYear.length+'일');
   s+=row('통틀어',sum(all).toFixed(1)+'매 · '+all.length+'일');
   s+=row('쓴 날의 하루 평균',avg(all.map(r=>mae(r.chars))).toFixed(1)+'매');
-  s+=row('다섯 매 달성',all.length?done.length+'일 / '+all.length+'일 · '+Math.round(done.length/all.length*100)+'%':'—');
+  s+=row('일일 매수 달성',all.length?done.length+'일 / '+all.length+'일 · '+Math.round(done.length/all.length*100)+'%':'—');
   s+=row('미달한 날의 평균',miss.length?avg(miss.map(r=>mae(r.chars))).toFixed(1)+'매':'—');
   const over=done.filter(r=>r.chars>goalOf(r));
   s+=row('넘긴 날의 평균 초과',over.length?'+'+avg(over.map(r=>mae(r.chars)-mae(goalOf(r)))).toFixed(1)+'매 · '+over.length+'일':'—');
@@ -976,16 +1000,32 @@ async function logout(){
 function bind(){
   sheet.addEventListener('input',onInput);
   sheet.addEventListener('keydown',e=>{
-    if(e.key!=='Tab'||e.metaKey||e.ctrlKey||e.altKey) return;
-    e.preventDefault();
-    const a=sheet.selectionStart,b=sheet.selectionEnd,v=sheet.value;
-    if(e.shiftKey){
-      if(a===b&&a>0&&v[a-1]==='\t'){ sheet.value=v.slice(0,a-1)+v.slice(a); sheet.setSelectionRange(a-1,a-1); onInput(); }
-      return;
+    if(e.metaKey||e.ctrlKey||e.altKey) return;
+    if(e.isComposing||e.keyCode===229) return;   /* 한글을 조합하는 중에는 손대지 않는다 */
+
+    if(e.key==='Tab'){
+      e.preventDefault();
+      const a=sheet.selectionStart,b=sheet.selectionEnd,v=sheet.value;
+      if(e.shiftKey){
+        if(a===b&&a>0&&v[a-1]==='\t'){
+          sheet.value=v.slice(0,a-1)+v.slice(a);
+          try{ sheet.setSelectionRange(a-1,a-1); }catch(err){}
+          onInput();
+        }
+        return;
+      }
+      insert('\t'); return;
     }
-    sheet.value=v.slice(0,a)+'\t'+v.slice(b);
-    sheet.setSelectionRange(a+1,a+1);
-    onInput();
+
+    if(e.key==='Enter'&&CFG.para){
+      e.preventDefault();
+      insert(e.shiftKey?'\n':'\n\n'); return;
+    }
+
+    if(CFG.smart&&(e.key==='"'||e.key==="'")){
+      e.preventDefault();
+      insert(curly(e.key)); return;
+    }
   });
   sheet.addEventListener('blur',()=>flush(true));
   window.addEventListener('resize',()=>{ if(CUR){ grow(); drawNums(); } });
@@ -1039,6 +1079,8 @@ function bind(){
   num('#fSM','sm',0,6,true);
   $('#fFont').addEventListener('change',e=>{ CFG.font=e.target.value.trim(); saveCFG(); applyCFG(); });
   $('#fDim').addEventListener('change',e=>{ CFG.dim=e.target.checked; saveCFG(); applyCFG(); });
+  $('#fSmart').addEventListener('change',e=>{ CFG.smart=e.target.checked; saveCFG(); });
+  $('#fPara').addEventListener('change',e=>{ CFG.para=e.target.checked; saveCFG(); });
 
   $('#bHelp').addEventListener('click',()=>veil('#vHelp',true));
   document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>{
