@@ -617,18 +617,57 @@ function prune(){
 }
 
 /* ── 설정 ─────────────────────────────────────────── */
+/* 한글 이름 활자는 영문 이름으로도 등록돼 있곤 한다. 여러 이름을 한꺼번에 물린다 */
+function fontAliases(n){
+  const out=[n];
+  const add=v=>{ v=(v||'').trim(); if(v&&out.indexOf(v)<0) out.push(v); };
+  if(/^[aA]/.test(n)){ add('A'+n.slice(1)); add('a'+n.slice(1)); add(n.slice(1)); }
+  else { add('a'+n); add('A'+n); }
+  add(n.replace(/\s+/g,''));
+  add(n+' Regular');
+  add(n+'M');
+  return out;
+}
+function applyUserFont(){
+  let el=document.getElementById('userFont');
+  if(!el){ el=document.createElement('style'); el.id='userFont'; document.head.appendChild(el); }
+  if(!CFG.font){ el.textContent=''; return; }
+  const src=fontAliases(CFG.font).map(v=>'local("'+v.replace(/["\\]/g,'')+'")').join(',');
+  el.textContent='@font-face{font-family:"사용자활자";src:'+src+';font-display:swap}';
+}
+/* 정말 걸렸는지는 이름을 묻지 말고 폭을 재어 본다 */
+function hasFont(name){
+  try{
+    const c=document.createElement('canvas').getContext('2d');
+    const probe='가나다라 ABCabc 漢字 0123';
+    c.font='72px monospace'; const a=c.measureText(probe).width;
+    c.font='72px "'+name.replace(/["\\]/g,'')+'", monospace'; const b=c.measureText(probe).width;
+    return Math.abs(a-b)>0.5;
+  }catch(e){ return false; }
+}
 function applyCFG(){
   const base="'Apple SD Gothic Neo','Noto Sans KR','Pretendard','Malgun Gothic',system-ui,sans-serif";
-  document.documentElement.style.setProperty('--font-type',(CFG.font?"'"+CFG.font+"',":'')+base);
+  applyUserFont();
+  document.documentElement.style.setProperty('--font-type',
+    (CFG.font?"'"+CFG.font.replace(/'/g,'')+"','사용자활자',":'')+base);
   document.documentElement.style.setProperty('--size',CFG.size+'px');
   document.documentElement.style.setProperty('--lh',String(CFG.lh));
   document.documentElement.style.setProperty('--sm',CFG.sm+'cm');
   const st=$('#fontState');
   if(!CFG.font) st.textContent='';
-  else{
-    let ok=false; try{ ok=document.fonts&&document.fonts.check('16px "'+CFG.font+'"'); }catch(e){}
-    st.innerHTML=ok?'<span class="ok">이 기기에 있습니다.</span>':'<span class="bad">이 기기에서는 찾지 못했습니다. 기본 고딕으로 갑니다.</span>';
-  }
+  else requestAnimationFrame(()=>{
+    const direct=hasFont(CFG.font);
+    const alias=hasFont('사용자활자');
+    if(direct) st.innerHTML='<span class="ok">이 기기에 있습니다.</span>';
+    else if(alias){
+      const hit=fontAliases(CFG.font).slice(1).filter(hasFont)[0];
+      st.innerHTML='<span class="ok">이 기기에 있습니다.</span>'
+        +(hit?' <span style="color:var(--ink-3)">시스템에는 '+esc(hit)+'(으)로 들어 있습니다.</span>':'');
+    }else{
+      st.innerHTML='<span class="bad">이 기기에서는 찾지 못했습니다. 기본 고딕으로 갑니다.</span>'
+        +' <span style="color:var(--ink-3)">서체 관리자에서 이름을 그대로 옮겨 적어 보십시오.</span>';
+    }
+  });
   if(!CFG.dim) document.body.classList.remove('typing');
   requestAnimationFrame(()=>{ if(CUR) paint(); });
 }
@@ -1077,7 +1116,9 @@ function bind(){
   num('#fSize','size',11,30,false);
   num('#fLh','lh',1.2,3,true);
   num('#fSM','sm',0,6,true);
-  $('#fFont').addEventListener('change',e=>{ CFG.font=e.target.value.trim(); saveCFG(); applyCFG(); });
+  const fontSet=e=>{ CFG.font=e.target.value.trim(); saveCFG(); applyCFG(); };
+  $('#fFont').addEventListener('change',fontSet);
+  $('#fFont').addEventListener('input',fontSet);
   $('#fDim').addEventListener('change',e=>{ CFG.dim=e.target.checked; saveCFG(); applyCFG(); });
   $('#fSmart').addEventListener('change',e=>{ CFG.smart=e.target.checked; saveCFG(); });
   $('#fPara').addEventListener('change',e=>{ CFG.para=e.target.checked; saveCFG(); });
