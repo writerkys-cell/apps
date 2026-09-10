@@ -277,7 +277,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
 }
 #toast.on{opacity:.95;transform:translateX(-50%) translateY(0)}
 
-/* 마우스가 있고 화면이 넓은 기기 — 맥북에서는 종이를 조금 넓게 */
+/* 마우스가 있고 화면이 넓은 기기 — 맥북에서는 종이를 조금 넓게 (설정에서 바꿉니다) */
 @media (min-width:1000px) and (hover:hover) and (pointer:fine){
   :root{ --pgw:16.3cm; }
 }
@@ -386,6 +386,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <div class="row"><label>글자 크기</label><input type="number" id="fSize" min="11" max="30" step="1"> px</div>
   <div class="row"><label>줄 간격</label><input type="number" id="fLh" min="1.2" max="3" step="0.1"></div>
   <div class="row"><label>들여쓰기 폭</label><input type="number" id="fIndent" min="0.5" max="4" step="0.5"> 자</div>
+  <div class="row" id="rowPgw" style="display:none"><label>종이 폭</label><input type="number" id="fPgw" min="9" max="26" step="0.5"> cm</div>
   <div class="row"><label>화면 좌우 여백</label><input type="number" id="fSM" min="0" max="6" step="0.5"> cm</div>
   <div class="row"><label>따옴표 굽히기 <span style="font-family:var(--font-type);color:var(--ink-3)">“ ” ‘ ’</span></label><input type="checkbox" id="fSmart"></div>
   <div class="row"><label>엔터를 치면 한 줄 띄우기</label><input type="checkbox" id="fPara"></div>
@@ -442,7 +443,7 @@ const STEP=200;                       /* 한 매 */
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,days:{}};
-let CFG={goal:1000,font:'',size:17,lh:1.9,sm:1,dim:true,smart:true,para:true,indent:1.5,book:700,fold:true};
+let CFG={goal:1000,font:'',size:17,lh:1.9,sm:1,dim:true,smart:true,para:true,indent:1.5,book:700,fold:true,pgw:16.3};
 let CUR=null;                         /* 지금 펼쳐진 날짜 */
 let saveT=null, midT=null, typingT=null, readCur=null;
 let MONTH=null;                       /* 기록 화면이 보고 있는 달 */
@@ -456,7 +457,10 @@ const WD=['일','월','화','수','목','금','토'];
 function count(t){let n=0;for(const ch of t) if(ch!=='\n'&&ch!=='\t') n++;return n;}
 function mae(n){return n/STEP;}
 function maeStr(n){return Number.isInteger(n)?String(n):n.toFixed(1);}
-function goalOf(r){return (r&&r.goal)||CFG.goal||1000;}
+function goalOf(r){
+  if(r&&r.d===today()) return CFG.goal||r.goal||1000;   /* 오늘은 설정을 따른다 */
+  return (r&&r.goal)||CFG.goal||1000;                   /* 지난 날은 그때 정한 값을 지킨다 */
+}
 function isDone(r){return !!r && r.chars>=goalOf(r);}
 function toast(m,ms){
   const el=$('#toast'); el.textContent=m; el.classList.add('on');
@@ -561,7 +565,7 @@ function showDay(){
 function openDay(d){
   CUR=d;
   const r=ensure(d);
-  if(!r.goal) r.goal=CFG.goal;
+  if(d===today()) r.goal=CFG.goal; else if(!r.goal) r.goal=CFG.goal;
   sheet.value=r.body||'';
   showDay(); paint();
 }
@@ -622,6 +626,8 @@ function armMidnight(){
 function checkDay(){
   const t=today();
   if(CUR!==t){
+    const y=DB.days[CUR];
+    if(y&&!y.goal) y.goal=CFG.goal;   /* 접히는 종이에 그때의 목표를 굳혀 둔다 */
     flush(true);
     openDay(t);
     prune();
@@ -691,6 +697,10 @@ function applyCFG(){
   document.documentElement.style.setProperty('--font-type',(mine?mine+',':'')+base);
   document.documentElement.style.setProperty('--size',CFG.size+'px');
   document.documentElement.style.setProperty('--lh',String(CFG.lh));
+  const wide=window.matchMedia('(min-width:1000px) and (hover:hover) and (pointer:fine)').matches;
+  if(wide) document.documentElement.style.setProperty('--pgw',CFG.pgw+'cm');
+  else document.documentElement.style.removeProperty('--pgw');
+  const rw=$('#rowPgw'); if(rw) rw.style.display=wide?'':'none';
   document.documentElement.style.setProperty('--sm',CFG.sm+'cm');
   document.documentElement.style.setProperty('--tab',String(tabUnits()));
   const st=$('#fontState');
@@ -714,7 +724,7 @@ function fillCFG(){
   $('#fSM').value=CFG.sm; $('#fDim').checked=!!CFG.dim;
   $('#fSmart').checked=!!CFG.smart; $('#fPara').checked=!!CFG.para;
   $('#fIndent').value=CFG.indent; $('#fBook').value=CFG.book;
-  $('#fFold').checked=!!CFG.fold;
+  $('#fFold').checked=!!CFG.fold; $('#fPgw').value=CFG.pgw;
 }
 
 /* ── 기록 ─────────────────────────────────────────── */
@@ -988,6 +998,7 @@ async function syncPull(){
         doneAt:row.done_at||null, updated:ru, dev:row.device||'',
         devchars:dc, kept:!!(row.body&&row.body.length)
       };
+      if(row.d===today()) DB.days[row.d].goal=CFG.goal;
       touched=true;
     }
     if(!(data||[]).length && written().length && !SY.seeded){
@@ -1151,7 +1162,7 @@ function bind(){
     let v=fl?parseFloat(e.target.value):parseInt(e.target.value,10);
     if(isNaN(v)) v=CFG[key];
     CFG[key]=Math.min(hi,Math.max(lo,v)); e.target.value=CFG[key];
-    if(key==='goal'&&DB.days[CUR]){ DB.days[CUR].goal=CFG.goal; DB.days[CUR].updated=Date.now(); syncPush(CUR); }
+    if(key==='goal'&&DB.days[CUR]){ DB.days[CUR].goal=CFG.goal; DB.days[CUR].updated=Date.now(); syncPush(CUR); paint(); }
     saveCFG(); applyCFG();
     if($('#vLog').classList.contains('on')){ drawCal(); drawStats(); }
   });
@@ -1161,6 +1172,8 @@ function bind(){
   num('#fSM','sm',0,6,true);
   num('#fIndent','indent',0.5,4,true);
   num('#fBook','book',100,3000,false);
+  num('#fPgw','pgw',9,26,true);
+  window.addEventListener('resize',applyCFG);
   const fontSet=e=>{ CFG.font=e.target.value.trim(); saveCFG(); applyCFG(); };
   $('#fFont').addEventListener('change',fontSet);
   $('#fFont').addEventListener('input',fontSet);
