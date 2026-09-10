@@ -736,8 +736,8 @@ function closeAll(){ document.querySelectorAll('.veil.on').forEach(v=>v.classLis
 /* ── 동기화 ───────────────────────────────────────────
    원고가 하루에 한 덩어리뿐이므로 병합하지 않는다.
    마지막에 고친 것이 이긴다. 기기별 글자 수만 각자의 칸에 더한다. */
-const SB_URL='https://qhwtlhzyxnlvrljlcndv.supabase.co';
-const SB_KEY='sb_publishable_JEZTEzfpFuB_LwvbVTl9PQ_p4aiUOe-';
+const SB_URL='https://gkptfbihlrgkgqfksdva.supabase.co';
+const SB_KEY='sb_publishable_apbbUoHz6JuXrpZ-5Jx8Iw_8NPttm0-';
 const PUSH_GAP=1200;
 const SY={sb:null,user:null,ch:null,rt:'',busy:0,err:'',pend:new Set(),last:0,timer:null,pullT:null,boot:false,seeded:false};
 const SQL=`create table if not exists public.days (
@@ -770,9 +770,32 @@ function devName(){
 }
 let DEV=devName();
 
+const CDN=[
+  'https://esm.sh/@supabase/supabase-js@2',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm',
+  'https://esm.run/@supabase/supabase-js@2'
+];
+async function loadLib(){
+  let last='';
+  for(const u of CDN){
+    try{
+      const m=await Promise.race([
+        import(u),
+        new Promise((_,rj)=>setTimeout(()=>rj(new Error('시간이 지났습니다')),12000))
+      ]);
+      if(m&&m.createClient) return m;
+      last='createClient을 찾지 못했습니다';
+    }catch(e){
+      last=(e&&e.message)||String(e);
+      console.warn('[다섯 매] 라이브러리를 못 불렀습니다:',u,e);
+    }
+  }
+  throw new Error('수파베이스 라이브러리를 못 불렀습니다 · '+last
+    +(location.protocol==='file:'?' (파일을 두 번 눌러 연 화면에서는 막힙니다. 웹 주소로 여십시오)':''));
+}
 async function sbGet(){
   if(SY.sb) return SY.sb;
-  const m=await import('https://esm.sh/@supabase/supabase-js@2');
+  const m=await loadLib();
   SY.sb=m.createClient(SB_URL,SB_KEY,{
     auth:{persistSession:true,autoRefreshToken:true,storageKey:'daseot-auth'},
     realtime:{params:{eventsPerSecond:3}}
@@ -789,7 +812,10 @@ function syncUI(){
   const st=$('#syncState'); if(!st) return;
   const n=written().length;
   if(!SY.user){
-    st.innerHTML='아직 이 기기 안에만 있습니다. 쓴 날 '+n+'일.';
+    st.innerHTML='아직 이 기기 안에만 있습니다. 쓴 날 '+n+'일.'
+      +(SY.busy?'<br>잇는 중입니다…':'')
+      +(SY.err?'<br><span class="bad">'+esc(SY.err)+'</span>':'')
+      +(location.protocol==='file:'?'<br><span class="bad">파일을 두 번 눌러 연 화면입니다. 이 상태로는 동기화가 막힙니다. 웹 주소로 열어 주십시오.</span>':'');
     $('#syncIn').style.display=''; $('#syncOn').style.display='none';
   }else{
     const p=SY.pend.size;
@@ -908,23 +934,34 @@ async function syncBoot(){
       syncUI(); await syncPull(); await syncWatch();
     }else syncUI();
     sb.auth.onAuthStateChange((_e,s)=>{ SY.user=s?s.user:null; syncUI(); });
-  }catch(e){ SY.err='잇지 못했습니다 · '+(e.message||e); syncUI(); }
+  }catch(e){
+    SY.err='잇지 못했습니다 · '+(e.message||e);
+    console.error('[다섯 매] 첫 연결 실패',e);
+    syncUI();
+  }
 }
 async function login(){
   const email=$('#fMail').value.trim(), password=$('#fPw').value;
   if(!email||!password) return toast('메일과 비밀번호를 적어 주십시오');
-  SY.busy++; syncMark();
+  SY.err=''; SY.busy++; syncMark(); syncUI();
+  $('#bLogin').disabled=true; $('#bLogin').textContent='잇는 중…';
   try{
     const sb=await sbGet();
     const {data,error}=await sb.auth.signInWithPassword({email,password});
     if(error) throw error;
     SY.user=data.user; SY.err=''; $('#fPw').value='';
     SY.busy--; syncMark();
+    $('#bLogin').disabled=false; $('#bLogin').textContent='들어가기';
     await syncPull(); await syncWatch();
     toast('이어졌습니다');
     return;
-  }catch(e){ SY.err='들어가지 못했습니다 · '+(e.message||e); }
+  }catch(e){
+    SY.err='들어가지 못했습니다 · '+(e.message||e);
+    console.error('[다섯 매] 로그인 실패',e);
+    toast('들어가지 못했습니다. 동기화 창에 까닭이 적혀 있습니다.',4200);
+  }
   SY.busy--; syncMark(); syncUI();
+  $('#bLogin').disabled=false; $('#bLogin').textContent='들어가기';
 }
 async function logout(){
   try{
