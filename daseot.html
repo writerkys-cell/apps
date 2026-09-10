@@ -413,7 +413,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>미달한 날.</b> 못 채운 원고는 지워지지 않고 기록에 그대로 남습니다. 다음 날 <b>기록</b>에서 그 날짜를 눌러 열고 복사해 가시면 됩니다. 채운 날의 원고는 최근 세 편까지만 본문을 남기고, 그보다 오래된 것은 숫자만 남습니다.<br><br>
   <b>세 기기.</b> 맥북·아이폰·아이패드 어디서 열어도 오늘 종이는 같습니다. 내보내기도 불러오기도 없습니다. 상단 동그라미가 초록이면 이어져 있는 것입니다.<br><br>
   <b>들여쓰기.</b> <kbd>Enter</kbd>를 치면 줄이 바뀌면서 문단 머리가 저절로 들여써집니다. 빈 종이에도 탭이 하나 놓여 있어 첫 문단부터 들여쓴 채로 시작합니다. 폭은 설정의 들여쓰기 폭이 정하고, 기본은 활자 한 자 반입니다. <kbd>Tab</kbd>으로 더 들여쓰거나 <kbd>⇧ Tab</kbd>으로 물릴 수 있고, 들여쓰기는 글자로 세지 않습니다.<br><br>
-  <b>내보낼 때.</b> 텍스트 복사로 나가는 글에서는 탭을 모두 텁니다. 문단마다 줄 하나씩, 맨 글자만 클립보드에 담깁니다. 스크리브너에서 서식이 들여쓰기를 넣어 줍니다. 종이와 기록에 든 글자는 그대로입니다. 메일처럼 서식이 없는 곳으로 옮기실 때는 설정에서 이 칸을 잠깐 끄십시오.<br><br>
+  <b>내보낼 때.</b> 텍스트 복사로 나가는 글에서는 탭을 모두 텁니다. 손으로 긁어 <kbd>⌘ C</kbd>로 뜨는 것도 마찬가지입니다. 문단마다 줄 하나씩, 맨 글자만 클립보드에 담깁니다. 스크리브너에서 서식이 들여쓰기를 넣어 줍니다. 종이와 기록에 든 글자는 그대로입니다. 메일처럼 서식이 없는 곳으로 옮기실 때는 설정에서 이 칸을 잠깐 끄십시오.<br><br>
   <b>따옴표와 행갈이.</b> 곧은 따옴표를 치면 앞 글자를 보고 <span style="font-family:var(--font-type)">“ ” ‘ ’</span>로 굽혀 넣습니다. <kbd>⇧ Enter</kbd>는 들여쓰지 않고 행만 바꾸니 시의 행갈이에 쓰십시오.<br><br>
   <b>편집은 자유입니다.</b> 되돌리기, 붙여넣기, 커서 옮기기 모두 됩니다. 여기는 초고를 흘려 쓰는 자리이고, 고치는 일은 스크리브너에서 합니다.
   </p>
@@ -1112,6 +1112,26 @@ function bind(){
     sheet.focus();
     try{ sheet.setSelectionRange(n,n); }catch(err){}
   }
+
+  /* 손으로 긁어 복사할 때도 같은 체를 거친다 */
+  const onCopy=e=>{
+    if(!CFG.fold) return;
+    const a=sheet.selectionStart, b=sheet.selectionEnd;
+    if(a===b) return;
+    const cut=forExport(sheet.value.slice(a,b));
+    if(!e.clipboardData) return;
+    e.clipboardData.setData('text/plain',cut);
+    e.preventDefault();
+  };
+  sheet.addEventListener('copy',onCopy);
+  sheet.addEventListener('cut',e=>{
+    const a=sheet.selectionStart, b=sheet.selectionEnd;
+    onCopy(e);
+    if(e.defaultPrevented){
+      sheet.setSelectionRange(a,b);
+      insert('');
+    }
+  });
 
   sheet.addEventListener('input',onInput);
   sheet.addEventListener('keydown',e=>{
