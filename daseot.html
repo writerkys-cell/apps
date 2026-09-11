@@ -259,6 +259,12 @@ button:focus-visible{outline:2px solid var(--insert);outline-offset:2px}
 .cal .cell.done .dot{background:var(--ink);border-color:var(--ink)}
 .cal .cell.over .dot{background:var(--insert);border-color:var(--insert)}
 .cal .cell.today{border-color:var(--ink)}
+.cal .cell.moved .dot{position:relative}
+.cal .cell.moved .dot::after{
+  content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;
+  margin:-1.5px 0 0 -1.5px;border-radius:50%;background:var(--paper);
+}
+.cal .cell.moved:not(.done):not(.over) .dot::after{background:var(--ink-3)}
 .cal .cell .n{font-size:9px;opacity:.75}
 .legend{display:flex;gap:14px;margin:12px 0 0;font-size:11px;color:var(--ink-3);flex-wrap:wrap}
 .legend span{display:flex;align-items:center;gap:5px}
@@ -362,6 +368,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
     <span><i class="d"></i>목표를 채운 날</span>
     <span><i class="o"></i>더 쓴 날</span>
     <span><i></i>미달한 날</span>
+    <span><i style="position:relative"><b style="position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px 0 0 -1.5px;border-radius:50%;background:var(--ink-3);display:block"></b></i>옮기고 비운 날</span>
   </div>
   <div class="stats" id="stats"></div>
   <div class="actions">
@@ -376,6 +383,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <p id="readMeta" class="hint" style="margin:0 0 12px"></p>
   <div id="readSheets"></div>
   <div class="actions">
+    <button class="s" id="bWipe">본문 비우기</button>
     <button class="p" data-close>닫기</button>
   </div>
 </div></div>
@@ -436,7 +444,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>날마다 다섯 매.</b> 공백을 포함해 1,000자입니다. 줄바꿈과 들여쓰기는 글자로 세지 않습니다. 왼쪽 여백의 눈금은 하루 목표를 넘길 때마다 그어집니다. 다섯 매로 잡으셨으면 5매·10매·15매 자리입니다. 첫 줄이 진하니 그 줄이 오늘의 끝입니다.<br><br>
   <b>채우면.</b> 1,000자에 닿으면 한 줄로 알리고 상단에 <span class="ok">텍스트 복사</span>가 뜹니다. 눌러 클립보드에 담고 스크리브너로 옮기십시오. 화면은 그대로 두니 더 쓰고 싶으면 계속 쓰시면 됩니다. 넘긴 글자도 그날 몫으로 셉니다.<br><br>
   <b>자정.</b> 자정이 되면 그 자리에서 종이가 갈립니다. 쓰던 중이었다면 거기까지가 어제 몫이고, 이어 치는 글자는 새 날의 빈 종이에 놓입니다.<br><br>
-  <b>미달한 날.</b> 못 채운 원고는 지워지지 않고 기록에 그대로 남습니다. 다음 날 <b>기록</b>에서 그 날짜를 눌러 열고 복사해 가시면 됩니다. 채운 날의 원고는 최근 세 편까지만 본문을 남기고, 그보다 오래된 것은 숫자만 남습니다.<br><br>
+  <b>지난 원고.</b> 저절로 사라지는 것은 없습니다. 채운 날이든 못 채운 날이든 원고는 기록에 그대로 있습니다. <b>기록</b>에서 날짜를 눌러 열고 종이마다 복사해 스크리브너로 옮긴 뒤, <b>본문 비우기</b>를 누르시면 글자만 비고 매수와 도장은 남습니다. 달력에서 도장 가운데 점이 찍힌 날이 옮기고 비운 날이니, 점 없는 날만 처리하시면 됩니다. 오늘 것은 쓰는 중이라 비울 수 없고, 자정이 지나면 비울 수 있습니다.<br><br>
   <b>세 기기.</b> 맥북·아이폰·아이패드 어디서 열어도 오늘 종이는 같습니다. 내보내기도 불러오기도 없습니다. 상단 동그라미가 초록이면 이어져 있는 것입니다.<br><br>
   <b>종이 나누기.</b> 원고를 여럿 함께 쓰실 때는 종이 위 <kbd>+</kbd>를 눌러 종이를 더하십시오. <kbd>1</kbd> <kbd>2</kbd> 숫자를 눌러 오갑니다. 목표는 나뉘지 않습니다 — 계기판도 눈금도 왼쪽 기록도 그날 쓴 것을 모두 합쳐 셉니다. 빈 종이는 숫자를 길게 눌러 접습니다. 글자가 든 종이는 접히지 않습니다. 텍스트 복사는 지금 보고 있는 종이만 담습니다.<br><br>
   <b>들여쓰기.</b> <kbd>Enter</kbd>를 치면 줄이 바뀌면서 문단 머리가 저절로 들여써집니다. 빈 종이에도 탭이 하나 놓여 있어 첫 문단부터 들여쓴 채로 시작합니다. 폭은 설정의 들여쓰기 폭이 정하고, 기본은 활자 한 자 반입니다. <kbd>Tab</kbd>으로 더 들여쓰거나 <kbd>⇧ Tab</kbd>으로 물릴 수 있고, 들여쓰기는 글자로 세지 않습니다.<br><br>
@@ -727,7 +735,6 @@ function checkDay(){
     if(y&&!y.goal) y.goal=CFG.goal;   /* 접히는 종이에 그때의 목표를 굳혀 둔다 */
     flush(true);
     openDay(t);
-    prune();
     toast('자정입니다. 어제 원고는 기록에 접어 두었습니다.',4200);
   }
   armMidnight();
@@ -736,16 +743,13 @@ function checkDay(){
 /* ── 갈무리 ───────────────────────────────────────────
    미달한 원고는 모두 남긴다. 채운 원고는 최근 셋만 본문을 남기고
    그보다 오랜 것은 숫자만 남는다. ─────────────────────── */
-function prune(){
-  const t=today();
-  const full=days()
-    .filter(r=>isDone(r)&&r.d!==t&&sheetsOf(r).some(x=>x&&x.length))
-    .sort((a,b)=>b.d.localeCompare(a.d));
-  const drop=full.slice(3);                 /* 채운 날은 최근 사흘치만 본문을 남긴다 */
-  if(!drop.length) return;
-  for(const r of drop){ r.sheets=['']; r.kept=false; r.updated=Date.now(); r.dev=DEV; }
-  saveDB();
-  drop.forEach(r=>syncPush(r.d));
+/* 저절로 사라지는 것은 없다. 옮기고 나서 손으로 비운다 */
+const hasBody=r=>sheetsOf(r).some(x=>x&&x.length);
+function clearDay(d){
+  const r=DB.days[d]; if(!r||d===today()) return false;
+  r.sheets=['']; r.kept=false; r.updated=Date.now(); r.dev=DEV;
+  saveDB(); syncPush(d,true);
+  return true;
 }
 
 /* ── 설정 ─────────────────────────────────────────── */
@@ -851,6 +855,7 @@ function drawCal(){
       if(r.chars>g) cls.push('over');
       else if(r.chars>=g) cls.push('done');
       else cls.push('part');
+      if(!hasBody(r)) cls.push('moved');
       dot='<span class="dot" style="--f:'+Math.min(100,Math.round(r.chars/g*100))+'%"></span>';
       num='<span class="n">'+mae(r.chars).toFixed(1)+'</span>';
     }else{
@@ -933,13 +938,16 @@ function openRead(key){
   const ss=sheetsOf(r).filter(x=>x&&x.length);
   const box=$('#readSheets');
   if(!ss.length){
-    box.innerHTML='<pre style="color:var(--ink-3)">본문은 남겨 두지 않았습니다. 목표를 채운 날은 최근 사흘치까지만 본문을 두고, 그보다 오랜 것은 숫자만 남습니다.</pre>';
+    box.innerHTML='<pre style="color:var(--ink-3)">본문은 남겨 두지 않았습니다. 옮기고 나서 비운 날입니다. 매수와 기록은 그대로 남아 있습니다.</pre>';
   }else{
     box.innerHTML=ss.map((t,i)=>
       '<h4><span>'+(ss.length>1?(i+1)+'번 종이 · ':'')+maeStr(Math.round(count(t)/STEP*10)/10)+'매</span>'
       +'<button data-c="'+i+'">텍스트 복사</button></h4>'
       +'<pre>'+esc(t)+'</pre>').join('');
   }
+  const w=$('#bWipe');
+  w.style.display=(ss.length&&key!==today())?'':'none';
+  w.textContent='본문 비우기'; w.dataset.sure='';
   veil('#vRead',true);
 }
 
@@ -1289,6 +1297,20 @@ function bind(){
     const ok=await copyText(forExport(sheet.value));
     toast(ok?'클립보드에 담았습니다. 스크리브너로 옮기십시오.':'복사하지 못했습니다');
   });
+  $('#bWipe').addEventListener('click',e=>{
+    const b=e.currentTarget;
+    if(b.dataset.sure!=='1'){
+      b.dataset.sure='1';
+      b.textContent='정말 비웁니까? 한 번 더';
+      setTimeout(()=>{ if(b.dataset.sure==='1'){ b.dataset.sure=''; b.textContent='본문 비우기'; } },4000);
+      return;
+    }
+    if(clearDay(readCur)){
+      toast('본문을 비웠습니다. 매수와 기록은 그대로입니다.',3600);
+      openRead(readCur);
+      drawCal(); drawStats();
+    }
+  });
   $('#readSheets').addEventListener('click',async e=>{
     const b=e.target.closest('button[data-c]'); if(!b) return;
     const r=readCur&&DB.days[readCur]; if(!r) return;
@@ -1390,7 +1412,6 @@ function bind(){
 function boot(){
   loadDB(); fillCFG(); applyCFG();
   openDay(today());
-  prune();
   bind();
   armMidnight();
   syncUI();
