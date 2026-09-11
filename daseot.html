@@ -88,6 +88,7 @@ button.t:focus-visible{outline:2px solid var(--insert);outline-offset:1px}
 button.t.copy{color:var(--insert);font-weight:600}
 button.t.copy:hover{background:rgba(29,78,107,.09);color:var(--insert)}
 button.t.copy[hidden]{display:none}
+button.t[hidden]{display:none}
 
 /* 동기화 표시등 */
 button.t.sync::before{
@@ -335,6 +336,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <span id="dayView"></span>
   <div class="tools">
     <button class="t copy" id="bCopy" hidden>텍스트 복사</button>
+    <button class="t" id="bMusic" hidden>타이핑 음악</button>
     <button class="t" id="bLog">기록</button>
     <button class="t sync" id="bSync">동기화</button>
     <button class="t" id="bSet">설정</button>
@@ -453,6 +455,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <b>편집은 자유입니다.</b> 되돌리기, 붙여넣기, 커서 옮기기 모두 됩니다. 여기는 초고를 흘려 쓰는 자리이고, 고치는 일은 스크리브너에서 합니다.
   </p>
   <div style="font-size:12.5px;line-height:2.1;color:var(--ink-2)">
+    <div><kbd>⌘ ⌥ M</kbd> · 타이핑 음악 (맥북)</div>
     <div><kbd>⌘ S</kbd> · 지금 올리기</div>
     <div><kbd>⌘ ⇧ C</kbd> · 텍스트 복사</div>
     <div><kbd>Esc</kbd> · 겹창 닫기</div>
@@ -802,6 +805,7 @@ function applyCFG(){
   if(wide) document.documentElement.style.setProperty('--pgw',CFG.pgw+'cm');
   else document.documentElement.style.removeProperty('--pgw');
   const rw=$('#rowPgw'); if(rw) rw.style.display=wide?'':'none';
+  const bm=$('#bMusic'); if(bm) bm.hidden=!(wide&&/^맥북/.test(DEV));
   document.documentElement.style.setProperty('--sm',CFG.sm+'cm');
   document.documentElement.style.setProperty('--tab',String(tabUnits()));
   const st=$('#fontState');
@@ -1319,6 +1323,9 @@ function bind(){
     const ok=await copyText(forExport(t));
     toast(ok?'클립보드에 담았습니다':'복사하지 못했습니다');
   });
+  $('#bMusic').addEventListener('click',()=>{
+    location.href='shortcuts://run-shortcut?name='+encodeURIComponent('타이핑음악');
+  });
   $('#bLog').addEventListener('click',openLog);
   $('#bPrev').addEventListener('click',()=>{ MONTH.m--; if(MONTH.m<0){MONTH.m=11;MONTH.y--;} drawCal(); });
   $('#bNext').addEventListener('click',()=>{ MONTH.m++; if(MONTH.m>11){MONTH.m=0;MONTH.y++;} drawCal(); });
@@ -1342,7 +1349,7 @@ function bind(){
   $('#fDev').addEventListener('change',e=>{
     const v=e.target.value.trim(); if(!v) return;
     DEV=baseDev(v)===v?v:baseDev(v); e.target.value=DEV;
-    localStorage.setItem('다섯매.dev',DEV); syncUI();
+    localStorage.setItem('다섯매.dev',DEV); syncUI(); applyCFG();
   });
   $('#sqlBox').textContent=SQL;
 
@@ -1394,6 +1401,11 @@ function bind(){
       if(document.querySelector('.veil.on')) return;
       e.preventDefault();
       copyText(forExport(sheet.value)).then(ok=>toast(ok?'클립보드에 담았습니다':'복사하지 못했습니다'));
+      return;
+    }
+    if(meta&&e.altKey&&(e.key==='m'||e.key==='M'||e.code==='KeyM')){
+      const bm=$('#bMusic');
+      if(bm&&!bm.hidden){ e.preventDefault(); bm.click(); }
       return;
     }
     if(meta&&(e.key==='s'||e.key==='S')){ e.preventDefault(); flush(true); toast(SY.user?'올렸습니다':'저장했습니다'); }
