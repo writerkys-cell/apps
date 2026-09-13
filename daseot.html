@@ -657,6 +657,8 @@ function showDay(){
 function openDay(d){
   CUR=d; CURI=0;
   const r=ensure(d);
+  r.sheets=r.sheets.filter(x=>typeof x==='string');
+  if(!r.sheets.length) r.sheets=[''];
   if(d===today()) r.goal=CFG.goal; else if(!r.goal) r.goal=CFG.goal;
   if(d===today()&&!r.chars&&r.sheets.length===1&&!r.sheets[0]) r.sheets[0]=newSheet();
   recount(r);
@@ -666,7 +668,7 @@ function openDay(d){
 function openSheet(i){
   const r=DB.days[CUR]; if(!r) return;
   const ss=sheetsOf(r);
-  if(i!=='d'&&(i<0||i>=ss.length)) return;
+  if(i!=='d'&&(!Number.isInteger(i)||i<0||i>=ss.length)) return;
   if(i===CURI) return;
   setCur(sheet.value);
   CURI=i;
@@ -1318,18 +1320,23 @@ function bind(){
     const b=e.target.closest('button'); if(!b) return;
     if(held){ held=false; return; }
     if(b.id==='bAdd') return addSheet();
-    if(b.dataset.i!=null) openSheet(+b.dataset.i);
+    const k=b.dataset.i;
+    if(k==null) return;
+    openSheet(k==='d'?'d':parseInt(k,10));
   });
   const holdStart=e=>{
-    const b=e.target.closest('button[data-i]'); if(!b) return;
+    const b=e.target.closest('button[data-i]'); if(!b||b.dataset.i==='d') return;
     clearTimeout(holdT);
-    holdT=setTimeout(()=>{ held=true; dropSheet(+b.dataset.i); },600);
+    holdT=setTimeout(()=>{ held=true; dropSheet(parseInt(b.dataset.i,10)); },600);
   };
   const holdStop=()=>{ clearTimeout(holdT); };
   tabs.addEventListener('mousedown',holdStart);
   tabs.addEventListener('touchstart',holdStart,{passive:true});
   ['mouseup','mouseleave','touchend','touchmove','touchcancel'].forEach(ev=>tabs.addEventListener(ev,holdStop));
-  tabs.addEventListener('contextmenu',e=>{ if(e.target.closest('button[data-i]')) e.preventDefault(); });
+  tabs.addEventListener('contextmenu',e=>{
+    const b=e.target.closest('button[data-i]');
+    if(b&&b.dataset.i!=='d') e.preventDefault();
+  });
 
   /* 종이의 빈 데를 눌러도 글 끝으로 커서가 간다. 글자가 있는 줄은 그 자리 그대로 */
   paper.addEventListener('mousedown',jumpToEnd);
