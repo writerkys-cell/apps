@@ -131,6 +131,7 @@ ul.past li.dropped button{color:var(--ink-faint)}
 .settings p.note{font-size:13.5px;color:var(--ink-faint);margin:6px 0 12px;line-height:1.65}
 .settings label{display:block;font-size:13.5px;color:var(--ink-soft);margin:12px 0 4px}
 .settings pre{background:var(--paper);border:1px solid var(--rule);padding:14px;overflow:auto;font-size:12px;line-height:1.55;font-family:ui-monospace,Menlo,monospace;white-space:pre;color:var(--ink-soft)}
+.settings pre#sbReport{white-space:pre-wrap;margin-top:14px}
 .btnrow{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
 .btn{border:1px solid var(--rule);background:var(--paper);padding:.5em 1.1em;font-size:14.5px;border-radius:2px}
 .btn:hover{border-color:var(--inju);color:var(--inju)}
@@ -170,6 +171,7 @@ ul.past li.dropped button{color:var(--ink-faint)}
 .toast.on{opacity:1}
 .syncdot{font-size:12px;color:var(--ink-faint)}
 .syncdot.live{color:var(--inju)}
+.syncdot.bad{color:#b03a2e}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media (max-width:480px){
   .wrap{padding:0 16px 120px}
@@ -219,7 +221,11 @@ ul.past li.dropped button{color:var(--ink-faint)}
     <input id="sbUrl" placeholder="https://xxxx.supabase.co" autocomplete="off">
     <label for="sbKey">anon key</label>
     <input id="sbKey" placeholder="eyJ..." autocomplete="off">
-    <div class="btnrow"><button class="btn solid" id="sbSave">저장하고 연결</button></div>
+    <div class="btnrow">
+      <button class="btn solid" id="sbSave">저장하고 연결</button>
+      <button class="btn" id="sbTest">연결 확인</button>
+    </div>
+    <pre id="sbReport" hidden></pre>
     <p class="note">처음 한 번, 수퍼베이스 SQL 편집기에 아래를 붙여넣고 실행하세요.</p>
     <pre id="sql"></pre>
 
@@ -274,9 +280,23 @@ alter table items disable row level security;
 alter table sessions disable row level security;
 alter table app_state disable row level security;
 
-alter publication supabase_realtime add table items;
-alter publication supabase_realtime add table sessions;
-alter publication supabase_realtime add table app_state;`;
+-- 실시간 전파 등록 (여러 번 실행해도 탈이 없음)
+do $$
+declare t text;
+begin
+  foreach t in array array['items','sessions','app_state'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+alter table items replica identity full;
+alter table sessions replica identity full;
+alter table app_state replica identity full;`;
 
 /* ───────── 상태 ───────── */
 let items = [], sessions = [], appState = { currentId:null, startedAt:null, device:null };
@@ -365,56 +385,82 @@ function loadLocal(){
     appState = JSON.parse(localStorage.getItem('mirae.state') || 'null') || appState;
   } catch {}
 }
-let pushing = false;
+let pushing = false, realtimeOk = false, lastError = '', sbChannel = null;
+function setDot(){
+  const d = $('#syncDot'); if (!d) return;
+  d.classList.remove('live','bad');
+  if (!sb) { d.textContent = '혼자 쓰는 중'; return; }
+  if (lastError) { d.classList.add('bad'); d.textContent = '동기화 실패 — 설정에서 연결 확인'; return; }
+  d.classList.add('live');
+  d.textContent = realtimeOk ? '기기 사이 동기화' : '기기 사이 동기화 (실시간 아님)';
+}
+function noteError(where, error){
+  if (error) { lastError = `${where}: ${error.message || error}`; console.warn(lastError); }
+  else lastError = '';
+  setDot();
+  return !!error;
+}
 async function pushItem(it){
   saveLocal();
   if (!sb) return;
   pushing = true;
-  try { await sb.from('items').upsert({ id: it.id, data: it, updated_at: new Date().toISOString() }); }
-  catch(e){ console.warn(e); toast('동기화에 실패했습니다'); }
-  finally { setTimeout(() => pushing = false, 400); }
+  const { error } = await sb.from('items').upsert({ id: it.id, data: it, updated_at: new Date().toISOString() });
+  if (noteError('항목 저장', error)) toast('서버에 저장되지 않았습니다');
+  setTimeout(() => pushing = false, 600);
 }
 async function pushSession(s){
   saveLocal();
   if (!sb) return;
   pushing = true;
-  try { await sb.from('sessions').upsert({ id: s.id, data: s }); }
-  catch(e){ console.warn(e); }
-  finally { setTimeout(() => pushing = false, 400); }
+  const { error } = await sb.from('sessions').upsert({ id: s.id, data: s });
+  noteError('세션 저장', error);
+  setTimeout(() => pushing = false, 600);
 }
 async function pushState(){
   saveLocal();
   if (!sb) return;
   pushing = true;
-  try { await sb.from('app_state').upsert({ id: 1, data: appState }); }
-  catch(e){ console.warn(e); }
-  finally { setTimeout(() => pushing = false, 400); }
+  const { error } = await sb.from('app_state').upsert({ id: 1, data: appState });
+  noteError('상태 저장', error);
+  setTimeout(() => pushing = false, 600);
 }
 async function pullAll(){
   if (!sb) return;
-  try {
-    const [a, b, c] = await Promise.all([
-      sb.from('items').select('data'),
-      sb.from('sessions').select('data'),
-      sb.from('app_state').select('data').eq('id', 1).maybeSingle()
-    ]);
-    if (a.data) items = a.data.map(r => r.data);
-    if (b.data) sessions = b.data.map(r => r.data);
-    if (c.data && c.data.data) appState = Object.assign({ currentId:null, startedAt:null, device:null }, c.data.data);
-    saveLocal(); closeMidnight(); render();
-  } catch(e){ console.warn(e); }
+  const [a, b, c] = await Promise.all([
+    sb.from('items').select('data'),
+    sb.from('sessions').select('data'),
+    sb.from('app_state').select('data').eq('id', 1).maybeSingle()
+  ]);
+  const err = a.error || b.error || c.error;
+  if (noteError('읽기', err)) return;
+  if (a.data) items = a.data.map(r => r.data).filter(Boolean);
+  if (b.data) sessions = b.data.map(r => r.data).filter(Boolean);
+  if (c.data && c.data.data) appState = Object.assign({ currentId:null, startedAt:null, device:null }, c.data.data);
+  saveLocal(); closeMidnight(); render();
 }
+/* 실시간이 막혀 있어도 앱이 돌아가도록, 조용히 주기적으로 다시 읽는다 */
+function canPoll(){
+  if (!sb || pushing || document.hidden) return false;
+  if ($('#modalSlot').innerHTML) return false;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return false;
+  return true;
+}
+setInterval(() => { if (canPoll()) pullAll(); }, 12000);
+
 function connect(){
-  if (!cfg.url || !cfg.key || !window.supabase) { $('#syncDot').textContent = '혼자 쓰는 중'; return; }
+  if (sbChannel && sb) { try { sb.removeChannel(sbChannel); } catch {} sbChannel = null; }
+  realtimeOk = false; lastError = '';
+  if (!cfg.url || !cfg.key) { sb = null; setDot(); return; }
+  if (!window.supabase) { sb = null; lastError = '수퍼베이스 라이브러리를 불러오지 못했습니다'; setDot(); return; }
   sb = window.supabase.createClient(cfg.url, cfg.key);
-  $('#syncDot').textContent = '이어지는 중…';
-  pullAll().then(() => {
-    $('#syncDot').textContent = '기기 사이 동기화';
-    $('#syncDot').classList.add('live');
-  });
-  sb.channel('mirae')
-    .on('postgres_changes', { event:'*', schema:'public' }, () => { if (!pushing) pullAll(); })
-    .subscribe();
+  setDot();
+  pullAll();
+  sbChannel = sb.channel('mirae-' + Math.random().toString(36).slice(2))
+    .on('postgres_changes', { event:'*', schema:'public', table:'items' }, () => { if (!pushing) pullAll(); })
+    .on('postgres_changes', { event:'*', schema:'public', table:'sessions' }, () => { if (!pushing) pullAll(); })
+    .on('postgres_changes', { event:'*', schema:'public', table:'app_state' }, () => { if (!pushing) pullAll(); })
+    .subscribe(status => { realtimeOk = (status === 'SUBSCRIBED'); setDot(); });
 }
 
 /* ───────── 항목 ───────── */
@@ -963,6 +1009,68 @@ $('#sbSave').onclick = () => {
   cfg.url = $('#sbUrl').value.trim(); cfg.key = $('#sbKey').value.trim();
   localStorage.setItem('mirae.url', cfg.url); localStorage.setItem('mirae.key', cfg.key);
   toast('연결합니다'); connect();
+};
+$('#sbTest').onclick = async () => {
+  const out = $('#sbReport'); out.hidden = false;
+  const lines = []; const say = s => { lines.push(s); out.textContent = lines.join('\n'); };
+
+  if (!window.supabase) { say('✕ 수퍼베이스 라이브러리를 못 불러왔습니다. 인터넷 연결을 보세요.'); return; }
+  if (!cfg.url || !cfg.key) { say('✕ 주소와 키가 비어 있습니다.'); return; }
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co\/?$/i.test(cfg.url)) say('! 주소 모양이 예사롭지 않습니다: ' + cfg.url);
+  if (cfg.key.length < 40) say('! 키가 너무 짧습니다. anon public 키가 맞는지 보세요.');
+  say('· 주소와 키 확인');
+
+  const c = window.supabase.createClient(cfg.url, cfg.key);
+
+  for (const t of ['items','sessions','app_state']) {
+    const { error } = await c.from(t).select('*').limit(1);
+    if (error) { say(`✕ ${t} 읽기 실패 — ${error.message}`); }
+    else say(`· ${t} 읽기 됨`);
+  }
+
+  const probeId = '__probe__';
+  const w = await c.from('items').upsert({ id: probeId, data: { probe:true }, updated_at:new Date().toISOString() });
+  if (w.error) {
+    say('✕ 쓰기 실패 — ' + w.error.message);
+    if (/row-level security|permission/i.test(w.error.message))
+      say('  → 테이블에 RLS가 켜져 있습니다. 아래 SQL을 다시 실행하세요.');
+  } else {
+    say('· 쓰기 됨');
+    const r = await c.from('items').select('data').eq('id', probeId).maybeSingle();
+    say(r.error ? '✕ 되읽기 실패 — ' + r.error.message : '· 되읽기 됨');
+    await c.from('items').delete().eq('id', probeId);
+  }
+
+  say('· 실시간 구독 시험 (10초)');
+  await new Promise(res => {
+    let done = false;
+    const ch = c.channel('probe-' + Math.random().toString(36).slice(2))
+      .on('postgres_changes', { event:'*', schema:'public', table:'items' }, () => {
+        if (done) return; done = true;
+        say('· 실시간 신호 받음 — 기기 사이 즉시 반영됩니다');
+        try { c.removeChannel(ch); } catch {}
+        res();
+      })
+      .subscribe(async status => {
+        if (status === 'SUBSCRIBED') {
+          say('· 채널 연결됨');
+          await c.from('items').upsert({ id: probeId, data:{ probe:true } });
+          await c.from('items').delete().eq('id', probeId);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (done) return; done = true;
+          say('✕ 채널 연결 실패 (' + status + ')'); res();
+        }
+      });
+    setTimeout(() => {
+      if (done) return; done = true;
+      say('✕ 실시간 신호가 오지 않습니다.');
+      say('  → 테이블이 Realtime publication에 없습니다. 아래 SQL을 다시 실행하세요.');
+      say('  → 12초마다 다시 읽는 방식으로는 계속 동기화됩니다.');
+      try { c.removeChannel(ch); } catch {}
+      res();
+    }, 10000);
+  });
+  say('— 끝');
 };
 $('#tplSave').onclick = () => {
   cfg.tpl = $('#promptTpl').value; localStorage.setItem('mirae.tpl', cfg.tpl); toast('저장했습니다');
