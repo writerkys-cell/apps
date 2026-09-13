@@ -83,17 +83,15 @@ nav.tabs button.on{color:var(--ink);border-bottom-color:var(--inju)}
 .now .aside{margin-top:16px}
 .now .aside input{background:transparent;border:none;border-bottom:1px dotted var(--rule);border-radius:0;padding:.35em 0;font-size:14px;color:var(--ink-soft)}
 .now .aside input::placeholder{color:var(--ink-faint)}
-.now.empty{border-top-color:var(--rule);text-align:left}
+.now.empty{border-top-color:var(--rule);text-align:left;cursor:text}
 .now.empty p{margin:0;color:var(--ink-faint);font-size:17px}
-
-/* 새 일 */
-.newline{display:flex;gap:12px;align-items:baseline;margin-bottom:20px;border-bottom:1px solid var(--rule)}
-.newline select{width:auto;flex:none;background:transparent;border:none;border-radius:0;color:var(--ink-soft);font-size:14px;padding:.5em 0;cursor:pointer}
-.newline select:focus{outline:none;color:var(--inju)}
-.newline input{background:transparent;border:none;border-radius:0;padding:.5em 0;flex:1;min-width:0}
-.newline input:focus{outline:none}
-.newline:focus-within{border-bottom-color:var(--inju)}
-.newline input::placeholder{color:var(--ink-faint)}
+.now .nowinput{
+  background:transparent;border:none;border-radius:0;padding:0;
+  font-family:'Gowun Batang','Nanum Myeongjo',serif;
+  font-size:27px;line-height:1.45;color:var(--ink);width:100%;
+}
+.now .nowinput:focus{outline:none}
+.now .nowinput::placeholder{color:var(--ink-faint);font-size:22px}
 
 /* 리스트 */
 ul.list{list-style:none;margin:0;padding:0}
@@ -197,14 +195,6 @@ ul.past li.dropped button{color:var(--ink-faint)}
   <section id="tab-today">
     <div class="todayline" id="todayLine"></div>
     <div id="nowSlot"></div>
-    <div class="newline">
-      <select id="newKind">
-        <option value="task">끝나는 일</option>
-        <option value="daily">매일</option>
-        <option value="future">미래</option>
-      </select>
-      <input id="newTitle" placeholder="떠오른 것을 한 문장으로" autocomplete="off">
-    </div>
     <ul class="list" id="list"></ul>
     <div class="weekline">
       <span class="syncdot" id="syncDot">혼자 쓰는 중</span>
@@ -541,8 +531,9 @@ function renderNow(){
   const it = currentItem();
   const slot = $('#nowSlot');
   if (!it) {
-    slot.innerHTML = `<div class="now empty"><div class="eyebrow">지금</div>
-      <p>아무 일도 하고 있지 않습니다. 아래에서 하나를 고르세요.</p></div>`;
+    slot.innerHTML = `<div class="now empty" id="nowEmpty"><div class="eyebrow">지금</div>
+      <p>아무 일도 하고 있지 않습니다. 여기를 눌러 바로 시작하거나, 아래에서 하나를 고르세요.</p></div>`;
+    $('#nowEmpty').onclick = startInline;
     return;
   }
   const note = lastNote(it);
@@ -562,7 +553,7 @@ function renderNow(){
         <button id="actEnd">${it.kind === 'daily' ? '멈추기' : it.kind === 'future' ? '덮어두기' : '세션 끝내기'}</button>
         ${it.kind === 'daily' ? `<button id="actDone">오늘 마침</button>` : ''}
       </div>
-      <div class="aside"><input id="asideInput" placeholder="딴생각은 여기에 적어 옆으로 치워두기" autocomplete="off"></div>
+      <div class="aside"><input id="asideInput" placeholder="떠오른 일이나 딴생각 — 적으면 리스트 맨 위로" autocomplete="off"></div>
     </div>`;
   tickClock();
   if (it.kind === 'task') $('#nowTitle').onclick = () => renameInline(it);
@@ -575,7 +566,7 @@ function renderNow(){
     if (b) b.onclick = () => window.open(l.url, '_blank');
   });
   onEnterSubmit($('#asideInput'), t => {
-    if (addItem(t, 'task')) toast('치워두었습니다');
+    if (addItem(t, 'task')) toast('리스트 맨 위에 넣었습니다');
   });
 }
 function renderTodayLine(){
@@ -683,6 +674,27 @@ function start(it){
   pushItem(it); pushState(); render();
 }
 
+/* 빈 박스를 누르면 그 자리에서 제목을 받아 곧바로 시작한다. 유형은 끝나는 일. */
+function startInline(){
+  const box = $('#nowEmpty'); if (!box) return;
+  const p = box.querySelector('p'); if (!p) return;
+  const input = document.createElement('input');
+  input.className = 'nowinput';
+  input.placeholder = '무엇을 시작합니까';
+  input.autocomplete = 'off';
+  p.replaceWith(input);
+  input.focus();
+  onEnterSubmit(input, v => {
+    input.onblur = null;
+    const made = addItem(v, 'task');
+    if (made) start(made);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { input.onblur = null; render(); }
+  });
+  input.onblur = () => render();
+}
+
 function renameInline(it){
   const h = $('#nowTitle'); if (!h) return;
   const old = it.title;
@@ -738,6 +750,12 @@ function endSession(opts = {}){
       <input id="mName" value="${esc(it.title)}">`}
     <label for="mNote">${isFuture ? '이 미래에 대해 생각한 것' : '적어둘 것'} ${fixedName ? '' : '(알게 된 것, 지금 위치, 바뀐 생각. 비워도 됩니다)'}</label>
     <textarea id="mNote" rows="3" placeholder="${isDaily ? (opts.finishDaily ? '비워도 됩니다' : '어디까지 했는지 적어두면 다음에 뜹니다') : isFuture ? '겨울보다 늦가을이 나을지도' : '212쪽까지 / 테이프가 아니라 편지여야 할 것 같다'}"></textarea>
+    <label for="mKind">이 일의 성격</label>
+    <select id="mKind">
+      <option value="task"${it.kind==='task'?' selected':''}>끝나는 일</option>
+      <option value="daily"${it.kind==='daily'?' selected':''}>매일 하는 일</option>
+      <option value="future"${it.kind==='future'?' selected':''}>미래</option>
+    </select>
     <div class="btnrow">
       <button class="btn solid" id="mOk">${isDaily ? (opts.finishDaily ? '오늘 마침' : '멈추기') : isFuture ? '덮어두기' : '끝내기'}</button>
       ${isDaily ? '' : `<button class="btn" id="mFinish">${isFuture ? '이 미래가 왔다' : '마침'}</button><button class="btn quiet" id="mDrop">내려놓기</button>`}
@@ -756,6 +774,12 @@ function endSession(opts = {}){
         }
       }
       if (note) it.chron.push({ id: uid(), at: new Date().toISOString(), type:'note', text: note });
+      const k = $('#mKind').value;
+      if (k !== it.kind) {
+        if (k === 'future' && openFutures().filter(f => f.id !== it.id).length >= FUTURE_CAP)
+          toast(`미래는 ${FUTURE_CAP}개까지입니다`);
+        else it.kind = k;
+      }
       if (isDaily && opts.finishDaily) {
         it.dailyDone = it.dailyDone || [];
         if (!it.dailyDone.includes(todayKey())) it.dailyDone.push(todayKey());
@@ -1000,9 +1024,6 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => goTa
 $('#brandBtn').onclick = () => goTab('today');
 
 /* ───────── 입력 ───────── */
-onEnterSubmit($('#newTitle'), v => {
-  addItem(v, $('#newKind').value);
-});
 $('#pastSearch').oninput = e => { pastQuery = e.target.value; renderPast(); };
 
 /* 설정 */
