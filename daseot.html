@@ -740,7 +740,10 @@ function openSheet(i){
   if(i===CURI) return;
   setCur(sheet.value);
   CURI=i;
-  if(i==='d'&&!r.diary){ r.diary=newDiary(CUR); r.dchars=count(r.diary); }
+  if(i==='d'&&!r.diary){
+    r.diary=newDiary(CUR); r.dchars=count(r.diary);
+    r.updated=Date.now(); r.dev=DEV; syncPush(CUR);
+  }
   sheet.value=curText();
   paint(); saveDB(); sheet.focus();
   try{ sheet.setSelectionRange(sheet.value.length,sheet.value.length); }catch(e){}
@@ -798,8 +801,14 @@ function onInput(){
 function flush(now){
   clearTimeout(saveT);
   const r=DB.days[CUR];
-  if(r&&curText()!==sheet.value){ setCur(sheet.value); r.updated=Date.now(); r.dev=DEV; }
-  saveDB(); syncPush(CUR,now);
+  let ch=false;
+  if(r&&curText()!==sheet.value){
+    setCur(sheet.value);
+    if(!isDiary()) marks(r);
+    r.updated=Date.now(); r.dev=DEV; ch=true;
+  }
+  if(ch) saveDB();
+  if(ch||SY.pend.has(CUR)) syncPush(CUR,now);
 }
 function insert(t){
   let ok=false;
@@ -1320,11 +1329,11 @@ async function syncFlush(){
   SY.busy++; SY.last=Date.now(); syncMark();
   try{
     const sb=await sbGet();
-    const rows=ids.map(d=>DB.days[d]).filter(r=>r&&!r.off&&!r.lent).map(r=>({
+    const rows=ids.map(d=>DB.days[d]).filter(r=>r&&!r.off&&!r.lent&&r.updated>0).map(r=>({
       d:r.d, body:(sheetsOf(r)[0]||''), sheets:sheetsOf(r), diary:r.diary||'',
       chars:r.chars||0, dchars:r.dchars||0, goal:goalOf(r),
       head:r.head||'', tail:r.tail||'', hours:r.hours||{},
-      done_at:r.doneAt||null, device:DEV, updated:r.updated||Date.now(),
+      done_at:r.doneAt||null, device:DEV, updated:r.updated,
       devchars:r.devchars||{}
     }));
     if(rows.length){
@@ -1340,7 +1349,7 @@ async function syncFlush(){
 }
 async function syncPushAll(){
   if(!SY.user) return;
-  written().filter(r=>!r.off&&!r.lent).forEach(r=>SY.pend.add(r.d));
+  days().filter(r=>!r.off&&!r.lent&&r.updated>0&&(r.chars>0||r.dchars>0)).forEach(r=>SY.pend.add(r.d));
   if(DB.days[CUR]) SY.pend.add(CUR);
   await syncFlush();
   if(!SY.err) toast('이 기기의 기록을 모두 올렸습니다');
@@ -1397,8 +1406,8 @@ async function syncPull(){
 function adoptEditor(){
   const r=DB.days[CUR]; if(!r) return;
   const ss=sheetsOf(r);
-  if(CURI>=ss.length) CURI=ss.length-1;
-  const body=ss[CURI]||'';
+  if(!isDiary()&&(!Number.isInteger(CURI)||CURI>=ss.length)) CURI=ss.length-1;
+  const body=curText();
   drawTabs();
   if(sheet.value===body) return;
   const atEnd=(sheet.selectionStart===sheet.value.length);
