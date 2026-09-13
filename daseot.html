@@ -163,6 +163,7 @@ body.typing #tabs:hover{opacity:1}
   caret-color:var(--ink);
 }
 #sheet::placeholder{color:var(--ink-3)}
+#mirror .crt{display:inline-block;width:0;height:1em;vertical-align:baseline;font-size:inherit}
 #mirror .tk{
   display:inline-block;width:0;height:0;overflow:hidden;
   font-size:0;line-height:0;vertical-align:top;
@@ -349,6 +350,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
 }
 @media (max-height:520px) and (orientation:landscape) and (pointer:coarse){
   #desk{padding-top:40px}
+  #desk{padding-bottom:75vh}
   #paper{
     padding-top:1.1cm;padding-bottom:2.4cm;margin-top:10px;
     min-height:calc(100vh - 58px);
@@ -648,14 +650,16 @@ const written=()=>days().filter(r=>r.chars>0);
 
 /* ── 종이 ─────────────────────────────────────────── */
 function buildMirror(t){
-  if(isDiary()){ mirror.innerHTML=esc(t)+'\u200b'; return; }
+  const car=sheet.selectionStart;
+  const dia=isDiary();
   const r=DB.days[CUR];
   const goal=Math.max(STEP,goalOf(r));
-  const other=Math.max(0,(r?r.chars:0)-count(t));   /* 오늘 다른 종이에 쓴 몫 */
-  let s='', n=0, next=goal-(other%goal);
+  const other=dia?0:Math.max(0,(r?r.chars:0)-count(t));   /* 오늘 다른 종이에 쓴 몫 */
+  let s='', n=0, idx=0, next=goal-(other%goal);
   for(const ch of t){
-    s+=esc(ch);
-    if(ch!=='\n'&&ch!=='\t'){
+    if(idx===car) s+='<b class="crt"></b>';
+    s+=esc(ch); idx+=ch.length;
+    if(!dia&&ch!=='\n'&&ch!=='\t'){
       n++;
       if(n===next){
         const tot=other+n;
@@ -664,13 +668,27 @@ function buildMirror(t){
       }
     }
   }
+  if(idx<=car) s+='<b class="crt"></b>';
   mirror.innerHTML=s+'\u200b';
+}
+/* 자판이 올라와 화면이 줄어도 커서가 늘 보이는 자리에 있게 한다 */
+function keepCaret(){
+  if(document.activeElement!==sheet) return;
+  const el=mirror.querySelector('.crt'); if(!el) return;
+  const vv=window.visualViewport;
+  const top=vv?vv.offsetTop:0;
+  const bot=(vv?vv.height:window.innerHeight)+top;
+  const r=el.getBoundingClientRect();
+  const lh=r.height||20;
+  if(r.bottom>bot-lh*1.2) desk.scrollTop+=(r.bottom-(bot-lh*1.2));
+  else if(r.top<top+50) desk.scrollTop-=((top+50)-r.top);
 }
 function grow(){
   sheet.style.height='auto';
   sheet.style.height=(sheet.scrollHeight+2)+'px';
 }
 function drawNums(){
+  if(isDiary()){ nums.innerHTML=''; return; }
   const pr=paper.getBoundingClientRect(), dr=desk.getBoundingClientRect();
   const room=(pr.left-dr.left>=38);
   const lr=nums.getBoundingClientRect();
@@ -714,6 +732,7 @@ function paint(){
   gauge();
   drawTabs();
   $('#bCopy').hidden=!isDone(DB.days[CUR]);
+  keepCaret();
 }
 /* 아침에 빈 종이를 열면 어제 어디서 끊었는지 보여 준다 */
 function showLast(){
@@ -1587,7 +1606,12 @@ function bind(){
     }
   });
   sheet.addEventListener('blur',()=>flush(true));
-  window.addEventListener('resize',()=>{ if(CUR){ grow(); drawNums(); } });
+  window.addEventListener('resize',()=>{ if(CUR){ grow(); drawNums(); keepCaret(); } });
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize',()=>setTimeout(keepCaret,60));
+    window.visualViewport.addEventListener('scroll',keepCaret);
+  }
+  ['keyup','click','select'].forEach(ev=>sheet.addEventListener(ev,()=>{ buildMirror(sheet.value); keepCaret(); }));
 
   $('#bCopy').addEventListener('click',async()=>{
     const ok=await copyText(forExport(sheet.value));
