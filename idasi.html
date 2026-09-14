@@ -64,14 +64,25 @@ main{height:100%;padding-top:calc(var(--top) + 3.1rem);overflow:hidden}
 
 #edit{background:var(--jongi)}
 #paper{
-  width:100%;min-height:100%;border:0;background:transparent;resize:none;
-  font-family:'Gowun Batang',serif;font-size:17px;line-height:1.95;color:var(--meok);
+  display:block;width:100%;min-height:100%;
+  border:0;background:transparent;resize:none;
+  font-family:'Gowun Batang',serif;
+  font-size:var(--fz,17px);line-height:var(--lh,1.95);color:var(--meok);
   padding:1.4rem 1.2rem calc(var(--bot) + 6rem);
   -webkit-user-select:text;
 }
 #paper:focus{outline:none}
 
+.fld{display:flex;align-items:center;gap:.7rem;padding:.55rem 0;border-bottom:1px solid var(--seon);font-size:.85rem;color:var(--meok-2)}
+.fld span:first-child{flex:1}
+.fld input{width:5rem;text-align:right}
+.fld .u{font-size:.75rem;color:var(--meok-3);width:1.8rem}
 label{display:block;font-size:.8rem;color:var(--meok-2);margin:1.4rem 0 .35rem}
+input[type=number]{
+  font-family:var(--ui);font-size:16px;color:var(--meok);
+  background:var(--jongi);border:1px solid var(--seon);border-radius:2px;
+  padding:.45rem .55rem;
+}
 input[type=text],input[type=password]{
   width:100%;font-family:var(--ui);font-size:16px;color:var(--meok);
   background:var(--jongi);border:1px solid var(--seon);border-radius:2px;
@@ -123,6 +134,11 @@ pre{
 
     <button class="btn" id="save">저장하고 불러오기</button>
 
+    <label>글 보기</label>
+    <div class="fld"><span>글자 크기</span><input type="number" id="fz" min="13" max="28" step="1"><span class="u">px</span></div>
+    <div class="fld"><span>줄 간격</span><input type="number" id="lh" min="1.2" max="3" step="0.05"><span class="u">배</span></div>
+    <p class="note">문단 사이는 한 줄 띄워 보여줍니다. 올릴 때는 도로 붙여 원문 그대로 보냅니다.</p>
+
     <label>표 만들기</label>
     <p class="note">수파베이스의 SQL 편집기에 아래를 한 번 실행해두세요.</p>
     <pre id="sql"></pre>
@@ -159,7 +175,7 @@ var SQL = [
 ].join("\n");
 
 var S = load();
-function fresh(){ return { url:"", key:"", rows:[], drafts:{} }; }
+function fresh(){ return { url:"", key:"", rows:[], drafts:{}, fz:17, lh:1.95 }; }
 function load(){
   var d = fresh();
   try{
@@ -201,6 +217,19 @@ function mae(n){ return (n/200).toFixed(1); }
 function stamp(t){
   var d = new Date(t), z = function(n){ return (n<10?"0":"")+n; };
   return (d.getMonth()+1)+"월 "+d.getDate()+"일 "+z(d.getHours())+":"+z(d.getMinutes());
+}
+
+/* 화면에서는 문단 사이를 한 줄 벌려 보여주고, 올릴 때 도로 붙인다 */
+function spread(t){ return t.split("\n").join("\n\n"); }
+function tighten(t){ return t.replace(/\r/g, "").split(/\n\s*\n/).join("\n"); }
+
+function paperSet(t){ elPaper.value = spread(t); }
+function paperGet(){ return tighten(elPaper.value); }
+
+function applyLook(){
+  var r = document.documentElement.style;
+  r.setProperty("--fz", (S.fz||17) + "px");
+  r.setProperty("--lh", String(S.lh||1.95));
 }
 
 /* ---------- 서버 ---------- */
@@ -323,7 +352,7 @@ function openVersion(id){
   if(!r) return;
   openId = id;
   elTitle.textContent = r.project_name + " · " + r.n + "번째";
-  elPaper.value = bodyOf(r);
+  paperSet(bodyOf(r));
   show("edit");
   elPaper.scrollTop = 0;
 }
@@ -332,7 +361,7 @@ function stash(){
   if(!openId) return;
   var r = S.rows.filter(function(x){ return x.id===openId; })[0];
   if(!r) return;
-  var t = elPaper.value;
+  var t = paperGet();
   if(t === r.text){
     delete S.drafts[openId];
   }else{
@@ -363,9 +392,23 @@ elGear.addEventListener("click", function(){
   $("#url").value = S.url;
   $("#key").value = S.key;
   $("#sql").textContent = SQL;
+  $("#fz").value = S.fz;
+  $("#lh").value = S.lh;
+
   elTitle.textContent = "설정";
   show("setup");
 });
+
+function num(el, key, min, max, fb){
+  el.addEventListener("change", function(){
+    var n = parseFloat(this.value);
+    S[key] = (!isNaN(n) && n>=min && n<=max) ? n : fb;
+    this.value = S[key];
+    save(); applyLook();
+  });
+}
+num($("#fz"), "fz", 13, 28, 17);
+num($("#lh"), "lh", 1.2, 3, 1.95);
 
 $("#save").addEventListener("click", function(){
   S.url = $("#url").value.trim();
@@ -402,6 +445,7 @@ document.addEventListener("visibilitychange", function(){
 window.addEventListener("pagehide", function(){ stash(); });
 
 /* 시작 */
+applyLook();
 renderList();
 show("list");
 if(ready()) pull();
