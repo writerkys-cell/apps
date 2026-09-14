@@ -122,9 +122,21 @@ ul.past li{border-bottom:1px solid var(--rule-soft);padding:13px 2px}
 ul.past li:last-child{border-bottom:none}
 ul.past li.mon{border-bottom:none;padding:26px 2px 2px;font-size:12.5px;color:var(--ink-faint);letter-spacing:.05em}
 ul.past li.mon:first-child{padding-top:0}
+ul.past li.mon.year{font-size:13.5px;color:var(--ink-soft);letter-spacing:.08em;padding-top:34px}
+ul.past li.mon.year:first-child{padding-top:0}
+ul.past li.mon.year button{color:inherit;font-size:inherit;letter-spacing:inherit}
+ul.past li.mon.year button:hover{color:var(--inju)}
+ul.past li.fold{border-bottom:none;padding:11px 2px 4px}
+ul.past li.fold button{font-size:13px;color:var(--ink-faint);width:auto}
+ul.past li.fold button:hover{color:var(--inju)}
+ul.past li.yearfold{padding:15px 2px}
+ul.past li.yearfold button{font-size:14px;color:var(--ink-soft)}
+ul.past li.yearfold button:hover{color:var(--inju)}
+.pastsum .swap{color:var(--ink-faint);border-bottom:1px dotted var(--rule);line-height:1.3}
+.pastsum .swap:hover{color:var(--inju)}
+.pastsum .swap.on{color:var(--ink);border-bottom-color:var(--inju)}
 ul.past li button{text-align:left;width:100%;line-height:1.6;word-break:keep-all}
 ul.past li .meta{font-size:12.5px;color:var(--ink-faint);margin-top:3px}
-ul.past li.dropped button{color:var(--ink-faint)}
 
 /* 설정 */
 .settings h3{font-size:15px;font-weight:400;color:var(--inju);margin:30px 0 10px;letter-spacing:.06em}
@@ -294,6 +306,9 @@ alter table app_state replica identity full;`;
 /* ───────── 상태 ───────── */
 let items = [], sessions = [], appState = { currentId:null, startedAt:null, device:null };
 let sb = null, tab = 'today', pastQuery = '';
+let pastMode = 'done', pastInit = false;
+const openYears = new Set();
+const openMonths = new Set();
 const cfg = {
   url: localStorage.getItem('mirae.url') || '',
   key: localStorage.getItem('mirae.key') || '',
@@ -621,43 +636,111 @@ function renderList(){
   });
 }
 
+function endNote(it){
+  const e = it.chron.filter(c => c.type === 'end').pop();
+  if (!e) return '';
+  return e.text.replace(/^(내려놓음|마침)\s*—\s*/, '').replace(/^(내려놓음|마침)$/, '');
+}
+function pastRow(it, mixed){
+  const d = new Date(it.doneAt || it.createdAt);
+  const took = it.createdAt && it.doneAt ? daysBetween(it.createdAt, it.doneAt) : null;
+  const bits = [];
+  if (mixed && it.status === 'dropped') bits.push('내려놓음');
+  const tail = it.status === 'dropped' ? endNote(it) : (it.outcome || '').trim();
+  if (tail) bits.push(esc(tail));
+  bits.push(`${d.getMonth()+1}.${d.getDate()}`);
+  if (took) bits.push(`${took}일 걸림`);
+  return `<li>
+    <button data-chron="${it.id}">${esc(it.title)}</button>
+    <div class="meta">${bits.join(' · ')}</div>
+  </li>`;
+}
+const doneAtOf = it => new Date(it.doneAt || it.createdAt);
+const newestFirst = (a, b) => doneAtOf(b) - doneAtOf(a);
+
 function renderPast(){
   const q = pastQuery.trim();
-  let list = items.filter(i => i.status !== 'open');
-  if (q) list = list.filter(i =>
-    ((i.title || '') + ' ' + (i.origin || '') + ' ' + (i.outcome || '') + ' ' + i.chron.map(c => c.text).join(' ')).includes(q));
-  list.sort((a, b) => new Date(b.doneAt || b.createdAt) - new Date(a.doneAt || a.createdAt));
-
-  const year = new Date().getFullYear();
-  const all = items.filter(i => i.status !== 'open' && new Date(i.doneAt || i.createdAt).getFullYear() === year);
-  const done = all.filter(i => i.status === 'done').length;
-  const dropped = all.filter(i => i.status === 'dropped').length;
-  const sum = $('#pastSum');
-  sum.textContent = (done || dropped)
-    ? `${year}년에 ${done}가지를 마치고 ${dropped}가지를 내려놓았습니다.`
-    : '';
-
+  const all = items.filter(i => i.status !== 'open');
   const ul = $('#pastList');
+  const bind = () => ul.querySelectorAll('[data-chron]').forEach(b => b.onclick = () => openChron(byId(b.dataset.chron)));
+
+  /* 올해 요약 — 두 숫자가 곧 두 화면으로 가는 통로다 */
+  const yr = new Date().getFullYear();
+  const thisYear = all.filter(i => doneAtOf(i).getFullYear() === yr);
+  const nDone = thisYear.filter(i => i.status === 'done').length;
+  const nDrop = thisYear.filter(i => i.status === 'dropped').length;
+  const sum = $('#pastSum');
+  if (nDone || nDrop) {
+    sum.innerHTML = `${yr}년에 `
+      + `<button class="swap${pastMode === 'done' ? ' on' : ''}" data-mode="done">${nDone}가지를 마치고</button> `
+      + `<button class="swap${pastMode === 'dropped' ? ' on' : ''}" data-mode="dropped">${nDrop}가지를 내려놓았습니다</button>.`;
+    sum.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+      pastMode = b.dataset.mode; pastInit = false; renderPast();
+    });
+  } else sum.innerHTML = '';
+
+  /* 찾는 중에는 마친 것과 내려놓은 것을 가리지 않고 평평하게 */
+  if (q) {
+    const hits = all.filter(i =>
+      ((i.title || '') + ' ' + (i.origin || '') + ' ' + (i.outcome || '') + ' ' + i.chron.map(c => c.text).join(' ')).includes(q)
+    ).sort(newestFirst);
+    ul.innerHTML = hits.length
+      ? hits.map(i => pastRow(i, true)).join('')
+      : `<li><span class="empty-note">찾은 것이 없습니다.</span></li>`;
+    bind(); return;
+  }
+
+  const list = all.filter(i => i.status === (pastMode === 'dropped' ? 'dropped' : 'done')).sort(newestFirst);
   if (!list.length) {
-    ul.innerHTML = `<li><span class="empty-note">${q ? '찾은 것이 없습니다.' : '아직 마친 일이 없습니다.'}</span></li>`;
+    ul.innerHTML = `<li><span class="empty-note">${pastMode === 'dropped' ? '내려놓은 일이 없습니다.' : '아직 마친 일이 없습니다.'}</span></li>`;
     return;
   }
-  let html = '', lastKey = '';
-  list.forEach(it => {
-    const d = new Date(it.doneAt || it.createdAt);
-    const key = `${d.getFullYear()}년 ${d.getMonth()+1}월`;
-    if (key !== lastKey) { html += `<li class="mon">${key}</li>`; lastKey = key; }
-    const took = it.createdAt && it.doneAt ? daysBetween(it.createdAt, it.doneAt) : null;
-    const tail = it.status === 'dropped'
-      ? '내려놓음'
-      : (it.outcome ? esc(it.outcome) : '마침');
-    html += `<li class="${it.status === 'dropped' ? 'dropped' : ''}">
-      <button data-chron="${it.id}">${esc(it.title)}</button>
-      <div class="meta">${tail}${took !== null && took > 0 ? ` · ${took}일 걸림` : ''}</div>
-    </li>`;
+
+  const years = [...new Set(list.map(i => doneAtOf(i).getFullYear()))].sort((a, b) => b - a);
+  if (!pastInit) { openYears.add(years[0]); pastInit = true; }
+
+  let html = '';
+  years.forEach(y => {
+    if (!openYears.has(y)) {
+      const inY = all.filter(i => doneAtOf(i).getFullYear() === y);
+      const d = inY.filter(i => i.status === 'done').length;
+      const r = inY.filter(i => i.status === 'dropped').length;
+      html += `<li class="yearfold"><button data-year="${y}">${y}년 — ${d}가지를 마치고 ${r}가지를 내려놓음</button></li>`;
+      return;
+    }
+    if (years.length > 1) html += `<li class="mon year"><button data-year="${y}">${y}년</button></li>`;
+    const inY = list.filter(i => doneAtOf(i).getFullYear() === y);
+    const months = [...new Set(inY.map(i => doneAtOf(i).getMonth()))].sort((a, b) => b - a);
+    months.forEach(m => {
+      const inM = inY.filter(i => doneAtOf(i).getMonth() === m);
+      html += `<li class="mon">${m + 1}월</li>`;
+      if (pastMode === 'dropped') { html += inM.map(i => pastRow(i)).join(''); return; }
+      const shown = inM.filter(i => (i.outcome || '').trim());
+      const rest = inM.filter(i => !(i.outcome || '').trim());
+      html += shown.map(i => pastRow(i)).join('');
+      if (rest.length) {
+        const key = `${y}-${m}`;
+        if (openMonths.has(key)) {
+          html += rest.map(i => pastRow(i)).join('')
+            + `<li class="fold"><button data-mon="${key}">그 밖에 마친 것 접기</button></li>`;
+        } else {
+          html += `<li class="fold"><button data-mon="${key}">그 밖에 마친 것 ${rest.length}가지</button></li>`;
+        }
+      }
+    });
   });
   ul.innerHTML = html;
-  ul.querySelectorAll('[data-chron]').forEach(b => b.onclick = () => openChron(byId(b.dataset.chron)));
+  bind();
+  ul.querySelectorAll('[data-year]').forEach(b => b.onclick = () => {
+    const y = Number(b.dataset.year);
+    openYears.has(y) ? openYears.delete(y) : openYears.add(y);
+    renderPast();
+  });
+  ul.querySelectorAll('[data-mon]').forEach(b => b.onclick = () => {
+    const k = b.dataset.mon;
+    openMonths.has(k) ? openMonths.delete(k) : openMonths.add(k);
+    renderPast();
+  });
 }
 
 /* ───────── 동작 ───────── */
