@@ -73,6 +73,8 @@ header{
   background:none;border:0;padding:0;
 }
 #clock:empty{display:none}
+#today{color:var(--meok-3);font-size:.8rem;font-variant-numeric:tabular-nums}
+#today:empty{display:none}
 #clock:hover{color:var(--inju)}
 nav{margin-left:auto;display:flex;gap:1.1rem;font-size:.85rem}
 nav button{background:none;border:0;padding:.1rem 0;color:var(--meok-2);border-bottom:1px solid transparent}
@@ -333,6 +335,7 @@ h2:first-child{margin-top:0}
   <select id="proj" aria-label="프로젝트"></select>
   <span id="tally"></span>
   <button id="clock" type="button" title="몰입 중단"></button>
+    <span id="today"></span>
   <nav>
     <button data-view="write" class="on">다시쓰기</button>
     <button data-view="vers">판본</button>
@@ -447,6 +450,7 @@ function fresh(){
     restCut:"휴식끝",
     prompt:DEFAULT_PROMPT,
     finished:[],
+    days:{},
     phase:"idle",
     endsAt:null
   };
@@ -471,6 +475,7 @@ function load(){
   }catch(e){}
   if(!Array.isArray(d.projects) || !d.projects.length) d.projects = fresh().projects;
   if(!Array.isArray(d.finished)) d.finished = [];
+  if(!d.days || typeof d.days !== "object") d.days = {};
   d.projects.forEach(function(p){
     if(typeof p.focusMs !== "number") p.focusMs = 0;
     if(!p.startedAt) p.startedAt = p.versions.length ? p.versions[0].at : null;
@@ -490,6 +495,15 @@ function spanText(ms){
   var r = m%60;
   return r ? h+"시간 "+r+"분" : h+"시간";
 }
+/* 하루의 경계는 새벽 4시 */
+function dayKey(t){
+  var d = new Date(t);
+  if(d.getHours() < 4) d.setDate(d.getDate() - 1);
+  var z = function(n){ return (n<10?"0":"")+n; };
+  return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate());
+}
+function todayMs(){ return S.days[dayKey(Date.now())] || 0; }
+
 function dayCount(from, to){
   var a = new Date(from), b = new Date(to);
   a.setHours(0,0,0,0); b.setHours(0,0,0,0);
@@ -505,7 +519,7 @@ function mae(n){ return (n/200).toFixed(1); }
 var $ = function(s){ return document.querySelector(s); };
 var elPrev=$("#prev"), elWrap=$("#editWrap"), elMirror=$("#mirror"), elInput=$("#input"),
     elSend=$("#send"), elCur=$("#cur"), elTally=$("#tally"), elClock=$("#clock"),
-    elProj=$("#proj"), elBand=$("#band > i"), elRest=$("#rest"), elRestNum=$("#restNum"),
+    elProj=$("#proj"), elToday=$("#today"), elBand=$("#band > i"), elRest=$("#rest"), elRestNum=$("#restNum"),
     elToast=$("#toast"), elTail=$("#restTail"),
     elRun=$("#tailRun"), elStrip=$("#strip"), elNums=$("#nums"), elWhen=$("#when");
 var viewIdx = null;
@@ -1163,10 +1177,17 @@ function clockIn(){
   var p = proj();
   p.focusMs = (p.focusMs||0) + d;
   if(!p.startedAt) p.startedAt = now;
+  var k = dayKey(now);
+  S.days[k] = (S.days[k] || 0) + d;
   if(++tickN % 40 === 0) save();
+}
+function renderToday(){
+  var ms = todayMs();
+  elToday.textContent = ms >= 30000 ? "오늘 " + spanText(ms) : "";
 }
 function tick(){
   clockIn();
+  renderToday();
   if(S.phase==="idle"){ elClock.textContent=""; elBand.style.width="0%"; return; }
   var left = S.endsAt - Date.now();
   var span = (S.phase==="focus" ? S.focusMin : S.restMin)*60000;
@@ -1372,7 +1393,7 @@ document.addEventListener("visibilitychange", function(){ clockIn(); save(); });
 /* 시작 */
 elInput.value = S.draft || "";
 applyStyle(); applySplit();
-renderHead(); renderWrite(); renderSet(); renderVers();
+renderHead(); renderWrite(); renderSet(); renderVers(); renderToday();
 restore(); tick(); setInterval(tick, 250);
 elInput.focus();
 
