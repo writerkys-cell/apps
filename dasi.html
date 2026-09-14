@@ -75,8 +75,22 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .view{display:none;height:100%}
 .view.on{display:block}
 
-#write{display:none;grid-template-columns:1fr 1fr}
+#write{display:none;grid-template-columns:var(--split,50%) 1fr;position:relative}
 #write.on{display:grid}
+#write.dragging{cursor:col-resize;user-select:none;-webkit-user-select:none}
+#write.dragging #input{pointer-events:none}
+#grip{
+  position:absolute;top:0;bottom:0;left:var(--split,50%);
+  width:11px;margin-left:-5px;z-index:20;
+  cursor:col-resize;background:transparent;
+}
+#grip::after{
+  content:"";position:absolute;left:50%;top:50%;
+  width:1px;height:2.2rem;margin:-1.1rem 0 0 -.5px;
+  background:var(--seon);opacity:0;transition:opacity .15s;
+}
+#grip:hover::after,#write.dragging #grip::after{opacity:1;background:var(--inju)}
+@media (prefers-reduced-motion:reduce){#grip::after{transition:none}}
 .pane{height:100%;display:flex;flex-direction:column;min-width:0}
 .pane.left{border-right:1px solid var(--seon);background:var(--jongi)}
 .strip{
@@ -134,8 +148,16 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 #input::placeholder{color:var(--meok-3)}
 #editWrap.focusing #mirror{display:block}
 #editWrap.focusing #input{color:transparent}
-#mirror .ln{color:#cdc7bb}
+#mirror .ln{display:block;position:relative;color:#cdc7bb}
 #mirror .ln.on{color:var(--meok)}
+#mirror .ln[data-n]::before{
+  content:attr(data-n);
+  position:absolute;left:-2rem;top:0;width:1.5rem;
+  text-align:right;font-family:var(--ui);
+  font-size:.62rem;line-height:1.9rem;
+  color:#ddd8cd;font-variant-numeric:tabular-nums;
+}
+#mirror .ln.on[data-n]::before{color:#c0b191}
 
 .foot{
   display:flex;align-items:center;gap:1rem;
@@ -232,7 +254,9 @@ h2:first-child{margin-top:0}
 @media (max-width:760px){
   #write.on{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
   .pane.left{border-right:0;border-bottom:1px solid var(--seon)}
-  #mirror,#input{padding:1.4rem 1.3rem}
+  #grip{display:none}
+  #mirror,#input{padding:1.4rem 1.3rem 1rem 2rem}
+  #mirror .ln[data-n]::before{left:-1.6rem;width:1.2rem}
   .foot{padding-left:1.3rem;padding-right:1.3rem}
   header{padding:.8rem 1.1rem .7rem;gap:.8rem;flex-wrap:wrap}
   nav{gap:.9rem}
@@ -256,6 +280,7 @@ h2:first-child{margin-top:0}
 
 <main>
   <section id="write" class="view on">
+    <div id="grip" role="separator" aria-label="창 나누기" title="끌어서 창 비율 조절"></div>
     <div class="pane left">
       <div class="strip hide" id="strip">
         <span class="nums" id="nums"></span>
@@ -339,6 +364,7 @@ function fresh(){
     focusMin:15,
     restMin:15,
     pfz:16, plh:1.9, ppad:40, pind:1,
+    split:50,
     shortcut:"스크리브너",
     phase:"idle",
     endsAt:null
@@ -420,6 +446,11 @@ function outgoing(){
   return S.lineMode ? tidy(elInput.value) : elInput.value.trim();
 }
 
+function applySplit(){
+  var v = Math.min(75, Math.max(25, S.split || 50));
+  S.split = v;
+  document.getElementById("write").style.setProperty("--split", v+"%");
+}
 function applyStyle(){
   var r = document.documentElement.style;
   r.setProperty("--pfz", S.pfz+"px");
@@ -504,13 +535,14 @@ function renderMirror(){
   if(!S.lineMode) return;
   var lines = elInput.value.split("\n");
   var cur = caretLine();
+  var n = 0;
   elMirror.innerHTML = "";
   lines.forEach(function(l, i){
-    if(i) elMirror.appendChild(document.createTextNode("\n"));
-    var s = document.createElement("span");
-    s.className = "ln" + (i===cur ? " on" : "");
-    s.textContent = l;
-    elMirror.appendChild(s);
+    var d = document.createElement("div");
+    d.className = "ln" + (i===cur ? " on" : "");
+    if(l.trim()){ d.setAttribute("data-n", String(++n)); d.textContent = l; }
+    else { d.textContent = "\u200b"; }
+    elMirror.appendChild(d);
   });
   elMirror.scrollTop = elInput.scrollTop;
 }
@@ -897,6 +929,44 @@ $("#addp").addEventListener("click", function(){
   save(); renderHead(); renderSet(); renderWrite(); renderVers();
 });
 
+/* 가운데 선 끌기 */
+(function(){
+  var wrap = document.getElementById("write"), grip = document.getElementById("grip");
+  var on = false;
+  function pct(x){
+    var r = wrap.getBoundingClientRect();
+    if(!r.width) return S.split;
+    return Math.min(75, Math.max(25, (x - r.left) / r.width * 100));
+  }
+  function move(e){
+    if(!on) return;
+    e.preventDefault();
+    S.split = pct(e.clientX);
+    applySplit();
+  }
+  function up(){
+    if(!on) return;
+    on = false;
+    wrap.classList.remove("dragging");
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+    save();
+    renderMirror();
+  }
+  grip.addEventListener("mousedown", function(e){
+    if(e.button) return;
+    e.preventDefault();
+    on = true;
+    wrap.classList.add("dragging");
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  });
+  grip.addEventListener("dblclick", function(){
+    S.split = 50; applySplit(); save(); renderMirror();
+  });
+  window.addEventListener("resize", function(){ renderMirror(); });
+})();
+
 elPrev.addEventListener("dblclick", function(){
   var x = shown();
   if(x) toScrivener(x.text);
@@ -907,7 +977,7 @@ document.addEventListener("visibilitychange", function(){ clockIn(); save(); });
 
 /* 시작 */
 elInput.value = S.draft || "";
-applyStyle();
+applyStyle(); applySplit();
 renderHead(); renderWrite(); renderSet(); renderVers();
 restore(); tick(); setInterval(tick, 250);
 elInput.focus();
