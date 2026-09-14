@@ -27,6 +27,7 @@
   --plh:1.9;
   --ppad:40px;
   --pmax:544px;
+  --ifz:16px;
   --pind:1em;
 }
 *{box-sizing:border-box}
@@ -140,7 +141,7 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 #mirror,#input{
   position:absolute;inset:0;
   padding:2.6rem 2.4rem 1rem;
-  font-size:1rem;line-height:1.9;
+  font-size:var(--ifz);line-height:1.9;
   white-space:pre-wrap;word-break:break-word;
   border:0;background:transparent;
 }
@@ -159,7 +160,7 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
   content:attr(data-n);
   position:absolute;left:-2rem;top:0;width:1.5rem;
   text-align:right;font-family:var(--ui);
-  font-size:.62rem;line-height:1.9rem;
+  font-size:.62rem;line-height:calc(var(--ifz) * 1.9);
   color:#ddd8cd;font-variant-numeric:tabular-nums;
 }
 #mirror .ln.on[data-n]::before{color:#c0b191}
@@ -211,6 +212,12 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .sum .p .meta{white-space:nowrap;color:var(--meok-3);font-size:.78rem}
 .sum .p.cur .nm{color:var(--inju)}
 .sum .p:hover .nm{color:var(--inju)}
+.sumAct{display:flex;gap:1.2rem;margin-top:1rem;font-size:.8rem}
+.sumAct button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+.sumAct button:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.sum .ask{display:flex;gap:1.4rem;align-items:center;padding:1rem 0 0;font-size:.8rem}
+.sum .ask button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+.sum .ask button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 .sweep{margin-top:2.4rem;font-size:.85rem}
 .sweep button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
 .sweep button:hover{color:var(--inju);border-bottom-color:var(--inju)}
@@ -235,6 +242,13 @@ h2:first-child{margin-top:0}
 .plist button,.addp{background:none;border:0;padding:0;font-size:.8rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
 .plist button:hover,.addp:hover{color:var(--inju);border-bottom-color:var(--inju)}
 .addp{margin-top:1.1rem;font-size:.85rem}
+.tpl{
+  width:100%;margin-top:.9rem;
+  font-family:var(--ui);font-size:.8rem;line-height:1.7;color:var(--meok);
+  background:var(--jongi);border:1px solid var(--seon);border-radius:2px;
+  padding:.8rem .9rem;resize:vertical;min-height:11rem;
+}
+.tpl:focus{outline:none;border-color:var(--inju)}
 .bak{display:flex;gap:1.4rem;align-items:center;padding:1.1rem 0 0;font-size:.85rem}
 .bak button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
 .bak button:hover{color:var(--inju);border-bottom-color:var(--inju)}
@@ -347,9 +361,17 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="ppad">좌우 여백</label><input type="number" id="ppad" min="0" max="160" step="4"><span class="unit">px</span></div>
       <div class="row"><label for="pind">문단 들여쓰기</label><input type="number" id="pind" min="0" max="4" step="0.5"><span class="unit">자</span></div>
 
+      <h2>오른쪽 화면</h2>
+      <div class="row"><label for="ifz">글자 크기</label><input type="number" id="ifz" min="12" max="28" step="1"><span class="unit">px</span></div>
+
       <h2>쓰기</h2>
       <div class="row"><label for="lmode">한 줄씩 집중해서 쓰기</label><input type="checkbox" id="lmode"></div>
       <p class="note">이 앱의 기본 방식입니다. 커서가 놓인 줄만 또렷하고 나머지는 흐려지며, 편집은 평소처럼 자유롭게 하면 됩니다. 왼쪽으로 보낼 때 줄바꿈은 공백 한 칸으로 이어 붙고, 한 줄을 비워둔 자리만 문단으로 나뉩니다. 꺼두면 흐림도 줄 정리도 없는 보통 입력창이 됩니다.</p>
+
+      <h2>AI 프롬프트</h2>
+      <p class="note">판본 탭에서 '이 프로젝트 물어볼 프롬프트'를 누르면 이 틀에 그 프로젝트의 자료를 채워 클립보드에 담습니다. 중괄호로 묶인 자리에 값이 들어갑니다. {프로젝트} {시작일} {일수} {들인시간} {판본수} {총매수} {최종매수} {tpd} {fpd} {배수} {기록} {판본들} {최종판본}</p>
+      <textarea id="tpl" class="tpl" spellcheck="false"></textarea>
+      <div class="bak"><button id="tplReset">기본 틀로 되돌리기</button></div>
 
       <h2>스크리브너</h2>
       <div class="row"><label for="scut">단축어 이름</label><input type="text" id="scut"></div>
@@ -383,6 +405,8 @@ h2:first-child{margin-top:0}
 
 var KEY = "dasi-v1";
 
+var DEFAULT_PROMPT = "'다시쓰기'는 글의 시작 지점을 찾기 위한 도구다. 쓸 대목을 처음부터 끝까지 쓴 뒤 그것을 옆에 펼쳐두고, 보면서 처음부터 다시 친다. 복사해 고치는 것이 아니라 다시 치는 것이라 판본마다 저절로 달라진다. 이것을 대여섯 번에서 열 번쯤 되풀이하다 '여기서 시작하면 되겠다' 싶은 판본이 나오면 그것을 들고 본문 집필로 넘어간다.\n\n아래는 '{프로젝트}'에 쌓인 판본 전부다. 쓴 순서대로다.\n\n[기록]\n{기록}\n\n[판본]\n{판본들}\n\n다음 다섯 가지만 짚어달라. 문장을 고쳐주거나 이어 써주지는 말 것.\n1. 판본이 거듭되며 무엇이 살아남았고 무엇이 버려졌나. 그 방향이 가리키는 것은 무엇인가.\n2. 되풀이해 돌아오는 말·이미지·장면이 있나. 그것이 이 글의 중심일 가능성은.\n3. 아직 정해지지 않은 것은 무엇인가. 화자, 시점, 어디서부터 말을 꺼낼지, 누구에게 말하는지 같은 것들.\n4. 시작 지점에 가까워지고 있나, 같은 자리를 맴돌고 있나. 맴돌고 있다면 무엇이 발목을 잡고 있나.\n5. 다음 판본에서 시도해볼 만한 것 두세 가지. 각각 한 문장으로.\n\n칭찬이나 격려는 빼고, 판본 사이의 실제 변화에 근거해서만 말해달라.";
+
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
 function fresh(){
@@ -394,9 +418,10 @@ function fresh(){
     seeded:true,
     focusMin:15,
     restMin:15,
-    pfz:16, plh:1.9, ppad:40, pind:1, pmax:544,
+    pfz:16, plh:1.9, ppad:40, pind:1, pmax:544, ifz:16,
     split:50,
     shortcut:"스크리브너",
+    prompt:DEFAULT_PROMPT,
     phase:"idle",
     endsAt:null
   };
@@ -488,6 +513,7 @@ function applyStyle(){
   r.setProperty("--plh", String(S.plh));
   r.setProperty("--ppad", S.ppad+"px");
   r.setProperty("--pmax", S.pmax+"px");
+  r.setProperty("--ifz", S.ifz+"px");
   r.setProperty("--pind", S.pind+"em");
 }
 
@@ -635,6 +661,22 @@ function renderSummary(w){
     };
     box.appendChild(b);
   });
+
+  var ask = document.createElement("div");
+  ask.className = "ask";
+  var a1 = document.createElement("button");
+  a1.textContent = "이 프로젝트 물어볼 프롬프트";
+  a1.onclick = function(){
+    var p = proj();
+    if(!p.versions.length){ toast("판본이 아직 없습니다"); return; }
+    copyText(promptOne(p), "프롬프트를 복사했습니다");
+  };
+  var a2 = document.createElement("button");
+  a2.textContent = "전체 기록 프롬프트";
+  a2.onclick = function(){ copyText(promptAll(), "프롬프트를 복사했습니다"); };
+  ask.appendChild(a1); ask.appendChild(a2);
+  box.appendChild(ask);
+
   w.appendChild(box);
 }
 
@@ -702,11 +744,13 @@ function renderSet(){
   $("#rmin").value = S.restMin;
   $("#pfz").value = S.pfz;
   $("#plh").value = S.plh;
+  $("#ifz").value = S.ifz;
   $("#pmax").value = S.pmax;
   $("#ppad").value = S.ppad;
   $("#pind").value = S.pind;
   $("#lmode").checked = S.lineMode;
   $("#scut").value = S.shortcut;
+  $("#tpl").value = S.prompt || DEFAULT_PROMPT;
   var ul = $("#plist");
   ul.innerHTML = "";
   S.projects.forEach(function(p){
@@ -746,6 +790,99 @@ function send(){
   elInput.value = ""; S.draft = "";
   save(); renderHead(); renderWrite();
   elInput.focus();
+}
+
+function copyText(text, msg){
+  var done = function(){ toast(msg || "복사했습니다"); };
+  function fallback(){
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(ta);
+    done();
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, fallback);
+  }else fallback();
+}
+
+/* ---------- AI에게 물을 프롬프트 ---------- */
+var HOW = "'다시쓰기'는 글의 시작 지점을 찾기 위한 도구다. 쓸 대목을 처음부터 끝까지 쓴 뒤 그것을 옆에 펼쳐두고, "
+        + "보면서 처음부터 다시 친다. 복사해 고치는 것이 아니라 다시 치는 것이라 판본마다 저절로 달라진다. "
+        + "이것을 대여섯 번에서 열 번쯤 되풀이하다 '여기서 시작하면 되겠다' 싶은 판본이 나오면 그것을 들고 본문 집필로 넘어간다.";
+
+function projStats(p){
+  var v = p.versions || [];
+  var last = v.length ? v[v.length-1] : null;
+  var began = p.startedAt || (v.length ? v[0].at : null);
+  var total = 0;
+  v.forEach(function(x){ total += x.text.length; });
+  return {
+    v:v, last:last, began:began, total:total,
+    days: began ? dayCount(began, last ? last.at : Date.now()) : 0
+  };
+}
+function statLines(p){
+  var t = projStats(p), L = [];
+  L.push("프로젝트: " + p.name);
+  L.push("시작: " + (t.began ? dayText(t.began) : "아직"));
+  L.push("경과: " + (t.days ? t.days + "일째" : "-"));
+  L.push("들인 시간: " + (p.focusMs ? spanText(p.focusMs) : "기록 없음"));
+  L.push("판본 수: " + t.v.length + "개");
+  L.push("총 매수: " + mae(t.total) + "매");
+  L.push("최종 판본 매수: " + (t.last ? mae(t.last.text.length) + "매" : "-"));
+  if(t.last && t.days){
+    L.push("하루당 총매수(tpd): " + ((t.total/200)/t.days).toFixed(1));
+    L.push("하루당 최종매수(fpd): " + ((t.last.text.length/200)/t.days).toFixed(1));
+    if(t.last.text.length) L.push("한 매를 남기려고 친 매수: " + (t.total/t.last.text.length).toFixed(1) + "배");
+  }
+  return L.join("\n");
+}
+
+function promptOne(p){
+  var t = projStats(p);
+  var body = t.v.map(function(x, i){
+    return "— " + (i+1) + "번째 (" + stamp(x.at) + " · " + mae(x.text.length) + "매)\n" + x.text;
+  }).join("\n\n");
+  var map = {
+    "프로젝트": p.name,
+    "시작일": t.began ? dayText(t.began) : "아직",
+    "일수": String(t.days),
+    "들인시간": p.focusMs ? spanText(p.focusMs) : "기록 없음",
+    "판본수": String(t.v.length),
+    "총매수": mae(t.total),
+    "최종매수": t.last ? mae(t.last.text.length) : "0.0",
+    "tpd": t.days ? ((t.total/200)/t.days).toFixed(1) : "0.0",
+    "fpd": (t.last && t.days) ? ((t.last.text.length/200)/t.days).toFixed(1) : "0.0",
+    "배수": (t.last && t.last.text.length) ? (t.total/t.last.text.length).toFixed(1) : "0.0",
+    "기록": statLines(p),
+    "판본들": body,
+    "최종판본": t.last ? t.last.text : ""
+  };
+  return (S.prompt || DEFAULT_PROMPT).replace(/\{([^}\n]+)\}/g, function(m, k){
+    return (k in map) ? map[k] : m;
+  });
+}
+
+function promptAll(){
+  var out = [];
+  out.push(HOW);
+  out.push("");
+  out.push("아래는 지금까지의 프로젝트별 기록이다. 본문은 빼고 수치만 추렸다.");
+  out.push("시작 지점을 찾고 나면 판본은 지우기 때문에, 이미 끝난 글은 여기 남아 있지 않을 수 있다.");
+  S.projects.forEach(function(p){
+    out.push("");
+    out.push(statLines(p));
+  });
+  out.push("");
+  out.push("이 기록을 보고 다음을 알려달라.");
+  out.push("1. 나는 대개 몇 판본, 며칠, 몇 배쯤 쳐야 시작 지점에 닿는가.");
+  out.push("2. 유난히 오래 걸린 글과 빨리 풀린 글 사이에 수치상 어떤 차이가 있나.");
+  out.push("3. 새 글을 시작할 때 며칠과 몇 시간을 잡아두면 무리가 없겠나.");
+  out.push("4. 이 수치만으로는 알 수 없는 것이 있다면 무엇인가.");
+  return out.join("\n");
 }
 
 function toScrivener(text){
@@ -942,6 +1079,7 @@ num($("#rmin"),"restMin",1,120,15);
 num($("#pfz"),"pfz",12,28,16,applyStyle);
 num($("#plh"),"plh",1.2,3,1.9,applyStyle);
 num($("#pmax"),"pmax",280,1400,544,applyStyle);
+num($("#ifz"),"ifz",12,28,16,function(){ applyStyle(); renderMirror(); });
 num($("#ppad"),"ppad",0,160,40,applyStyle);
 num($("#pind"),"pind",0,4,1,applyStyle);
 
@@ -949,6 +1087,13 @@ $("#lmode").addEventListener("change", function(){
   S.lineMode = this.checked;
   save(); renderMode(); renderCount();
 });
+$("#tpl").addEventListener("change", function(){ S.prompt = this.value; save(); });
+$("#tplReset").addEventListener("click", function(){
+  if(!confirm("프롬프트 틀을 기본값으로 되돌립니다.")) return;
+  S.prompt = DEFAULT_PROMPT; save(); $("#tpl").value = S.prompt;
+  toast("되돌렸습니다");
+});
+
 $("#scut").addEventListener("change", function(){ S.shortcut = this.value; save(); });
 
 /* 백업 */
