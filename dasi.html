@@ -254,6 +254,44 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .sweep button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
 .sweep button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 
+.calhead{display:flex;align-items:baseline;gap:1.2rem;margin-bottom:.6rem}
+.calhead #calTitle{flex:1;font-size:1rem}
+.calhead button{background:none;border:0;padding:0;font-size:.8rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+.calhead button:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.calsum{margin:0 0 1.4rem;font-size:.8rem;color:var(--meok-2);line-height:1.9}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px}
+.dow span{text-align:center;font-size:.68rem;color:var(--meok-3)}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cell{
+  position:relative;aspect-ratio:1;border-radius:2px;
+  background:var(--jongi);border:1px solid var(--seon);
+}
+.cell.pad{background:transparent;border-color:transparent}
+.cell.t0{background:var(--jongi)}
+.cell.t1{background:#eddcd8;border-color:#e3cdc8}
+.cell.t2{background:#d79c95;border-color:#cf8c84}
+.cell.t3{background:#a8322d;border-color:#a8322d}
+.cell.t4{background:#46525c;border-color:#46525c}
+.cell .n{position:absolute;top:3px;left:5px;font-size:.62rem;color:var(--meok-3)}
+.cell.t2 .n,.cell.t3 .n,.cell.t4 .n{color:rgba(255,255,255,.75)}
+.cell.today{box-shadow:0 0 0 1px var(--meok) inset}
+.cell .dots{position:absolute;left:0;right:0;bottom:4px;display:flex;justify-content:center;gap:2px}
+.cell .dots i{width:3px;height:3px;border-radius:50%;background:var(--meok-3);display:block}
+.cell.t2 .dots i,.cell.t3 .dots i,.cell.t4 .dots i{background:rgba(255,255,255,.85)}
+.cell .fin{position:absolute;top:3px;right:4px;font-size:.6rem;color:var(--inju)}
+.cell.t3 .fin,.cell.t4 .fin,.cell.t2 .fin{color:#fff}
+.legend{display:flex;flex-wrap:wrap;gap:1rem;margin-top:1rem;font-size:.72rem;color:var(--meok-3)}
+.legend span{display:flex;align-items:center;gap:.35rem}
+.legend i{width:9px;height:9px;border-radius:2px;display:block;border:1px solid var(--seon)}
+.weeks{display:flex;align-items:flex-end;gap:9px;height:5.5rem;margin-top:.8rem;position:relative}
+.weeks .wk{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.weeks .bar{width:100%;background:#d79c95;border-radius:1px 1px 0 0;min-height:1px}
+.weeks .bar.ok{background:#a8322d}
+.weeks .bar.over{background:#46525c}
+.weeks .lb{font-size:.6rem;color:var(--meok-3);margin-top:.3rem;white-space:nowrap}
+.weeks .rule{position:absolute;left:0;right:0;border-top:1px dashed var(--seon);pointer-events:none}
+.weeks .rule span{position:absolute;right:0;top:-1.1em;font-size:.6rem;color:var(--meok-3)}
+
 .row{display:flex;align-items:center;gap:.7rem;padding:.85rem 0;border-bottom:1px solid var(--seon)}
 .row label{flex:1;color:var(--meok-2);font-size:.9rem}
 .row .unit{color:var(--meok-3);font-size:.8rem;width:2.2rem}
@@ -351,6 +389,7 @@ h2:first-child{margin-top:0}
   <nav>
     <button data-view="write" class="on">다시쓰기</button>
     <button data-view="vers">판본</button>
+    <button data-view="cal">달력</button>
     <button data-view="set">설정</button>
   </nav>
 </header>
@@ -379,6 +418,22 @@ h2:first-child{margin-top:0}
 
   <section id="vers" class="view">
     <div class="scroll"><div class="wrap" id="versWrap"></div></div>
+  </section>
+
+  <section id="cal" class="view">
+    <div class="scroll"><div class="wrap">
+      <div class="calhead">
+        <button id="calPrev">이전</button>
+        <span id="calTitle"></span>
+        <button id="calNext">다음</button>
+      </div>
+      <p class="calsum" id="calSum"></p>
+      <div class="dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+      <div class="grid" id="calGrid"></div>
+      <div class="legend" id="calLeg"></div>
+      <h2>주당 하루 평균</h2>
+      <div class="weeks" id="calWeeks"></div>
+    </div></div>
   </section>
 
   <section id="set" class="view">
@@ -479,6 +534,7 @@ function fresh(){
     prompt:DEFAULT_PROMPT,
     finished:[],
     days:{},
+    sent:{},
     phase:"idle",
     endsAt:null
   };
@@ -505,6 +561,7 @@ function load(){
   if(!Array.isArray(d.finished)) d.finished = [];
   if(!Array.isArray(d.pending)) d.pending = [];
   if(!d.days || typeof d.days !== "object") d.days = {};
+  if(!d.sent || typeof d.sent !== "object") d.sent = {};
   d.projects.forEach(function(p){
     if(typeof p.focusMs !== "number") p.focusMs = 0;
     if(!p.startedAt) p.startedAt = p.versions.length ? p.versions[0].at : null;
@@ -1003,6 +1060,146 @@ function renderVers(){
   renderDone(w);
 }
 
+/* ---------- 달력 ---------- */
+var calRef = new Date();
+var H = 3600000;
+
+function keyOf(y, m, d){
+  var z = function(n){ return (n<10?"0":"")+n; };
+  return y + "-" + z(m+1) + "-" + z(d);
+}
+function tierOf(ms){
+  if(!ms) return 0;
+  if(ms < 2*H) return 1;
+  if(ms < 3*H) return 2;
+  if(ms <= 4*H) return 3;
+  return 4;
+}
+function finsByDay(){
+  var m = {};
+  S.finished.forEach(function(x){
+    var k = dayKey(x.at);
+    m[k] = (m[k] || 0) + 1;
+  });
+  return m;
+}
+
+function renderCal(){
+  var y = calRef.getFullYear(), mo = calRef.getMonth();
+  var first = new Date(y, mo, 1);
+  var last = new Date(y, mo+1, 0).getDate();
+  var today = new Date(), tk = dayKey(Date.now());
+  var fins = finsByDay();
+
+  $("#calTitle").textContent = y + "년 " + (mo+1) + "월";
+
+  /* 이번 달 통계 */
+  var upto = (y === today.getFullYear() && mo === today.getMonth())
+    ? today.getDate() : last;
+  var sum = 0, over2 = 0, streak = 0, best = 0;
+  for(var d=1; d<=upto; d++){
+    var ms = S.days[keyOf(y,mo,d)] || 0;
+    sum += ms;
+    if(ms >= 2*H){ over2++; streak++; if(streak>best) best = streak; }
+    else streak = 0;
+  }
+  var bits = [];
+  if(upto){
+    bits.push("하루 평균 " + spanText(sum/upto));
+    bits.push("두 시간 넘긴 날 " + Math.round(over2/upto*100) + "% (" + over2 + "/" + upto + "일)");
+    if(best) bits.push("가장 길게 이어진 " + best + "일");
+  }
+  $("#calSum").textContent = bits.join(" · ");
+
+  /* 격자 */
+  var g = $("#calGrid");
+  g.innerHTML = "";
+  for(var i=0; i<first.getDay(); i++){
+    var pad = document.createElement("div");
+    pad.className = "cell pad";
+    g.appendChild(pad);
+  }
+  for(var d2=1; d2<=last; d2++){
+    var k = keyOf(y, mo, d2);
+    var ms2 = S.days[k] || 0;
+    var c = document.createElement("div");
+    c.className = "cell t" + tierOf(ms2) + (k===tk ? " today" : "");
+    c.title = (mo+1) + "월 " + d2 + "일 · " + (ms2 ? spanText(ms2) : "쉼")
+            + (S.sent[k] ? " · 판본 " + S.sent[k] + "개" : "");
+    var n = document.createElement("span");
+    n.className = "n"; n.textContent = d2;
+    c.appendChild(n);
+    if(fins[k]){
+      var f = document.createElement("span");
+      f.className = "fin"; f.textContent = "끝";
+      c.appendChild(f);
+    }
+    if(S.sent[k]){
+      var dots = document.createElement("span");
+      dots.className = "dots";
+      var cnt = Math.min(5, S.sent[k]);
+      for(var j=0; j<cnt; j++) dots.appendChild(document.createElement("i"));
+      c.appendChild(dots);
+    }
+    g.appendChild(c);
+  }
+
+  /* 범례 */
+  $("#calLeg").innerHTML =
+      '<span><i style="background:#fcfcfa"></i>쉼</span>'
+    + '<span><i style="background:#eddcd8;border-color:#e3cdc8"></i>2시간 미만</span>'
+    + '<span><i style="background:#d79c95;border-color:#cf8c84"></i>2~3시간</span>'
+    + '<span><i style="background:#a8322d;border-color:#a8322d"></i>3~4시간</span>'
+    + '<span><i style="background:#46525c;border-color:#46525c"></i>4시간 넘음</span>'
+    + '<span><i style="background:transparent;border:0"></i>점은 그날 보낸 판본</span>';
+
+  renderWeeks();
+}
+
+function renderWeeks(){
+  var box = $("#calWeeks");
+  box.innerHTML = "";
+  var end = new Date();
+  end.setHours(0,0,0,0);
+  end.setDate(end.getDate() - end.getDay());   /* 이번 주 일요일 */
+  var weeks = [];
+  for(var w=7; w>=0; w--){
+    var st = new Date(end);
+    st.setDate(st.getDate() - w*7);
+    var sum = 0, n = 0;
+    for(var i=0; i<7; i++){
+      var d = new Date(st);
+      d.setDate(d.getDate() + i);
+      if(d > new Date()) break;
+      sum += S.days[keyOf(d.getFullYear(), d.getMonth(), d.getDate())] || 0;
+      n++;
+    }
+    weeks.push({ st:st, avg: n ? sum/n : 0 });
+  }
+  var top = Math.max(4*H, Math.max.apply(null, weeks.map(function(x){ return x.avg; })) * 1.1);
+
+  var rule = document.createElement("div");
+  rule.className = "rule";
+  rule.style.bottom = "calc(" + (3*H/top*100).toFixed(1) + "% + 1.1rem)";
+  rule.innerHTML = "<span>3시간</span>";
+  box.appendChild(rule);
+
+  weeks.forEach(function(x){
+    var wk = document.createElement("div");
+    wk.className = "wk";
+    var bar = document.createElement("div");
+    var t = tierOf(x.avg);
+    bar.className = "bar" + (t===3 ? " ok" : t===4 ? " over" : "");
+    bar.style.height = "max(1px, calc(" + (x.avg/top*100).toFixed(1) + "% - 1.1rem))";
+    bar.title = spanText(x.avg);
+    var lb = document.createElement("div");
+    lb.className = "lb";
+    lb.textContent = (x.st.getMonth()+1) + "/" + x.st.getDate();
+    wk.appendChild(bar); wk.appendChild(lb);
+    box.appendChild(wk);
+  });
+}
+
 function renderSet(){
   $("#fmin").value = S.focusMin;
   $("#rmin").value = S.restMin;
@@ -1189,6 +1386,8 @@ function send(){
   var full = pre ? (pre + "\n" + t) : t;
   var p = proj();
   var row = { id:uid(), text:full, typed:t.length, at:Date.now() };
+  var dk = dayKey(row.at);
+  S.sent[dk] = (S.sent[dk] || 0) + 1;
   p.versions.push(row);
   cloudPush({
     id: row.id,
@@ -1507,10 +1706,11 @@ document.querySelectorAll("nav button").forEach(function(b){
   b.addEventListener("click", function(){
     document.querySelectorAll("nav button").forEach(function(x){ x.classList.remove("on"); });
     b.classList.add("on");
-    ["write","vers","set"].forEach(function(v){
+    ["write","vers","cal","set"].forEach(function(v){
       document.getElementById(v).classList.toggle("on", v===b.dataset.view);
     });
     if(b.dataset.view==="vers") renderVers();
+    if(b.dataset.view==="cal") renderCal();
     if(b.dataset.view==="set") renderSet();
     if(b.dataset.view==="write"){ elInput.focus(); renderMirror(); }
   });
@@ -1550,6 +1750,9 @@ $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(
 $("#scut").addEventListener("change", function(){ S.shortcut = this.value; save(); });
 $("#rcut").addEventListener("change", function(){ S.restCut = this.value; save(); });
 $("#startcut").addEventListener("change", function(){ S.startCut = this.value; save(); });
+$("#calPrev").addEventListener("click", function(){ calRef.setMonth(calRef.getMonth()-1); renderCal(); });
+$("#calNext").addEventListener("click", function(){ calRef.setMonth(calRef.getMonth()+1); renderCal(); });
+
 $("#sburl").addEventListener("change", function(){ S.sbUrl = this.value.trim(); save(); });
 $("#sbkey").addEventListener("change", function(){ S.sbKey = this.value.trim(); save(); });
 $("#sbPull").addEventListener("click", function(){
