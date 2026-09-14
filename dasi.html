@@ -75,6 +75,7 @@ header{
 #clock:empty{display:none}
 #today{color:var(--meok-3);font-size:.8rem;font-variant-numeric:tabular-nums}
 #today:empty{display:none}
+#today.met{color:var(--inju)}
 #clock:hover{color:var(--inju)}
 nav{margin-left:auto;display:flex;gap:1.1rem;font-size:.85rem}
 nav button{background:none;border:0;padding:.1rem 0;color:var(--meok-2);border-bottom:1px solid transparent}
@@ -381,6 +382,12 @@ h2:first-child{margin-top:0}
       <h2>시간</h2>
       <div class="row"><label for="fmin">몰입</label><input type="number" id="fmin" min="1" max="120" step="1"><span class="unit">분</span></div>
       <div class="row"><label for="rmin">휴식</label><input type="number" id="rmin" min="1" max="120" step="1"><span class="unit">분</span></div>
+      <div class="row">
+        <label for="goalH">하루 목표</label>
+        <input type="number" id="goalH" min="0" max="16" step="1"><span class="unit">시간</span>
+        <input type="number" id="goalM" min="0" max="59" step="1"><span class="unit">분</span>
+      </div>
+      <p class="note">머리줄에 오늘 몰입한 시간이 목표와 함께 뜹니다. 0시간 0분으로 두면 목표 없이 누적만 보입니다.</p>
 
       <h2>왼쪽 화면</h2>
       <div class="row"><label for="pfz">글자 크기</label><input type="number" id="pfz" min="12" max="28" step="1"><span class="unit">px</span></div>
@@ -405,6 +412,7 @@ h2:first-child{margin-top:0}
 
       <h2>스크리브너</h2>
       <div class="row"><label for="scut">보낼 때 실행할 단축어</label><input type="text" id="scut"></div>
+      <div class="row"><label for="startcut">몰입을 시작할 때 실행할 단축어</label><input type="text" id="startcut"></div>
       <div class="row"><label for="rcut">휴식에 들어갈 때 실행할 단축어</label><input type="text" id="rcut"></div>
       <p class="note">몰입이 끝나 휴식으로 넘어가는 순간 이 단축어를 실행하고, 휴식 시간을 분 단위 숫자로 입력에 담아 보냅니다. 단축어 쪽에서 그 분만큼 기다렸다가 알람을 울리게 하시면 됩니다. 비워두면 실행하지 않습니다.</p>
 
@@ -455,6 +463,8 @@ function fresh(){
     split:50,
     shortcut:"스크리브너",
     restCut:"휴식끝",
+    startCut:"",
+    goalH:3, goalM:0,
     prompt:DEFAULT_PROMPT,
     finished:[],
     days:{},
@@ -949,6 +959,9 @@ function renderSet(){
   $("#smart").checked = S.smart !== false;
   $("#scut").value = S.shortcut;
   $("#rcut").value = S.restCut || "";
+  $("#startcut").value = S.startCut || "";
+  $("#goalH").value = S.goalH;
+  $("#goalM").value = S.goalM;
   $("#tpl").value = S.prompt || DEFAULT_PROMPT;
   var ul = $("#plist");
   ul.innerHTML = "";
@@ -1194,6 +1207,7 @@ function startFocus(){
   if(!p.startedAt) p.startedAt = Date.now();
   lastTick = Date.now();
   S.phase="focus"; S.endsAt = lastTick + S.focusMin*60000; save();
+  runShortcut(S.startCut, S.focusMin);
 }
 function startRest(){
   clockIn(); save();
@@ -1233,7 +1247,14 @@ function clockIn(){
 }
 function renderToday(){
   var ms = todayMs();
-  elToday.textContent = ms >= 30000 ? "오늘 " + spanText(ms) : "";
+  var goal = ((S.goalH||0)*60 + (S.goalM||0)) * 60000;
+  if(!goal){
+    elToday.textContent = ms >= 30000 ? "오늘 " + spanText(ms) : "";
+    elToday.classList.remove("met");
+    return;
+  }
+  elToday.textContent = "오늘 " + (ms < 60000 ? "0분" : spanText(ms)) + " / " + spanText(goal);
+  elToday.classList.toggle("met", ms >= goal);
 }
 function tick(){
   clockIn();
@@ -1320,6 +1341,8 @@ function num(el, key, min, max, fallback, after){
 }
 num($("#fmin"),"focusMin",1,120,15);
 num($("#rmin"),"restMin",1,120,15);
+num($("#goalH"),"goalH",0,16,3,renderToday);
+num($("#goalM"),"goalM",0,59,0,renderToday);
 num($("#pfz"),"pfz",12,28,16,applyStyle);
 num($("#plh"),"plh",1.2,3,1.9,applyStyle);
 num($("#pmax"),"pmax",280,1400,544,applyStyle);
@@ -1341,6 +1364,7 @@ $("#tplReset").addEventListener("click", function(){
 $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(); });
 $("#scut").addEventListener("change", function(){ S.shortcut = this.value; save(); });
 $("#rcut").addEventListener("change", function(){ S.restCut = this.value; save(); });
+$("#startcut").addEventListener("change", function(){ S.startCut = this.value; save(); });
 
 /* 백업 */
 $("#expBtn").addEventListener("click", function(){
