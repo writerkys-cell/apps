@@ -135,6 +135,10 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .prev.pickable .para{cursor:pointer}
 .prev.pickable .para:hover{color:var(--inju)}
 .prev .para.fixed{color:#c6bfb3}
+.prev .para .add{color:var(--inju)}
+.prev .para .del{color:#c3bcb0;text-decoration:line-through}
+.prev .para.fixed .add,.prev .para.fixed .del{color:#cfc9bd}
+.strip .mark{color:var(--inju);white-space:nowrap}
 .prev .para.edge{
   padding-bottom:.5em;margin-bottom:.5em;
   border-bottom:1px solid var(--inju);
@@ -416,6 +420,12 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="rcut">휴식에 들어갈 때 실행할 단축어</label><input type="text" id="rcut"></div>
       <p class="note">몰입이 끝나 휴식으로 넘어가는 순간 이 단축어를 실행하고, 휴식 시간을 분 단위 숫자로 입력에 담아 보냅니다. 단축어 쪽에서 그 분만큼 기다렸다가 알람을 울리게 하시면 됩니다. 비워두면 실행하지 않습니다.</p>
 
+      <h2>아이폰과 잇기</h2>
+      <div class="row"><label for="sburl">수파베이스 주소</label><input type="text" id="sburl" placeholder="https://xxxx.supabase.co"></div>
+      <div class="row"><label for="sbkey">익명 열쇠</label><input type="text" id="sbkey" placeholder="eyJ..."></div>
+      <p class="note">판본을 보낼 때마다 이곳에 올립니다. 밖에서 아이폰으로 최종 판본을 손보면 그 자국이 왼쪽 표시창에 인주색으로, 지운 자리는 줄이 그어진 채로 나타납니다. 자국을 보며 다시 써서 새 판본을 만들면 자국은 사라집니다. 비워두면 올리지 않습니다.</p>
+      <div class="bak"><button id="sbPull">지금 가져오기</button><button id="sbPush">밀린 판본 올리기</button></div>
+
       <h2>프로젝트</h2>
       <ul class="plist" id="plist"></ul>
       <button class="addp" id="addp">새 프로젝트 만들기</button>
@@ -464,6 +474,7 @@ function fresh(){
     shortcut:"스크리브너",
     restCut:"휴식끝",
     startCut:"",
+    sbUrl:"", sbKey:"", pending:[],
     goalH:3, goalM:0,
     prompt:DEFAULT_PROMPT,
     finished:[],
@@ -492,6 +503,7 @@ function load(){
   }catch(e){}
   if(!Array.isArray(d.projects) || !d.projects.length) d.projects = fresh().projects;
   if(!Array.isArray(d.finished)) d.finished = [];
+  if(!Array.isArray(d.pending)) d.pending = [];
   if(!d.days || typeof d.days !== "object") d.days = {};
   d.projects.forEach(function(p){
     if(typeof p.focusMs !== "number") p.focusMs = 0;
@@ -627,6 +639,8 @@ function renderStrip(){
   elStrip.classList.remove("hide");
   var cur = shownIdx();
   var from = Math.max(0, v.length-10);
+  var old = elStrip.querySelector(".mark");
+  if(old) elStrip.removeChild(old);
   elNums.innerHTML = "";
   for(var i=from;i<v.length;i++){
     (function(i){
@@ -642,23 +656,54 @@ function renderStrip(){
       elNums.appendChild(b);
     })(i);
   }
-  elWhen.textContent = mae(v[cur].text.length) + "매 · " + stamp(v[cur].at);
+  elWhen.textContent = mae(bodyOf(v[cur]).length) + "매 · " + stamp(v[cur].at);
+  if(marked(v[cur])){
+    var mk = document.createElement("span");
+    mk.className = "mark"; mk.textContent = "손봄";
+    elStrip.insertBefore(mk, elWhen);
+  }
   elNums.scrollLeft = elNums.scrollWidth;
 }
 var ANCHOR_FROM = 1000;   /* 이만큼 길어진 뒤부터 선을 그을 수 있다 */
 
+function bodyOf(x){ return (x && x.review) ? x.review : (x ? x.text : ""); }
+function marked(x){ return !!(x && x.review && x.review !== x.text); }
 function paras(){
   var x = shown();
   if(!x) return [];
-  return x.text.split("\n").filter(function(l){ return l.trim().length; });
+  return bodyOf(x).split("\n").filter(function(l){ return l.trim().length; });
 }
 function canAnchor(){
   var x = shown();
-  return !!x && x.text.length >= ANCHOR_FROM && paras().length > 1;
+  return !!x && bodyOf(x).length >= ANCHOR_FROM && paras().length > 1;
 }
 function fixedText(){
   if(!anchor) return "";
   return paras().slice(0, anchor).join("\n");
+}
+
+/* 자국을 문단별 조각으로 나눈다 */
+function markedParas(x){
+  var ops = diffWords(x.text, x.review);
+  var out = [], cur = [];
+  function flushPara(){
+    if(cur.some(function(c){ return c.s.trim().length; })) out.push(cur);
+    cur = [];
+  }
+  ops.forEach(function(op){
+    if(op.t === "del"){
+      var s = op.s.replace(/\n+/g, " ");
+      if(s) cur.push({t:"del", s:s});
+      return;
+    }
+    var parts = op.s.split("\n");
+    parts.forEach(function(piece, k){
+      if(k) flushPara();
+      if(piece) cur.push({t:op.t, s:piece});
+    });
+  });
+  flushPara();
+  return out;
 }
 
 function renderPrev(){
@@ -676,12 +721,23 @@ function renderPrev(){
   elPrev.classList.remove("empty");
   elPrev.classList.toggle("pickable", pick);
   elPrev.innerHTML = "";
+  var chunks = marked(x) ? markedParas(x) : null;
   list.forEach(function(line, i){
     var p = document.createElement("p");
     p.className = "para"
       + (i < anchor ? " fixed" : "")
       + (anchor && i === anchor-1 ? " edge" : "");
-    p.textContent = line;
+    if(chunks && chunks[i]){
+      chunks[i].forEach(function(c){
+        if(c.t === "same"){ p.appendChild(document.createTextNode(c.s)); return; }
+        var sp = document.createElement("span");
+        sp.className = (c.t === "add") ? "add" : "del";
+        sp.textContent = c.s;
+        p.appendChild(sp);
+      });
+    }else{
+      p.textContent = line;
+    }
     if(pick){
       p.title = (anchor === i+1) ? "선 풀기" : "여기까지 두고 그 뒤부터 다시 쓰기";
       p.onclick = function(){
@@ -937,6 +993,7 @@ function renderVers(){
     if(!confirm("'"+p.name+"'을 끝낸 글로 넘기고 판본 "+v.length+"개를 지웁니다.\n"
               + "판본 수·매수·들인 시간은 기록으로 남고, 원고는 되돌릴 수 없습니다.")) return;
     archive(p);
+    cloudDrop(p.id);
     viewIdx = null; anchor = 0;
     save(); renderHead(); renderVers(); renderWrite();
     toast("끝낸 글로 넘겼습니다");
@@ -960,6 +1017,8 @@ function renderSet(){
   $("#scut").value = S.shortcut;
   $("#rcut").value = S.restCut || "";
   $("#startcut").value = S.startCut || "";
+  $("#sburl").value = S.sbUrl || "";
+  $("#sbkey").value = S.sbKey || "";
   $("#goalH").value = S.goalH;
   $("#goalM").value = S.goalM;
   $("#tpl").value = S.prompt || DEFAULT_PROMPT;
@@ -996,6 +1055,7 @@ function renderSet(){
           : "'"+p.name+"'을 지웁니다.";
         if(!confirm(msg)) return;
         if(has) archive(p);
+        cloudDrop(p.id);
         S.projects = S.projects.filter(function(q){ return q.id!==p.id; });
         if(S.current===p.id){ S.current = S.projects[0].id; viewIdx=null; S.draft=""; elInput.value=""; }
         save(); renderHead(); renderSet(); renderWrite(); renderVers();
@@ -1006,13 +1066,138 @@ function renderSet(){
   });
 }
 
+/* ---------- 아이폰과 잇기 ---------- */
+function cloudOn(){ return !!(S.sbUrl && S.sbKey); }
+function sbFetch(path, opt){
+  opt = opt || {};
+  opt.headers = Object.assign({
+    "apikey": S.sbKey,
+    "Authorization": "Bearer " + S.sbKey,
+    "Content-Type": "application/json"
+  }, opt.headers || {});
+  return fetch(S.sbUrl.replace(/\/+$/,"") + "/rest/v1/" + path, opt);
+}
+
+function cloudPush(row){
+  if(!cloudOn()) return;
+  sbFetch("dasi_versions", {
+    method: "POST",
+    headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify(row)
+  }).then(function(r){
+    if(!r.ok) throw new Error(r.status+"");
+  }).catch(function(){
+    S.pending.push(row);
+    save();
+  });
+}
+
+function flush(done){
+  if(!cloudOn() || !S.pending.length){ if(done) done(S.pending.length); return; }
+  var queue = S.pending.slice();
+  S.pending = [];
+  save();
+  queue.reduce(function(chain, row){
+    return chain.then(function(){
+      return sbFetch("dasi_versions", {
+        method: "POST",
+        headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify(row)
+      }).then(function(r){
+        if(!r.ok) throw new Error(r.status+"");
+      }).catch(function(){
+        S.pending.push(row);
+      });
+    });
+  }, Promise.resolve()).then(function(){
+    save();
+    if(done) done(S.pending.length);
+  });
+}
+
+function cloudDrop(projectId){
+  if(!cloudOn()) return;
+  sbFetch("dasi_versions?project_id=eq." + encodeURIComponent(projectId), {
+    method: "DELETE",
+    headers: { "Prefer": "return=minimal" }
+  }).catch(function(){});
+}
+
+function cloudPull(done){
+  if(!cloudOn()){ if(done) done(0); return; }
+  sbFetch("dasi_versions?select=id,review,review_at&review=not.is.null&limit=300")
+    .then(function(r){ if(!r.ok) throw new Error(r.status+""); return r.json(); })
+    .then(function(rows){
+      var map = {};
+      rows.forEach(function(r){ map[r.id] = r; });
+      var n = 0;
+      S.projects.forEach(function(p){
+        (p.versions||[]).forEach(function(x){
+          var r = map[x.id];
+          if(!r) return;
+          if(r.review && r.review !== x.text && r.review !== x.review){
+            x.review = r.review;
+            n++;
+          }
+        });
+      });
+      if(n){ save(); renderWrite(); renderVers(); }
+      if(done) done(n);
+    })
+    .catch(function(){ if(done) done(0); });
+}
+
+/* 어절 단위로 견주기 */
+function tokens(t){
+  return t.split(/(\s+)/).filter(function(x){ return x.length; });
+}
+function diffWords(a, b){
+  var A = tokens(a), B = tokens(b);
+  var n = A.length, m = B.length;
+  if(n*m > 900000) return [{t:"same", s:b}];
+  var prev = new Uint32Array(m+1), cur = new Uint32Array(m+1);
+  var grid = [];
+  for(var i=n-1;i>=0;i--){
+    for(var j=m-1;j>=0;j--){
+      cur[j] = (A[i]===B[j]) ? prev[j+1]+1 : Math.max(prev[j], cur[j+1]);
+    }
+    grid[i] = cur.slice();
+    var tmp = prev; prev = cur; cur = tmp;
+  }
+  var ops = [], i2 = 0, j2 = 0;
+  function put(t, s){
+    if(!s) return;
+    var last = ops[ops.length-1];
+    if(last && last.t === t) last.s += s;
+    else ops.push({t:t, s:s});
+  }
+  while(i2 < n && j2 < m){
+    if(A[i2] === B[j2]){ put("same", A[i2]); i2++; j2++; }
+    else if((grid[i2+1] ? grid[i2+1][j2] : 0) >= (grid[i2][j2+1] || 0)){ put("del", A[i2]); i2++; }
+    else { put("add", B[j2]); j2++; }
+  }
+  while(i2 < n){ put("del", A[i2]); i2++; }
+  while(j2 < m){ put("add", B[j2]); j2++; }
+  return ops;
+}
+
 /* ---------- 동작 ---------- */
 function send(){
   var t = outgoing();
   if(!t) return;
   var pre = fixedText();
   var full = pre ? (pre + "\n" + t) : t;
-  proj().versions.push({ id:uid(), text:full, typed:t.length, at:Date.now() });
+  var p = proj();
+  var row = { id:uid(), text:full, typed:t.length, at:Date.now() };
+  p.versions.push(row);
+  cloudPush({
+    id: row.id,
+    project_id: p.id,
+    project_name: p.name,
+    n: p.versions.length,
+    text: full,
+    created_at: new Date(row.at).toISOString()
+  });
   anchor = 0;
   viewIdx = null;
   elInput.value = ""; S.draft = "";
@@ -1365,6 +1550,16 @@ $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(
 $("#scut").addEventListener("change", function(){ S.shortcut = this.value; save(); });
 $("#rcut").addEventListener("change", function(){ S.restCut = this.value; save(); });
 $("#startcut").addEventListener("change", function(){ S.startCut = this.value; save(); });
+$("#sburl").addEventListener("change", function(){ S.sbUrl = this.value.trim(); save(); });
+$("#sbkey").addEventListener("change", function(){ S.sbKey = this.value.trim(); save(); });
+$("#sbPull").addEventListener("click", function(){
+  cloudPull(function(n){ toast(n ? "손본 자국 "+n+"개를 가져왔습니다" : "새 자국이 없습니다"); });
+});
+$("#sbPush").addEventListener("click", function(){
+  var n = S.pending.length;
+  if(!n){ toast("밀린 판본이 없습니다"); return; }
+  flush(function(left){ toast(left ? left+"개가 아직 남았습니다" : n+"개를 올렸습니다"); });
+});
 
 /* 백업 */
 $("#expBtn").addEventListener("click", function(){
@@ -1469,6 +1664,11 @@ elInput.value = S.draft || "";
 applyStyle(); applySplit();
 renderHead(); renderWrite(); renderSet(); renderVers(); renderToday();
 restore(); tick(); setInterval(tick, 250);
+flush(); cloudPull();
+window.addEventListener("online", function(){ flush(); cloudPull(); });
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "visible"){ flush(); cloudPull(); }
+});
 elInput.focus();
 
 })();
