@@ -385,7 +385,7 @@ h2:first-child{margin-top:0}
       <h2>쓰기</h2>
       <div class="row"><label for="lmode">한 줄씩 집중해서 쓰기</label><input type="checkbox" id="lmode"></div>
       <div class="row"><label for="smart">스마트 문장부호</label><input type="checkbox" id="smart"></div>
-      <p class="note">치는 대로 따옴표가 여닫는 모양(“ ” ‘ ’)으로 바뀌고, 마침표 세 개는 말줄임표(…)로, 붙임표 두 개는 줄표(—)로 바뀝니다. 이미 쳐둔 글은 건드리지 않습니다.</p>
+      <p class="note">왼쪽으로 보낼 때 따옴표가 여닫는 모양(“ ” ‘ ’)으로 바뀌고, 마침표 세 개는 가운데 말줄임표(⋯)로, 붙임표 두 개는 줄표(—)로 바뀝니다. 치는 동안에는 곧은 채로 보입니다.</p>
       <p class="note">이 앱의 기본 방식입니다. 커서가 놓인 줄만 또렷하고 나머지는 흐려지며, 편집은 평소처럼 자유롭게 하면 됩니다. 왼쪽으로 보낼 때 줄바꿈은 공백 한 칸으로 이어 붙고, 한 줄을 비워둔 자리만 문단으로 나뉩니다. 꺼두면 흐림도 줄 정리도 없는 보통 입력창이 됩니다.</p>
 
       <h2>AI 프롬프트</h2>
@@ -521,8 +521,29 @@ function tidy(raw){
                 .filter(function(l){ return l.length; }).join(" ");
   }).filter(function(b){ return b.length; }).join("\n");
 }
+/* 왼쪽으로 보낼 때 문장부호 다듬기 */
+function punct(t){
+  if(S.smart === false) return t;
+  var out = "", open = " \n\t([{<\u300c\u300e\uff08";
+  for(var i=0;i<t.length;i++){
+    var ch = t.charAt(i);
+    if(ch === '"' || ch === "'"){
+      var prev = i ? out.charAt(out.length-1) : "";
+      var isOpen = (prev === "") || open.indexOf(prev) > -1;
+      out += (ch === '"') ? (isOpen ? "\u201c" : "\u201d") : (isOpen ? "\u2018" : "\u2019");
+    }else if(ch === "." && t.substr(i,3) === "..."){
+      out += "\u22ef"; i += 2;
+    }else if(ch === "-" && t.charAt(i+1) === "-"){
+      out += "\u2014"; i += 1;
+    }else{
+      out += ch;
+    }
+  }
+  return out;
+}
+
 function outgoing(){
-  return S.lineMode ? tidy(elInput.value) : elInput.value.trim();
+  return punct(S.lineMode ? tidy(elInput.value) : elInput.value.trim());
 }
 
 function applySplit(){
@@ -605,45 +626,6 @@ function renderPrev(){
     elPrev.appendChild(p);
   });
   elPrev.scrollTop = 0;
-}
-
-/* 치는 대로 문장부호 다듬기 */
-var OPENERS = " \n\t([{<\u201c\u2018\u300c\u300e\u2014\u2013-\uff08";
-var fixing = false;
-function smartFix(){
-  if(fixing) return false;
-  if(S.smart === false) return false;
-  var v = elInput.value, pos = elInput.selectionStart;
-  if(pos == null || pos < 1) return false;
-  var ch = v.charAt(pos-1), cut = 0, put = "";
-
-  if(ch === '"' || ch === "'"){
-    var prev = pos >= 2 ? v.charAt(pos-2) : "";
-    var open = (prev === "") || OPENERS.indexOf(prev) > -1;
-    put = (ch === '"') ? (open ? "\u201c" : "\u201d") : (open ? "\u2018" : "\u2019");
-    cut = 1;
-  }else if(ch === "." && v.slice(pos-3, pos) === "..."){
-    put = "\u2026"; cut = 3;
-  }else if(ch === "-" && v.charAt(pos-2) === "-"){
-    put = "\u2014"; cut = 2;
-  }else{
-    return false;
-  }
-
-  fixing = true;
-  try{
-    elInput.setSelectionRange(pos-cut, pos);
-    var ok = false;
-    try{ ok = document.execCommand("insertText", false, put); }catch(e){ ok = false; }
-    if(!ok){
-      elInput.value = v.slice(0, pos-cut) + put + v.slice(pos);
-      var at = pos - cut + put.length;
-      elInput.setSelectionRange(at, at);
-    }
-  }finally{
-    fixing = false;
-  }
-  return true;
 }
 
 /* 커서가 놓인 줄만 또렷하게 */
@@ -1098,7 +1080,7 @@ function tailSentences(text, n){
     var ch = text[i];
     if(ch==="\n"){ if(buf.trim()) out.push(buf.trim()); buf=""; continue; }
     buf += ch;
-    if(".!?\u2026".indexOf(ch) > -1){
+    if(".!?\u2026\u22ef".indexOf(ch) > -1){
       while(i+1 < text.length && close.indexOf(text[i+1]) > -1) buf += text[++i];
       if(buf.trim()) out.push(buf.trim());
       buf = "";
@@ -1202,8 +1184,7 @@ function restore(){
 }
 
 /* ---------- 연결 ---------- */
-elInput.addEventListener("input", function(e){
-  if(!e.isComposing) smartFix();
+elInput.addEventListener("input", function(){
   if(S.phase==="idle" && elInput.value.length) startFocus();
   S.draft = elInput.value;
   save(); renderMirror(); renderCount();
