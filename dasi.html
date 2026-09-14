@@ -131,6 +131,13 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
   word-break:break-all;hanging-punctuation:allow-end;
 }
 .prev .para + .para{margin-top:.15em}
+.prev.pickable .para{cursor:pointer}
+.prev.pickable .para:hover{color:var(--inju)}
+.prev .para.fixed{color:#c6bfb3}
+.prev .para.edge{
+  padding-bottom:.5em;margin-bottom:.5em;
+  border-bottom:1px solid var(--inju);
+}
 .prev.empty{
   color:var(--meok-3);display:flex;align-items:center;justify-content:center;
   text-align:center;font-size:1rem;line-height:1.9;font-family:var(--ui);
@@ -523,6 +530,7 @@ var elPrev=$("#prev"), elWrap=$("#editWrap"), elMirror=$("#mirror"), elInput=$("
     elToast=$("#toast"), elTail=$("#restTail"),
     elRun=$("#tailRun"), elStrip=$("#strip"), elNums=$("#nums"), elWhen=$("#when");
 var viewIdx = null;
+var anchor = 0;   /* 굳은 문단 수 — 그 뒤부터 다시 쓴다 */
 
 function toast(msg){
   elToast.textContent = msg;
@@ -587,7 +595,7 @@ function renderHead(){
     elProj.appendChild(o);
   });
   var v = proj().versions, total = 0;
-  v.forEach(function(x){ total += x.text.length; });
+  v.forEach(function(x){ total += typedLen(x); });
   elTally.innerHTML = v.length
     ? "<b>"+v.length+"</b>번째 · 누적 <b>"+mae(total)+"</b>매"
     : "첫 판본을 기다리는 중";
@@ -618,7 +626,8 @@ function renderStrip(){
       b.title = (i+1)+"번째 판본";
       b.onclick = function(){
         viewIdx = (i===v.length-1) ? null : i;
-        renderPrev(); renderStrip();
+        anchor = 0;
+        renderPrev(); renderStrip(); renderCount();
       };
       elNums.appendChild(b);
     })(i);
@@ -626,20 +635,50 @@ function renderStrip(){
   elWhen.textContent = mae(v[cur].text.length) + "매 · " + stamp(v[cur].at);
   elNums.scrollLeft = elNums.scrollWidth;
 }
+var ANCHOR_FROM = 1000;   /* 이만큼 길어진 뒤부터 선을 그을 수 있다 */
+
+function paras(){
+  var x = shown();
+  if(!x) return [];
+  return x.text.split("\n").filter(function(l){ return l.trim().length; });
+}
+function canAnchor(){
+  var x = shown();
+  return !!x && x.text.length >= ANCHOR_FROM && paras().length > 1;
+}
+function fixedText(){
+  if(!anchor) return "";
+  return paras().slice(0, anchor).join("\n");
+}
+
 function renderPrev(){
   var x = shown();
   if(!x){
     elPrev.classList.add("empty");
+    elPrev.classList.remove("pickable");
     elPrev.innerHTML = "아직 판본이 없습니다.<br>오른쪽에 쓰고 왼쪽으로 보내세요.";
     return;
   }
+  var list = paras();
+  if(anchor > list.length) anchor = 0;
+  var pick = canAnchor();
+
   elPrev.classList.remove("empty");
+  elPrev.classList.toggle("pickable", pick);
   elPrev.innerHTML = "";
-  x.text.split("\n").forEach(function(line){
-    if(!line.trim()) return;
+  list.forEach(function(line, i){
     var p = document.createElement("p");
-    p.className = "para";
+    p.className = "para"
+      + (i < anchor ? " fixed" : "")
+      + (anchor && i === anchor-1 ? " edge" : "");
     p.textContent = line;
+    if(pick){
+      p.title = (anchor === i+1) ? "선 풀기" : "여기까지 두고 그 뒤부터 다시 쓰기";
+      p.onclick = function(){
+        anchor = (anchor === i+1) ? 0 : i+1;
+        renderPrev(); renderCount();
+      };
+    }
     elPrev.appendChild(p);
   });
   elPrev.scrollTop = 0;
@@ -673,7 +712,14 @@ function renderMode(){
 
 function renderCount(){
   var t = outgoing();
-  elCur.textContent = t.length ? t.length.toLocaleString()+"자 · "+mae(t.length)+"매" : "";
+  var pre = fixedText();
+  if(!t.length){
+    elCur.textContent = pre ? "굳은 "+mae(pre.length)+"매" : "";
+  }else if(pre){
+    elCur.textContent = "굳은 "+mae(pre.length)+"매 + "+mae(t.length)+"매 = "+mae(pre.length+1+t.length)+"매";
+  }else{
+    elCur.textContent = t.length.toLocaleString()+"자 · "+mae(t.length)+"매";
+  }
   elSend.disabled = !t.length;
 }
 
@@ -690,7 +736,7 @@ function archive(p){
   var v = p.versions || [];
   if(!v.length) return false;
   var total = 0;
-  v.forEach(function(x){ total += x.text.length; });
+  v.forEach(function(x){ total += typedLen(x); });
   S.finished.push({
     id: uid(),
     name: p.name,
@@ -791,7 +837,7 @@ function renderSummary(w){
     if(last && began){
       var days = dayCount(began, last.at);
       var total = 0;
-      p.versions.forEach(function(x){ total += x.text.length; });
+      p.versions.forEach(function(x){ total += typedLen(x); });
       var tpd = (total/200)/days;
       var fpd = (last.text.length/200)/days;
       bits.push(tpd.toFixed(1)+"tpd");
@@ -803,7 +849,7 @@ function renderSummary(w){
     b.onclick = function(){
       if(p.id===S.current) return;
       S.current = p.id;
-      viewIdx = null; S.draft = ""; elInput.value = "";
+      viewIdx = null; anchor = 0; S.draft = ""; elInput.value = "";
       save(); renderHead(); renderWrite(); renderVers(); renderSet();
     };
     box.appendChild(b);
@@ -865,7 +911,7 @@ function renderVers(){
       if(!confirm(i+"번째 판본을 지웁니다.")) return;
       var p = proj();
       p.versions = p.versions.filter(function(y){ return y.id!==x.id; });
-      viewIdx = null;
+      viewIdx = null; anchor = 0;
       save(); renderHead(); renderVers(); renderWrite();
     };
     a.appendChild(b1); a.appendChild(b2);
@@ -881,7 +927,7 @@ function renderVers(){
     if(!confirm("'"+p.name+"'을 끝낸 글로 넘기고 판본 "+v.length+"개를 지웁니다.\n"
               + "판본 수·매수·들인 시간은 기록으로 남고, 원고는 되돌릴 수 없습니다.")) return;
     archive(p);
-    viewIdx = null;
+    viewIdx = null; anchor = 0;
     save(); renderHead(); renderVers(); renderWrite();
     toast("끝낸 글로 넘겼습니다");
   };
@@ -951,7 +997,10 @@ function renderSet(){
 function send(){
   var t = outgoing();
   if(!t) return;
-  proj().versions.push({ id:uid(), text:t, at:Date.now() });
+  var pre = fixedText();
+  var full = pre ? (pre + "\n" + t) : t;
+  proj().versions.push({ id:uid(), text:full, typed:t.length, at:Date.now() });
+  anchor = 0;
   viewIdx = null;
   elInput.value = ""; S.draft = "";
   save(); renderHead(); renderWrite();
@@ -979,12 +1028,13 @@ var HOW = "'다시쓰기'는 글의 시작 지점을 찾기 위한 도구다. �
         + "보면서 처음부터 다시 친다. 복사해 고치는 것이 아니라 다시 치는 것이라 판본마다 저절로 달라진다. "
         + "이것을 대여섯 번에서 열 번쯤 되풀이하다 '여기서 시작하면 되겠다' 싶은 판본이 나오면 그것을 들고 본문 집필로 넘어간다.";
 
+function typedLen(x){ return (typeof x.typed === "number") ? x.typed : x.text.length; }
 function projStats(p){
   var v = p.versions || [];
   var last = v.length ? v[v.length-1] : null;
   var began = p.startedAt || (v.length ? v[0].at : null);
   var total = 0;
-  v.forEach(function(x){ total += x.text.length; });
+  v.forEach(function(x){ total += typedLen(x); });
   return {
     v:v, last:last, began:began, total:total,
     days: began ? dayCount(began, last ? last.at : Date.now()) : 0
@@ -1243,7 +1293,7 @@ elClock.addEventListener("click", function(){
 
 elProj.addEventListener("change", function(){
   S.current = elProj.value;
-  viewIdx = null; S.draft = ""; elInput.value = "";
+  viewIdx = null; anchor = 0; S.draft = ""; elInput.value = "";
   save(); renderHead(); renderWrite(); renderVers(); renderSet();
 });
 
@@ -1340,7 +1390,7 @@ $("#addp").addEventListener("click", function(){
   var p = { id:uid(), name:n.trim(), tag:"", versions:[], focusMs:0, startedAt:null };
   S.projects.push(p);
   S.current = p.id;
-  viewIdx = null; S.draft = ""; elInput.value = "";
+  viewIdx = null; anchor = 0; S.draft = ""; elInput.value = "";
   save(); renderHead(); renderSet(); renderWrite(); renderVers();
 });
 
