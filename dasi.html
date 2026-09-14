@@ -335,7 +335,7 @@ h2:first-child{margin-top:0}
     <div class="pane right">
       <div id="editWrap">
         <div id="mirror" aria-hidden="true"></div>
-        <textarea id="input" placeholder="여기에 씁니다." spellcheck="false"></textarea>
+        <textarea id="input" placeholder="여기에 씁니다." spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
       </div>
       <div class="foot">
         <span id="cur"></span>
@@ -589,7 +589,9 @@ function renderPrev(){
 
 /* 치는 대로 문장부호 다듬기 */
 var OPENERS = " \n\t([{<\u201c\u2018\u300c\u300e\u2014\u2013-\uff08";
+var fixing = false;
 function smartFix(){
+  if(fixing) return false;
   if(S.smart === false) return false;
   var v = elInput.value, pos = elInput.selectionStart;
   if(pos == null || pos < 1) return false;
@@ -608,9 +610,19 @@ function smartFix(){
     return false;
   }
 
-  elInput.value = v.slice(0, pos-cut) + put + v.slice(pos);
-  var at = pos - cut + put.length;
-  elInput.setSelectionRange(at, at);
+  fixing = true;
+  try{
+    elInput.setSelectionRange(pos-cut, pos);
+    var ok = false;
+    try{ ok = document.execCommand("insertText", false, put); }catch(e){ ok = false; }
+    if(!ok){
+      elInput.value = v.slice(0, pos-cut) + put + v.slice(pos);
+      var at = pos - cut + put.length;
+      elInput.setSelectionRange(at, at);
+    }
+  }finally{
+    fixing = false;
+  }
   return true;
 }
 
