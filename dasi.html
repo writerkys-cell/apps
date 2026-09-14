@@ -212,6 +212,24 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .sum .p .meta{white-space:nowrap;color:var(--meok-3);font-size:.78rem}
 .sum .p.cur .nm{color:var(--inju)}
 .sum .p:hover .nm{color:var(--inju)}
+.sum .all{
+  display:flex;align-items:baseline;gap:.9rem;
+  padding:0 0 .8rem;font-size:.85rem;
+}
+.sum .all .nm{flex:1;color:var(--inju)}
+.sum .all .meta{white-space:nowrap;color:var(--meok-2);font-size:.78rem}
+.sum .p .tag{color:var(--meok-3);font-size:.78rem;flex:none}
+
+.done{margin-top:3rem}
+.done h3{font-size:.85rem;font-weight:400;color:var(--meok-2);margin:0 0 .6rem}
+.done .d{
+  display:flex;align-items:baseline;gap:.9rem;
+  padding:.55rem 0;border-bottom:1px solid var(--seon);font-size:.85rem;
+}
+.done .d:first-of-type{border-top:1px solid var(--seon)}
+.done .d .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.done .d .tag{color:var(--meok-3);font-size:.78rem;flex:none}
+.done .d .meta{white-space:nowrap;color:var(--meok-3);font-size:.78rem}
 .sumAct{display:flex;gap:1.2rem;margin-top:1rem;font-size:.8rem}
 .sumAct button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
 .sumAct button:hover{color:var(--inju);border-bottom-color:var(--inju)}
@@ -413,7 +431,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 
 function fresh(){
   return {
-    projects:[{id:uid(),name:"이름 없는 글",versions:[],focusMs:0,startedAt:null}],
+    projects:[{id:uid(),name:"이름 없는 글",tag:"",versions:[],focusMs:0,startedAt:null}],
     current:null,
     draft:"",
     lineMode:true,
@@ -425,6 +443,7 @@ function fresh(){
     split:50,
     shortcut:"스크리브너",
     prompt:DEFAULT_PROMPT,
+    finished:[],
     phase:"idle",
     endsAt:null
   };
@@ -448,6 +467,7 @@ function load(){
     }
   }catch(e){}
   if(!Array.isArray(d.projects) || !d.projects.length) d.projects = fresh().projects;
+  if(!Array.isArray(d.finished)) d.finished = [];
   d.projects.forEach(function(p){
     if(typeof p.focusMs !== "number") p.focusMs = 0;
     if(!p.startedAt) p.startedAt = p.versions.length ? p.versions[0].at : null;
@@ -666,6 +686,86 @@ function stamp(t){
   return (d.getMonth()+1)+"월 "+d.getDate()+"일 "+p(d.getHours())+":"+p(d.getMinutes());
 }
 
+/* 끝낸 글의 숫자만 남기기 */
+function archive(p){
+  var v = p.versions || [];
+  if(!v.length) return false;
+  var total = 0;
+  v.forEach(function(x){ total += x.text.length; });
+  S.finished.push({
+    id: uid(),
+    name: p.name,
+    tag: p.tag || "",
+    versions: v.length,
+    total: total,
+    fin: v[v.length-1].text.length,
+    focusMs: p.focusMs || 0,
+    at: Date.now()
+  });
+  p.versions = [];
+  p.focusMs = 0;
+  p.startedAt = null;
+  return true;
+}
+
+function shortSpan(ms){
+  var m = Math.round(ms/60000);
+  if(m < 60) return m + "분";
+  return Math.floor(m/60) + ":" + ((m%60)<10?"0":"") + (m%60);
+}
+
+function renderDone(w){
+  var f = S.finished;
+  if(!f.length) return;
+  var box = document.createElement("section");
+  box.className = "done";
+  var h = document.createElement("h3");
+
+  var timed = f.filter(function(x){ return x.focusMs > 0; });
+  var sumMs = 0, sumV = 0, sumT = 0, sumF = 0;
+  f.forEach(function(x){ sumV += x.versions; sumT += x.total; sumF += x.fin; });
+  timed.forEach(function(x){ sumMs += x.focusMs; });
+
+  var bits = [];
+  if(timed.length){
+    var lo = Math.min.apply(null, timed.map(function(x){ return x.focusMs; }));
+    var hi = Math.max.apply(null, timed.map(function(x){ return x.focusMs; }));
+    var avg = "한 편당 " + spanText(sumMs/timed.length);
+    if(timed.length > 1) avg += " (" + shortSpan(lo) + "–" + shortSpan(hi) + ")";
+    bits.push(avg);
+  }
+  bits.push((sumV/f.length).toFixed(1) + "판본");
+  if(sumF) bits.push((sumT/sumF).toFixed(1) + "배");
+  h.textContent = "끝낸 글 " + f.length + "편 · " + bits.join(" · ");
+  box.appendChild(h);
+
+  f.slice().reverse().forEach(function(x){
+    var d = document.createElement("div");
+    d.className = "d";
+    var nm = document.createElement("span");
+    nm.className = "nm"; nm.textContent = x.name;
+    d.appendChild(nm);
+    if(x.tag){
+      var tg = document.createElement("span");
+      tg.className = "tag"; tg.textContent = x.tag;
+      d.appendChild(tg);
+    }
+    var meta = document.createElement("span");
+    meta.className = "meta";
+    var m = [];
+    if(x.focusMs) m.push(spanText(x.focusMs));
+    m.push(x.versions + "판본");
+    m.push(mae(x.fin) + "매");
+    if(x.fin) m.push((x.total/x.fin).toFixed(1) + "배");
+    m.push(dayText(x.at));
+    meta.textContent = m.join(" · ");
+    d.appendChild(meta);
+    box.appendChild(d);
+  });
+
+  w.appendChild(box);
+}
+
 function renderSummary(w){
   var box = document.createElement("div");
   box.className = "sum";
@@ -674,6 +774,12 @@ function renderSummary(w){
     b.className = "p" + (p.id===S.current ? " cur" : "");
     var nm = document.createElement("span");
     nm.className = "nm"; nm.textContent = p.name;
+    b.appendChild(nm);
+    if(p.tag){
+      var tg = document.createElement("span");
+      tg.className = "tag"; tg.textContent = p.tag;
+      b.appendChild(tg);
+    }
     var meta = document.createElement("span");
     meta.className = "meta";
     var began = p.startedAt || (p.versions.length ? p.versions[0].at : null);
@@ -694,7 +800,7 @@ function renderSummary(w){
       if(last.text.length) bits.push((total/last.text.length).toFixed(1)+"배");
     }
     meta.textContent = bits.join(" · ");
-    b.appendChild(nm); b.appendChild(meta);
+    b.appendChild(meta);
     b.onclick = function(){
       if(p.id===S.current) return;
       S.current = p.id;
@@ -731,6 +837,7 @@ function renderVers(){
     e.className = "blank";
     e.textContent = "이 프로젝트에 쌓인 판본이 없습니다.";
     w.appendChild(e);
+    renderDone(w);
     return;
   }
   v.slice().reverse().forEach(function(x){
@@ -769,16 +876,19 @@ function renderVers(){
   var s = document.createElement("div");
   s.className = "sweep";
   var sb = document.createElement("button");
-  sb.textContent = "이 프로젝트의 판본 모두 지우기";
+  sb.textContent = "끝내고 판본 지우기";
   sb.onclick = function(){
-    if(!confirm("판본 "+v.length+"개를 모두 지웁니다. 되돌릴 수 없습니다.")) return;
-    proj().versions = [];
+    var p = proj();
+    if(!confirm("'"+p.name+"'을 끝낸 글로 넘기고 판본 "+v.length+"개를 지웁니다.\n"
+              + "판본 수·매수·들인 시간은 기록으로 남고, 원고는 되돌릴 수 없습니다.")) return;
+    archive(p);
     viewIdx = null;
     save(); renderHead(); renderVers(); renderWrite();
-    toast("판본을 모두 지웠습니다");
+    toast("끝낸 글로 넘겼습니다");
   };
   s.appendChild(sb);
   w.appendChild(s);
+  renderDone(w);
 }
 
 function renderSet(){
@@ -800,7 +910,7 @@ function renderSet(){
     var li = document.createElement("li");
     var nm = document.createElement("span");
     nm.className = "nm" + (p.id===S.current ? " cur" : "");
-    nm.textContent = p.name + " · 판본 " + p.versions.length + "개";
+    nm.textContent = p.name + (p.tag ? " · " + p.tag : "") + " · 판본 " + p.versions.length + "개";
     li.appendChild(nm);
     var r = document.createElement("button");
     r.textContent = "이름 바꾸기";
@@ -809,11 +919,24 @@ function renderSet(){
       if(n && n.trim()){ p.name = n.trim(); save(); renderHead(); renderSet(); }
     };
     li.appendChild(r);
+    var g = document.createElement("button");
+    g.textContent = "갈래";
+    g.onclick = function(){
+      var t = prompt("갈래 (비워두어도 됩니다)", p.tag || "");
+      if(t === null) return;
+      p.tag = t.trim(); save(); renderSet(); renderVers();
+    };
+    li.appendChild(g);
     if(S.projects.length>1){
       var x = document.createElement("button");
       x.textContent = "지우기";
       x.onclick = function(){
-        if(!confirm("'"+p.name+"'과 그 판본을 모두 지웁니다.")) return;
+        var has = (p.versions||[]).length;
+        var msg = has
+          ? "'"+p.name+"'을 지웁니다.\n판본 "+has+"개는 끝낸 글 기록으로 남기고 원고는 지웁니다."
+          : "'"+p.name+"'을 지웁니다.";
+        if(!confirm(msg)) return;
+        if(has) archive(p);
         S.projects = S.projects.filter(function(q){ return q.id!==p.id; });
         if(S.current===p.id){ S.current = S.projects[0].id; viewIdx=null; S.draft=""; elInput.value=""; }
         save(); renderHead(); renderSet(); renderWrite(); renderVers();
@@ -913,18 +1036,35 @@ function promptAll(){
   var out = [];
   out.push(HOW);
   out.push("");
-  out.push("아래는 지금까지의 프로젝트별 기록이다. 본문은 빼고 수치만 추렸다.");
-  out.push("시작 지점을 찾고 나면 판본은 지우기 때문에, 이미 끝난 글은 여기 남아 있지 않을 수 있다.");
+  out.push("아래는 지금까지의 기록이다. 본문은 빼고 수치만 추렸다.");
+  if(S.finished.length){
+    out.push("");
+    out.push("[끝낸 글 — 시작 지점을 찾아 본문 집필로 넘어간 것들]");
+    S.finished.forEach(function(x){
+      var m = [];
+      m.push(x.name + (x.tag ? " ("+x.tag+")" : ""));
+      if(x.focusMs) m.push("몰입 " + spanText(x.focusMs));
+      m.push(x.versions + "판본");
+      m.push("총 " + mae(x.total) + "매");
+      m.push("최종 " + mae(x.fin) + "매");
+      if(x.fin) m.push((x.total/x.fin).toFixed(1) + "배");
+      m.push(dayText(x.at) + " 끝냄");
+      out.push("- " + m.join(" · "));
+    });
+  }
+  out.push("");
+  out.push("[진행 중인 글]");
   S.projects.forEach(function(p){
     out.push("");
     out.push(statLines(p));
   });
   out.push("");
   out.push("이 기록을 보고 다음을 알려달라.");
-  out.push("1. 나는 대개 몇 판본, 며칠, 몇 배쯤 쳐야 시작 지점에 닿는가.");
-  out.push("2. 유난히 오래 걸린 글과 빨리 풀린 글 사이에 수치상 어떤 차이가 있나.");
-  out.push("3. 새 글을 시작할 때 며칠과 몇 시간을 잡아두면 무리가 없겠나.");
-  out.push("4. 이 수치만으로는 알 수 없는 것이 있다면 무엇인가.");
+  out.push("1. 나는 대개 몇 시간, 몇 판본, 몇 배쯤 쳐야 시작 지점에 닿는가.");
+  out.push("2. 유난히 오래 걸린 글과 빨리 풀린 글 사이에 수치상 어떤 차이가 있나. 갈래나 분량과 관계가 있나.");
+  out.push("3. 새 글을 시작할 때 몇 시간을 잡아두면 무리가 없겠나. 가장 오래 걸린 경우까지 감안해서.");
+  out.push("4. 진행 중인 글 가운데 평소보다 오래 끌고 있는 것이 있나.");
+  out.push("5. 이 수치만으로는 알 수 없는 것이 있다면 무엇인가.");
   return out.join("\n");
 }
 
@@ -1186,7 +1326,7 @@ $("#impFile").addEventListener("change", function(){
 $("#addp").addEventListener("click", function(){
   var n = prompt("프로젝트 이름");
   if(!n || !n.trim()) return;
-  var p = { id:uid(), name:n.trim(), versions:[], focusMs:0, startedAt:null };
+  var p = { id:uid(), name:n.trim(), tag:"", versions:[], focusMs:0, startedAt:null };
   S.projects.push(p);
   S.current = p.id;
   viewIdx = null; S.draft = ""; elInput.value = "";
