@@ -175,10 +175,22 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .wrap{max-width:40rem;margin:0 auto}
 .ver{border-top:1px solid var(--seon);padding:1.4rem 0}
 .ver:last-of-type{border-bottom:1px solid var(--seon)}
-.ver .head{display:flex;align-items:baseline;gap:.9rem;color:var(--meok-2);font-size:.8rem}
+.ver .head{
+  display:flex;align-items:baseline;gap:.9rem;
+  width:100%;background:none;border:0;padding:0;
+  color:var(--meok-2);font-size:.8rem;text-align:left;
+}
+.ver .head:hover{color:var(--meok)}
 .ver .no{color:var(--inju)}
-.ver .body{white-space:pre-wrap;word-break:break-word;margin-top:.7rem}
-.ver .acts{display:flex;gap:.9rem;margin-top:.7rem;font-size:.8rem}
+.ver .head .peek{
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--meok-3);
+}
+.ver .head:hover .peek{color:var(--meok-2)}
+.ver .body{white-space:pre-wrap;word-break:break-word;margin-top:.7rem;display:none}
+.ver.open .body{display:block}
+.ver .acts{display:none;gap:.9rem;margin-top:.7rem;font-size:.8rem}
+.ver.open .acts{display:flex}
 .ver .acts button{background:none;border:0;padding:0;color:var(--meok-2);border-bottom:1px solid var(--seon)}
 .ver .acts button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 .blank{color:var(--meok-3);padding:3rem 0;text-align:center}
@@ -233,12 +245,26 @@ h2:first-child{margin-top:0}
 }
 #restWord{color:#7d766a;font-size:.85rem;letter-spacing:.3em;margin-top:.9rem}
 #restTail{
-  position:absolute;left:50%;bottom:14vh;transform:translateX(-50%);
-  width:100%;max-width:32rem;padding:0 2rem;
-  font-size:.85rem;line-height:2.2;text-align:left;
+  position:absolute;left:0;right:0;bottom:13vh;
+  overflow:hidden;white-space:nowrap;
+  font-size:1.25rem;line-height:1.8;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);
 }
-#restTail p{
-  margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+#tailRun{display:inline-block;white-space:nowrap;will-change:transform}
+#tailRun.run{animation:flow var(--dur,40s) linear infinite}
+@keyframes flow{from{transform:translateX(0)}to{transform:translateX(calc(-1 * var(--w,0px)))}}
+#tailRun .grp{display:inline-block;white-space:nowrap}
+#tailRun .s{margin-right:3.5rem}
+#tailRun .back{color:#5c564c}
+#tailRun .now{color:#b4ab9b}
+@media (prefers-reduced-motion:reduce){
+  #restTail{white-space:normal;left:50%;right:auto;transform:translateX(-50%);
+    width:100%;max-width:52rem;padding:0 2.4rem}
+  #tailRun{display:block}
+  #tailRun.run{animation:none}
+  #tailRun .grp + .grp{display:none}
+  #tailRun .s{display:block;margin:0 0 .3em}
 }
 #restTail p.back{color:#5f594f}
 #restTail p.now{color:#a89f90}
@@ -341,7 +367,7 @@ h2:first-child{margin-top:0}
 <div id="rest">
   <div id="restNum">00:00</div>
   <div id="restWord">휴식</div>
-  <div id="restTail"></div>
+  <div id="restTail"><div id="tailRun"></div></div>
 </div>
 
 <div id="toast"></div>
@@ -425,7 +451,7 @@ var elPrev=$("#prev"), elWrap=$("#editWrap"), elMirror=$("#mirror"), elInput=$("
     elSend=$("#send"), elCur=$("#cur"), elTally=$("#tally"), elClock=$("#clock"),
     elProj=$("#proj"), elBand=$("#band > i"), elRest=$("#rest"), elRestNum=$("#restNum"),
     elToast=$("#toast"), elTail=$("#restTail"),
-    elStrip=$("#strip"), elNums=$("#nums"), elWhen=$("#when");
+    elRun=$("#tailRun"), elStrip=$("#strip"), elNums=$("#nums"), elWhen=$("#when");
 var viewIdx = null;
 
 function toast(msg){
@@ -622,9 +648,17 @@ function renderVers(){
     var i = v.indexOf(x)+1;
     var d = document.createElement("article");
     d.className = "ver";
-    var h = document.createElement("div");
+    var h = document.createElement("button");
     h.className = "head";
-    h.innerHTML = '<span class="no">'+i+'번째</span><span>'+mae(x.text.length)+'매</span><span>'+stamp(x.at)+'</span>';
+    h.type = "button";
+    var peek = x.text.replace(/\s+/g, " ").trim();
+    h.innerHTML = '<span class="no">'+i+'번째</span>'
+                + '<span>'+mae(x.text.length)+'매</span>'
+                + '<span>'+stamp(x.at)+'</span>';
+    var pk = document.createElement("span");
+    pk.className = "peek"; pk.textContent = peek;
+    h.appendChild(pk);
+    h.onclick = function(){ d.classList.toggle("open"); };
     var b = document.createElement("div");
     b.className = "body"; b.textContent = x.text;
     var a = document.createElement("div");
@@ -749,15 +783,37 @@ function tailSentences(text, n){
   return out.slice(-n);
 }
 function fillTail(){
-  elTail.innerHTML = "";
+  elRun.className = "";
+  elRun.innerHTML = "";
+  elRun.style.removeProperty("--w");
+  elRun.style.removeProperty("--dur");
   var pos = (document.activeElement===elInput && elInput.selectionStart!=null)
     ? elInput.selectionStart : elInput.value.length;
   var a = tailSentences(elInput.value.slice(0, pos), 3);
-  a.forEach(function(t, i){
-    var p = document.createElement("p");
-    p.className = (i===a.length-1) ? "now" : "back";
-    p.textContent = t;
-    elTail.appendChild(p);
+  if(!a.length){ elTail.style.visibility = "hidden"; return; }
+  elTail.style.visibility = "visible";
+
+  function group(){
+    var g = document.createElement("span");
+    g.className = "grp";
+    a.forEach(function(t, i){
+      var e = document.createElement("span");
+      e.className = "s " + (i===a.length-1 ? "now" : "back");
+      e.textContent = t;
+      g.appendChild(e);
+    });
+    return g;
+  }
+  var first = group();
+  elRun.appendChild(first);
+  elRun.appendChild(group());
+
+  requestAnimationFrame(function(){
+    var w = first.offsetWidth;
+    if(!w) return;
+    elRun.style.setProperty("--w", w+"px");
+    elRun.style.setProperty("--dur", Math.max(18, w/55).toFixed(1)+"s");
+    elRun.className = "run";
   });
 }
 
