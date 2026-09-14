@@ -394,7 +394,9 @@ h2:first-child{margin-top:0}
       <div class="bak"><button id="tplReset">기본 틀로 되돌리기</button></div>
 
       <h2>스크리브너</h2>
-      <div class="row"><label for="scut">단축어 이름</label><input type="text" id="scut"></div>
+      <div class="row"><label for="scut">보낼 때 실행할 단축어</label><input type="text" id="scut"></div>
+      <div class="row"><label for="rcut">휴식에 들어갈 때 실행할 단축어</label><input type="text" id="rcut"></div>
+      <p class="note">몰입이 끝나 휴식으로 넘어가는 순간 이 단축어를 실행하고, 휴식 시간을 분 단위 숫자로 입력에 담아 보냅니다. 단축어 쪽에서 그 분만큼 기다렸다가 알람을 울리게 하시면 됩니다. 비워두면 실행하지 않습니다.</p>
 
       <h2>프로젝트</h2>
       <ul class="plist" id="plist"></ul>
@@ -442,6 +444,7 @@ function fresh(){
     pfz:16, plh:1.9, ppad:40, pind:1, pmax:544, ifz:16,
     split:50,
     shortcut:"스크리브너",
+    restCut:"휴식끝",
     prompt:DEFAULT_PROMPT,
     finished:[],
     phase:"idle",
@@ -885,6 +888,7 @@ function renderSet(){
   $("#lmode").checked = S.lineMode;
   $("#smart").checked = S.smart !== false;
   $("#scut").value = S.shortcut;
+  $("#rcut").value = S.restCut || "";
   $("#tpl").value = S.prompt || DEFAULT_PROMPT;
   var ul = $("#plist");
   ul.innerHTML = "";
@@ -1053,11 +1057,7 @@ function promptAll(){
 function toScrivener(text){
   var done = function(){
     toast("복사했습니다");
-    if(S.shortcut && S.shortcut.trim()){
-      setTimeout(function(){
-        window.location.href = "shortcuts://run-shortcut?name=" + encodeURIComponent(S.shortcut.trim());
-      }, 120);
-    }
+    setTimeout(function(){ runShortcut(S.shortcut); }, 120);
   };
   function fallback(){
     var ta = document.createElement("textarea");
@@ -1136,7 +1136,15 @@ function startRest(){
   fillTail();
   S.phase="rest"; S.endsAt = Date.now() + S.restMin*60000; save();
   elRest.classList.add("on"); elInput.blur();
+  runShortcut(S.restCut, S.restMin);
 }
+function runShortcut(name, input){
+  if(!name || !name.trim()) return;
+  var url = "shortcuts://run-shortcut?name=" + encodeURIComponent(name.trim());
+  if(input != null && input !== "") url += "&input=text&text=" + encodeURIComponent(String(input));
+  try{ window.location.href = url; }catch(e){}
+}
+
 function goIdle(){
   S.phase="idle"; S.endsAt=null; save();
   elRest.classList.remove("on");
@@ -1261,6 +1269,7 @@ $("#tplReset").addEventListener("click", function(){
 
 $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(); });
 $("#scut").addEventListener("change", function(){ S.shortcut = this.value; save(); });
+$("#rcut").addEventListener("change", function(){ S.restCut = this.value; save(); });
 
 /* 백업 */
 $("#expBtn").addEventListener("click", function(){
