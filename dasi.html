@@ -101,7 +101,7 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 }
 #grip:hover::after,#write.dragging #grip::after{opacity:1;background:var(--inju)}
 @media (prefers-reduced-motion:reduce){#grip::after{transition:none}}
-.pane{height:100%;display:flex;flex-direction:column;min-width:0}
+.pane{height:100%;min-height:0;display:flex;flex-direction:column;min-width:0}
 .pane.left{border-right:1px solid var(--seon);background:var(--jongi)}
 .strip{
   display:flex;align-items:baseline;gap:.8rem;
@@ -121,7 +121,7 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .strip.hide{display:none}
 
 .prev{
-  flex:1;overflow-y:auto;
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
   padding:1.4rem var(--ppad) 3rem;
   max-width:var(--pmax);margin:0 auto;width:100%;
   font-size:var(--pfz);line-height:var(--plh);
@@ -154,19 +154,19 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 }
 #mirror,#input{
   position:absolute;inset:0;
-  padding:2.6rem 2.4rem 1rem;
+  padding:2.6rem 2.4rem 62vh;
   font-size:var(--ifz);line-height:1.9;
   white-space:pre-wrap;word-break:break-word;
   border:0;background:transparent;
 }
-#mirror{overflow:hidden;pointer-events:none;display:none}
+#mirror{overflow:hidden;pointer-events:none;visibility:hidden}
 #input{
   resize:none;overflow-y:auto;color:var(--meok);
   caret-color:var(--inju);
 }
 #input:focus{outline:none}
 #input::placeholder{color:var(--meok-3)}
-#editWrap.focusing #mirror{display:block}
+#editWrap.focusing #mirror{visibility:visible}
 #editWrap.focusing #input{color:transparent}
 #mirror .ln{display:block;position:relative;color:#cdc7bb}
 #mirror .ln.on{color:var(--meok)}
@@ -301,6 +301,15 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
   padding:.35rem .6rem;width:5.5rem;text-align:right;
 }
 .row input[type=text]{width:14rem;text-align:left}
+.row select{
+  font-family:var(--ui);font-size:.95rem;color:var(--meok);
+  background:var(--jongi);border:1px solid var(--seon);border-radius:2px;
+  padding:.35rem .5rem;appearance:none;padding-right:1.6rem;
+  background-image:linear-gradient(45deg,transparent 50%,var(--meok-3) 50%),linear-gradient(135deg,var(--meok-3) 50%,transparent 50%);
+  background-position:right 10px center,right 6px center;
+  background-size:4px 4px,4px 4px;background-repeat:no-repeat;
+}
+.row input.off{display:none}
 .row input[type=checkbox]{width:1.05rem;height:1.05rem;accent-color:var(--inju)}
 .note{color:var(--meok-3);font-size:.8rem;line-height:1.8;margin:.8rem 0 0}
 h2{font-size:.95rem;font-weight:400;color:var(--meok-2);margin:2.6rem 0 .2rem}
@@ -439,8 +448,16 @@ h2:first-child{margin-top:0}
   <section id="set" class="view">
     <div class="scroll"><div class="wrap">
       <h2>시간</h2>
-      <div class="row"><label for="fmin">몰입</label><input type="number" id="fmin" min="1" max="120" step="1"><span class="unit">분</span></div>
-      <div class="row"><label for="rmin">휴식</label><input type="number" id="rmin" min="1" max="120" step="1"><span class="unit">분</span></div>
+      <div class="row">
+        <label for="fsel">몰입</label>
+        <select id="fsel"><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option><option value="25">25분</option><option value="50">50분</option><option value="x">직접</option></select>
+        <input type="number" id="fmin" min="1" max="180" step="1"><span class="unit">분</span>
+      </div>
+      <div class="row">
+        <label for="rsel">휴식</label>
+        <select id="rsel"><option value="5">5분</option><option value="10">10분</option><option value="15">15분</option><option value="x">직접</option></select>
+        <input type="number" id="rmin" min="1" max="180" step="1"><span class="unit">분</span>
+      </div>
       <div class="row">
         <label for="goalH">하루 목표</label>
         <input type="number" id="goalH" min="0" max="16" step="1"><span class="unit">시간</span>
@@ -813,7 +830,6 @@ function caretLine(){
   return elInput.value.slice(0, pos).split("\n").length - 1;
 }
 function renderMirror(){
-  if(!S.lineMode) return;
   var lines = elInput.value.split("\n");
   var cur = caretLine();
   var n = 0;
@@ -827,10 +843,25 @@ function renderMirror(){
   });
   elMirror.scrollTop = elInput.scrollTop;
 }
+var wheelUntil = 0;
+function followCaret(){
+  if(Date.now() < wheelUntil) return;
+  var ln = elMirror.querySelector(".ln.on");
+  if(!ln) return;
+  var h = elInput.clientHeight;
+  if(!h) return;
+  var want = ln.offsetTop - h * 2 / 3;
+  var max = elInput.scrollHeight - h;
+  if(want < 0) want = 0;
+  if(want > max) want = max;
+  if(Math.abs(elInput.scrollTop - want) < 2) return;
+  elInput.scrollTop = want;
+  elMirror.scrollTop = want;
+}
+
 function renderMode(){
   elWrap.classList.toggle("focusing", !!S.lineMode);
-  if(S.lineMode) renderMirror();
-  else elMirror.innerHTML = "";
+  renderMirror();
 }
 
 function renderCount(){
@@ -1201,8 +1232,8 @@ function renderWeeks(){
 }
 
 function renderSet(){
-  $("#fmin").value = S.focusMin;
-  $("#rmin").value = S.restMin;
+  if(drawFocus) drawFocus();
+  if(drawRest) drawRest();
   $("#pfz").value = S.pfz;
   $("#plh").value = S.plh;
   $("#ifz").value = S.ifz;
@@ -1671,14 +1702,15 @@ function restore(){
 elInput.addEventListener("input", function(){
   if(S.phase==="idle" && elInput.value.length) startFocus();
   S.draft = elInput.value;
-  save(); renderMirror(); renderCount();
+  save(); renderMirror(); renderCount(); followCaret();
 });
 ["keyup","click","focus","select"].forEach(function(ev){
-  elInput.addEventListener(ev, renderMirror);
+  elInput.addEventListener(ev, function(){ renderMirror(); followCaret(); });
 });
 document.addEventListener("selectionchange", function(){
   if(document.activeElement===elInput) renderMirror();
 });
+elInput.addEventListener("wheel", function(){ wheelUntil = Date.now() + 2500; }, {passive:true});
 elInput.addEventListener("scroll", function(){ elMirror.scrollTop = elInput.scrollTop; });
 elInput.addEventListener("keydown", function(e){
   if((e.metaKey||e.ctrlKey) && e.key==="Enter"){ e.preventDefault(); send(); }
@@ -1724,8 +1756,29 @@ function num(el, key, min, max, fallback, after){
     save(); if(after) after();
   });
 }
-num($("#fmin"),"focusMin",1,120,15);
-num($("#rmin"),"restMin",1,120,15);
+function timePair(selId, inpId, key, fb, presets){
+  var sel = $(selId), inp = $(inpId);
+  function draw(){
+    var v = S[key];
+    var hit = presets.indexOf(v) > -1;
+    sel.value = hit ? String(v) : "x";
+    inp.value = v;
+    inp.classList.toggle("off", hit);
+  }
+  sel.addEventListener("change", function(){
+    if(this.value === "x"){ inp.classList.remove("off"); inp.focus(); return; }
+    S[key] = parseInt(this.value, 10);
+    save(); draw();
+  });
+  inp.addEventListener("change", function(){
+    var n = parseInt(this.value, 10);
+    S[key] = (!isNaN(n) && n>0 && n<=180) ? n : fb;
+    save(); draw();
+  });
+  return draw;
+}
+var drawFocus = timePair("#fsel", "#fmin", "focusMin", 15, [5,10,15,25,50]);
+var drawRest  = timePair("#rsel", "#rmin", "restMin", 15, [5,10,15]);
 num($("#goalH"),"goalH",0,16,3,renderToday);
 num($("#goalM"),"goalM",0,59,0,renderToday);
 num($("#pfz"),"pfz",12,28,16,applyStyle);
