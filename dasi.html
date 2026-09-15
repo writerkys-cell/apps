@@ -465,6 +465,9 @@ h2:first-child{margin-top:0}
       </div>
       <p class="note">머리줄에 오늘 몰입한 시간이 목표와 함께 뜹니다. 0시간 0분으로 두면 목표 없이 누적만 보입니다.</p>
 
+      <div class="row"><label for="piece">한 편 분량</label><input type="number" id="piece" min="0" max="100000" step="1"><span class="unit">자</span></div>
+      <p class="note">왼쪽 판본과 지금 쓰는 글이 이 분량의 몇 퍼센트인지 매수 옆에 함께 뜹니다. 0으로 두면 나오지 않습니다.</p>
+
       <h2>왼쪽 화면</h2>
       <div class="row"><label for="pfz">글자 크기</label><input type="number" id="pfz" min="12" max="28" step="1"><span class="unit">px</span></div>
       <div class="row"><label for="plh">줄 간격</label><input type="number" id="plh" min="1.2" max="3" step="0.1"><span class="unit">배</span></div>
@@ -548,6 +551,7 @@ function fresh(){
     startCut:"",
     sbUrl:"", sbKey:"", pending:[],
     goalH:3, goalM:0,
+    piece:2667,
     prompt:DEFAULT_PROMPT,
     finished:[],
     days:{},
@@ -618,6 +622,10 @@ function dayText(t){
        + (d.getMonth()+1)+"월 "+d.getDate()+"일";
 }
 function mae(n){ return (n/200).toFixed(1); }
+function pct(n){
+  var base = S.piece || 0;
+  return base ? " · " + Math.round(n/base*100) + "%" : "";
+}
 
 var $ = function(s){ return document.querySelector(s); };
 var elPrev=$("#prev"), elWrap=$("#editWrap"), elMirror=$("#mirror"), elInput=$("#input"),
@@ -730,7 +738,8 @@ function renderStrip(){
       elNums.appendChild(b);
     })(i);
   }
-  elWhen.textContent = mae(bodyOf(v[cur]).length) + "매 · " + stamp(v[cur].at);
+  var blen = bodyOf(v[cur]).length;
+  elWhen.textContent = mae(blen) + "매" + pct(blen) + " · " + stamp(v[cur].at);
   if(marked(v[cur])){
     var mk = document.createElement("span");
     mk.className = "mark"; mk.textContent = "손봄";
@@ -883,11 +892,12 @@ function renderCount(){
   var t = outgoing();
   var pre = fixedText();
   if(!t.length){
-    elCur.textContent = pre ? "굳은 "+mae(pre.length)+"매" : "";
+    elCur.textContent = pre ? "굳은 "+mae(pre.length)+"매"+pct(pre.length) : "";
   }else if(pre){
-    elCur.textContent = "굳은 "+mae(pre.length)+"매 + "+mae(t.length)+"매 = "+mae(pre.length+1+t.length)+"매";
+    var all = pre.length + 1 + t.length;
+    elCur.textContent = "굳은 "+mae(pre.length)+"매 + "+mae(t.length)+"매 = "+mae(all)+"매"+pct(all);
   }else{
-    elCur.textContent = t.length.toLocaleString()+"자 · "+mae(t.length)+"매";
+    elCur.textContent = t.length.toLocaleString()+"자 · "+mae(t.length)+"매"+pct(t.length);
   }
   elSend.disabled = !t.length;
 }
@@ -1252,6 +1262,7 @@ function renderSet(){
   $("#pfz").value = S.pfz;
   $("#plh").value = S.plh;
   $("#ifz").value = S.ifz;
+  $("#piece").value = S.piece;
   $("#pmax").value = S.pmax;
   $("#ppad").value = S.ppad;
   $("#pind").value = S.pind;
@@ -1441,6 +1452,7 @@ function send(){
     project_name: p.name,
     n: p.versions.length,
     text: full,
+    piece: S.piece || null,
     created_at: new Date(row.at).toISOString()
   });
   anchor = 0;
@@ -1798,6 +1810,7 @@ num($("#goalH"),"goalH",0,16,3,renderToday);
 num($("#goalM"),"goalM",0,59,0,renderToday);
 num($("#pfz"),"pfz",12,28,16,applyStyle);
 num($("#plh"),"plh",1.2,3,1.9,applyStyle);
+num($("#piece"),"piece",0,100000,2667,function(){ renderStrip(); renderCount(); });
 num($("#pmax"),"pmax",280,1400,544,applyStyle);
 num($("#ifz"),"ifz",12,28,16,function(){ applyStyle(); renderMirror(); });
 num($("#ppad"),"ppad",0,160,40,applyStyle);

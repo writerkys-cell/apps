@@ -41,10 +41,12 @@ header{
   background:var(--hanji);border-bottom:1px solid var(--seon);
   display:flex;align-items:baseline;gap:.8rem;
 }
-header .ttl{font-size:1rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .ttl{font-size:1rem;flex:1;min-width:1.5rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header .act{font-size:.85rem;color:var(--meok-2)}
 header .act:active{color:var(--inju)}
 #state{font-size:.75rem;color:var(--meok-3);white-space:nowrap}
+#cnt{font-size:.75rem;color:var(--meok-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+#cnt:empty{display:none}
 #state.warn{color:var(--inju)}
 
 main{height:100%;padding-top:calc(var(--top) + 3.1rem);overflow:hidden}
@@ -114,6 +116,7 @@ pre{
 <header>
   <button class="act" id="back" hidden>목록</button>
   <span class="ttl" id="title">다시쓰기</span>
+  <span id="cnt"></span>
   <span id="state"></span>
   <button class="act" id="gear">설정</button>
 </header>
@@ -162,8 +165,11 @@ var SQL = [
 "  text         text not null,",
 "  created_at   timestamptz not null default now(),",
 "  review       text,",
-"  review_at    timestamptz",
+"  review_at    timestamptz,",
+"  piece        int",
 ");",
+"",
+"alter table dasi_versions add column if not exists piece int;",
 "",
 "create index if not exists dasi_versions_proj",
 "  on dasi_versions (project_id, created_at desc);",
@@ -193,7 +199,8 @@ function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} 
 
 var $ = function(s){ return document.querySelector(s); };
 var elList=$("#listPad"), elPaper=$("#paper"), elTitle=$("#title"),
-    elBack=$("#back"), elGear=$("#gear"), elState=$("#state"), elToast=$("#toast");
+    elBack=$("#back"), elGear=$("#gear"), elState=$("#state"), elToast=$("#toast"),
+    elCnt=$("#cnt");
 var openId = null, saveT = null, pushT = null;
 
 function toast(m){
@@ -214,6 +221,16 @@ function show(v){
   elGear.hidden = (v !== "list");
 }
 function mae(n){ return (n/200).toFixed(1); }
+function curRow(){
+  return S.rows.filter(function(x){ return x.id===openId; })[0] || null;
+}
+function renderCnt(){
+  var r = curRow();
+  if(!r){ elCnt.textContent = ""; return; }
+  var n = paperGet().length;
+  var base = r.piece || 0;
+  elCnt.textContent = mae(n) + "매" + (base ? " · " + Math.round(n/base*100) + "%" : "");
+}
 function stamp(t){
   var d = new Date(t), z = function(n){ return (n<10?"0":"")+n; };
   return (d.getMonth()+1)+"월 "+d.getDate()+"일 "+z(d.getHours())+":"+z(d.getMinutes());
@@ -353,6 +370,7 @@ function openVersion(id){
   openId = id;
   elTitle.textContent = r.project_name + " · " + r.n + "번째";
   paperSet(bodyOf(r));
+  renderCnt();
   show("edit");
   elPaper.scrollTop = 0;
 }
@@ -371,6 +389,7 @@ function stash(){
 }
 
 elPaper.addEventListener("input", function(){
+  renderCnt();
   state("쓰는 중");
   clearTimeout(saveT); clearTimeout(pushT);
   saveT = setTimeout(function(){ stash(); state("저장됨"); }, 600);
@@ -384,6 +403,7 @@ elBack.addEventListener("click", function(){
     pushOne(openId);
   }
   openId = null;
+  elCnt.textContent = "";
   renderList();
   show("list");
 });
@@ -396,6 +416,7 @@ elGear.addEventListener("click", function(){
   $("#lh").value = S.lh;
 
   elTitle.textContent = "설정";
+  elCnt.textContent = "";
   show("setup");
 });
 
