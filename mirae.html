@@ -65,7 +65,6 @@ nav.tabs button.on{color:var(--ink);border-bottom-color:var(--inju)}
   font-size:17px;line-height:1.7;letter-spacing:0;
 }
 .now .eyebrow{font-size:13px;color:var(--inju);letter-spacing:.1em;margin-bottom:14px}
-.now .clock{float:right;color:var(--ink-faint);font-size:13px;letter-spacing:.04em}
 .now h2{
   font-size:27px;line-height:1.45;font-weight:400;margin:0 0 4px;
   cursor:text;word-break:keep-all;
@@ -341,12 +340,6 @@ const fmtShort = iso => {
   return `${d.getMonth()+1}.${d.getDate()}`;
 };
 const daysBetween = (a, b) => Math.floor((new Date(b) - new Date(a)) / 86400000);
-const fmtMin = m => {
-  m = Math.max(0, Math.round(m));
-  if (m < 60) return `${m}분`;
-  const h = Math.floor(m/60), r = m%60;
-  return r ? `${h}시간 ${r}분` : `${h}시간`;
-};
 function toast(msg){
   const t = $('#toast'); t.textContent = msg; t.classList.add('on');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 1900);
@@ -444,7 +437,7 @@ async function pullAll(){
   if (a.data) items = a.data.map(r => r.data).filter(Boolean);
   if (b.data) sessions = b.data.map(r => r.data).filter(Boolean);
   if (c.data && c.data.data) appState = Object.assign({ currentId:null, startedAt:null, device:null }, c.data.data);
-  saveLocal(); closeMidnight(); render();
+  saveLocal(); render();
 }
 /* 실시간이 막혀 있어도 앱이 돌아가도록, 조용히 주기적으로 다시 읽는다 */
 function canPoll(){
@@ -514,28 +507,16 @@ function listOrder(){
 
 /* ───────── 세션 ───────── */
 function currentItem(){ return appState.currentId ? byId(appState.currentId) : null; }
-function elapsedMin(){
-  if (!appState.startedAt) return 0;
-  return (Date.now() - new Date(appState.startedAt)) / 60000;
-}
-function recordSession(itemId, startedAt, endedAt, minutes){
+/* 얼마나 걸렸는지가 아니라, 언제 꺼내 들었는지만 남긴다 */
+function recordSession(itemId, startedAt, endedAt){
   const it = byId(itemId);
   const s = {
     id: uid(), itemId, title: it ? it.title : '',
-    startedAt, endedAt, minutes: Math.max(0, Math.round(minutes)),
-    device: deviceName
+    startedAt, endedAt, device: deviceName
   };
   sessions.push(s); pushSession(s);
 }
-/* 자정을 넘긴 세션은 조용히 끊는다 */
-function closeMidnight(){
-  if (!appState.currentId || !appState.startedAt) return;
-  if (todayKey(appState.startedAt) === todayKey()) return;
-  const start = new Date(appState.startedAt);
-  const midnight = new Date(start); midnight.setHours(24,0,0,0);
-  recordSession(appState.currentId, appState.startedAt, midnight.toISOString(), (midnight - start)/60000);
-  appState.currentId = null; appState.startedAt = null; pushState();
-}
+const pickCount = id => sessions.filter(s => s.itemId === id).length;
 
 /* ───────── 그리기 ───────── */
 function render(){
@@ -556,7 +537,6 @@ function renderNow(){
     `<button data-open-link="${i}">${esc(l.label || '링크')}</button>`).join('');
   slot.innerHTML = `
     <div class="now">
-      <span class="clock" id="clock"></span>
       <div class="eyebrow">${it.kind === 'future' ? '들여다보는 중' : '지금'}</div>
       <h2 id="nowTitle"${it.kind === 'task' ? ' title="눌러서 이름 고치기"' : ' class="fixed"'}>${esc(it.title)}</h2>
       ${it.origin && it.origin !== it.title ? `<p class="origin">처음엔 “${esc(it.origin)}”</p>` : ''}
@@ -570,7 +550,6 @@ function renderNow(){
       </div>
       <div class="aside"><input id="asideInput" placeholder="떠오른 일이나 딴생각 — 적으면 리스트 맨 위로" autocomplete="off"></div>
     </div>`;
-  tickClock();
   if (it.kind === 'task') $('#nowTitle').onclick = () => renameInline(it);
   $('#actPrompt').onclick = () => copyPrompt(it);
   $('#actDetail').onclick = () => openDetail(it);
@@ -593,11 +572,7 @@ function renderTodayLine(){
   const h12 = h % 12 === 0 ? 12 : h % 12;
   el.innerHTML = `<b>${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${day}요일</b> ${ampm} ${h12}시 ${String(d.getMinutes()).padStart(2,'0')}분`;
 }
-function tickClock(){
-  const c = $('#clock'); if (!c || !appState.startedAt) return;
-  c.textContent = fmtMin(elapsedMin()) + ' 째';
-}
-setInterval(() => { renderTodayLine(); tickClock(); }, 15000);
+setInterval(renderTodayLine, 15000);
 
 function renderList(){
   const ul = $('#list'); const list = listOrder();
@@ -819,16 +794,12 @@ function endSession(opts = {}){
   const it = currentItem();
   if (!it) { if (opts.then) opts.then(); return; }
   const startedAt = appState.startedAt;
-  const mins = elapsedMin();
   const isDaily = it.kind === 'daily';
   const isFuture = it.kind === 'future';
   const fixedName = it.kind !== 'task';
-  const longRun = mins > 180;
 
   openModal(`
     <h3>${esc(it.title)}</h3>
-    <p class="sub">${fmtMin(mins)} 했습니다${longRun ? ' · 너무 길면 아래에서 고치세요' : ''}</p>
-    ${longRun ? `<label for="mFix">실제로 얼마나 했습니까 (분)</label><input id="mFix" type="number" value="${Math.round(mins)}">` : ''}
     ${fixedName ? '' : `<label for="mName">다음 한 걸음 — 이 일의 새 이름</label>
       <input id="mName" value="${esc(it.title)}">`}
     <label for="mNote">${isFuture ? '이 미래에 대해 생각한 것' : '적어둘 것'} ${fixedName ? '' : '(알게 된 것, 지금 위치, 바뀐 생각. 비워도 됩니다)'}</label>
@@ -844,9 +815,7 @@ function endSession(opts = {}){
       ${isDaily ? '' : `<button class="btn" id="mFinish">${isFuture ? '이 미래가 왔다' : '마침'}</button><button class="btn quiet" id="mDrop">내려놓기</button>`}
     </div>`, () => {
     const commit = () => {
-      const fix = $('#mFix');
-      const minutes = fix ? Number(fix.value) || 0 : mins;
-      recordSession(it.id, startedAt, new Date().toISOString(), minutes);
+      recordSession(it.id, startedAt, new Date().toISOString());
       const note = $('#mNote').value.trim();
       const nameEl = $('#mName');
       if (nameEl) {
@@ -1050,12 +1019,16 @@ function openChron(it){
       <div class="what">${esc(c.text)}</div>
     </li>`;
   }).join('');
-  const mins = sessions.filter(s => s.itemId === it.id).reduce((m, s) => m + (s.minutes || 0), 0);
+  const times = pickCount(it.id);
+  const span = it.doneAt ? daysBetween(it.createdAt, it.doneAt) : daysBetween(it.createdAt, new Date());
+  const bits = [`${fmtDate(it.createdAt)}부터${it.doneAt ? ` ${fmtDate(it.doneAt)}까지` : ''}`];
+  if (span > 0) bits.push(`${span}일`);
+  if (times > 0) bits.push(`${times}번 꺼냄`);
   const outLinks = (it.outcomeLinks || []).map(l =>
     `<button class="btn" data-out="${esc(l.url)}">${esc(l.label || '결과물 열기')}</button>`).join('');
   openModal(`
     <h3>${esc(it.title)}</h3>
-    <p class="sub">${fmtDate(it.createdAt)}부터${it.doneAt ? ` ${fmtDate(it.doneAt)}까지` : ''} · 모두 ${fmtMin(mins)}</p>
+    <p class="sub">${bits.join(' · ')}</p>
     <ul class="chron">${rows}</ul>
     ${it.outcome ? `<div class="hintbox">남은 것 — ${esc(it.outcome)}</div>` : ''}
     <div class="btnrow">
@@ -1219,11 +1192,10 @@ $('#restoreFile').onchange = e => {
 
 /* ───────── 시작 ───────── */
 loadLocal();
-closeMidnight();
 render();
 connect();
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') { closeMidnight(); if (sb) pullAll(); else render(); }
+  if (document.visibilityState === 'visible') { if (sb) pullAll(); else render(); }
 });
 </script>
 </body>
