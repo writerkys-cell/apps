@@ -504,6 +504,8 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="startcut">몰입을 시작할 때 실행할 단축어</label><input type="text" id="startcut"></div>
       <div class="row"><label for="rcut">휴식에 들어갈 때 실행할 단축어</label><input type="text" id="rcut"></div>
       <p class="note">몰입이 끝나 휴식으로 넘어가는 순간 이 단축어를 실행하고, 휴식 시간을 분 단위 숫자로 입력에 담아 보냅니다. 단축어 쪽에서 그 분만큼 기다렸다가 알람을 울리게 하시면 됩니다. 비워두면 실행하지 않습니다.</p>
+      <div class="row"><label for="scut2">몰입을 중단할 때 실행할 단축어</label><input type="text" id="scut2"></div>
+      <p class="note">머리줄의 남은 시간을 눌러 몰입을 중단할 때 실행합니다. 그때까지 몰입한 시간을 분 단위 숫자로 보냅니다. 휴식으로 넘어가지 않으므로 캘린더 일정을 닫는 용도로 쓰시면 됩니다.</p>
 
       <h2>아이폰과 잇기</h2>
       <div class="row"><label for="sburl">수파베이스 주소</label><input type="text" id="sburl" placeholder="https://xxxx.supabase.co"></div>
@@ -558,7 +560,7 @@ function fresh(){
     split:50,
     shortcut:"스크리브너",
     restCut:"휴식끝",
-    startCut:"",
+    startCut:"", stopCut:"중단",
     sbUrl:"", sbKey:"", pending:[],
     goalH:3, goalM:0,
     piece:2667,
@@ -1281,6 +1283,7 @@ function renderSet(){
   $("#scut").value = S.shortcut;
   $("#rcut").value = S.restCut || "";
   $("#startcut").value = S.startCut || "";
+  $("#scut2").value = S.stopCut || "";
   $("#sburl").value = S.sbUrl || "";
   $("#sbkey").value = S.sbKey || "";
   $("#goalH").value = S.goalH;
@@ -1759,9 +1762,12 @@ elSend.addEventListener("click", send);
 /* 남은 시간을 누르면 몰입 중단 — 휴식 없이 처음 상태로 */
 elClock.addEventListener("click", function(){
   if(S.phase!=="focus") return;
+  var ran = Math.round((S.focusMin*60000 - (S.endsAt - Date.now())) / 60000);
+  if(ran < 0) ran = 0;
   clockIn();
   goIdle();
   save();
+  runShortcut(S.stopCut, ran);
   toast("몰입을 중단했습니다");
   elInput.focus();
 });
@@ -1848,6 +1854,7 @@ $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(
 $("#scut").addEventListener("change", function(){ S.shortcut = this.value; save(); });
 $("#rcut").addEventListener("change", function(){ S.restCut = this.value; save(); });
 $("#startcut").addEventListener("change", function(){ S.startCut = this.value; save(); });
+$("#scut2").addEventListener("change", function(){ S.stopCut = this.value; save(); });
 $("#calPrev").addEventListener("click", function(){ calRef.setMonth(calRef.getMonth()-1); renderCal(); });
 $("#calNext").addEventListener("click", function(){ calRef.setMonth(calRef.getMonth()+1); renderCal(); });
 
