@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>한 줄씩</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Gowun+Dodum&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f7f3ea">
+<style>
+:root{
+  --hanji:#efe9dc;
+  --meok:#23201c;
+  --meok-2:#6b6259;
+  --meok-3:#9a9084;
+  --seon:#d6cdba;
+  --inju:#a8322d;
+  --sheet:#f7f3ea;
+  --ui:'Gowun Dodum',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;
+  --fz:17px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--sheet);color:var(--meok);
+  font-family:var(--ui);font-size:15px;
+  -webkit-font-smoothing:antialiased;overflow:hidden;
+  display:flex;flex-direction:column;
+}
+button{font-family:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;font-size:inherit}
+:focus-visible{outline:2px solid var(--inju);outline-offset:2px}
+::selection{background:rgba(168,50,45,.18)}
+
+header{
+  display:flex;align-items:center;gap:1.3rem;
+  padding:.8rem 1.2rem .6rem;border-bottom:1px solid var(--seon);
+}
+header .sp{flex:1}
+header button{font-size:.85rem;color:var(--meok-2);border-bottom:1px solid var(--seon);padding-bottom:1px}
+header button:hover{color:var(--inju);border-bottom-color:var(--inju)}
+
+#wrap{position:relative;flex:1;min-height:0;width:100%;max-width:38rem;margin:0 auto}
+#mirror,#paper{
+  position:absolute;inset:0;
+  padding:1.6rem 2rem 62vh;
+  font-family:'Gowun Batang',serif;
+  font-size:var(--fz);line-height:1.95;
+  white-space:pre-wrap;word-break:break-word;
+  border:0;background:transparent;
+}
+#mirror{overflow:hidden;pointer-events:none}
+#paper{
+  resize:none;overflow-y:auto;color:transparent;
+  caret-color:var(--inju);
+}
+#paper:focus{outline:none}
+#paper::placeholder{color:var(--meok-3)}
+#mirror .ln{display:block;position:relative;color:#cdc7bb}
+#mirror .ln.on{color:var(--meok)}
+#mirror .ln[data-n]::before{
+  content:attr(data-n);
+  position:absolute;left:-1.7rem;top:0;width:1.3rem;
+  text-align:right;font-family:var(--ui);
+  font-size:.62rem;line-height:calc(var(--fz) * 1.95);
+  color:#ddd8cd;font-variant-numeric:tabular-nums;
+}
+#mirror .ln.on[data-n]::before{color:#c0b191}
+
+#toast{
+  position:fixed;left:50%;bottom:1.6rem;transform:translateX(-50%);
+  background:var(--meok);color:#fff;padding:.45rem 1rem;border-radius:2px;
+  font-size:.85rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:30;
+}
+#toast.on{opacity:1}
+
+@media (max-width:640px){
+  #mirror,#paper{padding:1.2rem 1.1rem 55vh 2.2rem}
+  #mirror .ln[data-n]::before{left:-1.5rem;width:1.1rem}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <button id="fresh">새로 쓰기</button>
+  <button id="copy">복사</button>
+  <span class="sp"></span>
+  <button id="tidy">정렬</button>
+</header>
+
+<div id="wrap">
+  <div id="mirror" aria-hidden="true"></div>
+  <textarea id="paper" placeholder="한 줄씩 씁니다." spellcheck="false" autocorrect="off" autocapitalize="off"></textarea>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+var $ = function(s){ return document.querySelector(s); };
+var elPaper = $("#paper"), elMirror = $("#mirror");
+var wheelUntil = 0;
+
+/* ---------- 겹화면 ---------- */
+function caretLine(){
+  var pos = elPaper.selectionStart || 0;
+  return elPaper.value.slice(0, pos).split("\n").length - 1;
+}
+function renderMirror(){
+  var v = elPaper.value;
+  var lines = v.split("\n");
+  var cur = caretLine();
+  var pos = elPaper.selectionStart || 0;
+  var head = 0;
+  for(var k=0; k<cur && k<lines.length; k++) head += lines[k].length + 1;
+  var col = pos - head;
+
+  var n = 0;
+  elMirror.innerHTML = "";
+  lines.forEach(function(l, i){
+    var d = document.createElement("div");
+    d.className = "ln" + (i===cur ? " on" : "");
+    if(l.trim()) d.setAttribute("data-n", String(++n));
+
+    if(i === cur && l.length){
+      var c = Math.max(0, Math.min(col, l.length));
+      var pre = document.createElement("span");
+      pre.className = "pre";
+      pre.textContent = l.slice(0, c);
+      d.appendChild(pre);
+      if(c < l.length) d.appendChild(document.createTextNode(l.slice(c)));
+    }else if(l.trim()){
+      d.textContent = l;
+    }else{
+      d.textContent = "\u200b";
+    }
+    elMirror.appendChild(d);
+  });
+  elMirror.scrollTop = elPaper.scrollTop;
+}
+
+/* 쓰는 줄을 아래에서 1/3 지점에 붙들어둔다 */
+function caretTop(){
+  var ln = elMirror.querySelector(".ln.on");
+  if(!ln) return null;
+  var pre = ln.querySelector(".pre");
+  if(pre){
+    var rects = pre.getClientRects();
+    if(rects.length){
+      var last = rects[rects.length-1];
+      return last.top - elMirror.getBoundingClientRect().top + elMirror.scrollTop;
+    }
+  }
+  return ln.offsetTop;
+}
+function followCaret(){
+  if(Date.now() < wheelUntil) return;
+  var top = caretTop();
+  if(top === null) return;
+  var h = elPaper.clientHeight;
+  if(!h) return;
+  var want = top - h * 2 / 3;
+  var max = elPaper.scrollHeight - h;
+  if(want < 0) want = 0;
+  if(want > max) want = max;
+  if(Math.abs(elPaper.scrollTop - want) < 2) return;
+  elPaper.scrollTop = want;
+  elMirror.scrollTop = want;
+}
+
+/* ---------- 정렬 ---------- */
+/* 엔터 한 번은 공백 한 칸, 엔터 두 번은 문단 나눔 */
+function joinLines(raw){
+  return raw.split(/\n{2,}/).map(function(block){
+    return block.split("\n").map(function(l){ return l.trim(); })
+                .filter(function(l){ return l.length; }).join(" ");
+  }).filter(function(b){ return b.length; }).join("\n");
+}
+
+/* 따옴표·말줄임표·줄표 다듬기 */
+function punct(t){
+  var out = "", open = " \n\t([{<\u300c\u300e\uff08";
+  for(var i=0; i<t.length; i++){
+    var ch = t.charAt(i);
+    if(ch === '"' || ch === "'"){
+      var prev = i ? out.charAt(out.length-1) : "";
+      var isOpen = (prev === "") || open.indexOf(prev) > -1;
+      out += (ch === '"') ? (isOpen ? "\u201c" : "\u201d") : (isOpen ? "\u2018" : "\u2019");
+    }else if(ch === "." && t.substr(i,3) === "..."){
+      out += "\u22ef"; i += 2;
+    }else if(ch === "-" && t.charAt(i+1) === "-"){
+      out += "\u2014"; i += 1;
+    }else{
+      out += ch;
+    }
+  }
+  return out;
+}
+
+/* ---------- 저장 ---------- */
+var KEY = "hanjul-v1";
+function save(){
+  try{ localStorage.setItem(KEY, elPaper.value); }catch(e){}
+}
+function load(){
+  try{ return localStorage.getItem(KEY) || ""; }catch(e){ return ""; }
+}
+
+function toast(m){
+  var el = $("#toast");
+  el.textContent = m;
+  el.classList.add("on");
+  clearTimeout(toast.t);
+  toast.t = setTimeout(function(){ el.classList.remove("on"); }, 1500);
+}
+
+function copyAll(){
+  var t = elPaper.value;
+  if(!t){ toast("쓴 글이 없습니다"); return; }
+  var done = function(){ toast("복사했습니다"); };
+  function fallback(){
+    var keep = [elPaper.selectionStart, elPaper.selectionEnd];
+    elPaper.select();
+    try{ document.execCommand("copy"); }catch(e){}
+    elPaper.setSelectionRange(keep[0], keep[1]);
+    done();
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done, fallback);
+  }else fallback();
+}
+
+/* ---------- 연결 ---------- */
+elPaper.addEventListener("input", function(){
+  save(); renderMirror(); followCaret();
+});
+["keyup","click","focus","select"].forEach(function(ev){
+  elPaper.addEventListener(ev, function(){ renderMirror(); followCaret(); });
+});
+document.addEventListener("selectionchange", function(){
+  if(document.activeElement === elPaper) renderMirror();
+});
+elPaper.addEventListener("scroll", function(){ elMirror.scrollTop = elPaper.scrollTop; });
+elPaper.addEventListener("wheel", function(){ wheelUntil = Date.now() + 2500; }, {passive:true});
+
+$("#fresh").addEventListener("click", function(){
+  elPaper.value = "";
+  save(); renderMirror();
+  elPaper.focus();
+});
+
+$("#copy").addEventListener("click", copyAll);
+
+$("#tidy").addEventListener("click", function(){
+  var t = punct(joinLines(elPaper.value));
+  elPaper.value = t;
+  save(); renderMirror();
+  elPaper.focus();
+  elPaper.select();
+});
+
+window.addEventListener("beforeunload", save);
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState !== "visible") save();
+});
+
+elPaper.value = load();
+elPaper.focus();
+renderMirror();
+
+})();
+</script>
+</body>
+</html>
