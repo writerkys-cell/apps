@@ -866,27 +866,62 @@ function caretLine(){
   return elInput.value.slice(0, pos).split("\n").length - 1;
 }
 function renderMirror(){
-  var lines = elInput.value.split("\n");
+  var v = elInput.value;
+  var lines = v.split("\n");
   var cur = caretLine();
+  var pos = elInput.selectionStart || 0;
+  /* 커서가 놓인 줄의 시작 위치 */
+  var head = 0;
+  for(var k=0; k<cur && k<lines.length; k++) head += lines[k].length + 1;
+  var col = pos - head;
+
   var n = 0;
   elMirror.innerHTML = "";
   lines.forEach(function(l, i){
     var d = document.createElement("div");
     d.className = "ln" + (i===cur ? " on" : "");
-    if(l.trim()){ d.setAttribute("data-n", String(++n)); d.textContent = l; }
-    else { d.textContent = "\u200b"; }
+    if(l.trim()) d.setAttribute("data-n", String(++n));
+
+    if(i === cur && l.length){
+      /* 커서 앞쪽만 감싸 두면, 접혀 내려간 줄까지 헤아려 자리를 잴 수 있다 */
+      var c = Math.max(0, Math.min(col, l.length));
+      var pre = document.createElement("span");
+      pre.className = "pre";
+      pre.textContent = l.slice(0, c);
+      d.appendChild(pre);
+      if(c < l.length) d.appendChild(document.createTextNode(l.slice(c)));
+    }else if(l.trim()){
+      d.textContent = l;
+    }else{
+      d.textContent = "\u200b";
+    }
     elMirror.appendChild(d);
   });
   elMirror.scrollTop = elInput.scrollTop;
 }
 var wheelUntil = 0;
+/* 커서가 놓인 화면상의 줄 위치 — 긴 줄이 접혀 내려간 만큼까지 헤아린다 */
+function caretTop(){
+  var ln = elMirror.querySelector(".ln.on");
+  if(!ln) return null;
+  var pre = ln.querySelector(".pre");
+  if(pre){
+    var rects = pre.getClientRects();
+    if(rects.length){
+      var last = rects[rects.length-1];
+      return last.top - elMirror.getBoundingClientRect().top + elMirror.scrollTop;
+    }
+  }
+  return ln.offsetTop;
+}
+
 function followCaret(){
   if(Date.now() < wheelUntil) return;
-  var ln = elMirror.querySelector(".ln.on");
-  if(!ln) return;
+  var top = caretTop();
+  if(top === null) return;
   var h = elInput.clientHeight;
   if(!h) return;
-  var want = ln.offsetTop - h * 2 / 3;
+  var want = top - h * (S.lineMode ? 2/3 : 1/2);
   var max = elInput.scrollHeight - h;
   if(want < 0) want = 0;
   if(want > max) want = max;
