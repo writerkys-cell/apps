@@ -32,10 +32,6 @@ body{
 button{font-family:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;font-size:inherit}
 :focus-visible{outline:2px solid var(--inju);outline-offset:2px}
 
-#band{position:fixed;top:0;left:0;height:2px;width:100%;z-index:40}
-#band > i{display:block;height:100%;width:0;background:var(--inju);opacity:.55;transition:width .25s linear}
-@media (prefers-reduced-motion:reduce){#band > i{transition:none}}
-
 header{
   display:flex;align-items:center;gap:.7rem;
   padding:.9rem 1rem .6rem;border-bottom:1px solid var(--seon);
@@ -57,21 +53,30 @@ main{flex:1;min-height:0;overflow-y:auto}
 .view.on{display:flex}
 
 #face{
-  flex-direction:column;align-items:center;justify-content:center;gap:.2rem;
-  padding:1rem;text-align:center;
+  position:relative;flex-direction:column;align-items:center;justify-content:center;
+  padding:1rem;text-align:center;overflow:hidden;
 }
-#clock{
-  font-size:4rem;line-height:1;font-variant-numeric:tabular-nums;
-  color:var(--meok);letter-spacing:.01em;
+#fill{
+  position:absolute;left:0;right:0;bottom:0;height:0;
+  background:var(--inju);opacity:.16;
+  transition:height .25s linear;pointer-events:none;
 }
-#clock.rest{color:var(--meok-3)}
-#phase{font-size:.78rem;color:var(--meok-3);letter-spacing:.28em;margin-top:.7rem}
-#today{font-size:.8rem;color:var(--meok-2);margin-top:1.4rem;font-variant-numeric:tabular-nums}
-#today.met{color:var(--inju)}
-.acts{display:flex;gap:1.6rem;margin-top:1.1rem;font-size:.9rem}
+@media (prefers-reduced-motion:reduce){#fill{transition:none}}
+#stack{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
+#phase{font-size:.72rem;color:var(--meok-3);letter-spacing:.3em}
+.acts{display:flex;gap:1.4rem;margin-top:.9rem;font-size:.9rem}
 .acts button{color:var(--meok-2);border-bottom:1px solid var(--seon);padding-bottom:1px}
 .acts button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 .acts button[hidden]{display:none}
+#clock{
+  position:absolute;left:.7rem;bottom:.5rem;z-index:1;
+  font-size:.75rem;color:var(--meok-3);font-variant-numeric:tabular-nums;
+}
+#today{
+  position:absolute;right:.7rem;bottom:.5rem;z-index:1;
+  font-size:.75rem;color:var(--meok-3);font-variant-numeric:tabular-nums;
+}
+#today.met{color:var(--inju)}
 
 #set{flex-direction:column}
 .pad{padding:1rem 1.1rem 2rem;width:100%;overflow-y:auto}
@@ -111,8 +116,6 @@ h2:first-child{margin-top:0}
 </head>
 <body>
 
-<div id="band"><i></i></div>
-
 <header>
   <select id="sel" aria-label="몰입 시간">
     <option value="5">5분</option><option value="10">10분</option><option value="15">15분</option>
@@ -125,12 +128,15 @@ h2:first-child{margin-top:0}
 
 <main>
   <section id="face" class="view on">
-    <div id="clock">00:00</div>
-    <div id="phase">기다리는 중</div>
-    <div class="acts">
-      <button id="go">시작</button>
-      <button id="stop" hidden>중단</button>
+    <div id="fill"></div>
+    <div id="stack">
+      <div id="phase">기다리는 중</div>
+      <div class="acts">
+        <button id="go">시작</button>
+        <button id="stop" hidden>중단</button>
+      </div>
     </div>
+    <div id="clock">15:00</div>
     <div id="today"></div>
   </section>
 
@@ -197,8 +203,7 @@ var S = load();
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 
 var $ = function(s){ return document.querySelector(s); };
-var elClock=$("#clock"), elPhase=$("#phase"), elToday=$("#today"), elBand=$("#band > i"),
-    elGo=$("#go"), elStop=$("#stop"), elRest=$("#rest"), elRestNum=$("#restNum"),
+var elClock=$("#clock"), elPhase=$("#phase"), elToday=$("#today"), elGo=$("#go"), elStop=$("#stop"), elFill=$("#fill"), elRest=$("#rest"), elRestNum=$("#restNum"),
     elSel=$("#sel"), elToast=$("#toast");
 
 function toast(m){
@@ -294,9 +299,8 @@ function draw(){
 
   if(S.phase === "idle"){
     elClock.textContent = mmss(S.focusMin*60000);
-    elClock.classList.remove("rest");
     elPhase.textContent = "기다리는 중";
-    elBand.style.width = "0%";
+    elFill.style.height = "0%";
     elGo.hidden = false; elStop.hidden = true;
     return;
   }
@@ -307,15 +311,13 @@ function draw(){
 
   if(S.phase === "focus"){
     elClock.textContent = mmss(left);
-    elClock.classList.remove("rest");
     elPhase.textContent = "몰입";
-    elBand.style.width = (100 - left/span*100).toFixed(2) + "%";
+    elFill.style.height = (100 - left/span*100).toFixed(1) + "%";
     elGo.hidden = true; elStop.hidden = false;
   }else{
     elClock.textContent = mmss(left);
-    elClock.classList.add("rest");
     elPhase.textContent = "휴식";
-    elBand.style.width = "0%";
+    elFill.style.height = "0%";
     elGo.hidden = true; elStop.hidden = true;
     elRestNum.textContent = mmss(left);
   }
