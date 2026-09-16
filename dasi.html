@@ -603,7 +603,11 @@ function load(){
   return d;
 }
 var S = load();
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+var frozen = false;   /* 불러오기 중에는 자동 저장을 멈춘다 */
+function save(){
+  if(frozen) return;
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+}
 
 function proj(){ return S.projects.filter(function(p){return p.id===S.current;})[0] || S.projects[0]; }
 function spanText(ms){
@@ -1938,8 +1942,9 @@ $("#impFile").addEventListener("change", function(){
     var n = incoming.projects.length, vs = 0;
     incoming.projects.forEach(function(p){ vs += (p.versions||[]).length; });
     if(!confirm("프로젝트 "+n+"개, 판본 "+vs+"개를 불러옵니다.\n지금 있는 것은 모두 지워집니다.")) return;
+    frozen = true;
     try{ localStorage.setItem(KEY, JSON.stringify(incoming)); }
-    catch(e){ toast("저장하지 못했습니다"); return; }
+    catch(e){ frozen = false; toast("저장하지 못했습니다"); return; }
     location.reload();
   };
   r.onerror = function(){ toast("파일을 읽지 못했습니다"); };
