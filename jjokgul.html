@@ -156,6 +156,7 @@ body.oneline #ta::selection{color:transparent;background:rgba(168,50,45,.16)}
     <div class="lhead">
       <span class="meta" id="lmeta"></span>
       <span class="acts">
+        <button class="link" id="saveBtn">저장</button>
         <button class="link" id="printBtn">프린트</button>
         <button class="link" id="scrivBtn">스크리브너</button>
         <button class="link" id="delBtn">지우기</button>
@@ -216,8 +217,8 @@ body.oneline #ta::selection{color:transparent;background:rgba(168,50,45,.16)}
       <div class="acts">
         <button class="link" id="renameBtn">이름 바꾸기</button>
         <button class="link" id="delBtn2">지우기</button>
-        <button class="link" id="newBtn">새로 만들기</button>
       </div>
+      <p class="note" id="jjokNote">쪽글은 이름을 바꿀 수 없습니다. 남겨 두려면 쓰기 화면에서 ‘저장’을 누르세요.</p>
     </section>
     <section>
       <h2>백업</h2>
@@ -254,7 +255,9 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-const newPiece = name => ({ id:uid(), name:(name && name.trim()) || '이름 없음', left:'', leftAt:0, right:'' });
+const JJOK = 'jjok';
+const isJjok = p => p && p.id === JJOK;
+const newPiece = name => ({ id:uid(), name:(name && name.trim()) || '쪽글', left:'', leftAt:0, right:'' });
 
 /* ───────── 저장 ───────── */
 let S;
@@ -264,8 +267,13 @@ function load(){
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch(e){ S = null; }
   if (!S || typeof S !== 'object') S = {};
   S.settings = Object.assign({}, DEF_SET, S.settings || {});
-  if (!Array.isArray(S.pieces) || !S.pieces.length) S.pieces = [newPiece()];
-  if (!S.pieces.some(p => p.id === S.currentId)) S.currentId = S.pieces[0].id;
+  if (!Array.isArray(S.pieces)) S.pieces = [];
+  let jj = S.pieces.find(p => p.id === JJOK)
+        || S.pieces.find(p => p.name === '쪽글' || p.name === '이름 없음');
+  if (!jj) jj = Object.assign(newPiece(), { id:JJOK });
+  jj.id = JJOK; jj.name = '쪽글';
+  S.pieces = [jj].concat(S.pieces.filter(p => p !== jj));
+  S.currentId = JJOK;                    // 앱은 늘 쪽글에서 시작한다
   if (!DUR.some(d => d[0] === S.focusKey)) S.focusKey = '25';
   if (typeof S.split !== 'number') S.split = 0.5;
   S.timer = Object.assign({ phase:'idle' }, S.timer || {});
@@ -326,11 +334,17 @@ function applySplit(){
 }
 
 /* ───────── 조각글 ───────── */
+const jjok = () => S.pieces.find(isJjok);
+
 function renderPieceSel(){
-  pieceSel.innerHTML = '<option value="__new">새 글 쓰기…</option>' +
-    S.pieces.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  pieceSel.innerHTML = S.pieces.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   pieceSel.value = S.currentId;
+  const j = isJjok(cur());
+  $('#saveBtn').hidden = !j;
   $('#nameInput').value = cur().name;
+  $('#nameInput').disabled = j;
+  $('#renameBtn').hidden = j;
+  $('#jjokNote').hidden = !j;
 }
 
 // 입력창 값을 바꿔야 할 때(보낸 뒤 비우기, 조각글 바꾸기)는 먼저 포커스를 빼서
@@ -356,36 +370,49 @@ function switchTo(id, focus){
   save();
   if (focus) setTimeout(() => ta.focus(), 0);
 }
-function createPiece(name){
+
+// 쪽글을 이름 붙여 목록에 남기고, 쪽글은 비운 채 그리로 돌아간다
+function saveJjok(){
   const p = cur();
-  if (p) p.right = ta.value;
-  const np = newPiece(name);
-  S.pieces.unshift(np);
-  switchTo(np.id, true);
-}
-function askNew(){
-  const name = prompt('새 조각글의 이름', '');
-  if (name === null) { pieceSel.value = S.currentId; return false; }
-  createPiece(name);
-  return true;
-}
-function deletePiece(){
-  const p = cur();
-  if (!confirm(`‘${p.name}’을(를) 목록에서 지웁니다. 되돌릴 수 없습니다.`)) return;
-  S.pieces = S.pieces.filter(x => x !== p);
-  if (!S.pieces.length) S.pieces.push(newPiece());
-  S.currentId = S.pieces[0].id;
+  if (!isJjok(p)) return;
+  p.right = ta.value;
+  if (!p.left && !p.right.trim()) return;
+  const name = prompt('이 쪽글을 어떤 이름으로 저장할까요?', '');
+  if (name === null) return;
+  const nm = name.trim();
+  if (!nm) return;
+  if (nm === '쪽글'){ alert('‘쪽글’은 쓸 수 없는 이름입니다. 다른 이름을 적어 주세요.'); return; }
+  const np = newPiece(nm);
+  np.left = p.left; np.leftAt = p.leftAt; np.right = p.right;
+  S.pieces.splice(1, 0, np);
+  p.left = ''; p.leftAt = 0; p.right = '';
+  S.currentId = JJOK;
   renderPieceSel();
-  setTa(S.pieces[0].right || '');
+  setTa('');
   renderLeft();
   leftBody.scrollTop = 0;
   save();
 }
 
-pieceSel.addEventListener('change', () => {
-  if (pieceSel.value === '__new') askNew();
-  else switchTo(pieceSel.value, true);
-});
+function deletePiece(){
+  const p = cur();
+  if (isJjok(p)){
+    if (!p.left && !ta.value.trim()) return;
+    if (!confirm('쪽글을 비웁니다. 되돌릴 수 없습니다.')) return;
+    p.left = ''; p.leftAt = 0; p.right = '';
+  } else {
+    if (!confirm(`‘${p.name}’을(를) 목록에서 지웁니다. 되돌릴 수 없습니다.`)) return;
+    S.pieces = S.pieces.filter(x => x !== p);
+    S.currentId = JJOK;
+  }
+  renderPieceSel();
+  setTa(cur().right || '');
+  renderLeft();
+  leftBody.scrollTop = 0;
+  save();
+}
+
+pieceSel.addEventListener('change', () => switchTo(pieceSel.value, true));
 
 /* ───────── 왼쪽 표시창 ───────── */
 function renderLeft(){
@@ -580,6 +607,7 @@ $('#printBtn').addEventListener('click', () => {
   $('#pMeta').innerHTML = `<span>${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일</span><span>200자 원고지 ${mae(n)}매</span>`;
   window.print();
 });
+$('#saveBtn').addEventListener('click', saveJjok);
 $('#delBtn').addEventListener('click', deletePiece);
 $('#delBtn2').addEventListener('click', deletePiece);
 
@@ -706,9 +734,8 @@ $$('.tab').forEach(b => b.addEventListener('click', () => {
   $('#write').hidden = tab !== 'write';
   $('#settings').hidden = tab !== 'settings';
   if (tab === 'write'){ schedule(true); ta.focus(); }
-  else $('#nameInput').value = cur().name;
+  else renderPieceSel();
 }));
-function showWrite(){ $('.tab[data-tab="write"]').click(); }
 
 /* ───────── 설정 ───────── */
 $$('[data-k]').forEach(el => {
@@ -740,12 +767,13 @@ $$('[data-k]').forEach(el => {
 
 $('#renameBtn').addEventListener('click', () => {
   const v = $('#nameInput').value.trim();
+  if (isJjok(cur())) return;
   if (!v) { $('#nameInput').value = cur().name; return; }
+  if (v === '쪽글'){ alert('‘쪽글’은 쓸 수 없는 이름입니다. 다른 이름을 적어 주세요.'); $('#nameInput').value = cur().name; return; }
   cur().name = v;
   renderPieceSel();
   save();
 });
-$('#newBtn').addEventListener('click', () => { if (askNew()) showWrite(); });
 
 /* ───────── 백업 ───────── */
 $('#exportBtn').addEventListener('click', () => {
