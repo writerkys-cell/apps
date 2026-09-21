@@ -721,6 +721,9 @@ function renderHead(){
     if(p.id===S.current) o.selected = true;
     elProj.appendChild(o);
   });
+  var mk = document.createElement("option");
+  mk.value = "__new__"; mk.textContent = "새 프로젝트…";
+  elProj.appendChild(mk);
   var v = proj().versions, total = 0;
   v.forEach(function(x){ total += typedLen(x); });
   elTally.innerHTML = v.length
@@ -1817,7 +1820,23 @@ elClock.addEventListener("click", function(){
   elInput.focus();
 });
 
+function newProject(){
+  var n = prompt("프로젝트 이름");
+  if(!n || !n.trim()) return false;
+  var p = { id:uid(), name:n.trim(), tag:"", versions:[], focusMs:0, startedAt:null };
+  S.projects.push(p);
+  S.current = p.id;
+  viewIdx = null; anchor = 0; S.draft = ""; elInput.value = "";
+  save(); renderHead(); renderSet(); renderWrite(); renderVers();
+  return true;
+}
+
 elProj.addEventListener("change", function(){
+  if(elProj.value === "__new__"){
+    if(!newProject()) renderHead();   /* 취소하면 본래 프로젝트로 */
+    elInput.focus();
+    return;
+  }
   S.current = elProj.value;
   viewIdx = null; anchor = 0; S.draft = ""; elInput.value = "";
   save(); renderHead(); renderWrite(); renderVers(); renderSet();
@@ -1957,15 +1976,7 @@ $("#impFile").addEventListener("change", function(){
   r.readAsText(f);
 });
 
-$("#addp").addEventListener("click", function(){
-  var n = prompt("프로젝트 이름");
-  if(!n || !n.trim()) return;
-  var p = { id:uid(), name:n.trim(), tag:"", versions:[], focusMs:0, startedAt:null };
-  S.projects.push(p);
-  S.current = p.id;
-  viewIdx = null; anchor = 0; S.draft = ""; elInput.value = "";
-  save(); renderHead(); renderSet(); renderWrite(); renderVers();
-});
+$("#addp").addEventListener("click", newProject);
 
 /* 가운데 선 끌기 */
 (function(){
