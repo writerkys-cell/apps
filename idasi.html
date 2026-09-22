@@ -49,7 +49,7 @@ header .act:active{color:var(--inju)}
 #cnt:empty{display:none}
 #state.warn{color:var(--inju)}
 
-main{height:100%;padding-top:calc(var(--top) + 3.1rem);overflow:hidden}
+main{height:var(--vvh,100%);padding-top:calc(var(--top) + 3.1rem);overflow:hidden}
 .view{display:none;height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .view.on{display:block}
 .pad{padding:1.2rem 1.1rem calc(var(--bot) + 3rem)}
@@ -483,6 +483,34 @@ show("list");
 if(ready()) pull();
 else state("설정 필요", true);
 
+})();
+
+/* ---------- 키보드가 올라와도 헤드는 제자리에 ----------
+   아이폰 사파리는 커서가 키보드에 가려지면 페이지째 밀어 올려 헤드까지 사라진다.
+   보이는 영역(visualViewport)의 높이로 본문만 줄이고, 밀려 올라간 페이지는 제자리로 돌린다.
+   손가락으로 만지는 기기에서만 켜진다 — 맥과 스크리브너 안에서는 아무것도 바꾸지 않는다 */
+(function(){
+  var vv = window.visualViewport;
+  var touch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  if(!vv || !touch) return;
+  var root = document.documentElement;
+  var elPaper = document.getElementById("paper");
+  function nearEnd(){
+    return document.activeElement === elPaper &&
+           (elPaper.value.length - (elPaper.selectionStart || 0)) < 200;
+  }
+  function fit(){
+    root.style.setProperty("--vvh", Math.round(vv.height) + "px");
+    if(window.scrollY || vv.offsetTop) window.scrollTo(0, 0);
+    /* 끝부분을 쓰는 중이면, 줄어든 편집창 안에서 끝이 보이게 */
+    if(nearEnd()) elPaper.scrollTop = elPaper.scrollHeight;
+  }
+  vv.addEventListener("resize", fit);
+  vv.addEventListener("scroll", fit);
+  window.addEventListener("scroll", function(){ if(window.scrollY) window.scrollTo(0, 0); });
+  document.addEventListener("focusin", function(){ setTimeout(fit, 60); setTimeout(fit, 350); });
+  document.addEventListener("focusout", function(){ setTimeout(fit, 60); });
+  fit();
 })();
 </script>
 </body>
