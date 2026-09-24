@@ -168,6 +168,12 @@ pre{
 
 var KEY = "botaegi-phone-v1";
 var TABLE = "botaegi_ms";
+var CHS = {};   /* 작품마다 장 목록 {id, no, name, done, ms:[원고 id]} */
+function chOfRow(r){
+  var cs = CHS[r.work_id]; if(!cs) return null;
+  return cs.filter(function(c){ return (c.ms || []).indexOf(r.id) > -1; })[0]
+      || cs.filter(function(c){ return c.no === r.act; })[0] || null;
+}
 var DEF_URL = "https://pvunctdbsdcgvbqloslg.supabase.co";
 var DEF_KEY = "sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY";
 var SQL = [
@@ -298,6 +304,13 @@ function pull(){
     })
     .then(function(rows){
       /* 빈 원고도 보여준다 — 보태기에는 이제 입력창이 없어, 첫 글도 여기서 붙여 넣는다 */
+      /* 장이 있는 작품 — 책의 순서(장, 그 안의 순서)대로 */
+      if(S.work && CHS[S.work]){
+        rows.sort(function(a, b){
+          var ca = chOfRow(a), cb = chOfRow(b);
+          return ((ca ? ca.no : 1e6) - (cb ? cb.no : 1e6)) || ((a.ord || 0) - (b.ord || 0));
+        });
+      }
       S.rows = rows;
       var gone = 0, whole = !S.work;
       Object.keys(S.drafts).forEach(function(id){
@@ -333,7 +346,12 @@ function loadWorks(){
     if(S.work && !seen[S.work]) S.work = null;   /* 끝난 작품은 목록에서 내려갔다 */
     save();
   }
-  return api(TABLE + "?select=work_id,work_title,work_kind").then(function(r){
+  /* 장 — 보태기가 올린 작품 목록에서(장편·중편). 못 읽으면 예전처럼 막 번호로 */
+  var kvp = api("botaegi_kv?select=data&id=eq.works").then(function(r){ return r.ok ? r.json() : []; }).then(function(kv){
+    var m = {}; ((kv[0] && kv[0].data) || []).forEach(function(w){ if(Array.isArray(w.chapters)) m[w.id] = w.chapters; });
+    CHS = m;
+  }).catch(function(){});
+  return kvp.then(function(){ return api(TABLE + "?select=work_id,work_title,work_kind"); }).then(function(r){
     if(r.status === 400) return api(TABLE + "?select=work_title,work_kind").then(function(r2){ return r2.ok ? r2.json() : []; }).then(function(rows){ build(rows, false); });
     if(!r.ok) throw new Error(r.status + "");
     return r.json().then(function(rows){ build(rows, true); });
@@ -411,9 +429,18 @@ function renderList(){
     return;
   }
   var lastAct = null, novel = !!S.work && S.rows.some(function(r){ return r.work_kind === "장편"; });
+  var chw = !!S.work && !!CHS[S.work];
   S.rows.forEach(function(r){
-    /* 장편을 골랐으면 막마다 머리를 단다 */
-    if(novel && (r.act || 1) !== lastAct){
+    /* 장편·중편을 골랐으면 장마다 머리를 단다 */
+    if(chw){
+      var c = chOfRow(r), key = c ? c.id : "?";
+      if(key !== lastAct){
+        lastAct = key;
+        var hc = document.createElement("div"); hc.className = "acth";
+        hc.textContent = c ? c.no + "장 · " + c.name + (c.done ? " · 완성" : "") : "장을 정하는 중";
+        elList.appendChild(hc);
+      }
+    }else if(novel && (r.act || 1) !== lastAct){
       lastAct = r.act || 1;
       var h = document.createElement("div"); h.className = "acth"; h.textContent = lastAct + "막";
       elList.appendChild(h);
