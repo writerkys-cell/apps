@@ -66,6 +66,12 @@ main{height:var(--vvh,100%);padding-top:calc(var(--top) + 3.1rem);overflow:hidde
 .card .sub{font-size:.78rem;color:var(--meok-3)}
 .card .mark{color:var(--inju)}
 .blank{color:var(--meok-3);font-size:.9rem;text-align:center;padding:4rem 1rem;line-height:2}
+/* 작품 고르기 — 고른 작품만 불러오고 기억해 둔다 */
+.wsel{width:100%;margin:0 0 1rem;font-family:var(--ui);font-size:16px;color:var(--meok);background:var(--jongi);
+  border:1px solid var(--seon);border-radius:2px;padding:.5rem .6rem}
+.acth{font-size:.78rem;color:var(--meok-2);margin:1.2rem 0 .4rem;font-weight:600}
+.acth:first-of-type{margin-top:.2rem}
+.wsel + .card,.acth + .card{border-top:1px solid var(--seon)}
 
 #edit{background:var(--jongi)}
 #paper{
@@ -183,7 +189,7 @@ var SQL = [
 ].join("\n");
 
 var S = load();
-function fresh(){ return { url:DEF_URL, key:DEF_KEY, rows:[], drafts:{}, fz:17, lh:1.95 }; }
+function fresh(){ return { url:DEF_URL, key:DEF_KEY, rows:[], drafts:{}, fz:17, lh:1.95, work:null, works:[] }; }
 function load(){
   var d = fresh();
   try{
@@ -195,6 +201,7 @@ function load(){
   }catch(e){}
   if(!Array.isArray(d.rows)) d.rows = [];
   if(!d.drafts || typeof d.drafts !== "object") d.drafts = {};
+  if(!Array.isArray(d.works)) d.works = [];
   return d;
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
@@ -278,7 +285,13 @@ function reviewFits(r){ return r.review != null && r.review !== "" && same(r.rev
 function pull(){
   if(!ready()){ state("설정 필요", true); return Promise.resolve(); }
   state("불러오는 중");
-  return api(TABLE + "?select=*&order=updated_at.desc")
+  return loadWorks().then(function(){
+      var w = S.work, q;
+      if(!w) q = "?select=*&order=updated_at.desc";
+      else if(/^t:/.test(w)) q = "?select=*&work_title=eq." + encodeURIComponent(w.slice(2)) + "&order=ord.asc";
+      else q = "?select=*&work_id=eq." + encodeURIComponent(w) + "&order=ord.asc";
+      return api(TABLE + q);
+    })
     .then(function(r){
       if(!r.ok) throw new Error(r.status + "");
       return r.json();
@@ -286,11 +299,12 @@ function pull(){
     .then(function(rows){
       /* 빈 원고도 보여준다 — 보태기에는 이제 입력창이 없어, 첫 글도 여기서 붙여 넣는다 */
       S.rows = rows;
-      var gone = 0;
+      var gone = 0, whole = !S.work;
       Object.keys(S.drafts).forEach(function(id){
         var d = S.drafts[id];
         var r = S.rows.filter(function(x){ return x.id===id; })[0];
-        if(!r){ delete S.drafts[id]; return; }
+        /* 다른 작품을 보는 중이면 그 작품의 손본 글은 그대로 두고 올리기만 한다 */
+        if(!r){ if(whole) delete S.drafts[id]; return; }
         /* 맥에서 원고를 새로 보냈으면 옛 원고를 보고 손본 것은 버린다 */
         if(!same(d.base, r.updated_at)){ delete S.drafts[id]; if(!d.sent) gone++; return; }
         var sv = r.review_at ? Date.parse(r.review_at) : 0;
@@ -306,6 +320,25 @@ function pull(){
     });
 }
 
+/* 작품 목록 — 원고 표에서 작품만 가볍게 읽는다. work_id 칸이 없으면 작품 이름으로 */
+function loadWorks(){
+  function build(rows, useId){
+    var seen = {}, out = [];
+    rows.forEach(function(r){
+      var id = useId && r.work_id ? r.work_id : "t:" + (r.work_title || "");
+      if(!r.work_title || seen[id]) return;
+      seen[id] = 1; out.push({ id:id, title:r.work_title, kind:r.work_kind || "" });
+    });
+    S.works = out;
+    if(S.work && !seen[S.work]) S.work = null;   /* 끝난 작품은 목록에서 내려갔다 */
+    save();
+  }
+  return api(TABLE + "?select=work_id,work_title,work_kind").then(function(r){
+    if(r.status === 400) return api(TABLE + "?select=work_title,work_kind").then(function(r2){ return r2.ok ? r2.json() : []; }).then(function(rows){ build(rows, false); });
+    if(!r.ok) throw new Error(r.status + "");
+    return r.json().then(function(rows){ build(rows, true); });
+  });
+}
 function pushOne(id){
   var d = S.drafts[id];
   if(!d || !ready()) return Promise.resolve();
@@ -363,11 +396,28 @@ function renderList(){
     elList.innerHTML = '<p class="blank">설정에서 수파베이스 주소와<br>익명 열쇠를 넣어주세요.</p>';
     return;
   }
+  if(S.works.length){
+    var ws = document.createElement("select"); ws.className = "wsel";
+    [["", "모든 작품"]].concat(S.works.map(function(w){ return [w.id, w.title + (w.kind ? " · " + w.kind : "")]; })).forEach(function(o){
+      var op = document.createElement("option"); op.value = o[0]; op.textContent = o[1]; ws.appendChild(op);
+    });
+    ws.value = S.work || "";
+    ws.onchange = function(){ S.work = this.value || null; S.rows = []; save(); renderList(); pull(); };
+    elList.appendChild(ws);
+  }
   if(!S.rows.length){
-    elList.innerHTML = '<p class="blank">아직 올라온 원고가 없습니다.</p>';
+    var bl = document.createElement("p"); bl.className = "blank"; bl.textContent = "아직 올라온 원고가 없습니다.";
+    elList.appendChild(bl);
     return;
   }
+  var lastAct = null, novel = !!S.work && S.rows.some(function(r){ return r.work_kind === "장편"; });
   S.rows.forEach(function(r){
+    /* 장편을 골랐으면 막마다 머리를 단다 */
+    if(novel && (r.act || 1) !== lastAct){
+      lastAct = r.act || 1;
+      var h = document.createElement("div"); h.className = "acth"; h.textContent = lastAct + "막";
+      elList.appendChild(h);
+    }
     var b = document.createElement("button");
     b.className = "card";
     var nm = document.createElement("div");
