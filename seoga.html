@@ -441,7 +441,8 @@ function todayBest(b){
     </section>`;
 }
 function noticeLine(){
-  const due=dueBooks(), rm=removables(), out=[];
+  const due=dueBooks(), rm=removables(), out=[], a=R.active;
+  if(a) out.push(`<button class="linkish" style="color:var(--seal)" onclick="go('read')">${a.closing?'읽기를 끝냈습니다 · 쪽을 적어주세요':(elsewhere(a)?esc(a.device)+'에서 ':'')+'읽는 중 · '+fmtMin(Math.max(0,(Date.now()-a.startedAt)/60000))+'째'}</button>`);
   if(due.length) out.push(`<button class="linkish" onclick="go('list','bin')">내놓을 책 ${due.length}권</button>`);
   if(rm.length) out.push(`<button class="linkish" onclick="go('list','remove')">목록에서 지울 책 ${rm.length}권</button>`);
   return out.length? `<div class="rowbtns" style="margin:-10px 0 22px">${out.join('')}</div>` : '';
@@ -912,7 +913,7 @@ function loadR(){
   let r=null; try{ r=JSON.parse(localStorage.getItem('seoga.read.v1')); }catch(e){}
   return {reads:(r&&r.reads)||[],
     settings:normSettings((r&&r.settings)||{}),
-    active:(r&&r.active)||null};
+    active:(r&&r.active)||null, activeUpdated:(r&&r.activeUpdated)||''};
 }
 function normSettings(o){
   const st=Object.assign({target:120,min:15,adjustedAt:'',updated:'',back:true,nextMax:100,grace:30,binName:'폐기 서가'},o);
@@ -921,7 +922,23 @@ function normSettings(o){
   delete st.shortcut; delete st.minUpdated;
   return st;
 }
-function saveR(){ try{ localStorage.setItem(RKEY,JSON.stringify(R)); }catch(e){} queueSync(); }
+/* 읽는 중인 상태는 기기 사이에 하나만 둔다. 바뀔 때마다 시각을 올려 다른 기기로 보낸다. */
+let activeSig=null;
+function saveR(){
+  const sig=JSON.stringify(R.active||null);
+  if(activeSig!==null&&sig!==activeSig) R.activeUpdated=new Date().toISOString();
+  activeSig=sig;
+  try{ localStorage.setItem(RKEY,JSON.stringify(R)); }catch(e){} queueSync();
+}
+function myDevice(){
+  try{ const d=localStorage.getItem('seoga.device'); if(d) return d; }catch(e){}
+  const u=navigator.userAgent;
+  if(/iPhone/.test(u)) return '아이폰';
+  if(/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1)) return '아이패드';
+  if(/Macintosh/.test(u)) return '맥북';
+  return '이 기기';
+}
+function elsewhere(a){ return a&&a.device&&a.device!==myDevice(); }
 function dstr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function mdLabel(d){ return (+d.slice(5,7))+'월 '+(+d.slice(8,10))+'일'; }
 function fmtMin(n){ n=Math.round(n); return n>=60? Math.floor(n/60)+'시간'+(n%60?' '+n%60+'분':'') : n+'분'; }
@@ -1016,7 +1033,8 @@ function vReading(){
   const a=R.active, b=book(a.bookId);
   return `<div style="text-align:center;padding-top:8px">
       <div class="now-t" style="font-size:21px">${esc(b?b.title:(a.title||''))}</div>
-      <div class="now-a">${a.fromPage?a.fromPage+'쪽부터':'처음부터'}</div></div>
+      <div class="now-a">${a.fromPage?a.fromPage+'쪽부터':'처음부터'}${elsewhere(a)?' · '+esc(a.device)+'에서 시작':''}</div></div>
+    ${Date.now()-a.startedAt>6*3600000?`<p class="hint" style="text-align:center;color:var(--seal);margin:18px 0 0">끝내지 않은 읽기가 있습니다. 읽기 끝을 누르면 실제로 읽은 시간을 고칠 수 있습니다.</p>`:''}
     <div class="clock" id="clock">${fmtClock(Date.now()-a.startedAt)}</div>
     <div class="clock-sub" id="clocksub"></div>
     <div class="laterbox"><div class="field" style="flex:1;margin:0"><label>나중에 찾아볼 것</label>
@@ -1033,7 +1051,7 @@ function vClosing(){
   let guess=sp? Math.round((a.fromPage||0)+sp*el) : '';
   if(guess&&b&&b.total) guess=Math.min(b.total,guess);
   return `<div style="max-width:560px">
-    <p class="hint" style="margin:0 0 20px">${esc(b?b.title:'')} · ${fmtMin(Math.max(1,el))} 읽었습니다</p>
+    <p class="hint" style="margin:0 0 20px">${esc(b?b.title:'')} · ${fmtMin(Math.max(1,el))} 읽었습니다${elsewhere(a)?' · '+esc(a.device)+'에서 시작':''}</p>
     <div class="field" style="max-width:220px"><label>몇 쪽까지 읽었습니까</label>
       <input type="number" inputmode="numeric" id="r-page" value="${guess}" placeholder="${a.fromPage?a.fromPage+'쪽에서 시작':'쪽'}"></div>
     ${el>Math.max(180,R.settings.target*1.5)?`<div class="field" style="max-width:220px"><label>실제로 읽은 시간(분)</label>
@@ -1098,7 +1116,7 @@ function startReading(){
   const b=ordered('next')[0]; if(!b) return;
   const t=document.getElementById('r-total'); if(t&&t.value){ const v=parseInt(t.value,10); if(v>0){ b.total=v; touch(b); save(); } }
   const need=Math.max(0,R.settings.target-(dayMinutes().get(today())||0));
-  R.active={bookId:b.id,title:b.title,startedAt:Date.now(),fromPage:b.page||0,need,scans:0,later:0};
+  R.active={bookId:b.id,title:b.title,startedAt:Date.now(),fromPage:b.page||0,need,scans:0,later:0,device:myDevice()};
   finishFor=null; saveR(); render(true);
   runShortcut(R.settings.sc.read||'읽기',String(R.settings.min));
 }
@@ -1158,6 +1176,8 @@ function vSettings(){
       <div class="field" style="width:150px"><label>끝 단축어</label><input type="text" id="s-sc-end" value="${esc(st.sc.end)}" autocapitalize="off"></div>
       <div class="field" style="width:150px"><label>스캔 단축어</label><input type="text" id="s-sc-scan" value="${esc(st.sc.scan)}" autocapitalize="off"></div></div>
     <p class="hint" style="margin-top:0">시작 단축어에는 최소 읽을 시간이 숫자로, 끝 단축어에는 책 제목이 그대로, 스캔 단축어에는 띄어쓰기와 문장부호를 뺀 책 제목이 넘어갑니다.</p>
+    <div class="field" style="width:200px;margin-top:6px"><label>이 기기 이름</label><input type="text" id="s-dev" value="${esc(myDevice())}"></div>
+    <p class="hint" style="margin-top:0">다른 기기에서 읽는 중일 때 “아이폰에서 읽는 중”처럼 보이는 이름입니다. 이 기기에만 저장됩니다.</p>
     <button class="toggle ${st.back?'on':''}" onclick="toggleBack()"><span class="box"></span>단축어가 끝나면 서가로 돌아오기</button>
     <div class="hint">홈 화면에 둔 서가로 돌아오지 않고 사파리에서 따로 열리면 이 표시를 떼세요. 이 기기에만 적용됩니다.</div>
     <div class="rowbtns"><button class="ghost" onclick="saveReadSet()">읽기 설정 저장</button></div>
@@ -1183,6 +1203,7 @@ function saveReadSet(){
     if(tg!==st.target) st.adjustedAt=today();
     st.target=tg; st.min=mn; st.updated=new Date().toISOString();
   }
+  const dv=g('s-dev').value.trim(); try{ if(dv) localStorage.setItem('seoga.device',dv); else localStorage.removeItem('seoga.device'); }catch(e){}
   st.sc={read:g('s-sc-read').value.trim()||'읽기',end:g('s-sc-end').value.trim()||'읽기끝',scan:g('s-sc-scan').value.trim()||'스캔'};
   saveR(); toast('저장했습니다'); render();
 }
@@ -1307,6 +1328,9 @@ function applyRows(kind,rows,bulk){
     } else if(id==='order'){
       if(up>(MARK.order||'')) MARK.order=up;
       if(up>(S.orderUpdated||'')){ S.order={best:d.best||[],next:d.next||[]}; S.orderUpdated=up; orderSig=JSON.stringify(S.order); changed=true; }
+    } else if(id==='active'){
+      if(up>(MARK.active||'')) MARK.active=up;
+      if(up>(R.activeUpdated||'')){ R.active=d.active||null; R.activeUpdated=up; activeSig=JSON.stringify(R.active); changed=true; }
     } else if(id==='settings'){
       if(up>(MARK.min||'')) MARK.min=up;
       if(up>(R.settings.updated||'')){
@@ -1345,6 +1369,7 @@ async function pushDirty(inner){
   Object.entries(S.tomb).forEach(([id,t])=>{ if(t>(MARK.b[id]||'')&&!book(id)) bR.push({id,data:{id,purged:true,updated:t},updated_at:at}); });
   R.reads.forEach(x=>{ if((x.updated||'')>(MARK.r[x.id]||'')) rR.push({id:x.id,data:x,updated_at:at}); });
   if(S.orderUpdated&&S.orderUpdated>(MARK.order||'')) mR.push({id:'order',data:{best:S.order.best,next:S.order.next,updated:S.orderUpdated},updated_at:at});
+  if(R.activeUpdated&&R.activeUpdated>(MARK.active||'')) mR.push({id:'active',data:{active:R.active||null,updated:R.activeUpdated},updated_at:at});
   const st=R.settings;
   if(st.updated&&st.updated>(MARK.min||'')) mR.push({id:'settings',data:{target:st.target,min:st.min,adjustedAt:st.adjustedAt,nextMax:st.nextMax,grace:st.grace,binName:st.binName,updated:st.updated},updated_at:at});
   if(!bR.length&&!rR.length&&!mR.length){ if(!inner&&syncState!=='on') setSync('on'); return; }
@@ -1353,7 +1378,7 @@ async function pushDirty(inner){
     for(const [t,rows] of [['seoga_books',bR],['seoga_reads',rR],['seoga_meta',mR]])
       for(let i=0;i<rows.length;i+=500){ const {error}=await SB.from(t).upsert(rows.slice(i,i+500)); if(error) throw error; }
     bR.forEach(r=>MARK.b[r.id]=r.data.updated); rR.forEach(r=>MARK.r[r.id]=r.data.updated);
-    mR.forEach(r=>{ if(r.id==='order') MARK.order=r.data.updated; else MARK.min=r.data.updated; });
+    mR.forEach(r=>{ if(r.id==='order') MARK.order=r.data.updated; else if(r.id==='active') MARK.active=r.data.updated; else MARK.min=r.data.updated; });
     saveMark(); if(!inner){ syncErr=''; setSync('on'); }
   }catch(e){ if(inner) throw e; setSync('err'); }
 }
@@ -1388,6 +1413,7 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&editId){ editId=null; render(); }});
 window.addEventListener('beforeunload',()=>{ try{ localStorage.setItem(KEY,JSON.stringify({books:S.books,order:S.order,lastLocation:S.lastLocation,orderUpdated:S.orderUpdated,tomb:S.tomb})); }catch(e){} });
+activeSig=JSON.stringify(R.active||null);
 adjustTarget();
 render();
 setInterval(updClock,1000);
@@ -1395,7 +1421,7 @@ if(sbCfg.url&&sbCfg.key) sbConnect(false);
 window.addEventListener('online',()=>{ if(sbCfg.url) syncAll(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') return;
   adjustTarget();
-  if(R.active&&view!=='read'){ view='read'; render(true); } else updClock();
+  if(R.active&&!elsewhere(R.active)&&view!=='read'){ view='read'; render(true); } else updClock();
   if(sbCfg.url) syncAll(); });
 </script>
 </body>
