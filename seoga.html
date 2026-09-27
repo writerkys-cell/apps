@@ -172,7 +172,18 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 .clock{font-size:68px;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:.03em;margin:34px 0 6px;line-height:1.1}
 .clock-sub{text-align:center;font-size:14.5px;color:var(--ink-soft);min-height:1.7em}
 .clock-sub.done{color:var(--seal)}
-.laterbox{display:flex;gap:8px;align-items:flex-end;margin-top:40px}
+.markbox{margin-top:40px}
+.markbox>label,.scanbox>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
+.markrow{display:flex;gap:10px;align-items:flex-end}
+.markrow .pg{flex:0 0 64px}
+.markrow .pg input{text-align:center}
+.markrow .tx{flex:1}
+.markrow textarea{resize:none;line-height:1.55}
+.markfoot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px}
+.markfoot .hint{margin:0;flex:1}
+.markfoot button{white-space:nowrap;flex:none}
+.scanbox{margin-top:30px;padding-top:14px;border-top:1px solid var(--line)}
+.lines .lt.soft{color:var(--ink-soft)}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:340px}
 .cal .h{font-size:11.5px;color:var(--ink-soft);text-align:center}
 .cal .d{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12.5px;color:var(--ink-soft);border-radius:50%;border:1px solid transparent;font-variant-numeric:tabular-nums}
@@ -676,17 +687,50 @@ function copyLines(id){
     ...ls.map(x=>rangeText(x)+' · '+x.date+'\n'+x.memory+'\n')].join('\n').trim();
   navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
 }
+/* 밑줄: 책별로 쪽 순서로 모은다. 스캔 기록도 함께. */
+let marksFor=null;
+function marksBtn(b){ const n=markItems(b.id).length; return n?`<button onclick="toggleMarks('${b.id}')">${marksFor===b.id?'밑줄 접기':'밑줄 '+n+'개'}</button>`:''; }
+function marksBlock(b){ return marksFor===b.id? marksList(b) : ''; }
+function markHead(x){ return (x.page?x.page+'쪽 · ':'')+(x.kind==='scan'?'스캔 · ':'')+mdLabel(x.date); }
+function marksList(b){
+  const ms=markItems(b.id); if(!ms.length) return '';
+  return `<ul class="lines">${ms.map(x=>`<li><div class="lr">${markHead(x)}</div>
+      <div class="lt${x.kind==='scan'&&!x.text?' soft':''}">${x.text?esc(x.text):'설명 없이 스캔했습니다'}</div>
+      <div class="la"><button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}')">지우기</button></div></li>`).join('')}</ul>
+    <div class="rowbtns" style="margin-top:12px"><button class="ghost" onclick="copyMarks('${b.id}')">밑줄을 글로 복사</button></div>`;
+}
+function toggleMarks(id){ marksFor=marksFor===id?null:id; if(view==='list') refreshList(); else render(); }
+function editMark(rid){
+  const x=R.reads.find(r=>r.id===rid); if(!x) return;
+  const v=prompt((x.kind==='scan'?'스캔 설명 고치기':'밑줄 고치기')+(x.page?' · '+x.page+'쪽':''),x.text||''); if(v===null) return;
+  const t=v.trim(); if(!t&&x.kind==='mark'){ dropMark(rid); return; }
+  const pv=prompt('쪽 번호',x.page?String(x.page):'');
+  if(pv!==null){ const n=parseInt(pv,10); x.page=n>0?n:0; }
+  x.text=t; x.updated=new Date().toISOString(); saveR(); toast('고쳤습니다'); view==='list'?refreshList():render();
+}
+function dropMark(rid){
+  const x=R.reads.find(r=>r.id===rid); if(!x) return;
+  if(!confirm(x.kind==='scan'?'이 스캔 기록을 지웁니다. 애플 메모에 저장된 스캔은 그대로 남습니다.':'이 밑줄을 지웁니다.')) return;
+  x.gone=true; x.updated=new Date().toISOString(); saveR(); toast('지웠습니다'); view==='list'?refreshList():render();
+}
+function copyMarks(id){
+  const b=book(id), ms=markItems(id); if(!ms.length) return;
+  const title=b?b.title:(ms[0].title||'');
+  const t=['#'+title.replace(/[^\p{L}\p{N}_-]/gu,''), title+(b&&b.author?' / '+b.author:''), '',
+    ...ms.map(x=>(x.page?x.page+'쪽':'쪽 없음')+(x.kind==='scan'?' · 스캔':'')+'\n'+(x.text||'설명 없음')+'\n')].join('\n').trim();
+  navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
+}
 function detailHTML(b){
   if(b.discarded) return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button onclick="restore('${b.id}')">되살리기</button>
-      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}
-      <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}</div>`;
+      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}
+      <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}</div>`;
   if(inBin(b)) return `<div class="detail">
     <div class="meta">폐기 서가에 둔 지 ${daysBetween(b.binAt,today())}일째${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>
       <button onclick="unBin('${b.id}')">되살리기</button>
-      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}</div>${linesBlock(b)}</div>`;
+      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}</div>${linesBlock(b)}${marksBlock(b)}</div>`;
   return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):'가지고 있지 않음'}${b.page?' · '+b.page+'쪽까지':''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
@@ -701,9 +745,9 @@ function detailHTML(b){
       ${b.keep&&outOfRank(b)?`<button onclick="unKeep('${b.id}')">보관 라벨 떼기</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>
       ${b.location?`<button class="warn" onclick="toBin('${b.id}')">폐기</button>`:''}
-      ${linesBtn(b)}
+      ${linesBtn(b)}${marksBtn(b)}
       <button class="warn" onclick="del('${b.id}')">${isRemovable(b)?'목록에서 지우기':'지우기'}</button>
-    </div>${linesBlock(b)}</div>`;
+    </div>${linesBlock(b)}${marksBlock(b)}</div>`;
 }
 function toggle(id){ openId=openId===id?null:id; if(view==='list') refreshList(); else render(); }
 function reRank(id){ removeFromOrder(id); if(!startCompare(id)){ save(); toast('견줄 상대가 아직 없습니다'); render(); } }
@@ -991,7 +1035,9 @@ function fmtClock(ms){ const s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3
 function sessionsAll(){ return R.reads.filter(x=>x.kind==='read').sort((a,b)=>(a.start||'').localeCompare(b.start||'')); }
 /* 계산에 쓰는 읽기는 시작한 날부터. 그 전의 기록은 한 줄 목록에만 남는다. */
 function sessions(){ const sd=R.settings.startDate||''; return sessionsAll().filter(x=>(x.date||'')>=sd); }
-function laterItems(){ return R.reads.filter(x=>x.kind==='later'&&!x.done).sort((a,b)=>(b.at||'').localeCompare(a.at||'')); }
+/* 밑줄과 스캔: 읽는 중에 책에 붙여 두는 기록. 지우면 gone 표시만 남긴다(다른 기기에 지움을 전하려고). */
+function markItems(id){ return R.reads.filter(x=>(x.kind==='mark'||x.kind==='scan')&&x.bookId===id&&!x.gone)
+  .sort((a,b)=>((a.page||0)-(b.page||0))||(a.at||'').localeCompare(b.at||'')); }
 function dayMinutes(){ const m=new Map(); sessions().forEach(s=>m.set(s.date,(m.get(s.date)||0)+s.minutes)); return m; }
 /* 오늘 읽을 시간은 일주일에 한 번, 최근 14일 하루 평균(읽지 않은 날은 0분, 처음 읽기 전의 날은 빼고)을 보고 조정한다.
    평균이 목표의 90~110%면 그대로 두고, 그 밖이면 차이의 25%만큼 옮긴다. 한 번에 ±15%까지, 5분 단위, 최소 시간 아래로는 내려가지 않는다. */
@@ -1042,6 +1088,7 @@ function vRead(){
     const f=book(finishFor);
     out+=`<section style="margin-bottom:30px"><p class="rd-m" style="margin:0">‘${esc(f.title)}’, 끝까지 읽었습니다.</p>
       ${memLines(f.id).length?`<h2 class="sec" style="margin-top:22px">이 책에 남긴 한 줄 ${memLines(f.id).length}개</h2>${linesList(f)}`:''}
+      ${markItems(f.id).length?`<h2 class="sec" style="margin-top:22px">이 책에 친 밑줄 ${markItems(f.id).length}개</h2>${marksList(f)}`:''}
       <p class="note" style="margin-top:18px">서가에서 읽은 책으로 옮기면 베스트 가운데 자리를 견주어 정합니다.</p>
       <div class="rowbtns"><button class="primary" onclick="finishMove()">읽은 책으로 옮기기</button>
         <button class="linkish" onclick="finishFor=null;render()">나중에</button></div></section><hr class="hr">`;
@@ -1085,12 +1132,18 @@ function vReading(){
     ${Date.now()-a.startedAt>6*3600000?`<p class="hint" style="text-align:center;color:var(--seal);margin:18px 0 0">끝내지 않은 읽기가 있습니다. 읽기 끝을 누르면 실제로 읽은 시간을 고칠 수 있습니다.</p>`:''}
     <div class="clock" id="clock">${fmtClock(Date.now()-a.startedAt)}</div>
     <div class="clock-sub" id="clocksub"></div>
-    <div class="laterbox"><div class="field" style="flex:1;margin:0"><label>나중에 찾아볼 것</label>
-      <input type="text" id="later" placeholder="떠오른 것을 한 줄로" autocomplete="off"></div>
-      <button class="ghost" style="padding:7px 14px" onclick="addLater()">적기</button></div>
-    <div class="hint" id="latern">${a.later?'적어둔 것 '+a.later+'개':'검색하고 싶어지면 여기 적어두고, 덮은 뒤에 찾아봅니다.'}</div>
+    <div class="markbox"><label>밑줄을 적다</label>
+      <div class="markrow"><div class="pg"><input type="number" inputmode="numeric" id="mk-page" value="${markPage(a)}" placeholder="쪽" aria-label="쪽"></div>
+        <div class="tx"><textarea id="mk-text" rows="2" placeholder="밑줄 친 문장" aria-label="밑줄 친 문장"></textarea></div></div>
+      <div class="markfoot"><div class="hint" id="markn">${a.marks?'이번에 적은 밑줄 '+a.marks+'개':'여기에 적으면 책에 저장됩니다'}</div>
+        <button class="ghost" style="padding:7px 16px" onclick="addMark()">적기</button></div></div>
+    ${scanOpen?`<div class="scanbox"><label>스캔할 부분</label>
+      <div class="markrow"><div class="pg"><input type="number" inputmode="numeric" id="sc-page" value="${markPage(a)}" placeholder="쪽" aria-label="쪽"></div>
+        <div class="tx"><input type="text" id="sc-text" placeholder="어떤 부분인지 짧게 · 비워도 됩니다" aria-label="스캔 설명" autocomplete="off"></div></div>
+      <div class="hint" style="margin:8px 0 0">쪽과 설명은 책에 저장되고, 스캔은 단축어로 넘어갑니다.</div>
+      <div class="markfoot" style="justify-content:flex-end"><button class="linkish" onclick="scanOpen=false;render()">닫기</button><button class="ghost" style="padding:7px 16px" onclick="runScan()">스캔하기</button></div></div>`:''}
     <div class="rowbtns" style="justify-content:space-between;margin-top:34px">
-      <button class="ghost" onclick="runScan()">스캔${a.scans?' · '+a.scans:''}</button>
+      <button class="ghost" onclick="openScan()">스캔${a.scans?' · '+a.scans:''}</button>
       <button class="primary" onclick="closeBook()">읽기 끝</button></div>
     <div class="rowbtns" style="margin-top:28px"><button class="linkish" onclick="abandon()">기록하지 않고 그만두기</button></div>`;
 }
@@ -1109,8 +1162,8 @@ function vClosing(){
     <div class="rowbtns"><button class="primary" onclick="stamp()">도장 찍기</button></div></div>`;
 }
 function statsHTML(){
-  const s=sessions(), lat=laterItems();
-  if(!s.length&&!lat.length) return `<hr class="hr"><p class="note">읽은 날마다 여기 달력에 도장이 찍힙니다.</p>`;
+  const s=sessions();
+  if(!s.length) return `<hr class="hr"><p class="note">읽은 날마다 여기 달력에 도장이 찍힙니다.</p>`;
   const m=dayMinutes(), dt=dayTargets(), t=today(), ym=t.slice(0,7), y=t.slice(0,4), tg=R.settings.target;
   const sum=f=>s.filter(f).reduce((a,x)=>{ a.mi+=x.minutes; a.p+=Math.max(0,x.toPage-x.fromPage); return a; },{mi:0,p:0});
   const mo=sum(x=>x.date.startsWith(ym)), yr=sum(x=>x.date.startsWith(y));
@@ -1135,13 +1188,13 @@ function statsHTML(){
       <div><span>올해</span><b>${fmtMin(yr.mi)}</b></div>
       <div><span>올해 쪽수</span><b>${yr.p}</b></div>
       ${(()=>{ const all=sum(()=>true); return all.mi>=1? `<div><span>시간당 쪽수</span><b>${Math.round(all.p/(all.mi/60))}</b></div>`:''; })()}</div>
-    ${fin.length?`<h2 class="sec" style="margin-top:32px">올해 다 읽은 책 ${fin.length}권</h2><ul class="plain">${fin.join('')}</ul>`:''}
-    ${lat.length?`<h2 class="sec" style="margin-top:32px">나중에 찾아볼 것 ${lat.length}</h2><ul class="plain">${lat.map(x=>
-      `<li><span>${esc(x.text)}<span class="m"> · ${mdLabel(x.date||t)}</span></span><button class="linkish" onclick="laterDone('${x.id}')">찾아봤다</button></li>`).join('')}</ul>`:''}`;
+    ${fin.length?`<h2 class="sec" style="margin-top:32px">올해 다 읽은 책 ${fin.length}권</h2><ul class="plain">${fin.join('')}</ul>`:''}`;
 }
 function bindRead(){
-  const l=document.getElementById('later');
-  if(l) l.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); addLater(); } });
+  const mk=document.getElementById('mk-text');
+  if(mk) mk.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){ e.preventDefault(); addMark(); } });
+  const sc=document.getElementById('sc-text');
+  if(sc) sc.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); runScan(); } });
   const t=document.getElementById('r-total');
   if(t) t.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); const b=ordered('next')[0]; if(b) setTotal(b.id); } });
   const p=document.getElementById('r-page'); if(p){ p.focus(); p.select(); }
@@ -1165,8 +1218,8 @@ function startReading(){
   const b=ordered('next')[0]; if(!b) return;
   const t=document.getElementById('r-total'); if(t&&t.value){ const v=parseInt(t.value,10); if(v>0){ b.total=v; touch(b); save(); } }
   const need=Math.max(0,R.settings.target-(dayMinutes().get(today())||0));
-  R.active={bookId:b.id,title:b.title,startedAt:Date.now(),fromPage:b.page||0,need,scans:0,later:0,device:myDevice()};
-  finishFor=null; saveR(); render(true);
+  R.active={bookId:b.id,title:b.title,startedAt:Date.now(),fromPage:b.page||0,need,scans:0,marks:0,device:myDevice()};
+  finishFor=null; scanOpen=false; saveR(); render(true);
   runShortcut(R.settings.sc.read||'읽기',String(R.settings.min));
 }
 function closeBook(){
@@ -1190,18 +1243,25 @@ function stamp(){
   if(rec.finished) finishFor=b.id;
   toast(fmtMin(minutes)+' · '+to+'쪽까지'); render(true);
 }
-function addLater(){
-  const i=document.getElementById('later'); if(!i) return; const t=i.value.trim(); if(!t) return;
-  const a=R.active, now=new Date().toISOString();
-  R.reads.push({id:uid(),kind:'later',text:t,bookId:a?a.bookId:'',date:today(),at:now,done:false,updated:now});
-  if(a) a.later=(a.later||0)+1; saveR(); i.value='';
-  const n=document.getElementById('latern'); if(n&&a) n.textContent='적어둔 것 '+a.later+'개';
-  toast('적어두었습니다 · 책으로 돌아가세요');
+let scanOpen=false;
+function markPage(a){ return a.markPage||a.fromPage||''; }
+function pageVal(id){ const n=parseInt((document.getElementById(id)||{}).value,10); return n>0?n:0; }
+function addMark(){
+  const i=document.getElementById('mk-text'); if(!i) return; const t=i.value.trim();
+  const a=R.active; if(!a) return;
+  if(!t){ toast('밑줄 친 문장을 적어주세요'); i.focus(); return; }
+  const b=book(a.bookId), page=pageVal('mk-page'), now=new Date().toISOString();
+  R.reads.push({id:uid(),kind:'mark',bookId:a.bookId,title:b?b.title:(a.title||''),page,text:t,date:today(),at:now,updated:now});
+  a.marks=(a.marks||0)+1; if(page) a.markPage=page; saveR(); i.value=''; i.blur();
+  const n=document.getElementById('markn'); if(n) n.textContent='이번에 적은 밑줄 '+a.marks+'개';
+  toast('밑줄을 책에 저장했습니다');
 }
-function laterDone(id){ const x=R.reads.find(r=>r.id===id); if(!x) return; x.done=true; x.updated=new Date().toISOString(); saveR(); render(); }
+function openScan(){ scanOpen=true; render(); const t=document.getElementById('sc-text'); if(t) t.focus(); }
 function runScan(){
-  const a=R.active; if(!a) return; const b=book(a.bookId);
-  a.scans=(a.scans||0)+1; saveR();
+  const a=R.active; if(!a) return; const b=book(a.bookId), now=new Date().toISOString();
+  const page=pageVal('sc-page'), note=((document.getElementById('sc-text')||{}).value||'').trim();
+  R.reads.push({id:uid(),kind:'scan',bookId:a.bookId,title:b?b.title:(a.title||''),page,text:note,date:today(),at:now,updated:now});
+  a.scans=(a.scans||0)+1; if(page) a.markPage=page; scanOpen=false; saveR();
   const text=(b?b.title:(a.title||'')).replace(/[^\p{L}\p{N}_-]/gu,'');   // 애플 메모 태그로 쓰도록 글자·숫자·_·-만 남긴다
   runShortcut(R.settings.sc.scan||'스캔',text);
   setTimeout(render,300);
