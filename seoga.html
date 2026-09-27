@@ -229,7 +229,7 @@ let R=loadR(), finishFor=null;
 let view=(R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
 let openShelves=new Set(), homeOpen=false, pageFor=null;
 let draft=blankDraft();
-function blankDraft(loc){ return {title:'',author:'',publisher:'',category:null,gift:false,received:today(),location:loc||'',step:1}; }
+function blankDraft(loc){ return {title:'',author:'',publisher:'',total:'',category:null,gift:false,received:today(),location:loc||'',step:1}; }
 
 /* ── 저장 ── */
 function load(){
@@ -424,6 +424,7 @@ function vAdd(){
     <div class="field"><label>제목</label><input type="text" id="f-title" value="${esc(d.title)}" placeholder="표지에 적힌 그대로"></div>
     <div class="field"><label>지은이</label><input type="text" id="f-author" value="${esc(d.author)}" placeholder="옮긴이가 있으면 함께"><div class="sugg" id="f-author-sugg"></div></div>
     <div class="field"><label>펴낸곳</label><input type="text" id="f-pub" value="${esc(d.publisher)}"><div class="sugg" id="f-pub-sugg"></div></div>
+    <div class="field" style="max-width:200px"><label>총 쪽수</label><input type="number" inputmode="numeric" id="f-total" value="${esc(String(d.total||''))}" placeholder="비워둬도 됩니다"></div>
     ${dupWarning(d.title)}
     <div class="rowbtns"><button class="primary" id="btn-step1" ${d.title.trim()?'':'disabled'} onclick="addStep1()">다음 · 분류</button></div>`;
   if(d.step===1) return `<div style="max-width:560px">${step1}</div>`;
@@ -458,7 +459,7 @@ function summary(){
   const d=draft;
   return `<div style="border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px">
     <div class="title">${esc(d.title)||'(제목 없음)'}${d.gift?'<span class="badge b-gift">증정본</span>':''}</div>
-    <div class="meta">${[d.author,d.publisher].filter(Boolean).map(esc).join(' · ')||'&nbsp;'}</div>
+    <div class="meta">${[d.author,d.publisher,parseInt(d.total,10)>0?parseInt(d.total,10)+'쪽':''].filter(Boolean).map(esc).join(' · ')||'&nbsp;'}</div>
     <button class="linkish" onclick="draft.step=1;render()">고치기</button></div>`;
 }
 function dupWarning(t){
@@ -482,13 +483,14 @@ function attachSuggest(id,pool,set){
   inp.addEventListener('blur',()=>setTimeout(()=>{ box.innerHTML=''; },150));
 }
 function bindAdd(){
-  const map={'f-title':'title','f-author':'author','f-pub':'publisher'};
+  const map={'f-title':'title','f-author':'author','f-pub':'publisher','f-total':'total'};
   Object.keys(map).forEach(id=>{
     const e=document.getElementById(id); if(!e) return;
     e.addEventListener('input',()=>{ draft[map[id]]=e.value; const b=document.getElementById('btn-step1'); if(b) b.disabled=!draft.title.trim(); });
     e.addEventListener('keydown',ev=>{ if(ev.key!=='Enter'||ev.isComposing) return; ev.preventDefault();
       if(id==='f-title') document.getElementById('f-author').focus();
-      else if(id==='f-author') document.getElementById('f-pub').focus(); else addStep1(); });
+      else if(id==='f-author') document.getElementById('f-pub').focus();
+      else if(id==='f-pub') document.getElementById('f-total').focus(); else addStep1(); });
   });
   const r=document.getElementById('f-recv'); if(r) r.addEventListener('input',()=>draft.received=r.value);
   const l=document.getElementById('f-loc');
@@ -515,7 +517,7 @@ function addSave(again){
   const now=new Date().toISOString();
   const b={id:uid(),title:d.title.trim(),author:d.author.trim(),publisher:d.publisher.trim(),
     category:d.category,gift:d.gift,received:d.gift?(d.received||today()):'',location:d.location.trim(),
-    discarded:false,toDiscard:false,discardedAt:'',page:0,pageAt:'',total:0,added:now,updated:now,note:''};
+    discarded:false,toDiscard:false,discardedAt:'',page:0,pageAt:'',total:Math.max(0,parseInt(d.total,10)||0),added:now,updated:now,note:''};
   S.books.push(b);
   if(b.location) S.lastLocation=b.location;
   const cat=b.category, loc=b.location;
