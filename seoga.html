@@ -54,6 +54,9 @@ h2.sec{font-size:15px;font-weight:400;color:var(--ink-soft);letter-spacing:.14em
 .b-gift{border-color:var(--moss);color:var(--moss)}
 .b-read{border-color:var(--deep);color:var(--deep)}
 .b-cand{border-color:var(--seal);color:var(--seal)}
+.b-keep{border-color:var(--deep);color:var(--deep)}
+.judge .now-book{cursor:default}
+.judge .now-book:hover{background:none}
 .b-gone{border-color:var(--void);color:var(--void)}
 .tagdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
 .d-best{background:var(--seal)} .d-next{background:var(--deep)} .d-gift{background:var(--moss)} .d-none{background:var(--void)}
@@ -91,7 +94,9 @@ input:focus,textarea:focus{outline:none;border-bottom-color:var(--seal)}
 .choice.on[data-c=best]{background:var(--seal)}
 .choice.on[data-c=next]{background:var(--deep)}
 .choice.on[data-c=gift]{background:var(--moss)}
-.choice.on[data-c=undecided],.choice.on[data-c=none],.choice.on[data-c=cand],.choice.on[data-c=gone]{background:var(--void)}
+.choice.on[data-c=undecided],.choice.on[data-c=none],.choice.on[data-c=remove],.choice.on[data-c=gone]{background:var(--void)}
+.choice.on[data-c=wait],.choice.on[data-c=bin]{background:var(--seal)}
+.choice.on[data-c=keep]{background:var(--deep)}
 .toggle{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);padding:9px 15px;border-radius:var(--radius);font-size:15px;color:var(--ink-soft);background:none}
 .toggle.on{border-color:var(--moss);color:var(--moss)}
 .toggle .box{width:13px;height:13px;border:1px solid currentColor;display:inline-block;border-radius:1px}
@@ -205,7 +210,7 @@ pre.sql{font-size:12px;line-height:1.5;background:var(--paper-2);padding:12px 14
       <button data-v="add">담기</button>
       <button data-v="list">목록</button>
       <button data-v="shelf">자리</button>
-      <button data-v="data">보관</button>
+      <button data-v="data">설정</button>
     </nav>
   </div>
 </header>
@@ -237,7 +242,7 @@ function load(){
   const s={books:(r&&r.books)||[],order:{best:r?.order?.best||[],next:r?.order?.next||[]},lastLocation:r?.lastLocation||'',
     orderUpdated:r?.orderUpdated||((r?.order?.best?.length||r?.order?.next?.length)?'2000-01-01T00:00:00.000Z':''),tomb:r?.tomb||{}};
   s.books.forEach(normBook);
-  const alive=new Set(s.books.filter(b=>!b.discarded).map(b=>b.id));
+  const alive=new Set(s.books.filter(b=>!b.discarded&&!b.binAt).map(b=>b.id));
   s.order.best=s.order.best.filter(id=>alive.has(id));
   s.order.next=s.order.next.filter(id=>alive.has(id));
   return s;
@@ -247,7 +252,10 @@ function normBook(b){
     if(typeof b.gift!=='boolean') b.gift=!!b.received;
     if(b.category!=='best'&&b.category!=='next') b.category='';
     if(typeof b.discarded!=='boolean') b.discarded=false;
-    if(typeof b.toDiscard!=='boolean') b.toDiscard=false;
+    b.toDiscard=false;
+    if(typeof b.keep!=='boolean') b.keep=false;
+    if(!b.binAt) b.binAt='';
+    if(!b.prevLocation) b.prevLocation='';
     if(!b.discardedAt) b.discardedAt='';
     if(!b.updated) b.updated=b.added||new Date().toISOString();
     if(typeof b.page!=='number') b.page=0;
@@ -278,15 +286,34 @@ function gifts(){ return live().filter(b=>b.gift).sort((a,b)=>(b.received||'').l
 function undecided(){ return live().filter(b=>!b.category).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 function homeless(){ return live().filter(b=>!b.location).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 function rankOf(b){ return b.category&&!b.discarded? S.order[b.category].indexOf(b.id)+1 : 0; }
-function isCandidate(b){ return !b.discarded && (b.toDiscard || (b.category==='best' && rankOf(b)>BEST_MAX)); }
-function candidates(){ return live().filter(isCandidate).sort((a,b)=>(rankOf(b)||0)-(rankOf(a)||0)); }
+/* 폐기 판단: 순위 밖으로 밀려난 책은 판단을 기다린다. 폐기하면 폐기 서가로, 보관하면 제자리에 라벨만 붙는다. */
+function nextMax(){ return R.settings.nextMax||100; }
+function graceDays(){ return R.settings.grace??30; }
+function binName(){ return R.settings.binName||'폐기 서가'; }
+function inBin(b){ return !b.discarded&&!!b.binAt; }
+function outOfRank(b){
+  if(b.discarded||b.binAt||!b.category) return false;
+  const r=rankOf(b); return r>0 && r>(b.category==='best'?BEST_MAX:nextMax());
+}
+function inGrace(b){ const g=graceDays(); if(!g||!b.added) return false; return daysBetween(b.added.slice(0,10),today())<g; }
+function isWaiting(b){ return outOfRank(b)&&!b.keep&&!!b.location&&!inGrace(b); }
+function isRemovable(b){ return outOfRank(b)&&!b.location&&!inGrace(b); }
+const locKey=l=>(l||'').replace(/\d+/g,n=>n.padStart(4,'0'));
+let skipQ=(()=>{ try{ return JSON.parse(localStorage.getItem('seoga.skip'))||{}; }catch(e){ return {}; } })();
+function waiting(){ return live().filter(isWaiting).sort((a,b)=>(skipQ[a.id]||'').localeCompare(skipQ[b.id]||'')||locKey(a.location).localeCompare(locKey(b.location),'ko')||rankOf(b)-rankOf(a)); }
+function keptBooks(){ return live().filter(b=>b.keep&&outOfRank(b)).sort((a,b)=>locKey(a.location).localeCompare(locKey(b.location),'ko')); }
+function binBooks(){ return live().filter(inBin).sort((a,b)=>(a.binAt||'').localeCompare(b.binAt||'')); }
+function dueBooks(){ return binBooks().filter(b=>daysBetween(b.binAt,today())>=7); }
+function removables(){ return live().filter(isRemovable).sort((a,b)=>rankOf(b)-rankOf(a)); }
+/* 보관 라벨은 순위 안으로 돌아오면 저절로 뗀다 */
+function sweepKeep(){ let n=0; live().forEach(b=>{ if(b.keep&&!outOfRank(b)){ b.keep=false; touch(b); n++; } }); if(n) save(); }
 function discardedBooks(){ return S.books.filter(b=>b.discarded).sort((a,b)=>(b.discardedAt||'').localeCompare(a.discardedAt||'')); }
-function overflow(){ return Math.max(0, ordered('best').length-BEST_MAX); }
 function locations(){ const m=new Map(); live().forEach(b=>{ if(b.location) m.set(b.location,(m.get(b.location)||0)+1); }); return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ko')); }
 function recentLocations(){ const seen=[]; [...live()].sort((a,b)=>(b.added||'').localeCompare(a.added||'')).forEach(b=>{ if(b.location&&!seen.includes(b.location)&&seen.length<6) seen.push(b.location); }); return seen; }
 function fieldValues(f){ const m=new Map(); S.books.forEach(b=>{ const v=(b[f]||'').trim(); if(v) m.set(v,(m.get(v)||0)+1); });
   return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'ko')).map(e=>e[0]); }
 function stateLabel(b){
+  if(inBin(b)) return `<span class="tagdot d-none"></span>${esc(binName())} · ${esc(b.binAt)}`;
   if(b.discarded) return `<span class="tagdot d-none"></span>폐기함${b.discardedAt?' · '+esc(b.discardedAt):''}`;
   if(!b.category) return '<span class="tagdot d-none"></span>분류 미정';
   return `<span class="tagdot ${CAT[b.category].dot}"></span>${CAT[b.category].name} ${rankOf(b)}위`;
@@ -296,7 +323,10 @@ function badges(b,rank){
   if(rank===1&&b.category==='next'&&!b.discarded) s+='<span class="badge b-read">지금 읽는 책</span>';
   if(b.gift) s+='<span class="badge b-gift">증정본</span>';
   if(b.discarded) s+='<span class="badge b-gone">폐기함</span>';
-  else if(isCandidate(b)) s+='<span class="badge b-cand">폐기 대상</span>';
+  else if(inBin(b)) s+='<span class="badge b-cand">폐기 서가</span>';
+  else if(b.keep&&outOfRank(b)) s+='<span class="badge b-keep">보관</span>';
+  else if(isWaiting(b)) s+='<span class="badge b-cand">판단 대기</span>';
+  else if(isRemovable(b)) s+='<span class="badge b-gone">지울 책</span>';
   return s;
 }
 function matches(b,k){ return !k||[b.title,b.author,b.publisher,b.location].some(v=>(v||'').toLowerCase().includes(k)); }
@@ -315,7 +345,7 @@ function finishCompare(pos){
   const {id,cat,list}=cmp;
   S.order[cat]=list.slice(0,pos).concat(id,list.slice(pos)); cmp=null; save();
   let m=CAT[cat].name+' '+(pos+1)+'번째에 놓았습니다';
-  if(cat==='best'&&overflow()) m+=' · 366위 아래 '+overflow()+'권이 폐기 대상입니다';
+  if(pos+1>(cat==='best'?BEST_MAX:nextMax())) m+=' · 순위 밖이라 판단을 기다리게 됩니다';
   toast(m);
   if(S._queue&&S._queue.length){ nextQueued(); return; }
   view='list'; listTab=cat; shown=PAGE; render(true);
@@ -333,6 +363,7 @@ function nextQueued(){
 /* ── 그리기 ── */
 function render(reset){
   const y=window.scrollY;
+  if(!cmp) sweepKeep();
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   const n=live().length;
   document.getElementById('brandCount').textContent = S.books.length? n+'권 · 꽂힌 책 '+(n-homeless().length)+'권'+(discardedBooks().length?' · 폐기 '+discardedBooks().length+'권':'') : '';
@@ -357,14 +388,14 @@ function vHome(){
     <div class="empty" style="border:none;padding-top:10px">
     <b>아직 담긴 책이 없습니다.</b><br>‘담기’에서 책을 적고, 읽은 책인지 읽을 책인지 고른 뒤 꽂을 자리를 적으면 됩니다.
     <div class="rowbtns"><button class="primary" onclick="go('add')">첫 책 담기</button></div></div>`;
-  const b=ordered('best'),n=ordered('next'),g=gifts(),u=undecided(),c=candidates();
+  const b=ordered('best'),n=ordered('next'),g=gifts(),u=undecided();
   const sec=(label,dot,list,rank,more)=>`<section style="margin-bottom:34px">
       <h2 class="sec"><span class="tagdot ${dot}"></span>${label}</h2>
       ${list.length?`<div class="rows">${list.map((x,i)=>rowHTML(x,rank?i+1:null,!rank)).join('')}</div>`:`<div class="empty">아직 없습니다.</div>`}
       ${more?`<div class="rowbtns"><button class="ghost" onclick="go('list','${more}')">모두 보기</button></div>`:''}
     </section>`;
   const head=`<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>`;
-  return head + nowReading(n) + todayBest(b) + candidateLine(c)
+  return head + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
     + sec(`최근에 받은 증정본${g.length>5?` · ${g.length}권 중 5권`:''}`,'d-gift',g.slice(0,5),false,g.length>5?'gift':'')
     + (u.length?sec(`분류하지 않은 책 ${u.length}권`,'d-none',u.slice(0,5),false,'undecided'):'');
 }
@@ -409,12 +440,26 @@ function todayBest(b){
       ${b.length>10?`<div class="rowbtns"><button class="ghost" onclick="go('list','best')">모두 보기</button></div>`:''}
     </section>`;
 }
-function candidateLine(c){
-  if(!c.length) return '';
-  return `<section style="margin-bottom:34px">
-    <h2 class="sec"><span class="tagdot d-none"></span>폐기 대상 ${c.length}권</h2>
-    <p class="note">베스트 366위 아래로 밀렸거나 손수 골라둔 책입니다. 폐기하면 서가에서 빠지고 자리 기록이 지워지지만, 검색으로는 계속 찾을 수 있습니다.</p>
-    <div class="rowbtns"><button class="ghost" onclick="go('list','cand')">폐기 대상 보기</button></div></section>`;
+function noticeLine(){
+  const due=dueBooks(), rm=removables(), out=[];
+  if(due.length) out.push(`<button class="linkish" onclick="go('list','bin')">내놓을 책 ${due.length}권</button>`);
+  if(rm.length) out.push(`<button class="linkish" onclick="go('list','remove')">목록에서 지울 책 ${rm.length}권</button>`);
+  return out.length? `<div class="rowbtns" style="margin:-10px 0 22px">${out.join('')}</div>` : '';
+}
+function judgeCard(){
+  const w=waiting(); if(!w.length) return '';
+  const b=w[0], r=rankOf(b);
+  const info=[CAT[b.category].name+' '+r+'위', b.added?'담은 날 '+b.added.slice(0,10):''].filter(Boolean).join(' · ');
+  return `<section class="judge" style="margin-bottom:34px">
+    <h2 class="sec"><span class="tagdot d-none"></span>판단을 기다리는 책 · ${w.length}권 중 1</h2>
+    <div class="now-book">
+      <div class="now-t">${esc(b.title)}${b.gift?'<span class="badge b-gift">증정본</span>':''}</div>
+      <div class="now-a">${[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')}</div>
+      <div class="now-p"><span class="place">${esc(b.location)}</span><span class="pagemark">${esc(info)}</span></div></div>
+    <div class="acts" style="margin-top:14px"><button class="warn" onclick="toBin('${b.id}')">폐기</button>
+      <button onclick="keepBook('${b.id}')">보관</button>
+      ${w.length>1?`<button class="linkish" style="border:none" onclick="judgeLater('${b.id}')">나중에</button>`:''}</div>
+  </section><hr class="hr">`;
 }
 
 /* 담기 */
@@ -536,12 +581,15 @@ function addSave(again){
 }
 
 /* 목록 */
-const TABS=[['best','베스트'],['next','다음 읽을 책'],['gift','증정본'],['undecided','미정'],['none','자리 없음'],['cand','폐기 대상'],['gone','폐기함']];
+const TABS=[['best','베스트'],['next','다음 읽을 책'],['gift','증정본'],['undecided','미정'],['none','자리 없음'],['wait','판단 대기'],['keep','보관본'],['bin','폐기 서가'],['remove','지울 책'],['gone','폐기함']];
 function tabList(c){
   if(c==='gift') return gifts();
   if(c==='undecided') return undecided();
   if(c==='none') return homeless();
-  if(c==='cand') return candidates();
+  if(c==='wait') return waiting();
+  if(c==='keep') return keptBooks();
+  if(c==='bin') return binBooks();
+  if(c==='remove') return removables();
   if(c==='gone') return discardedBooks();
   return ordered(c);
 }
@@ -565,7 +613,8 @@ function listBody(){
     + `<div class="rows">${part.map((b,i)=>rowHTML(b,ranked?i+1:null,!ranked)).join('')}</div>`
     + (total>part.length?`<div class="rowbtns"><button class="ghost" onclick="shown+=PAGE;refreshList()">${
         Math.min(PAGE,total-part.length)}권 더 보기 · 남은 ${total-part.length}권</button></div>`:'')
-    + (!searching&&listTab==='cand'&&total?`<div class="rowbtns"><button class="ghost warn" style="color:var(--seal);border-color:rgba(155,59,50,.35)" onclick="discardAll()">폐기 대상 ${total}권을 모두 폐기하기</button></div>`:'')
+    + (!searching&&listTab==='bin'&&dueBooks().length?`<div class="rowbtns"><button class="ghost" onclick="outAll()">폐기 서가에 7일 넘게 있는 ${dueBooks().length}권 모두 내놓았다</button></div>`:'')
+    + (!searching&&listTab==='remove'&&total?`<div class="rowbtns"><button class="ghost warn" style="color:var(--seal);border-color:rgba(155,59,50,.35)" onclick="removeAll()">지울 책 ${total}권 모두 목록에서 지우기</button></div>`:'')
     + (ranked&&total>1?`<div class="rowbtns"><button class="ghost" onclick="reorderAll('${listTab}')">순서 처음부터 다시 정하기</button></div>`:'');
 }
 function refreshList(){ const el=document.getElementById('listbody'); if(el) el.innerHTML=listBody(); }
@@ -575,6 +624,7 @@ function rowHTML(b,rank,showState){
   const meta=[[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')];
   if(showState) meta.push(stateLabel(b));
   if(b.gift&&b.received) meta.push(esc(b.received)+' 받음');
+  if(inBin(b)) meta.push(daysBetween(b.binAt,today())+'일째'+(b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''));
   return `<div class="row${cls}" data-id="${b.id}" onclick="toggle('${b.id}')">
     <div class="rank">${rank?rank:`<span class="tagdot ${dot}" style="margin:0"></span>`}</div>
     <div><div class="title">${esc(b.title)}${badges(b,rank)}</div>
@@ -588,6 +638,11 @@ function detailHTML(b){
     <div class="acts"><button onclick="restore('${b.id}')">되살리기</button>
       <button onclick="edit('${b.id}')">고치기</button>
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div></div>`;
+  if(inBin(b)) return `<div class="detail">
+    <div class="meta">폐기 서가에 둔 지 ${daysBetween(b.binAt,today())}일째${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.note?'<br>'+esc(b.note):''}</div>
+    <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>
+      <button onclick="unBin('${b.id}')">되살리기</button>
+      <button onclick="edit('${b.id}')">고치기</button></div></div>`;
   return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):'가지고 있지 않음'}${b.page?' · '+b.page+'쪽까지':''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
@@ -598,10 +653,11 @@ function detailHTML(b){
       ${b.category!=='next'?`<button onclick="moveTo('${b.id}','next')">읽을 책으로</button>`:''}
       ${b.category?`<button onclick="moveTo('${b.id}','')">분류 미루기</button>`:''}
       <button class="gift" onclick="toggleGiftOn('${b.id}')">${b.gift?'증정본 표시 떼기':'증정본으로 표시'}</button>
-      <button onclick="toggleCand('${b.id}')">${b.toDiscard?'폐기 대상 풀기':'폐기 대상으로'}</button>
-      ${isCandidate(b)?`<button class="warn" onclick="discard('${b.id}')">폐기하기</button>`:''}
+      ${isWaiting(b)?`<button onclick="keepBook('${b.id}')">보관</button>`:''}
+      ${b.keep&&outOfRank(b)?`<button onclick="unKeep('${b.id}')">보관 라벨 떼기</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>
-      <button class="warn" onclick="del('${b.id}')">지우기</button>
+      ${b.location?`<button class="warn" onclick="toBin('${b.id}')">폐기</button>`:''}
+      <button class="warn" onclick="del('${b.id}')">${isRemovable(b)?'목록에서 지우기':'지우기'}</button>
     </div></div>`;
 }
 function toggle(id){ openId=openId===id?null:id; if(view==='list') refreshList(); else render(); }
@@ -620,22 +676,29 @@ function toggleGiftOn(id){
   else { b.gift=true; b.received=b.received||today(); toast('증정본으로 표시했습니다 · '+b.received); }
   touch(b); save(); render();
 }
-function toggleCand(id){
-  const b=book(id); b.toDiscard=!b.toDiscard; touch(b); save();
-  toast(b.toDiscard?'폐기 대상으로 두었습니다':'폐기 대상에서 풀었습니다');
-  render();
+function toBin(id){
+  const b=book(id); if(!b||!b.location) return;
+  b.prevLocation=b.location; b.location=binName(); b.binAt=today(); b.keep=false;
+  touch(b); removeFromOrder(id); delete skipQ[id]; saveSkip(); save(); openId=null;
+  toast('폐기 서가로 · '+b.prevLocation+'에서 꺼내 옮기세요'); render();
 }
-function discard(id){
-  const b=book(id);
-  if(!confirm('‘'+b.title+'’을 폐기합니다.\n서가에서 빼고 자리 기록을 지웁니다. 목록의 폐기함에 남고 검색으로도 계속 찾을 수 있습니다.')) return;
-  doDiscard(b); save(); openId=null; toast('폐기했습니다 · '+b.discardedAt); render();
-}
-function doDiscard(b){ b.discarded=true; b.discardedAt=today(); b.toDiscard=false; b.location=''; touch(b); removeFromOrder(b.id); }
-function discardAll(){
-  const list=candidates();
-  if(!list.length) return;
-  if(!confirm('폐기 대상 '+list.length+'권을 모두 폐기합니다.\n서가에서 빼고 자리 기록을 지웁니다. 되돌리려면 폐기함에서 한 권씩 되살려야 합니다.')) return;
-  list.forEach(doDiscard); save(); openId=null; toast(list.length+'권을 폐기했습니다'); listTab='gone'; shown=PAGE; render(true);
+function keepBook(id){ const b=book(id); b.keep=true; touch(b); delete skipQ[id]; saveSkip(); save(); toast('보관 · 자리는 그대로 '+(b.location||'')); render(); }
+function unKeep(id){ const b=book(id); b.keep=false; touch(b); save(); toast('보관 라벨을 뗐습니다 · 다시 판단을 기다립니다'); render(); }
+function judgeLater(id){ skipQ[id]=new Date().toISOString(); saveSkip(); render(); }
+function saveSkip(){ Object.keys(skipQ).forEach(k=>{ const b=book(k); if(!b||!isWaiting(b)) delete skipQ[k]; }); try{ localStorage.setItem('seoga.skip',JSON.stringify(skipQ)); }catch(e){} }
+function doDiscard(b){ b.discarded=true; b.discardedAt=today(); b.toDiscard=false; b.keep=false; b.binAt=''; b.location=''; touch(b); removeFromOrder(b.id); }
+function outOne(id){ const b=book(id); doDiscard(b); save(); openId=null; toast('내놓았습니다 · 폐기함에 기록이 남습니다'); render(); }
+function outAll(){ const list=dueBooks(); if(!list.length) return;
+  if(!confirm('폐기 서가에 7일 넘게 있는 '+list.length+'권을 내놓은 것으로 적습니다.')) return;
+  list.forEach(doDiscard); save(); openId=null; toast(list.length+'권을 내놓았습니다'); render(); }
+function removeAll(){ const list=removables(); if(!list.length) return;
+  if(!confirm('자리 없이 순위 밖으로 밀려난 '+list.length+'권을 목록에서 아주 지웁니다. 되돌릴 수 없습니다.')) return;
+  const now=new Date().toISOString(); list.forEach(b=>{ S.tomb[b.id]=now; removeFromOrder(b.id); });
+  const ids=new Set(list.map(b=>b.id)); S.books=S.books.filter(b=>!ids.has(b.id)); save(); openId=null; toast(list.length+'권을 지웠습니다'); render(); }
+function unBin(id){
+  const b=book(id); b.location=b.prevLocation||''; b.prevLocation=''; b.binAt=''; touch(b); save(); openId=null;
+  if(b.category){ S.order[b.category].push(id); save(); if(startCompare(id)){ S.order[b.category]=S.order[b.category].filter(x=>x!==id); return; } }
+  toast('되살렸습니다'+(b.location?' · '+b.location+'에 다시 꽂으세요':'')); render();
 }
 function restore(id){
   const b=book(id); b.discarded=false; b.discardedAt=''; touch(b); save();
@@ -721,10 +784,19 @@ function vData(){
       <div><span>증정본</span><b>${gifts().length}</b></div>
       <div><span>미정</span><b>${undecided().length}</b></div>
       <div><span>서가</span><b>${locations().length}</b></div>
-      <div><span>폐기 대상</span><b>${candidates().length}</b></div>
+      <div><span>판단 대기</span><b>${waiting().length}</b></div>
+      <div><span>보관본</span><b>${keptBooks().length}</b></div>
+      <div><span>폐기 서가</span><b>${binBooks().length}</b></div>
       <div><span>폐기함</span><b>${discardedBooks().length}</b></div>
     </div>
-  <p class="note" style="margin-top:18px">베스트는 ${BEST_MAX}권까지 자리를 지킵니다. 지금 ${b.length}권${overflow()?`, ${BEST_MAX+1}위 아래 ${overflow()}권이 폐기 대상입니다`:''}.</p>
+  <p class="note" style="margin-top:18px">베스트는 ${BEST_MAX}권, 다음 읽을 책은 ${nextMax()}권까지 순위를 지킵니다. 그 밖으로 밀려난 책은 한눈에서 한 권씩 폐기와 보관을 묻습니다.</p>
+  <hr class="hr"><h2 class="sec">폐기</h2>
+  <div style="display:flex;gap:18px;flex-wrap:wrap">
+    <div class="field" style="width:170px"><label>다음 읽을 책 순위(권)</label><input type="number" inputmode="numeric" id="s-nmax" value="${nextMax()}"></div>
+    <div class="field" style="width:170px"><label>막 담은 책 유예(일)</label><input type="number" inputmode="numeric" id="s-grace" value="${graceDays()}"></div>
+    <div class="field" style="width:170px"><label>폐기 서가 이름</label><input type="text" id="s-bin" value="${esc(binName())}"></div></div>
+  <p class="hint" style="margin-top:0">순위 밖으로 밀려나도 담은 지 유예 기간이 지나지 않은 책은 묻지 않습니다. 자리가 없는 책은 폐기 대신 ‘지울 책’으로 모입니다. 폐기 서가로 옮긴 지 7일이 지나면 내놓으라고 알려줍니다.</p>
+  <div class="rowbtns"><button class="ghost" onclick="saveDiscardSet()">폐기 설정 저장</button></div>
   <hr class="hr">
   <h2 class="sec">파일로 옮기기</h2>
   <p class="note">기록은 이 브라우저 안에 저장되고, 동기화를 켜면 Supabase에도 함께 남습니다. 읽기 기록도 함께 내보냅니다. 권수가 늘수록 여벌이 중요합니다. 기기를 옮기거나 여벌을 남기려면 파일로 내보낸 뒤 다른 기기에서 불러오면 됩니다.</p>
@@ -843,7 +915,7 @@ function loadR(){
     active:(r&&r.active)||null};
 }
 function normSettings(o){
-  const st=Object.assign({target:120,min:15,adjustedAt:'',updated:'',back:true},o);
+  const st=Object.assign({target:120,min:15,adjustedAt:'',updated:'',back:true,nextMax:100,grace:30,binName:'폐기 서가'},o);
   st.sc=Object.assign({read:'읽기',end:'읽기끝',scan:o.shortcut||'스캔'},o.sc||{});
   if(!st.updated&&o.minUpdated) st.updated=o.minUpdated;
   delete st.shortcut; delete st.minUpdated;
@@ -1114,6 +1186,18 @@ function saveReadSet(){
   st.sc={read:g('s-sc-read').value.trim()||'읽기',end:g('s-sc-end').value.trim()||'읽기끝',scan:g('s-sc-scan').value.trim()||'스캔'};
   saveR(); toast('저장했습니다'); render();
 }
+function saveDiscardSet(){
+  const st=R.settings, g=id=>document.getElementById(id);
+  const nm=parseInt(g('s-nmax').value,10), gr=parseInt(g('s-grace').value,10), bn=g('s-bin').value.trim()||'폐기 서가';
+  if(!(nm>0)){ toast('다음 읽을 책 순위를 권수로 적어주세요'); return; }
+  if(!(gr>=0)){ toast('유예 기간을 날수로 적어주세요'); return; }
+  const before=waiting().length+removables().length, old=[st.nextMax,st.grace];
+  st.nextMax=nm; st.grace=gr;
+  const after=waiting().length+removables().length;
+  if(after>before&&!confirm('이렇게 바꾸면 '+(after-before)+'권이 새로 판단을 기다리게 됩니다. 저장할까요?')){ st.nextMax=old[0]; st.grace=old[1]; render(); return; }
+  if(bn!==st.binName){ const was=st.binName; live().forEach(b=>{ if(inBin(b)&&b.location===was){ b.location=bn; touch(b); } }); st.binName=bn; save(); }
+  st.updated=new Date().toISOString(); saveR(); toast('저장했습니다'); render();
+}
 function toggleBack(){ R.settings.back=!R.settings.back; saveR(); render(); }
 function copySQL(){ navigator.clipboard.writeText(SQL).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다')); }
 
@@ -1227,7 +1311,9 @@ function applyRows(kind,rows,bulk){
       if(up>(MARK.min||'')) MARK.min=up;
       if(up>(R.settings.updated||'')){
         if(d.target>0) R.settings.target=d.target; if(d.min>0) R.settings.min=d.min;
-        if(d.adjustedAt) R.settings.adjustedAt=d.adjustedAt; R.settings.updated=up; changed=true; }
+        if(d.adjustedAt) R.settings.adjustedAt=d.adjustedAt;
+        if(d.nextMax>0) R.settings.nextMax=d.nextMax; if(d.grace>=0) R.settings.grace=d.grace; if(d.binName) R.settings.binName=d.binName;
+        R.settings.updated=up; changed=true; }
     }
   });
   saveMark();
@@ -1248,8 +1334,8 @@ function reconcile(){
   if(cmp) return;
   for(const c of ['best','next']){
     const seen=new Set();
-    S.order[c]=S.order[c].filter(id=>{ const b=book(id); if(!b||b.discarded||b.category!==c||seen.has(id)) return false; seen.add(id); return true; });
-    S.books.forEach(b=>{ if(!b.discarded&&b.category===c&&!seen.has(b.id)){ S.order[c].push(b.id); seen.add(b.id); } });
+    S.order[c]=S.order[c].filter(id=>{ const b=book(id); if(!b||b.discarded||b.binAt||b.category!==c||seen.has(id)) return false; seen.add(id); return true; });
+    S.books.forEach(b=>{ if(!b.discarded&&!b.binAt&&b.category===c&&!seen.has(b.id)){ S.order[c].push(b.id); seen.add(b.id); } });
   }
 }
 async function pushDirty(inner){
@@ -1260,7 +1346,7 @@ async function pushDirty(inner){
   R.reads.forEach(x=>{ if((x.updated||'')>(MARK.r[x.id]||'')) rR.push({id:x.id,data:x,updated_at:at}); });
   if(S.orderUpdated&&S.orderUpdated>(MARK.order||'')) mR.push({id:'order',data:{best:S.order.best,next:S.order.next,updated:S.orderUpdated},updated_at:at});
   const st=R.settings;
-  if(st.updated&&st.updated>(MARK.min||'')) mR.push({id:'settings',data:{target:st.target,min:st.min,adjustedAt:st.adjustedAt,updated:st.updated},updated_at:at});
+  if(st.updated&&st.updated>(MARK.min||'')) mR.push({id:'settings',data:{target:st.target,min:st.min,adjustedAt:st.adjustedAt,nextMax:st.nextMax,grace:st.grace,binName:st.binName,updated:st.updated},updated_at:at});
   if(!bR.length&&!rR.length&&!mR.length){ if(!inner&&syncState!=='on') setSync('on'); return; }
   if(!inner) setSync('busy');
   try{
