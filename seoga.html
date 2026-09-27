@@ -182,6 +182,12 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 ul.plain{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
 ul.plain li{padding:9px 2px;border-bottom:1px solid var(--line);font-size:15.5px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 ul.plain li .m{font-size:13px;color:var(--ink-soft)}
+.lines{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--line)}
+.lines li{padding:10px 2px;border-bottom:1px solid var(--line)}
+.lines .lr{font-size:12.5px;color:var(--ink-soft);letter-spacing:.02em}
+.lines .lt{font-size:16px;line-height:1.6;margin-top:2px}
+.lines .la{display:flex;gap:4px;margin-top:2px}
+.lines .la .linkish{font-size:12.5px;padding:2px 4px}
 pre.sql{font-size:12px;line-height:1.5;background:var(--paper-2);padding:12px 14px;overflow:auto;white-space:pre;border-radius:var(--radius);margin:10px 0 0}
 .count.err{color:var(--seal)}
 
@@ -633,17 +639,54 @@ function rowHTML(b,rank,showState){
     <div class="${b.location?'place':'place none'}">${b.location?esc(b.location):(b.discarded?'폐기':'자리 없음')}</div>
   </div>${open?detailHTML(b):''}`;
 }
+/* 한 줄: 읽기 기록마다 남긴 한 줄을 책별로 모은다 */
+let linesFor=null;
+function memLines(id){ return sessions().filter(x=>x.bookId===id&&x.memory); }
+function rangeText(x){
+  let a=x.fromPage||1, z=x.toPage||0;
+  if(!z) return a+'쪽부터';
+  if(a>z){ const t=a; a=z; z=t; }
+  return a===z? z+'쪽' : a+'–'+z+'쪽';
+}
+function linesBtn(b){ const n=memLines(b.id).length; return n?`<button onclick="toggleLines('${b.id}')">${linesFor===b.id?'한 줄 접기':'한 줄 '+n+'개'}</button>`:''; }
+function linesBlock(b){ return linesFor===b.id? linesList(b) : ''; }
+function linesList(b){
+  const ls=memLines(b.id); if(!ls.length) return '';
+  return `<ul class="lines">${ls.map(x=>`<li><div class="lr">${rangeText(x)} · ${mdLabel(x.date)}</div>
+      <div class="lt">${esc(x.memory)}</div>
+      <div class="la"><button class="linkish" onclick="editLine('${x.id}')">고치기</button><button class="linkish" onclick="dropLine('${x.id}')">지우기</button></div></li>`).join('')}</ul>
+    <div class="rowbtns" style="margin-top:12px"><button class="ghost" onclick="copyLines('${b.id}')">한 줄을 글로 복사</button></div>`;
+}
+function toggleLines(id){ linesFor=linesFor===id?null:id; if(view==='list') refreshList(); else render(); }
+function editLine(rid){
+  const x=R.reads.find(r=>r.id===rid); if(!x) return;
+  const v=prompt('한 줄 고치기 · '+rangeText(x),x.memory); if(v===null) return;
+  const t=v.trim(); if(!t){ dropLine(rid); return; }
+  x.memory=t; x.updated=new Date().toISOString(); saveR(); toast('고쳤습니다'); view==='list'?refreshList():render();
+}
+function dropLine(rid){
+  const x=R.reads.find(r=>r.id===rid); if(!x) return;
+  if(!confirm('이 한 줄을 지웁니다. 읽은 시간과 쪽 기록은 그대로 남습니다.')) return;
+  x.memory=''; x.updated=new Date().toISOString(); saveR(); toast('지웠습니다'); view==='list'?refreshList():render();
+}
+function copyLines(id){
+  const b=book(id), ls=memLines(id); if(!ls.length) return;
+  const title=b?b.title:(ls[0].title||'');
+  const t=['#'+title.replace(/[^\p{L}\p{N}_-]/gu,''), title+(b&&b.author?' / '+b.author:''), '',
+    ...ls.map(x=>rangeText(x)+' · '+x.date+'\n'+x.memory+'\n')].join('\n').trim();
+  navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
+}
 function detailHTML(b){
   if(b.discarded) return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button onclick="restore('${b.id}')">되살리기</button>
-      <button onclick="edit('${b.id}')">고치기</button>
-      <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div></div>`;
+      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}
+      <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}</div>`;
   if(inBin(b)) return `<div class="detail">
     <div class="meta">폐기 서가에 둔 지 ${daysBetween(b.binAt,today())}일째${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>
       <button onclick="unBin('${b.id}')">되살리기</button>
-      <button onclick="edit('${b.id}')">고치기</button></div></div>`;
+      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}</div>${linesBlock(b)}</div>`;
   return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):'가지고 있지 않음'}${b.page?' · '+b.page+'쪽까지':''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
@@ -658,8 +701,9 @@ function detailHTML(b){
       ${b.keep&&outOfRank(b)?`<button onclick="unKeep('${b.id}')">보관 라벨 떼기</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>
       ${b.location?`<button class="warn" onclick="toBin('${b.id}')">폐기</button>`:''}
+      ${linesBtn(b)}
       <button class="warn" onclick="del('${b.id}')">${isRemovable(b)?'목록에서 지우기':'지우기'}</button>
-    </div></div>`;
+    </div>${linesBlock(b)}</div>`;
 }
 function toggle(id){ openId=openId===id?null:id; if(view==='list') refreshList(); else render(); }
 function reRank(id){ removeFromOrder(id); if(!startCompare(id)){ save(); toast('견줄 상대가 아직 없습니다'); render(); } }
@@ -994,7 +1038,8 @@ function vRead(){
   if(finishFor&&book(finishFor)){
     const f=book(finishFor);
     out+=`<section style="margin-bottom:30px"><p class="rd-m" style="margin:0">‘${esc(f.title)}’, 끝까지 읽었습니다.</p>
-      <p class="note">서가에서 읽은 책으로 옮기면 베스트 가운데 자리를 견주어 정합니다.</p>
+      ${memLines(f.id).length?`<h2 class="sec" style="margin-top:22px">이 책에 남긴 한 줄 ${memLines(f.id).length}개</h2>${linesList(f)}`:''}
+      <p class="note" style="margin-top:18px">서가에서 읽은 책으로 옮기면 베스트 가운데 자리를 견주어 정합니다.</p>
       <div class="rowbtns"><button class="primary" onclick="finishMove()">읽은 책으로 옮기기</button>
         <button class="linkish" onclick="finishFor=null;render()">나중에</button></div></section><hr class="hr">`;
   }
