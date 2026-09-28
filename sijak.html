@@ -296,6 +296,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <div class="day"><span class="d" id="dayD"></span><span class="w" id="dayW"></span><span class="mp" id="dayMp"></span></div>
     <div class="agenda" id="agenda"></div>
     <div class="wbox"><a class="strip" id="stripW" target="sijak_write" rel="opener"></a><a class="tteo" id="tteoLink" target="sijak_tteo" rel="opener">떠들기</a></div>
+    <a class="strip" id="stripA" target="sijak_write" rel="opener"></a>
     <a class="strip" id="stripR" target="sijak_read" rel="opener"></a>
     <div class="strip" id="stripT"></div>
     <div class="strip inc" id="stripI" role="button" tabindex="0" title="수입 보기와 적기"></div>
@@ -455,14 +456,14 @@ async function loadWrite(k){
   try{
     const [rows,kv]=await Promise.all([
       rest(cfg.bt,'botaegi_sessions?select=type,start_at,end_at,ms_title,source&start_at=gte.'+enc(s.toISOString())+'&start_at=lt.'+enc(e.toISOString())),
-      rest(cfg.bt,'botaegi_kv?select=id,data&id=in.(now,conf)')
+      rest(cfg.bt,'botaegi_kv?select=id,data&id=in.(now,conf,days)')
     ]);
     let ms=0, tt=0;
     (rows||[]).forEach(r=>{ if(/^(focus|ty|gyo)/.test(r.type||'')){  /* 몰입(책 고치기 포함)·타이핑·교열 — 보태기의 하루 몰입과 같은 기준 */ const a=Date.parse(r.start_at), b=Date.parse(r.end_at); if(b>a){ ms+=b-a; if(r.source==='tteodeulgi') tt+=b-a; } } });
-    const now=(kv||[]).find(x=>x.id==='now'), conf=(kv||[]).find(x=>x.id==='conf');
+    const now=(kv||[]).find(x=>x.id==='now'), conf=(kv||[]).find(x=>x.id==='conf'), days=(kv||[]).find(x=>x.id==='days');
     const c=conf&&conf.data||{};
     const goal=(c.goalH!=null||c.goalM!=null)? ((+c.goalH||0)*60+(+c.goalM||0)) : null;
-    W={min:ms/60000, tteo:tt/60000, goal, goalKnown:goal!=null, now:now&&now.data||null, at:Date.now()};
+    W={min:ms/60000, tteo:tt/60000, goal, goalKnown:goal!=null, now:now&&now.data||null, adv:days&&days.data&&days.data.adv||null, at:Date.now()};
     Werr='';
   }catch(er){ Werr=er.message||'불러오지 못했습니다'; }
 }
@@ -567,6 +568,21 @@ function renderToday(){
     if(Werr) sub+=` <span class="err">· ${esc(Werr)}</span>`;
     sw.innerHTML=stripHTML('글쓰기', W.min, run?run.min:0, goal, sub, met);
     sw.classList.toggle('met',met);
+  }
+
+  /* 원고 — 보태기의 나아감(완성 전 원고에서 늘어난 글자), 최근 30일 하루 평균 */
+  const sa=$('stripA'); sa.href=linkFor('write');
+  const aHead=num=>`<div class="strip-head"><span class="strip-name">원고</span>${num||''}</div>`;
+  if(Werr==='setup'){ sa.removeAttribute('href'); sa.innerHTML=aHead()+`<div class="strip-sub">${setupMsg()}</div>`; sa.classList.remove('met'); }
+  else if(!W){ sa.innerHTML=aHead()+`<div class="strip-sub">${Werr?'<span class="err">'+esc(Werr)+'</span>':'불러오는 중'}</div>`; }
+  else if(!W.adv){ sa.innerHTML=aHead()+`<div class="strip-sub">날짜별 분량이 아직 올라오지 않았습니다 · 맥의 보태기를 한 번 열어 주세요</div>`; sa.classList.remove('met'); }
+  else{
+    const a=advAvg(W.adv), g=writeGoal(), met=a.mae>=g;
+    sa.innerHTML=aHead(`<span class="strip-num">${a.mae.toFixed(1)}매 <span class="of">/ ${maeTxt(g)}매</span></span>`)
+      +`<div class="gauge"><i class="done" style="width:${Math.max(0,Math.min(100,a.mae/g*100))}%"></i></div>`
+      +`<div class="strip-sub">최근 30일 하루 평균 · 쓴 날 ${a.days}일</div>`
+      +(met?'<span class="stamp">채움</span>':'');
+    sa.classList.toggle('met',met);
   }
 
   /* 독서 */
@@ -1183,6 +1199,11 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="copyCalSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">일정 ${liveEvents().length}개가 있고, ${Object.keys(CAL.dirty).length?Object.keys(CAL.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
 
+  <h3>원고</h3>
+  <p class="note">오늘 화면에 보태기의 나아감(완성 전 원고에서 늘어난 글자)으로 최근 30일 하루 평균을 보이고, 이 기준선과 견줍니다. 쉰 날도 나누므로 보태기의 하루 목표보다 낮게 잡아도 됩니다. 매 단위로 적으세요(0.5매까지).</p>
+  <div class="field"><label>기준선 (매)</label><input id="wGoal" inputmode="decimal" value="${maeTxt(writeGoal())}"></div>
+  <div class="btnrow"><button class="btn" id="saveWGoal">기준선 저장</button></div>
+
   <h3>수입</h3>
   <p class="note">오늘 화면에 최근 12개월의 한 달 평균을 보이고, 이 기준선과 견줍니다. 만 원 단위로 적으세요.</p>
   <div class="field"><label>기준선 (만 원)</label><input id="incGoal" inputmode="decimal" value="${Math.round(incGoal()/10000)}"></div>
@@ -1220,7 +1241,8 @@ function renderSet(){
   };
   $('copySql').onclick=()=>navigator.clipboard.writeText(MP_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyIncSql').onclick=()=>navigator.clipboard.writeText(INC_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
-  $('saveIncGoal').onclick=()=>{ const v=parseFloat(String($('incGoal').value).replace(/[^\d.]/g,'')); if(!(v>0)){ toast('기준선을 만 원 단위 숫자로 적으세요'); return; } touchInc({id:'conf', goal:Math.round(v*10000)}); toast('기준선을 '+man(v*10000)+'으로 두었습니다'); renderSet(); };
+  $('saveIncGoal').onclick=()=>{ const v=parseFloat(String($('incGoal').value).replace(/[^\d.]/g,'')); if(!(v>0)){ toast('기준선을 만 원 단위 숫자로 적으세요'); return; } touchIncConf({goal:Math.round(v*10000)}); toast('기준선을 '+man(v*10000)+'으로 두었습니다'); renderSet(); };
+  $('saveWGoal').onclick=()=>{ const v=parseFloat(String($('wGoal').value).replace(/[^\d.]/g,'')); if(!(v>0&&v<=100)){ toast('기준선을 매 단위 숫자로 적으세요'); return; } const g=Math.round(v*2)/2||0.5; touchIncConf({writeGoal:g}); toast('원고 기준선을 '+maeTxt(g)+'매로 두었습니다'); renderSet(); };
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
@@ -1248,7 +1270,7 @@ async function probe(){
 /* ═════════ 수입 — 달마다의 합계로 최근 12개월 한 달 평균을 본다 ═════════
    income_log 한 줄 = 적은 것 하나. data: { id, date:'YYYY-MM-DD', amount(원, 실수령), seed?, deleted, updatedAt, device }
    seed:true는 수입 장부 CSV에서 채운 그 달의 합계(id 'm'+YYYY-MM, date는 그달 1일). 지급처·메모는 두지 않는다.
-   id 'conf'는 { goal }(평균의 기준선, 원).
+   id 'conf'는 { goal(평균의 기준선, 원), writeGoal(오늘 화면 원고 칸의 기준선, 매) } — 저장할 때 touchIncConf로 제 칸만 바꾼다.
    평균은 지난달까지 끝난 12개월로 낸다. 이번 달은 평균에 넣지 않고 따로 보인다. 달은 적은 날짜 그대로 가른다. */
 const INC_KEY='sijak.inc', INC_DEF_GOAL=7000000;
 let INC=Object.assign({rows:{}, dirty:{}, since:''}, lsGet(INC_KEY,{}));
@@ -1257,6 +1279,18 @@ let incTableMissing=false, incPushT=null, incPushing=false;
 let incDraft={date:'', amount:'', warned:false};
 function incPersist(){ lsSet(INC_KEY,INC); }
 function incGoal(){ const c=INC.rows.conf; return (c&&+c.goal>0)?+c.goal:INC_DEF_GOAL; }
+/* 원고 칸의 기준선(매) — 표를 새로 만들지 않고 income_log의 conf 줄에 함께 둔다 */
+const WRITE_DEF_GOAL=4;
+function writeGoal(){ const c=INC.rows.conf; return (c&&+c.writeGoal>0)?+c.writeGoal:WRITE_DEF_GOAL; }
+function maeTxt(v){ return String(Math.round(v*10)/10); }
+/* conf 줄은 수입 기준선과 원고 기준선이 함께 쓴다 — 통째로 덮지 않고 제 칸만 바꾼다 */
+function touchIncConf(p){ const c=INC.rows.conf||{}; const r=Object.assign({},c,p,{id:'conf'}); delete r.deleted; touchInc(r); }
+/* 오늘(4시 기준)을 넣은 최근 30일. 쉰 날도 나눈다. 쓴 날 = 나아감이 있는 날 */
+function advAvg(adv){
+  const k0=dayKey(); let sum=0, days=0;
+  for(let i=0;i<30;i++){ const v=+adv[addDays(k0,-i)]||0; sum+=v; if(v>0) days++; }
+  return {mae:sum/30/200, days};
+}
 function incLive(){ return Object.values(INC.rows).filter(r=>r&&r.id!=='conf'&&!r.deleted&&/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&+r.amount); }
 function touchInc(r){
   r.updatedAt=new Date().toISOString(); r.device=myDevice();
