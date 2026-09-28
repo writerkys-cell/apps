@@ -77,6 +77,9 @@ a.strip:hover{background:rgba(155,59,50,.035)}
 .todo .m.due{color:var(--seal)}
 .todo li.now .k{color:var(--seal)}
 .todo li.now .t{font-size:18px}
+.todo.others{margin-top:4px;border-top:1px solid var(--line)}
+.todo.others .t{font-size:14.5px;color:var(--ink-soft)}
+.todo.others .m{color:var(--faint)}
 .more{font-size:13.5px;color:var(--ink-soft);margin-top:8px}
 .empty{font-size:14.5px;color:var(--ink-soft)}
 .err{font-size:13.5px;color:var(--seal)}
@@ -459,9 +462,12 @@ async function loadTodo(k){
     const dues=items.filter(i=>i.kind!=='daily'&&i.kind!=='future'&&i!==cur&&i.deadline&&daysBetween(k,i.deadline)<=7)
       .sort((a,b)=>a.deadline.localeCompare(b.deadline));
     const shown=new Set([cur,...dailies,...dues].filter(Boolean).map(i=>i.id));
-    const rest_=items.filter(i=>i.kind!=='future'&&!shown.has(i.id)&&!(i.kind==='daily'&&(i.dailyDone||[]).includes(k))).length;
+    /* 그 밖의 일: 미래 앱의 목록 순서(order 큰 순)대로. ‘미래’ 종류와 오늘 마친 매일 일은 뺀다 */
+    const others=items.filter(i=>i.kind!=='future'&&!shown.has(i.id)&&!(i.kind==='daily'&&(i.dailyDone||[]).includes(k)))
+      .sort((a,b)=>(b.order||0)-(a.order||0));
+    const rest_=others.length;
     const deadlines=items.filter(i=>i.kind!=='daily'&&i.kind!=='future'&&i.deadline).map(i=>({id:i.id,title:i.title,deadline:i.deadline}));
-    T={cur, curAt:as.startedAt, curDev:as.device, dailies, dues, rest:rest_, deadlines};
+    T={cur, curAt:as.startedAt, curDev:as.device, dailies, dues, others:others.slice(0,5), rest:rest_, deadlines};
     Terr='';
   }catch(er){ Terr=missingTable(er)?'Supabase에 미래 표가 없습니다.':(er.message||'불러오지 못했습니다'); }
 }
@@ -544,9 +550,13 @@ function renderToday(){
     T.dailies.forEach(i=>li.push(a(`<span class="k">매일</span><span class="t">${esc(i.title)}</span><span class="m"></span>`)));
     T.dues.forEach(i=>{ const n=daysBetween(dayKey(),i.deadline);
       li.push(a(`<span class="k">마감</span><span class="t">${esc(i.title)}</span><span class="m due">${n<0?(-n)+'일 지남':n===0?'오늘까지':n+'일 남음'}</span>`)); });
+    const oli=(T.others||[]).map(i=>{ const dl=i.deadline?parseKey(i.deadline):null;
+      return a(`<span class="k"></span><span class="t">${esc(i.title)}</span><span class="m">${dl?(dl.getMonth()+1)+'월 '+dl.getDate()+'일까지':''}</span>`,'other'); });
     if(li.length) h+=`<ul class="todo">${li.join('')}</ul>`;
     else h+=`<div class="strip-sub">오늘 매일 하는 일을 모두 마쳤고, 이레 안에 닥친 마감도 없습니다.</div>`;
-    if(T.rest) h+=`<p class="more">그 밖에 리스트에 ${T.rest}가지가 있습니다.</p>`;
+    if(oli.length) h+=`<ul class="todo others">${oli.join('')}</ul>`;
+    const left=T.rest-oli.length;
+    if(left>0) h+=`<p class="more">그 밖에 리스트에 ${left}가지가 더 있습니다.</p>`;
     if(Terr) h+=`<p class="err">${esc(Terr)}</p>`;
   }
   st.innerHTML=h;
