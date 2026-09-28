@@ -1793,6 +1793,49 @@ function importSess(){
       if(n){ save(); renderToday(); renderList(); }
     }).catch(function(){});
 }
+/* ---------- 떠들기 — 작품에 이어 둔 떠들기 시간 ----------
+   보태기의 저장 데이터(S)에는 한 줄도 쓰지 않는다. 열 때마다 Supabase에서 읽어 들고만 있고,
+   읽지 못하면 TTEO가 null이 되어 '떠들기까지' 숫자만 빠진다. 기존의 1매당 시간 계산은 그대로 둔다 */
+var TTEO = null;   /* { byWork:{작품id: ms}, sess:[{ w:작품id, s, e }] } */
+function loadTteo(){
+  if(!cloudOn()) return Promise.resolve();
+  return Promise.all([
+    sb("tteodeulgi?select=data&id=eq.links").then(function(r){ return r.ok ? r.json() : null; }),
+    sb("botaegi_sessions?select=ms_id,start_at,end_at&source=eq.tteodeulgi").then(function(r){ return r.ok ? r.json() : null; })
+  ]).then(function(res){
+    var links = res[0] && res[0][0] && res[0][0].data && res[0][0].data.map, rows = res[1];
+    if(!links || !rows){ TTEO = null; return; }
+    var t = { byWork:{}, sess:[] };
+    rows.forEach(function(x){
+      var l = links[String(x.ms_id || "").replace(/^tteo:/, "")];
+      if(!l || !l.work_id) return;
+      var st = Date.parse(x.start_at), en = Date.parse(x.end_at);
+      if(!(en > st)) return;
+      t.byWork[l.work_id] = (t.byWork[l.work_id] || 0) + (en - st);
+      t.sess.push({ w:l.work_id, s:st, e:en });
+    });
+    TTEO = t;
+    var ana = document.getElementById("ana");
+    if(ana && ana.classList.contains("on")) try{ renderAna(); }catch(e){}
+  }).catch(function(){ TTEO = null; });
+}
+function tteoOf(w){ return (TTEO && w && TTEO.byWork[w.id]) || 0; }
+/* 떠들기 시간이 들어가는 장르 — 개정 작품은 새 글의 종류로 */
+function tteoKind(w){ return !w ? "" : w.kind === "개정" ? (w.newKind || "산문") : (w.kind || ""); }
+/* 떠들기까지 넣은 1매당 시간(분) — 떠들기 시간이 없으면 null */
+function withTteo(ms, extra, chars){ return extra > 0 && ms >= 0 && chars > 0 ? (ms + extra) / 60000 / (chars / 200) : null; }
+/* 같은 장르에서 완성한 원고들의 1매당 시간에, 그 원고들의 작품에 이어 둔 떠들기 시간을 더해서 */
+function genreTteoMinPerMae(kind){
+  if(!TTEO) return null;
+  var tt = 0, cc = 0, ws = {};
+  S.mss.forEach(function(m){
+    if(m.merged || effKind(m) !== kind || !m.finishedAt || !(m.finalChars > 0)) return;
+    tt += unitStats(m).tFin.all; cc += m.finalChars;
+    var w = workOf(m); if(w) ws[w.id] = w;
+  });
+  var extra = 0; Object.keys(ws).forEach(function(id){ extra += tteoOf(ws[id]); });
+  return withTteo(tt, extra, cc);
+}
 function confObj(){
   return { focusMin:S.focusMin, restMin:S.restMin, dayStart:S.dayStart, focus1Cut:S.focus1Cut, rest1Cut:S.rest1Cut,
            stopCut:S.stopCut, ty1Cut:S.ty1Cut, ty2Cut:S.ty2Cut, tyStopCut:S.tyStopCut, tyResCut:S.tyResCut, tyDoneCut:S.tyDoneCut };
@@ -2187,7 +2230,7 @@ function cloudPull(loud){
   pulling = true;
   return flush().then(applyReqs).then(function(){
     shareConf(); shareWorks(); shareSess(); shareNow();
-    return Promise.all([importSess().then(dropDupRows), readNow()]);
+    return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo()]);
   }).then(function(){
     return sb(TABLE + "?select=id,review,review_at,review_base,done_req,review_src");
   }).then(function(r){
@@ -2586,8 +2629,9 @@ function recordPage(w){
   var tg = w.targetMae ? w.targetMae : null;
   h.push('<p>' + (isRevision(w) ? '새 글 원고 ' : '원고 ') + r.nFin + ' / ' + r.planned + ' 완성 · ' + m1(maeOf(r.cNow)) + (tg ? ' / ' + tg + '매 (' + Math.round(r.cNow / (tg*200) * 100) + '%)' : '매') +
          (done && w.finalChars != null ? ' · 컴파일 ' + m1(maeOf(w.finalChars)) + '매' : '') + '</p>');
-  h.push('<p>시간 ' + spanText(r.fAll) + ' <span class="dim">(' + timeText(r) + ')</span>' +
-         (r.fCnt && r.cNow ? ' · ' + (isRevision(w) ? '새 글 ' : '') + '1매에 ' + Math.round(r.fCnt / 60000 / maeOf(r.cNow)) + '분' : '') + '</p>');
+  var tw = tteoOf(w), twR = withTteo(r.fCnt, tw, r.cNow);
+  h.push('<p>시간 ' + spanText(r.fAll) + ' <span class="dim">(' + timeText(r) + (tw ? ' · 떠들기 ' + spanText(tw) : '') + ')</span>' +
+         (r.fCnt && r.cNow ? ' · ' + (isRevision(w) ? '새 글 ' : '') + '1매에 ' + Math.round(r.fCnt / 60000 / maeOf(r.cNow)) + '분' + (twR ? ' · 떠들기까지 ' + Math.round(twR) + '분' : '') : '') + '</p>');
   if(w.gyoMs) h.push('<p>' + gyoLine(w) + '</p>');
   if(r.dLast != null) h.push('<p>마지막 원고를 완성하고 작품 완성까지 ' + (r.dLast === 0 ? '같은 날' : r.dLast + '일') + '</p>');
   if(w.due){
@@ -2610,8 +2654,9 @@ function recordPage(w){
         h.push('<h3>조심스러운 가늠</h3>');
         h.push('<p>남은 ' + m1(leftMae) + '매에 앞으로 ' + (Math.abs(hi - lo) < 60000 ? '약 ' + spanText(lo) : spanText(lo) + ' ~ ' + spanText(hi)) + '</p>');
         var basis = [];
-        if(mine) basis.push('이 작품 지금까지 1매에 ' + Math.round(mine) + '분');
-        if(gen) basis.push((w.kind || '같은 장르') + ' 평소 1매에 ' + Math.round(gen) + '분');
+        var mineT = withTteo(r.fAll, tteoOf(w), r.cNow), genT = NOT_OWN[w.kind] ? null : genreTteoMinPerMae(w.kind);
+        if(mine) basis.push('이 작품 지금까지 1매에 ' + Math.round(mine) + '분' + (mineT ? '(떠들기까지 ' + Math.round(mineT) + '분)' : ''));
+        if(gen) basis.push((w.kind || '같은 장르') + ' 평소 1매에 ' + Math.round(gen) + '분' + (genT ? '(떠들기까지 ' + Math.round(genT) + '분)' : ''));
         h.push('<p class="dim">' + basis.join(' · ') + '</p>');
         var pace = r.cNow / Math.max(1, r.dAll);   /* 하루에 늘어난 글자 */
         if(pace > 0){
@@ -2654,7 +2699,7 @@ function recordPage(w){
 function patternBlock(){
   var today = dayKey(Date.now()), from = addDays(today, -29), rg = [from, today];
   var byK = {};
-  function row(k){ return byK[k] = byK[k] || { t:0, c:0 }; }
+  function row(k){ return byK[k] = byK[k] || { t:0, c:0, d:0 }; }
   S.log.sess.forEach(function(x){
     if(!inRange(dayKey(x.start), rg)) return;
     var k0 = x.type === "gyo" ? "교열" : bookWork(x.ms) ? "개정" : effKind(msById(x.ms));   /* 개정 원고도 "개정" */
@@ -2666,21 +2711,31 @@ function patternBlock(){
     if(em && isRevMs(em)) return;   /* 개정 원고의 글자는 세지 않는다 */
     row(effKind(em) || "미분류").c += (x.a - x.b);
   });
+  /* 떠들기 — 이어 둔 작품의 장르로. 표에는 '떠들기까지' 칸으로만 나란히 둔다 */
+  var dAll = 0;
+  if(TTEO) TTEO.sess.forEach(function(x){
+    if(!inRange(dayKey(x.s), rg)) return;
+    var k1 = tteoKind(workById(x.w)) || "미분류";
+    row(k1).d += x.e - x.s; dAll += x.e - x.s;
+  });
+  var hasD = dAll > 0;
   var tAll = 0, cAll = 0, days = 0, wrote = 0;
   for(var k = from; k <= today; k = addDays(k, 1)){ days++; tAll += S.days[k] || 0; cAll += S.net[k] || 0; if(S.days[k] || S.net[k]) wrote++; }
-  function tr(name, t, c, cls){
+  function tr(name, t, c, cls, d){
     var hrs2 = t / 3600000, mm = maeOf(c);
     return '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + name + '</td><td>' + (t ? spanText(t) : '—') + '</td><td>' + (c ? (c > 0 ? '+' : '') + m1(mm) : '—') + '</td>' +
-      '<td>' + (t && c > 0 ? m1(mm / hrs2) : '—') + '</td><td>' + (t && c > 0 ? Math.round(t / 60000 / mm) + '분' : '—') + '</td></tr>';
+      '<td>' + (t && c > 0 ? m1(mm / hrs2) : '—') + '</td><td>' + (t && c > 0 ? Math.round(t / 60000 / mm) + '분' : '—') + '</td>' +
+      (hasD ? '<td>' + (d && c > 0 ? Math.round((t + d) / 60000 / mm) + '분' : '—') + '</td>' : '') + '</tr>';
   }
   var own = ["장편","중편","단편","산문","미분류"], other = ["청탁","개정","교열"], rows = [];
-  own.forEach(function(k){ if(byK[k]) rows.push(tr(k, byK[k].t, byK[k].c)); });
-  rows.push(tr('모두', tAll, cAll, 'all'));
+  own.forEach(function(k){ if(byK[k]) rows.push(tr(k, byK[k].t, byK[k].c, '', byK[k].d)); });
+  rows.push(tr('모두', tAll, cAll, 'all', dAll));
   var oth = other.filter(function(k){ return byK[k]; });
-  if(oth.length){ rows.push('<tr class="sep"><td colspan="5">' + oth.join("·") + '</td></tr>'); oth.forEach(function(k){ rows.push(tr(k, byK[k].t, byK[k].c)); }); }
+  if(oth.length){ rows.push('<tr class="sep"><td colspan="' + (hasD ? 6 : 5) + '">' + oth.join("·") + '</td></tr>'); oth.forEach(function(k){ rows.push(tr(k, byK[k].t, byK[k].c, '', byK[k].d)); }); }
   var h = [];
   h.push('<h3>요즘의 글쓰기 · 최근 30일</h3>');
-  h.push('<table><tr><th>장르</th><th>시간</th><th>매수</th><th>1시간당</th><th>1매에</th></tr>' + rows.join('') + '</table>');
+  h.push('<table><tr><th>장르</th><th>시간</th><th>매수</th><th>1시간당</th><th>1매에</th>' + (hasD ? '<th>떠들기까지</th>' : '') + '</tr>' + rows.join('') + '</table>');
+  if(hasD) h.push('<p class="note">떠들기까지는 같은 기간에 그 장르 작품에 이어 둔 떠들기 시간(' + spanText(dAll) + ')을 더해 1매에 든 시간입니다. 시간 칸에는 넣지 않았습니다.</p>');
   h.push('<p>하루 평균 ' + m1(maeOf(cAll) / days) + '매 · 30일 모두 ' + m1(maeOf(cAll)) + '매 · 쓴 날 ' + wrote + ' / ' + days + '일</p>');
   h.push('<p class="note">매수는 순증 기준이라 다듬으며 덜어낸 달에는 줄거나 마이너스가 될 수 있습니다. 장르별 줄은 ' + fullDate(S.logSince) + '부터의 기록으로 세고, 그 전의 날은 \'모두\'에만 들어갑니다.</p>');
   return h.join('');
@@ -4105,13 +4160,15 @@ function renderAnaRecs(){
     if(w.draftAt) flow.push(dayText(w.draftAt) + " 초고 완성");
     if(w.finishedAt) flow.push(dayText(w.finishedAt) + " 작품 완성");
     html += '<div class="ln">' + flow.join(" → ") + ' <em>· 모두 ' + r.dAll + '일 · ' + (isRevision(w) ? '새 글 원고 ' : '원고 ') + r.nFin + ' / ' + r.planned + ' 완성</em></div>';
-    html += '<div class="ln">시간 ' + spanText(r.fAll) + ' <em>· ' + timeText(r) + '</em></div>';
+    var tw2 = tteoOf(w);
+    html += '<div class="ln">시간 ' + spanText(r.fAll) + ' <em>· ' + timeText(r) + (tw2 ? ' · 떠들기 ' + spanText(tw2) : '') + '</em></div>';
     if(w.gyoMs) html += '<div class="ln">' + gyoLine(w) + '</div>';
     var t2 = "분량";
     if(r.cFin) t2 += " · 원고 완성 때 " + fmt(r.cFin) + "자";
     t2 += " · 지금 " + (isRevision(w) ? "새 글 " : "") + fmt(r.cNow) + "자(" + mae(r.cNow) + "매)";
     if(w.finishedAt && w.finalChars != null) t2 += " · 컴파일 " + fmt(w.finalChars) + "자";
-    if(own && r.fCnt && r.cNow) t2 += ' <em>· 1매에 ' + Math.round(r.fCnt / 60000 / (r.cNow / 200)) + '분</em>';
+    var twR2 = withTteo(r.fCnt, tw2, r.cNow);
+    if(own && r.fCnt && r.cNow) t2 += ' <em>· 1매에 ' + Math.round(r.fCnt / 60000 / (r.cNow / 200)) + '분' + (twR2 ? ' · 떠들기까지 ' + Math.round(twR2) + '분' : '') + '</em>';
     html += '<div class="ln">' + t2 + '</div>';
     if(isNovel(w)) html += chLines(w).map(function(t){ return '<div class="ln">' + t + '</div>'; }).join("");
     if(isRevision(w)) html += revLines(w).map(function(t){ return '<div class="ln">' + t + '</div>'; }).join("");
