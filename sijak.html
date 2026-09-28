@@ -77,9 +77,6 @@ a.strip:hover{background:rgba(155,59,50,.035)}
 .todo .m.due{color:var(--seal)}
 .todo li.now .k{color:var(--seal)}
 .todo li.now .t{font-size:18px}
-.todo.others{margin-top:4px;border-top:1px solid var(--line)}
-.todo.others .t{font-size:14.5px;color:var(--ink-soft)}
-.todo.others .m{color:var(--faint)}
 .more{font-size:13.5px;color:var(--ink-soft);margin-top:8px}
 .empty{font-size:14.5px;color:var(--ink-soft)}
 .err{font-size:13.5px;color:var(--seal)}
@@ -209,6 +206,45 @@ select#dateJump{font-size:12.5px;color:var(--ink-soft);background:transparent;bo
   .ag .what{font-size:15.5px}
 }
 
+/* ── 수입 ── */
+div.strip.inc{cursor:pointer}
+div.strip.inc:hover{background:rgba(155,59,50,.035)}
+.inc h3{font-size:16px;font-weight:700;margin:34px 0 8px;letter-spacing:.06em}
+.inc .note{font-size:13.5px;color:var(--ink-soft);line-height:1.8;margin:6px 0 0}
+.inc-top{margin:4px 0 8px}
+.inc-top .lbl{font-size:14px;color:var(--ink-soft);letter-spacing:.06em}
+.inc-top .big{font-size:40px;line-height:1.25;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.inc-top .big small{font-size:17px;color:var(--ink-soft);margin-left:8px}
+.inc-top.met .big{color:var(--seal)}
+.inc-top .sub{font-size:14.5px;color:var(--ink-soft)}
+.inc-top .now{font-size:14.5px;margin-top:10px;padding-top:10px;border-top:1px dotted var(--line)}
+.incform{display:grid;grid-template-columns:10.5em 1fr auto;gap:10px;align-items:end}
+.incform label{display:block;font-size:13px;color:var(--ink-soft);margin-bottom:3px}
+.incform input{width:100%;background:#f8f5ec;border:1px solid var(--line);border-radius:2px;padding:8px 10px;font-size:15px;font-variant-numeric:tabular-nums}
+.incform .btn{height:40px}
+.incform .btn.warn{background:var(--seal);color:#fff;border-color:var(--seal)}
+.incwarn{font-size:14px;color:var(--seal);margin:10px 0 0;line-height:1.7}
+.incwarn:empty{display:none}
+.incchart{margin-top:6px}
+.incchart svg{display:block;width:100%;height:auto}
+.inclist{list-style:none;margin:0;padding:0}
+.inclist li{display:grid;grid-template-columns:7.5em 1fr auto;gap:12px;align-items:baseline;padding:7px 2px;border-bottom:1px dotted var(--line);font-variant-numeric:tabular-nums}
+.inclist .d{font-size:14px;color:var(--ink-soft)}
+.inclist .a{font-size:16px;text-align:right}
+.inclist button{font-size:12.5px;color:var(--faint);border-bottom:1px dotted var(--faint)}
+.inctab{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
+.inctab th,.inctab td{padding:6px 2px;border-bottom:1px dotted var(--line);text-align:right;font-weight:400}
+.inctab th{font-size:12.5px;color:var(--ink-soft)}
+.inctab th:first-child,.inctab td:first-child{text-align:left}
+.inctab td.low{color:var(--ink-soft)}
+.inctab td.hi{color:var(--seal)}
+.inctab tr.part td{color:var(--faint)}
+@media (max-width:520px){
+  .incform{grid-template-columns:1fr 1fr}
+  .incform .btn{grid-column:1/-1}
+  .inc-top .big{font-size:32px}
+}
+
 /* ── 설정 ── */
 .set h3{font-size:16px;font-weight:700;margin:30px 0 8px;letter-spacing:.06em}
 .set h3:first-child{margin-top:0}
@@ -253,6 +289,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <a class="strip" id="stripW" target="sijak_write" rel="opener"></a>
     <a class="strip" id="stripR" target="sijak_read" rel="opener"></a>
     <div class="strip" id="stripT"></div>
+    <div class="strip inc" id="stripI" role="button" tabindex="0" title="수입 보기와 적기"></div>
     <p class="foot" id="foot"></p>
   </section>
 
@@ -291,6 +328,9 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <div class="archMeta" id="archMeta"></div>
   </section>
 
+  <!-- 수입 (오늘의 수입 칸을 누르면) -->
+  <section data-v="inc" class="inc" id="incHost"></section>
+
   <!-- 설정 -->
   <section data-v="set" class="set" id="setHost"></section>
 </main>
@@ -312,7 +352,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
 "use strict";
 /* ═════════ 시작 ═════════
    글쓰기(보태기)·독서(서가)·할 일(미래)의 오늘 상태를 읽기만 하고,
-   모닝페이지(아침 쓰기와 저녁의 하루 정리)와 달력 일정만 스스로 적는다.
+   모닝페이지(아침 쓰기와 저녁의 하루 정리)·달력 일정·수입(월별 합계)만 스스로 적는다.
    하루는 새벽 4시에 바뀐다. */
 
 const DAY_H = 4;
@@ -462,12 +502,9 @@ async function loadTodo(k){
     const dues=items.filter(i=>i.kind!=='daily'&&i.kind!=='future'&&i!==cur&&i.deadline&&daysBetween(k,i.deadline)<=7)
       .sort((a,b)=>a.deadline.localeCompare(b.deadline));
     const shown=new Set([cur,...dailies,...dues].filter(Boolean).map(i=>i.id));
-    /* 그 밖의 일: 미래 앱의 목록 순서(order 큰 순)대로. ‘미래’ 종류와 오늘 마친 매일 일은 뺀다 */
-    const others=items.filter(i=>i.kind!=='future'&&!shown.has(i.id)&&!(i.kind==='daily'&&(i.dailyDone||[]).includes(k)))
-      .sort((a,b)=>(b.order||0)-(a.order||0));
-    const rest_=others.length;
+    const rest_=items.filter(i=>i.kind!=='future'&&!shown.has(i.id)&&!(i.kind==='daily'&&(i.dailyDone||[]).includes(k))).length;
     const deadlines=items.filter(i=>i.kind!=='daily'&&i.kind!=='future'&&i.deadline).map(i=>({id:i.id,title:i.title,deadline:i.deadline}));
-    T={cur, curAt:as.startedAt, curDev:as.device, dailies, dues, others:others.slice(0,5), rest:rest_, deadlines};
+    T={cur, curAt:as.startedAt, curDev:as.device, dailies, dues, rest:rest_, deadlines};
     Terr='';
   }catch(er){ Terr=missingTable(er)?'Supabase에 미래 표가 없습니다.':(er.message||'불러오지 못했습니다'); }
 }
@@ -478,7 +515,7 @@ async function refreshToday(force){
   if(!force && Date.now()-lastLoad<4000) { renderToday(); return; }
   loading=true; setDot('today','busy','불러오는 중');
   const k=dayKey();
-  await Promise.all([loadWrite(k),loadRead(k),loadTodo(k),pullCal()]);
+  await Promise.all([loadWrite(k),loadRead(k),loadTodo(k),pullCal(),pullInc()]);
   lastLoad=Date.now(); loading=false;
   const errs=[Werr,Rerr,Terr].filter(x=>x&&x!=='setup');
   setDot('today', errs.length?'err':'ok', errs.length?errs[0]:'');
@@ -550,16 +587,15 @@ function renderToday(){
     T.dailies.forEach(i=>li.push(a(`<span class="k">매일</span><span class="t">${esc(i.title)}</span><span class="m"></span>`)));
     T.dues.forEach(i=>{ const n=daysBetween(dayKey(),i.deadline);
       li.push(a(`<span class="k">마감</span><span class="t">${esc(i.title)}</span><span class="m due">${n<0?(-n)+'일 지남':n===0?'오늘까지':n+'일 남음'}</span>`)); });
-    const oli=(T.others||[]).map(i=>{ const dl=i.deadline?parseKey(i.deadline):null;
-      return a(`<span class="k"></span><span class="t">${esc(i.title)}</span><span class="m">${dl?(dl.getMonth()+1)+'월 '+dl.getDate()+'일까지':''}</span>`,'other'); });
     if(li.length) h+=`<ul class="todo">${li.join('')}</ul>`;
     else h+=`<div class="strip-sub">오늘 매일 하는 일을 모두 마쳤고, 이레 안에 닥친 마감도 없습니다.</div>`;
-    if(oli.length) h+=`<ul class="todo others">${oli.join('')}</ul>`;
-    const left=T.rest-oli.length;
-    if(left>0) h+=`<p class="more">그 밖에 리스트에 ${left}가지가 더 있습니다.</p>`;
+    if(T.rest) h+=`<p class="more">그 밖에 리스트에 ${T.rest}가지가 있습니다.</p>`;
     if(Terr) h+=`<p class="err">${esc(Terr)}</p>`;
   }
   st.innerHTML=h;
+
+  /* 수입 */
+  renderIncStrip();
 
   const t=new Date(lastLoad||Date.now());
   $('foot').textContent = lastLoad ? pad(t.getHours())+':'+pad(t.getMinutes())+'에 불러왔습니다 · 앱을 닫고 돌아오면 다시 불러옵니다' : '';
@@ -1118,7 +1154,7 @@ function renderSet(){
   <div class="field"><label>키</label><input id="btKey" type="password" value="${esc(cfg.bt.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
 
   <h3>미래 프로젝트</h3>
-  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지와 달력 일정을 이곳의 mp_entries·cal_events 표에 적습니다.</p>
+  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지·달력 일정·수입을 이곳의 mp_entries·cal_events·income_log 표에 적습니다.</p>
   <div class="field"><label>프로젝트 주소</label><input id="mrUrl" value="${esc(cfg.mr.url)}" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   <div class="field"><label>키</label><input id="mrKey" type="password" value="${esc(cfg.mr.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   ${autoNote?`<p class="note">${esc(autoNote)}</p>`:''}
@@ -1136,6 +1172,17 @@ function renderSet(){
   <pre class="sql">${esc(CAL_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copyCalSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">일정 ${liveEvents().length}개가 있고, ${Object.keys(CAL.dirty).length?Object.keys(CAL.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
+
+  <h3>수입</h3>
+  <p class="note">오늘 화면에 최근 12개월의 한 달 평균을 보이고, 이 기준선과 견줍니다. 만 원 단위로 적으세요.</p>
+  <div class="field"><label>기준선 (만 원)</label><input id="incGoal" inputmode="decimal" value="${Math.round(incGoal()/10000)}"></div>
+  <div class="btnrow"><button class="btn" id="saveIncGoal">기준선 저장</button></div>
+  <p class="note" style="margin-top:14px">수입 장부에서 내려받은 CSV를 고르면 달마다의 합계만 계산해 넣습니다(여러 파일을 한꺼번에 골라도 됩니다). 지급처와 메모는 올리지 않습니다. 이미 채운 달을 다시 넣으면 그 달은 새 합계로 바뀝니다.</p>
+  <div class="btnrow"><button class="btn" id="impInc">장부 CSV로 채우기</button><input type="file" id="impIncFile" accept=".csv,text/csv" multiple hidden></div>
+  <p class="note" style="margin-top:14px">처음 한 번, 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <pre class="sql">${esc(INC_SQL)}</pre>
+  <div class="btnrow"><button class="btn" id="copyIncSql">SQL 복사</button></div>
+  <p class="note" style="margin-top:10px">${(()=>{ const st=incStats(), ms=Object.keys(st.sums).sort(); return ms.length?monthLabel(ms[0])+'부터 '+ms.length+'달치가 있고, ':'아직 수입 기록이 없고, '; })()}${Object.keys(INC.dirty).length?Object.keys(INC.dirty).length+'줄을 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
 
   <h3>여는 앱</h3>
   <p class="note">칸을 누르면 새 탭으로 엽니다. 같은 앱이 이미 열려 있으면 그 탭으로 돌아갑니다. 일을 마치고 그 탭을 닫으면 여기로 돌아와 다시 불러옵니다.</p>
@@ -1161,6 +1208,10 @@ function renderSet(){
     saveCfg(); await probe();
   };
   $('copySql').onclick=()=>navigator.clipboard.writeText(MP_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
+  $('copyIncSql').onclick=()=>navigator.clipboard.writeText(INC_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
+  $('saveIncGoal').onclick=()=>{ const v=parseFloat(String($('incGoal').value).replace(/[^\d.]/g,'')); if(!(v>0)){ toast('기준선을 만 원 단위 숫자로 적으세요'); return; } touchInc({id:'conf', goal:Math.round(v*10000)}); toast('기준선을 '+man(v*10000)+'으로 두었습니다'); renderSet(); };
+  $('impInc').onclick=()=>$('impIncFile').click();
+  $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo}; saveCfg(); toast('저장했습니다'); };
   $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
@@ -1174,14 +1225,258 @@ async function probe(){
   const out=[]; const p=$('probe'); p.textContent='확인하는 중…';
   if(btOn()){ try{ await rest(cfg.bt,'botaegi_sessions?select=id&limit=1'); out.push('✓ 보태기 기록을 읽을 수 있습니다'); }catch(e){ out.push('✕ 보태기: '+e.message); } } else out.push('· 보태기 프로젝트가 비어 있습니다');
   if(mrOn()){
-    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표']]){
+    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표']]){
       try{ await rest(cfg.mr,t+'?select=id&limit=1'); out.push('✓ '+n+'을(를) 읽을 수 있습니다'); }
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
   } else out.push('· 미래 프로젝트가 비어 있습니다');
   p.textContent=out.join('\n');
-  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); refreshToday(true);
+  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); refreshToday(true);
 }
+
+/* ═════════ 수입 — 달마다의 합계로 최근 12개월 한 달 평균을 본다 ═════════
+   income_log 한 줄 = 적은 것 하나. data: { id, date:'YYYY-MM-DD', amount(원, 실수령), seed?, deleted, updatedAt, device }
+   seed:true는 수입 장부 CSV에서 채운 그 달의 합계(id 'm'+YYYY-MM, date는 그달 1일). 지급처·메모는 두지 않는다.
+   id 'conf'는 { goal }(평균의 기준선, 원).
+   평균은 지난달까지 끝난 12개월로 낸다. 이번 달은 평균에 넣지 않고 따로 보인다. 달은 적은 날짜 그대로 가른다. */
+const INC_KEY='sijak.inc', INC_DEF_GOAL=7000000;
+let INC=Object.assign({rows:{}, dirty:{}, since:''}, lsGet(INC_KEY,{}));
+if(!INC.rows) INC.rows={}; if(!INC.dirty) INC.dirty={};
+let incTableMissing=false, incPushT=null, incPushing=false;
+let incDraft={date:'', amount:'', warned:false};
+function incPersist(){ lsSet(INC_KEY,INC); }
+function incGoal(){ const c=INC.rows.conf; return (c&&+c.goal>0)?+c.goal:INC_DEF_GOAL; }
+function incLive(){ return Object.values(INC.rows).filter(r=>r&&r.id!=='conf'&&!r.deleted&&/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&+r.amount); }
+function touchInc(r){
+  r.updatedAt=new Date().toISOString(); r.device=myDevice();
+  INC.rows[r.id]=r; INC.dirty[r.id]=1; incPersist();
+  clearTimeout(incPushT); incPushT=setTimeout(pushInc,800);
+}
+async function pushInc(){
+  if(!mrOn()||incPushing) return;
+  const ids=Object.keys(INC.dirty); if(!ids.length) return;
+  incPushing=true; setDot('inc','busy','수입 올리는 중');
+  try{
+    for(let i=0;i<ids.length;i+=100){
+      const part=ids.slice(i,i+100), sent={};
+      part.forEach(id=>sent[id]=INC.rows[id].updatedAt);
+      await upsert(cfg.mr,'income_log',part.map(id=>({id, data:INC.rows[id], updated_at:INC.rows[id].updatedAt||new Date().toISOString()})));
+      part.forEach(id=>{ if(INC.rows[id]&&INC.rows[id].updatedAt===sent[id]) delete INC.dirty[id]; });
+      incPersist();
+    }
+    incTableMissing=false; setDot('inc','ok','');
+  }catch(er){
+    incTableMissing=missingTable(er);
+    setDot('inc','err', incTableMissing?'Supabase에 수입 표가 없습니다 · 설정에서 SQL을 실행하세요':'수입을 올리지 못했습니다 · '+er.message);
+  }
+  incPushing=false;
+  if(Object.keys(INC.dirty).length && !incTableMissing){ clearTimeout(incPushT); incPushT=setTimeout(pushInc,15000); }
+}
+/* 더 나중에 고친 쪽이 이긴다. 이 기기에서 아직 못 올린 줄은 덮지 않는다. */
+async function pullInc(){
+  if(!mrOn()) return false;
+  try{
+    let q='income_log?select=id,data,updated_at&order=updated_at.asc';
+    if(INC.since) q+='&updated_at=gte.'+enc(new Date(Date.parse(INC.since)-10*60000).toISOString());
+    let off=0, max=INC.since||'', changed=false;
+    for(;;){
+      const rows=await rest(cfg.mr,q+'&limit=500&offset='+off);
+      (rows||[]).forEach(r=>{
+        if(r.updated_at>max) max=r.updated_at;
+        const rem=r.data; if(!rem||!rem.id||INC.dirty[r.id]) return;
+        const loc=INC.rows[r.id];
+        if(!loc||(rem.updatedAt||'')>(loc.updatedAt||'')){ INC.rows[r.id]=rem; changed=true; }
+      });
+      if(!rows||rows.length<500) break; off+=500;
+    }
+    INC.since=max; incPersist(); incTableMissing=false;
+    if(Object.keys(INC.dirty).length) pushInc(); else setDot('inc','ok','');
+    return changed;
+  }catch(er){
+    incTableMissing=missingTable(er);
+    if(incTableMissing && !incLive().length) setDot('inc','','');
+    else setDot('inc','err', incTableMissing?'Supabase에 수입 표가 없습니다 · 설정에서 SQL을 실행하세요':'수입을 받지 못했습니다');
+    return false;
+  }
+}
+
+/* 계산 */
+function monthAdd(m,n){ const [y,mo]=m.split('-').map(Number); const d=new Date(y,mo-1+n,1); return d.getFullYear()+'-'+pad(d.getMonth()+1); }
+function monthLabel(m){ const [y,mo]=m.split('-').map(Number); return y+'년 '+mo+'월'; }
+const man=n=>{ const v=Math.round(n/10000); return v.toLocaleString('ko-KR')+'만 원'; };
+const won=n=>Math.round(n).toLocaleString('ko-KR')+'원';
+function incStats(){
+  const sums={};
+  incLive().forEach(r=>{ const m=r.date.slice(0,7); sums[m]=(sums[m]||0)+(+r.amount); });
+  const ms=Object.keys(sums).sort(), cur=dayKey().slice(0,7), last=monthAdd(cur,-1);
+  const out={sums, cur, last, first:ms[0]||null, series:[], avg:null, now:sums[cur]||0};
+  if(!ms.length||ms[0]>last) return out;
+  for(let m=ms[0]; m<=last; m=monthAdd(m,1)){
+    let s=0,n=0; for(let i=0;i<12;i++){ const k=monthAdd(m,-i); if(k<ms[0]) break; s+=sums[k]||0; n++; }
+    out.series.push({m, total:sums[m]||0, avg:s/n, n});
+  }
+  out.avg=out.series[out.series.length-1];
+  return out;
+}
+function incPeriod(a){ return monthLabel(monthAdd(a.m,-(a.n-1)))+'–'+(a.m.slice(0,4)===monthAdd(a.m,-(a.n-1)).slice(0,4)?(+a.m.slice(5))+'월':monthLabel(a.m)); }
+function incCompare(avg,g){
+  const d=avg-g;
+  if(Math.abs(d)<5000) return '기준선 '+man(g)+'과 같습니다';
+  return '기준선 '+man(g)+'보다 '+man(Math.abs(d))+' '+(d>0?'많습니다':'적습니다');
+}
+
+/* 오늘 화면 — 평균만 */
+function renderIncStrip(){
+  const el=$('stripI'); if(!el) return;
+  const head=num=>`<div class="strip-head"><span class="strip-name">수입</span>${num||''}</div>`;
+  if(!mrOn()){ el.innerHTML=head()+`<div class="strip-sub">${setupMsg()}</div>`; el.classList.remove('met'); return; }
+  const st=incStats(), g=incGoal(), a=st.avg;
+  if(!a){
+    el.innerHTML=head()+`<div class="strip-sub">${incTableMissing?'<span class="err">Supabase에 수입 표가 없습니다 · <button class="linkish" onclick="go(\'set\')">설정</button>에서 SQL을 실행하세요</span>':'아직 평균을 낼 수입이 없습니다 · <button class="linkish" onclick="go(\'set\')">설정</button>에서 장부 CSV로 채우세요'}</div>`;
+    el.classList.remove('met'); return;
+  }
+  const met=a.avg>=g;
+  el.innerHTML=head(`<span class="strip-num">${man(a.avg)} <span class="of">/ ${man(g)}</span></span>`)
+    +`<div class="gauge"><i class="done" style="width:${Math.max(0,Math.min(100,a.avg/g*100))}%"></i></div>`
+    +`<div class="strip-sub">${a.n<12?'최근 '+a.n+'개월':'최근 12개월'} 한 달 평균 · ${incCompare(a.avg,g)}</div>`
+    +(met?'<span class="stamp">채움</span>':'');
+  el.classList.toggle('met',met);
+}
+
+/* 수입 화면 */
+function incChart(st,g){
+  /* 12개월이 다 찬 평균만 그린다(그 전의 짧은 평균은 흐름을 흐린다). 모자라면 있는 대로 */
+  const fulls=st.series.filter(p=>p.n>=12);
+  const pts=(fulls.length>=2?fulls:st.series).slice(-24); if(pts.length<2) return '<p class="note">두 달 이상이 쌓이면 흐름을 그립니다.</p>';
+  const narrow=window.innerWidth<520;   /* 좁은 화면은 그림 폭을 줄여 글자를 키운다 */
+  const W=narrow?360:640,H=narrow?190:210,L=8,R=narrow?62:78,T=18,B=30, w=W-L-R, h=H-T-B;
+  const qs=pts.map((p,i)=>i).filter(i=>[1,4,7,10].includes(+pts[i].m.slice(5)));
+  const ticks=new Set(qs); if(!qs.length||qs[0]>=3) ticks.add(0);
+  const hiV=Math.max(g,...pts.map(p=>p.avg))*1.2, loV=Math.max(0,Math.min(g,...pts.map(p=>p.avg))*0.7);
+  const x=i=>L+(pts.length===1?w/2:i*w/(pts.length-1)), y=v=>T+h-(v-loV)/(hiV-loV)*h;
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 12개월 한 달 평균의 흐름">`;
+  const gy=y(g);
+  svg+=`<line x1="${L}" x2="${L+w}" y1="${gy}" y2="${gy}" stroke="#9b3b32" stroke-width="1" stroke-dasharray="4 4"/>`;
+  svg+=`<text x="${L+w+8}" y="${gy+4}" font-size="12" fill="#9b3b32">기준 ${Math.round(g/10000).toLocaleString('ko-KR')}만</text>`;
+  pts.forEach((p,i)=>{ const mo=+p.m.slice(5);
+    if(ticks.has(i)) svg+=`<text x="${x(i)}" y="${H-8}" font-size="11.5" fill="#736a59" text-anchor="${i===0?'start':'middle'}">${mo===1||i===0?p.m.slice(2,4)+'년 ':''}${mo}월</text>`;
+    svg+=`<line x1="${x(i)}" x2="${x(i)}" y1="${T+h}" y2="${T+h+4}" stroke="#d6ccb6"/>`;
+  });
+  const seg=(arr,dash,col)=>arr.length>1?`<polyline fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" ${dash?'stroke-dasharray="3 4"':''} points="${arr.map(([i,p])=>x(i)+','+y(p.avg)).join(' ')}"/>`:'';
+  const idx=pts.map((p,i)=>[i,p]), part=idx.filter(([i,p])=>p.n<12), full=idx.filter(([i,p])=>p.n>=12);
+  if(part.length&&full.length) part.push(full[0]);
+  svg+=seg(part,true,'#a39a88')+seg(full,false,'#23201c');
+  idx.forEach(([i,p])=>{ svg+=`<circle cx="${x(i)}" cy="${y(p.avg)}" r="${i===pts.length-1?4:2.2}" fill="${p.avg>=g?'#9b3b32':(p.n<12?'#a39a88':'#23201c')}"><title>${monthLabel(p.m)}까지 ${p.n}개월 평균 ${man(p.avg)}</title></circle>`; });
+  const lp=pts[pts.length-1];
+  svg+=`<text x="${x(pts.length-1)+8}" y="${y(lp.avg)+(Math.abs(y(lp.avg)-gy)<14?(y(lp.avg)<gy?-6:16):4)}" font-size="13" fill="#23201c">${Math.round(lp.avg/10000).toLocaleString('ko-KR')}만</text>`;
+  return svg+'</svg>';
+}
+function renderInc(){
+  const host=$('incHost'), st=incStats(), g=incGoal(), a=st.avg;
+  if(!incDraft.date) incDraft.date=dayKey();
+  let h='';
+  if(!mrOn()) h+=`<p class="empty">${setupMsg()}</p>`;
+  if(a){
+    h+=`<div class="inc-top${a.avg>=g?' met':''}">
+      <div class="lbl">${a.n<12?'최근 '+a.n+'개월':'최근 12개월'} 한 달 평균</div>
+      <div class="big">${man(a.avg)}</div>
+      <div class="sub">${incPeriod(a)} · ${incCompare(a.avg,g)}</div>
+      <div class="now">${+st.cur.slice(5)}월에는 지금까지 ${man(st.now)}이 들어왔습니다. 이 달은 ${+monthAdd(st.cur,1).slice(5)}월부터 평균에 들어갑니다.</div>
+    </div>`;
+  } else {
+    h+=`<p class="empty">${incTableMissing?'Supabase에 수입 표가 없습니다. 설정에서 SQL을 실행하세요.':'아직 평균을 낼 수입이 없습니다. 설정에서 수입 장부의 CSV로 지난 달들을 채우거나, 아래에 적으세요.'}</p>`;
+  }
+  h+=`<h3>수입 적기</h3>
+  <div class="incform">
+    <div><label for="incDate">들어온 날</label><input id="incDate" type="date" value="${esc(incDraft.date)}"></div>
+    <div><label for="incAmt">금액 (원)</label><input id="incAmt" inputmode="numeric" autocomplete="off" placeholder="예: 456000" value="${esc(incDraft.amount)}"></div>
+    <button class="btn solid${incDraft.warned?' warn':''}" id="incAdd">${incDraft.warned?'그래도 적기':'적기'}</button>
+  </div>
+  <p class="incwarn" id="incWarn"></p>
+  <p class="note">장부처럼 세금을 뗀 뒤 들어온 돈으로 적습니다. 지급처나 메모는 적지 않고, 달마다의 합계에만 더해집니다.</p>`;
+  h+=`<h3>평균의 흐름</h3><div class="incchart">${a?incChart(st,g):'<p class="note">수입이 쌓이면 그립니다.</p>'}</div>`;
+  const mine=incLive().filter(r=>!r.seed).sort((x,y)=>(y.date+y.updatedAt).localeCompare(x.date+x.updatedAt));
+  if(mine.length){
+    h+=`<h3>여기서 적은 것</h3><ul class="inclist">${mine.slice(0,20).map(r=>{ const d=parseKey(r.date);
+      return `<li><span class="d">${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}.</span><span class="a">${won(r.amount)}</span><button data-del="${esc(r.id)}">지우기</button></li>`; }).join('')}</ul>`;
+    if(mine.length>20) h+=`<p class="note">그 전의 ${mine.length-20}건은 달마다의 합계에 들어 있습니다.</p>`;
+  }
+  if(st.series.length||st.now){
+    const rows=st.series.slice().reverse();
+    h+=`<h3>달마다</h3><table class="inctab"><thead><tr><th>달</th><th>들어온 돈</th><th>그달까지 12개월 평균</th></tr></thead><tbody>`;
+    if(st.now||st.sums[st.cur]) h+=`<tr class="part"><td>${monthLabel(st.cur)} (진행 중)</td><td>${man(st.now)}</td><td></td></tr>`;
+    rows.forEach(r=>{ h+=`<tr><td>${monthLabel(r.m)}</td><td>${man(r.total)}</td><td class="${r.n<12?'low':(r.avg>=g?'hi':'')}">${man(r.avg)}${r.n<12?' ('+r.n+'개월)':''}</td></tr>`; });
+    h+=`</tbody></table>`;
+  }
+  host.innerHTML=h;
+
+  const warnEl=$('incWarn'), btn=$('incAdd');
+  const unwarn=()=>{ if(incDraft.warned){ incDraft.warned=false; btn.textContent='적기'; btn.classList.remove('warn'); warnEl.textContent=''; } };
+  $('incDate').oninput=e=>{ incDraft.date=e.target.value; unwarn(); };
+  $('incAmt').oninput=e=>{ incDraft.amount=e.target.value; unwarn(); };
+  $('incAmt').onkeydown=e=>{ if(e.key==='Enter') btn.click(); };
+  btn.onclick=()=>{
+    const date=incDraft.date, amt=parseInt(String(incDraft.amount).replace(/[^\d]/g,''),10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ warnEl.textContent='들어온 날을 고르세요.'; return; }
+    if(!(amt>0)){ warnEl.textContent='금액을 숫자로 적으세요.'; $('incAmt').focus(); return; }
+    const dups=incLive().filter(r=>!r.seed&&+r.amount===amt);
+    if(dups.length && !incDraft.warned){
+      incDraft.warned=true;
+      const list=dups.sort((x,y)=>y.date.localeCompare(x.date)).slice(0,3).map(r=>{ const d=parseKey(r.date); return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일'; }).join(', ');
+      warnEl.textContent=`같은 금액 ${won(amt)}을 이미 적었습니다(${list}${dups.length>3?' 외 '+(dups.length-3)+'건':''}). 두 번 적는 것이 아니라면 ‘그래도 적기’를 누르세요.`;
+      btn.textContent='그래도 적기'; btn.classList.add('warn');
+      return;
+    }
+    touchInc({id:'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), date, amount:amt, deleted:false});
+    incDraft.amount=''; incDraft.warned=false;
+    toast(monthLabel(date.slice(0,7))+'에 '+won(amt)+'을 적었습니다');
+    renderInc(); renderIncStrip();
+    setTimeout(()=>{ const i=$('incAmt'); if(i&&!isTouch) i.focus(); },30);
+  };
+  host.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    const r=INC.rows[b.dataset.del]; if(!r) return; const d=parseKey(r.date);
+    if(!confirm((d.getMonth()+1)+'월 '+d.getDate()+'일에 적은 '+won(r.amount)+'을 지울까요?')) return;
+    touchInc(Object.assign({},r,{deleted:true})); renderInc(); renderIncStrip(); toast('지웠습니다');
+  });
+}
+
+/* 수입 장부 CSV → 달마다의 합계만 */
+function parseCSV(t){
+  const rows=[]; let row=[], f='', q=false; t=String(t).replace(/^\uFEFF/,'');
+  for(let i=0;i<t.length;i++){ const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(f); f=''; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&t[i+1]==='\n') i++; row.push(f); f=''; rows.push(row); row=[]; }
+    else f+=c;
+  }
+  if(f||row.length){ row.push(f); rows.push(row); }
+  return rows;
+}
+async function importIncCSV(files){
+  const sums={}; let n=0;
+  for(const file of files){
+    const rows=parseCSV(await file.text());
+    rows.slice(1).forEach(r=>{
+      const d=String(r[0]||'').trim(), amt=parseInt(String(r[3]||'').replace(/[^\d]/g,''),10);
+      if(/^\d{4}-\d{2}-\d{2}$/.test(d)&&amt>0){ const m=d.slice(0,7); sums[m]=(sums[m]||0)+amt; n++; }
+    });
+  }
+  const ms=Object.keys(sums).sort();
+  if(!ms.length){ toast('수입 장부에서 내려받은 CSV가 아닌 것 같습니다'); return; }
+  if(!confirm(`${monthLabel(ms[0])}부터 ${monthLabel(ms[ms.length-1])}까지 ${ms.length}달의 합계(${n}건)를 넣습니다.\n지급처와 메모는 올리지 않습니다. 이미 채운 달은 새 합계로 바뀝니다.`)) return;
+  const overlap=incLive().filter(r=>!r.seed&&sums[r.date.slice(0,7)]);
+  let drop=false;
+  if(overlap.length) drop=confirm(`이 달들에 시작에서 따로 적은 수입이 ${overlap.length}건 있습니다.\n\n[확인] 그 기록을 지우고 CSV 합계만 남깁니다. 장부에도 적어 두었다면 이쪽입니다.\n[취소] 그대로 둡니다. 같은 돈이 두 번 셈해질 수 있습니다.`);
+  ms.forEach(m=>{ const id='m'+m; touchInc(Object.assign({},INC.rows[id]||{},{id, date:m+'-01', amount:sums[m], seed:true, deleted:false})); });
+  if(drop) overlap.forEach(r=>touchInc(Object.assign({},r,{deleted:true})));
+  toast(ms.length+'달의 합계를 넣었습니다'+(drop?' · 겹친 '+overlap.length+'건을 지웠습니다':''));
+  renderSet(); renderIncStrip();
+}
+const INC_SQL=`create table if not exists income_log (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
+alter table income_log enable row level security;
+drop policy if exists "income open" on income_log;
+create policy "income open" on income_log for all using (true) with check (true);`;
 
 /* ═════════ 화면 전환과 돌아옴 ═════════ */
 let view='today';
@@ -1196,10 +1491,13 @@ function go(v){
   if(v==='cal'){ renderCal();
     Promise.all([pullCal(), (!T&&mrOn())?loadTodo(dayKey()):null]).then(([c])=>{ if(view==='cal'&&calEdit==null) renderCal(); });
   }
+  if(v==='inc'){ renderInc(); pullInc().then(c=>{ if(c&&view==='inc'&&!$('incHost').contains(document.activeElement)) renderInc(); }); }
   if(v==='set') renderSet();
   window.scrollTo(0,0);
 }
 window.go=go;
+$('stripI').onclick=e=>{ if(!e.target.closest('button')) go('inc'); };
+$('stripI').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('inc'); } };
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{ if(b.dataset.go==='cal'){ calSel=dayKey(); calMonth=null; calEdit=null; } go(b.dataset.go); });
 
 /* 그날 처음 열면(새벽 4시가 지나 처음) 모닝페이지부터 */
@@ -1225,6 +1523,7 @@ async function onBack(){
   else { lastLoad=0; }
   if(view==='morning' && (changed.includes(mpDay) || mpDay!==dayKey()) && document.activeElement!==editor) mpLoadEditor();
   if(view==='close' && changed.includes(curKey)) renderDirect(curKey);
+  if(view==='inc'){ const c=await pullInc(); if(c&&!$('incHost').contains(document.activeElement)) renderInc(); }
   if(view==='cal'){ const c=await pullCal(); if(!T&&mrOn()) await loadTodo(dayKey()); if(calEdit==null) renderCal(); }
 }
 document.addEventListener('visibilitychange',onBack);
@@ -1245,6 +1544,7 @@ setInterval(()=>{
   await pullMP(!MP.since);
   if(Object.keys(MP.dirty).length) queuePush();
   if(Object.keys(CAL.dirty).length) pushCal();
+  if(Object.keys(INC.dirty).length) pushInc();
   if(view==='morning' && document.activeElement!==editor) mpLoadEditor();
   if(!mpTableMissing) setDot('mp', mrOn()?'ok':'', '');
   refreshToday(true);
