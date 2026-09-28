@@ -82,7 +82,9 @@ button{cursor:pointer}
 #tWorkNote{color:var(--meok-3);font-size:.7rem}
 #tSent{font-size:.72rem;color:var(--meok-3);margin-top:.3rem;min-height:1.1em}
 
-#cast{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:1.2rem 0 0;padding:.7rem 0;border-top:1px solid var(--seon);border-bottom:1px solid var(--seon)}
+/* 칩 줄 — 머리줄 아래에 붙어 따라온다(--barH는 머리줄 높이, 스크립트가 잰다) */
+html{scroll-padding-top:var(--stickH,7rem)}
+#cast{position:sticky;top:var(--barH,3rem);z-index:4;background:var(--hanji);display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:1.2rem 0 0;padding:.7rem 0;border-top:1px solid var(--seon);border-bottom:1px solid var(--seon)}
 .chip{display:inline-flex;align-items:center;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);font-size:.82rem}
 .chip .pick{background:none;border:0;padding:.25rem .55rem;display:flex;gap:.4rem;align-items:baseline}
 .chip .pick kbd{font-family:var(--ui);font-size:.66rem;color:var(--meok-3)}
@@ -92,7 +94,6 @@ button{cursor:pointer}
 .chip.cur .pick{color:var(--inju)}
 #addChar{font-size:.82rem;padding:.25rem .5rem;border:1px dashed var(--seon);border-radius:2px;background:transparent;width:8.5rem}
 #addChar:focus{outline:none;border-style:solid;border-color:var(--inju);background:var(--jongi)}
-#castHelp{margin-left:auto;font-size:.7rem;color:var(--meok-3)}
 
 /* 원고 — 이름은 고딕, 말은 명조 */
 #sheet{position:relative;background:var(--jongi);border:1px solid var(--seon);border-radius:2px;margin-top:1.4rem;padding:2.2rem 3rem 2.6rem;min-height:50vh}
@@ -275,7 +276,6 @@ button{cursor:pointer}
   <div id="cast">
     <span id="chips" style="display:contents"></span>
     <input id="addChar" placeholder="+ 인물 추가" aria-label="인물 추가">
-    <span id="castHelp">⌃숫자 화자 · ⌃/ 질문 · ⌃⇧/ 질문 카드 · 엔터 두 번이면 다음 사람</span>
   </div>
   <div id="sheet"></div>
 </main>
@@ -332,6 +332,9 @@ button{cursor:pointer}
     <div class="f"><label for="sDay">하루가 시작되는 시각(시)</label><input id="sDay" type="number" min="0" max="23"></div>
     <label class="chk"><input type="checkbox" id="sAuto"><span>말하기 시작하면 몰입 시작</span></label>
     <p class="note">몰입이 돌지 않을 때 원고에 첫 글자를 치면, 그 순간부터 기본 몰입 시간만큼 몰입합니다. 몰입 단축어는 타이핑이 2초 멈췄을 때 부릅니다. '몰입 중단'을 누른 뒤에는 몰입 시작을 한 번 누르거나 씬을 다시 열 때까지 저절로 시작되지 않습니다. 휴식이 끝난 뒤 다시 말하기 시작하면 다음 몰입이 이어집니다.</p>
+
+    <h3>키</h3>
+    <p class="note">⌃1~⌃9 그 인물이 말하게 · ⌃0 지문 · ⌃/ 질문 · ⌃⇧/ 질문 카드 · 빈 줄에서 엔터를 한 번 더 치면 다음 사람 · ⌘↩ 곧바로 다음 사람 · 빈 칸에서 백스페이스는 앞 칸으로 · ⌘⇧F 찾기. 칩이나 이 키를 쓸 때 지금 칸이 화면 밖에 있으면 화면 가운데로 끌어옵니다.</p>
 
     <h3>지문</h3>
     <label class="chk"><input type="checkbox" id="sStage"><span>지문 쓰기</span></label>
@@ -702,7 +705,7 @@ function renderCast(){
   var bi = curBlkIdx(), who = bi > -1 ? t.blocks[bi].c : null;
   t.chars.forEach(function(c, i){
     var ch = document.createElement("span"); ch.className = "chip" + (c.id === who ? " cur" : "");
-    ch.innerHTML = '<button class="pick" title="눌러서 이 사람이 말하게 · 두 번 눌러 이름 고치기">' + (i < 9 ? "<kbd>⌃" + (i+1) + "</kbd>" : "") + esc(c.name) + '</button><button class="x" title="지우기" aria-label="' + esc(c.name) + ' 지우기">×</button>';
+    ch.innerHTML = '<button class="pick" title="' + (i < 9 ? '⌃' + (i+1) + ' · ' : '') + '눌러서 이 사람이 말하게 · 두 번 눌러 이름 고치기 · 엔터 두 번이면 다음 사람">' + (i < 9 ? "<kbd>⌃" + (i+1) + "</kbd>" : "") + esc(c.name) + '</button><button class="x" title="지우기" aria-label="' + esc(c.name) + ' 지우기">×</button>';
     ch.querySelector(".pick").onmousedown = function(e){ e.preventDefault(); };   /* 원고의 커서를 잃지 않게 */
     ch.querySelector(".pick").onclick = function(){ setSpeaker(c.id); };
     ch.querySelector(".pick").ondblclick = function(){
@@ -733,6 +736,7 @@ function renderCast(){
     box.appendChild(st);
   }
   box.appendChild(qa); box.appendChild(qc);
+  requestAnimationFrame(measureSticky);
 }
 function autosize(ta){ ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
 function focusEnd(ta){ ta.focus(); var n = ta.value.length; ta.setSelectionRange(n, n); }
@@ -765,6 +769,18 @@ function markCur(){
   document.querySelectorAll("#sheet .blk").forEach(function(d){ d.classList.toggle("cur", d.dataset.id === id); });
   renderCast();
 }
+/* 지금 칸이 화면 밖(또는 칩 줄 밑)에 있으면 가운데로 끌어온다. 보이면 그대로 */
+function revealBlk(id){
+  var d = document.querySelector('#sheet .blk[data-id="' + id + '"]'); if(!d) return;
+  var r = d.getBoundingClientRect(), top = $("cast").getBoundingClientRect().bottom;
+  if(r.top < top + 4 || r.bottom > window.innerHeight - 8) d.scrollIntoView({ block:"center", behavior:"smooth" });
+}
+/* 머리줄과 칩 줄의 높이를 재어 둔다 — 칩 줄이 붙을 자리와, 커서가 칩 줄 밑으로 숨지 않을 여백 */
+function measureSticky(){
+  var bh = $("bar").offsetHeight, ch = $("cast").offsetHeight || 0;
+  document.documentElement.style.setProperty("--barH", bh + "px");
+  document.documentElement.style.setProperty("--stickH", (bh + ch + 12) + "px");
+}
 function taOf(id){ var d = document.querySelector('#sheet .blk[data-id="' + id + '"]'); return d ? d.querySelector("textarea") : null; }
 
 /* 다음 화자 — 지문은 건너뛰고 본다. 마지막으로 말한 사람과 다른, 그 앞에 말한 사람. 없으면 목록의 다음 사람
@@ -790,6 +806,7 @@ function setSpeaker(cid){
   if(bx){ bx.classList.toggle("stage", cid === STAGE); bx.classList.toggle("ask", cid === ASK); var d = bx.querySelector(".who"); if(d) d.textContent = charName(t, cid); }
   markCur();
   var ta = taOf(b.id); if(ta && document.activeElement !== ta) focusEnd(ta);
+  revealBlk(b.id);
 }
 function cycleSpeaker(dir){
   var t = cur(), i = curBlkIdx(); if(i < 0 || !t.chars.length) return;
@@ -1424,7 +1441,7 @@ document.addEventListener("keydown", function(e){
 }, true);
 document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible"){ tick(); fireRestCut(); if(NOW && NOW.cutDue) waitCut(); pull(); } });
 window.addEventListener("online", function(){ pull(); });
-window.addEventListener("resize", function(){ document.querySelectorAll("#sheet textarea").forEach(autosize); });
+window.addEventListener("resize", function(){ document.querySelectorAll("#sheet textarea").forEach(autosize); measureSticky(); });
 
 /* 설정의 기본 몰입 시간이 목록에 없으면 더한다 */
 (function(){ var mo = $("mins"); if(![].some.call(mo.options, function(o){ return o.value === String(CONF.focusMin); })){ var o = document.createElement("option"); o.value = String(CONF.focusMin); o.textContent = CONF.focusMin + "분"; mo.appendChild(o); } })();
