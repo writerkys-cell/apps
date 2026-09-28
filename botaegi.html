@@ -1843,12 +1843,18 @@ function confObj(){
            stopCut:S.stopCut, ty1Cut:S.ty1Cut, ty2Cut:S.ty2Cut, tyStopCut:S.tyStopCut, tyResCut:S.tyResCut, tyDoneCut:S.tyDoneCut,
            goalH:S.goalH, goalM:S.goalM };   /* goalH·goalM — 시작의 글쓰기 칸이 읽는다 */
 }
-/* 시작(sijak)이 읽는 날짜별 나아감 — botaegi_kv의 days 줄. 최근 60일, 0이 아닌 날만(글자) */
+/* 시작(sijak)이 읽는 날짜별 나아감 — botaegi_kv의 days 줄. 가진 날 전부, 0이 아닌 날만(글자).
+   since = 나아감을 따로 세기 시작한 날(그 전은 원고 전체), first = 기록이 있는 첫날(몰입·증감·나아감 가운데) */
 var daysSent = "", daysT = null;
 function daysObj(){
-  var o = {}, t = Date.now();
-  for(var i = 0; i < 60; i++){ var k = dayKey(t - i*86400000), v = advOf(k); if(v) o[k] = v; }
-  return { dayStart:S.dayStart, adv:o };
+  var o = {}, ks = {}, first = null;
+  [S.adv, S.net, S.days].forEach(function(m){ Object.keys(m || {}).forEach(function(k){ ks[k] = 1; }); });
+  Object.keys(ks).sort().forEach(function(k){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(k)) return;
+    if(!first) first = k;
+    var v = advOf(k); if(v) o[k] = v;
+  });
+  return { dayStart:S.dayStart, since:S.advSince, first:first, adv:o };
 }
 function shareDays(){
   if(!cloudOn()) return;
