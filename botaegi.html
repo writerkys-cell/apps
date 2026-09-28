@@ -1745,6 +1745,7 @@ function bump(d, m){
     S.hit[k] = true;
     stamp("五", "오늘 " + fmt(S.daily) + "자를 보탰습니다", "다섯 매. 더 써도 됩니다.");
   }
+  queueDays();
 }
 /* ---------- 기록 ---------- */
 function logEdit(m, before, after, how){
@@ -1839,8 +1840,25 @@ function genreTteoMinPerMae(kind){
 }
 function confObj(){
   return { focusMin:S.focusMin, restMin:S.restMin, dayStart:S.dayStart, focus1Cut:S.focus1Cut, rest1Cut:S.rest1Cut,
-           stopCut:S.stopCut, ty1Cut:S.ty1Cut, ty2Cut:S.ty2Cut, tyStopCut:S.tyStopCut, tyResCut:S.tyResCut, tyDoneCut:S.tyDoneCut };
+           stopCut:S.stopCut, ty1Cut:S.ty1Cut, ty2Cut:S.ty2Cut, tyStopCut:S.tyStopCut, tyResCut:S.tyResCut, tyDoneCut:S.tyDoneCut,
+           goalH:S.goalH, goalM:S.goalM };   /* goalH·goalM — 시작의 글쓰기 칸이 읽는다 */
 }
+/* 시작(sijak)이 읽는 날짜별 나아감 — botaegi_kv의 days 줄. 최근 60일, 0이 아닌 날만(글자) */
+var daysSent = "", daysT = null;
+function daysObj(){
+  var o = {}, t = Date.now();
+  for(var i = 0; i < 60; i++){ var k = dayKey(t - i*86400000), v = advOf(k); if(v) o[k] = v; }
+  return { dayStart:S.dayStart, adv:o };
+}
+function shareDays(){
+  if(!cloudOn()) return;
+  var c = JSON.stringify(daysObj());
+  if(c === daysSent) return;
+  sb("botaegi_kv", { method:"POST", headers:{ "Prefer":"resolution=merge-duplicates,return=minimal" },
+    body:JSON.stringify({ id:"days", data:JSON.parse(c), updated_at:new Date().toISOString() }) })
+    .then(function(r){ if(r.ok) daysSent = c; }).catch(function(){});
+}
+function queueDays(){ clearTimeout(daysT); daysT = setTimeout(shareDays, 3000); }
 var confSent = "";
 function shareConf(){
   if(!cloudOn()) return;
@@ -2230,7 +2248,7 @@ function cloudPull(loud){
   if(!cloudOn() || pulling){ return Promise.resolve(); }
   pulling = true;
   return flush().then(applyReqs).then(function(){
-    shareConf(); shareWorks(); shareSess(); shareNow();
+    shareConf(); shareDays(); shareWorks(); shareSess(); shareNow();
     return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo()]);
   }).then(function(){
     return sb(TABLE + "?select=id,review,review_at,review_base,done_req,review_src");
@@ -4852,8 +4870,8 @@ $("#fmin").addEventListener("change", function(){
 drawRest = timePair("#rsel", "#rmin", "restMin", 15, [5,10,15]);
 $("#fsel").addEventListener("change", function(){ S.focusMin = parseInt(this.value, 10); save(); });
 
-num($("#goalH"),"goalH",0,16,3,renderToday);
-num($("#goalM"),"goalM",0,59,0,renderToday);
+num($("#goalH"),"goalH",0,16,3,function(){ renderToday(); shareConf(); });
+num($("#goalM"),"goalM",0,59,0,function(){ renderToday(); shareConf(); });
 num($("#daily"),"daily",0,100000,1000,function(){ renderNet(); });
 /* 한 편 분량 — 2,667 · 5,334 · 8,000을 한 묶음으로 되풀이한다 */
 function ladder(n){ return Math.floor(n/3)*8000 + [0,2667,5334][n%3]; }
