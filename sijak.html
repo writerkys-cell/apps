@@ -248,6 +248,11 @@ div.strip.inc:hover{background:rgba(155,59,50,.035)}
 .inctab td.low{color:var(--ink-soft)}
 .inctab td.hi{color:var(--seal)}
 .inctab tr.part td{color:var(--faint)}
+.advold{margin-top:6px}
+.advold summary{cursor:pointer;font-size:14px;color:var(--ink-soft);padding:8px 2px;list-style:none}
+.advold summary::-webkit-details-marker{display:none}
+.advold summary::before{content:'▸ '}
+.advold[open] summary::before{content:'▾ '}
 @media (max-width:520px){
   .incform{grid-template-columns:1fr 1fr}
   .incform .btn{grid-column:1/-1}
@@ -296,7 +301,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <div class="day"><span class="d" id="dayD"></span><span class="w" id="dayW"></span><span class="mp" id="dayMp"></span></div>
     <div class="agenda" id="agenda"></div>
     <div class="wbox"><a class="strip" id="stripW" target="sijak_write" rel="opener"></a><a class="tteo" id="tteoLink" target="sijak_tteo" rel="opener">떠들기</a></div>
-    <a class="strip" id="stripA" target="sijak_write" rel="opener"></a>
+    <div class="strip inc" id="stripA" role="button" tabindex="0" title="원고 보기"></div>
     <a class="strip" id="stripR" target="sijak_read" rel="opener"></a>
     <div class="strip" id="stripT"></div>
     <div class="strip inc" id="stripI" role="button" tabindex="0" title="수입 보기와 적기"></div>
@@ -340,6 +345,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
 
   <!-- 수입 (오늘의 수입 칸을 누르면) -->
   <section data-v="inc" class="inc" id="incHost"></section>
+  <section data-v="adv" class="inc" id="advHost"></section>
 
   <!-- 설정 -->
   <section data-v="set" class="set" id="setHost"></section>
@@ -463,7 +469,7 @@ async function loadWrite(k){
     const now=(kv||[]).find(x=>x.id==='now'), conf=(kv||[]).find(x=>x.id==='conf'), days=(kv||[]).find(x=>x.id==='days');
     const c=conf&&conf.data||{};
     const goal=(c.goalH!=null||c.goalM!=null)? ((+c.goalH||0)*60+(+c.goalM||0)) : null;
-    W={min:ms/60000, tteo:tt/60000, goal, goalKnown:goal!=null, now:now&&now.data||null, adv:days&&days.data&&days.data.adv||null, at:Date.now()};
+    W={min:ms/60000, tteo:tt/60000, goal, goalKnown:goal!=null, now:now&&now.data||null, adv:days&&days.data&&days.data.adv||null, since:days&&days.data&&days.data.since||'', first:days&&days.data&&days.data.first||'', at:Date.now()};
     Werr='';
   }catch(er){ Werr=er.message||'불러오지 못했습니다'; }
 }
@@ -571,16 +577,16 @@ function renderToday(){
   }
 
   /* 원고 — 보태기의 나아감(완성 전 원고에서 늘어난 글자), 최근 30일 하루 평균 */
-  const sa=$('stripA'); sa.href=linkFor('write');
+  const sa=$('stripA');
   const aHead=num=>`<div class="strip-head"><span class="strip-name">원고</span>${num||''}</div>`;
-  if(Werr==='setup'){ sa.removeAttribute('href'); sa.innerHTML=aHead()+`<div class="strip-sub">${setupMsg()}</div>`; sa.classList.remove('met'); }
+  if(Werr==='setup'){ sa.innerHTML=aHead()+`<div class="strip-sub">${setupMsg()}</div>`; sa.classList.remove('met'); }
   else if(!W){ sa.innerHTML=aHead()+`<div class="strip-sub">${Werr?'<span class="err">'+esc(Werr)+'</span>':'불러오는 중'}</div>`; }
   else if(!W.adv){ sa.innerHTML=aHead()+`<div class="strip-sub">날짜별 분량이 아직 올라오지 않았습니다 · 맥의 보태기를 한 번 열어 주세요</div>`; sa.classList.remove('met'); }
   else{
-    const a=advAvg(W.adv), g=writeGoal(), met=a.mae>=g;
+    const a=advAvg(W.adv,W.first), g=writeGoal(), met=a.mae>=g;
     sa.innerHTML=aHead(`<span class="strip-num">${a.mae.toFixed(1)}매 <span class="of">/ ${maeTxt(g)}매</span></span>`)
       +`<div class="gauge"><i class="done" style="width:${Math.max(0,Math.min(100,a.mae/g*100))}%"></i></div>`
-      +`<div class="strip-sub">최근 30일 하루 평균 · 쓴 날 ${a.days}일</div>`
+      +`<div class="strip-sub">최근 ${a.n}일 하루 평균 · 쓴 날 ${a.days}일</div>`
       +(met?'<span class="stamp">채움</span>':'');
     sa.classList.toggle('met',met);
   }
@@ -1285,11 +1291,13 @@ function writeGoal(){ const c=INC.rows.conf; return (c&&+c.writeGoal>0)?+c.write
 function maeTxt(v){ return String(Math.round(v*10)/10); }
 /* conf 줄은 수입 기준선과 원고 기준선이 함께 쓴다 — 통째로 덮지 않고 제 칸만 바꾼다 */
 function touchIncConf(p){ const c=INC.rows.conf||{}; const r=Object.assign({},c,p,{id:'conf'}); delete r.deleted; touchInc(r); }
-/* 오늘(4시 기준)을 넣은 최근 30일. 쉰 날도 나눈다. 쓴 날 = 나아감이 있는 날 */
-function advAvg(adv){
-  const k0=dayKey(); let sum=0, days=0;
-  for(let i=0;i<30;i++){ const v=+adv[addDays(k0,-i)]||0; sum+=v; if(v>0) days++; }
-  return {mae:sum/30/200, days};
+/* 오늘(4시 기준)을 넣은 최근 30일. 쉰 날도 나눈다. 쓴 날 = 나아감이 있는 날.
+   기록이 30일이 안 되면(보태기의 first 이후) 있는 날만큼으로 나눈다 */
+function advAvg(adv,first,end){
+  const k0=end||dayKey(); let sum=0, days=0, n=0;
+  for(let i=0;i<30;i++){ const k=addDays(k0,-i); if(first&&k<first) break; const v=+adv[k]||0; sum+=v; n++; if(v>0) days++; }
+  n=Math.max(1,n);
+  return {mae:sum/n/200, days, n, from:addDays(k0,-(n-1)), to:k0};
 }
 function incLive(){ return Object.values(INC.rows).filter(r=>r&&r.id!=='conf'&&!r.deleted&&/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')&&+r.amount); }
 function touchInc(r){
@@ -1387,6 +1395,97 @@ function renderIncStrip(){
     +(met?'<span class="stamp">채움</span>':'');
   el.classList.toggle('met',met);
 }
+
+/* ═════════ 원고 화면 — 보태기의 나아감(날짜별 글자)을 읽기만 한다 ═════════ */
+const mae1=c=>(c/200).toFixed(1);
+function advCompare(v,g){
+  const d=v-g;
+  if(Math.abs(d)<0.05) return '기준선 '+maeTxt(g)+'매와 같습니다';
+  return '기준선 '+maeTxt(g)+'매보다 '+Math.abs(d).toFixed(1)+'매 '+(d>0?'많습니다':'적습니다');
+}
+function kLabel(k){ const d=parseKey(k); return (d.getMonth()+1)+'월 '+d.getDate()+'일'; }
+function advFirst(){ const ks=Object.keys(W.adv).sort(); const f=W.first||ks[0]||dayKey(); return ks[0]&&ks[0]<f?ks[0]:f; }
+/* 최근 30일 날마다 — 쉰 날은 빈칸 */
+function advBars(adv,first){
+  const k0=dayKey(), ks=[]; for(let i=29;i>=0;i--) ks.push(addDays(k0,-i));
+  const vs=ks.map(k=>Math.max(0,+adv[k]||0)/200), top=Math.max(1,...vs)*1.15;
+  const narrow=window.innerWidth<520;
+  const W_=narrow?360:640,H=narrow?150:160,L=4,R=4,T=14,B=26,w=W_-L-R,h=H-T-B, bw=w/30;
+  let svg=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="최근 30일 날마다의 매수">`;
+  svg+=`<line x1="${L}" x2="${L+w}" y1="${T+h}" y2="${T+h}" stroke="#d6ccb6"/>`;
+  ks.forEach((k,i)=>{ const v=vs[i], x=L+i*bw, raw=+adv[k]||0, before=first&&k<first;
+    if(v>0){ const bh=Math.max(1.5,v/top*h); svg+=`<rect x="${x+bw*0.18}" y="${T+h-bh}" width="${bw*0.64}" height="${bh}" fill="${k===k0?'#9b3b32':'#23201c'}"><title>${kLabel(k)} · ${mae1(raw)}매</title></rect>`; }
+    else svg+=`<rect x="${x}" y="${T}" width="${bw}" height="${h}" fill="transparent"><title>${kLabel(k)} · ${before?'기록 전':raw<0?mae1(raw)+'매':'쓰지 않음'}</title></rect>`;
+    const d=parseKey(k);
+    if(i===0||d.getDate()===1||(i%(narrow?7:5)===0&&i<27)) svg+=`<text x="${x+bw/2}" y="${H-8}" font-size="11.5" fill="#736a59" text-anchor="middle">${i===0||d.getDate()===1?(d.getMonth()+1)+'/':''}${d.getDate()}</text>`;
+  });
+  const mx=Math.max(...vs); if(mx>0){ const i=vs.indexOf(mx); svg+=`<text x="${L+i*bw+bw/2}" y="${T+h-mx/top*h-4}" font-size="11.5" fill="#736a59" text-anchor="middle">${mx.toFixed(1)}</text>`; }
+  return svg+'</svg>';
+}
+/* 평균의 흐름 — 날마다 그날까지의 30일 평균, 30일이 다 찬 것만, 최근 1년 */
+function advChart(adv,first,since,g){
+  const k0=dayKey(), start0=addDays(first,29); if(start0>k0) return '<p class="note">기록이 30일 쌓이면 흐름을 그립니다.</p>';
+  let from=addDays(k0,-364); if(from<start0) from=start0;
+  const pts=[]; for(let k=from;k<=k0;k=addDays(k,1)) pts.push({k, v:advAvg(adv,first,k).mae});
+  if(pts.length<2) return '<p class="note">내일부터 흐름을 그립니다.</p>';
+  const narrow=window.innerWidth<520;
+  const W_=narrow?360:640,H=narrow?190:210,L=8,R=narrow?70:74,T=18,B=30, w=W_-L-R, h=H-T-B;
+  const hiV=Math.max(g,...pts.map(p=>p.v))*1.2, loV=Math.max(0,Math.min(g,...pts.map(p=>p.v))*0.7);
+  const x=i=>L+i*w/(pts.length-1), y=v=>T+h-(v-loV)/(hiV-loV)*h;
+  let svg=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="최근 30일 하루 평균의 흐름">`;
+  pts.forEach((p,i)=>{ const d=parseKey(p.k);
+    if(d.getDate()===1||i===0){ const long=pts.length>70;
+      if(!long||d.getDate()===1) svg+=`<line x1="${x(i)}" x2="${x(i)}" y1="${T+h}" y2="${T+h+4}" stroke="#d6ccb6"/>`;
+      if(d.getDate()===1&&(!long||d.getMonth()%(narrow?3:2)===0)||i===0&&(d.getDate()<20)) svg+=`<text x="${x(i)}" y="${H-8}" font-size="11.5" fill="#736a59" text-anchor="${i===0?'start':'middle'}">${(d.getMonth()===0||i===0)?String(d.getFullYear()).slice(2)+'년 ':''}${d.getMonth()+1}월${d.getDate()!==1?' '+d.getDate()+'일':''}</text>`;
+    }
+    if(since&&p.k===since&&i>0) svg+=`<line x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${T+h}" stroke="#d6ccb6" stroke-dasharray="2 3"><title>${kLabel(since)}부터 나아감으로 셉니다. 그 전은 원고 전체의 증감</title></line>`;
+  });
+  const gy=y(g);
+  svg+=`<line x1="${L}" x2="${L+w}" y1="${gy}" y2="${gy}" stroke="#9b3b32" stroke-width="1" stroke-dasharray="4 4"/>`;
+  svg+=`<text x="${L+w+8}" y="${gy+4}" font-size="12" fill="#9b3b32">기준 ${maeTxt(g)}매</text>`;
+  svg+=`<polyline fill="none" stroke="#23201c" stroke-width="${pts.length>120?1.6:2}" stroke-linejoin="round" points="${pts.map((p,i)=>x(i).toFixed(1)+','+y(p.v).toFixed(1)).join(' ')}"/>`;
+  const lp=pts[pts.length-1], ly=y(lp.v);
+  svg+=`<circle cx="${x(pts.length-1)}" cy="${ly}" r="4" fill="${lp.v>=g?'#9b3b32':'#23201c'}"><title>${kLabel(lp.k)}까지 30일 평균 ${lp.v.toFixed(1)}매</title></circle>`;
+  svg+=`<text x="${x(pts.length-1)+8}" y="${ly+(Math.abs(ly-gy)<14?(ly<gy?-6:16):4)}" font-size="13" fill="#23201c">${lp.v.toFixed(1)}매</text>`;
+  return svg+'</svg>';
+}
+/* 달마다 — 합계 매수, 쓴 날, 하루 평균(그달의 기록이 있는 날로 나눔) */
+function advMonths(adv,first){
+  const k0=dayKey(), cur=k0.slice(0,7), out=[];
+  for(let m=first.slice(0,7); m<=cur; m=monthAdd(m,1)){
+    let sum=0, days=0, n=0;
+    for(let k=m+'-01'; k.slice(0,7)===m && k<=k0; k=addDays(k,1)){ if(k<first) continue; const v=+adv[k]||0; sum+=v; n++; if(v>0) days++; }
+    out.push({m, sum, days, n, part:m===cur});
+  }
+  return out.reverse();
+}
+function renderAdv(){
+  const host=$('advHost'), open=`<p class="note" style="margin-top:28px"><a class="linkish" href="${esc(linkFor('write'))}" target="sijak_write" rel="opener">보태기 열기</a></p>`;
+  if(Werr==='setup'){ host.innerHTML=`<p class="empty">${setupMsg()}</p>`; return; }
+  if(!W){ host.innerHTML=`<p class="empty">${Werr?'<span class="err">'+esc(Werr)+'</span>':'불러오는 중'}</p>`; return; }
+  if(!W.adv){ host.innerHTML=`<p class="empty">보태기에서 날짜별 분량이 아직 올라오지 않았습니다. 맥의 보태기를 한 번 열어 주세요.</p>`+open; return; }
+  const adv=W.adv, first=advFirst(), g=writeGoal(), a=advAvg(adv,first), k0=dayKey(), cur=k0.slice(0,7);
+  let mSum=0, mDays=0; for(let k=cur+'-01'; k<=k0; k=addDays(k,1)){ const v=+adv[k]||0; mSum+=v; if(v>0) mDays++; }
+  let h=`<div class="inc-top${a.mae>=g?' met':''}">
+    <div class="lbl">최근 ${a.n}일 하루 평균</div>
+    <div class="big">${a.mae.toFixed(1)}매<small>쓴 날 ${a.days}일</small></div>
+    <div class="sub">${kLabel(a.from)}–${kLabel(a.to)} · ${advCompare(a.mae,g)}</div>
+    <div class="now">${+cur.slice(5)}월에는 지금까지 ${mae1(mSum)}매를 보탰습니다 · 쓴 날 ${mDays}일</div>
+  </div>
+  <p class="note">보태기의 나아감(완성 전 원고에서 늘어난 글자)으로 셉니다. 쉰 날도 나누고, 200자를 1매로 봅니다.${W.since&&W.since>first?' '+kLabel(W.since)+' 전의 날은 보태기가 원고 전체의 증감으로 대신 셉니다.':''}</p>`;
+  h+=`<h3>최근 30일 날마다</h3><div class="incchart">${advBars(adv,first)}</div>`;
+  h+=`<h3>평균의 흐름</h3><div class="incchart">${advChart(adv,first,W.since,g)}</div>`;
+  if(W.since&&W.since>first&&addDays(first,29)<k0&&W.since>addDays(first,29)) h+=`<p class="note">점선 세로 금은 나아감으로 세기 시작한 날(${kLabel(W.since)})입니다.</p>`;
+  const ms=advMonths(adv,first);
+  const row=r=>`<tr${r.part?' class="part"':''}><td>${monthLabel(r.m)}${r.part?' (진행 중)':''}</td><td>${mae1(r.sum)}매</td><td>${r.days}일</td><td class="${!r.part&&r.sum/r.n/200>=g?'hi':''}">${(r.sum/Math.max(1,r.n)/200).toFixed(1)}매</td></tr>`;
+  const head=`<table class="inctab"><thead><tr><th>달</th><th>보탠 매수</th><th>쓴 날</th><th>하루 평균</th></tr></thead><tbody>`;
+  h+=`<h3>달마다</h3>`+head+ms.slice(0,12).map(row).join('')+`</tbody></table>`;
+  if(ms.length>12) h+=`<details class="advold"><summary>이전 ${ms.length-12}달 보기</summary>`+head+ms.slice(12).map(row).join('')+`</tbody></table></details>`;
+  if(first.slice(8)!=='01') h+=`<p class="note">하루 평균은 그달의 날 수로 나눕니다. 첫 달은 기록을 시작한 ${first.slice(0,4)}년 ${kLabel(first)}부터, 이번 달은 오늘까지로 나눕니다.</p>`;
+  else h+=`<p class="note">하루 평균은 그달의 날 수로 나눕니다. 이번 달은 오늘까지로 나눕니다.</p>`;
+  host.innerHTML=h+open;
+}
+async function openAdv(){ renderAdv(); if(btOn()){ await loadWrite(dayKey()); if(view==='adv') renderAdv(); } }
 
 /* 수입 화면 */
 function incChart(st,g){
@@ -1537,10 +1636,13 @@ function go(v){
     Promise.all([pullCal(), (!T&&mrOn())?loadTodo(dayKey()):null]).then(([c])=>{ if(view==='cal'&&calEdit==null) renderCal(); });
   }
   if(v==='inc'){ renderInc(); pullInc().then(c=>{ if(c&&view==='inc'&&!$('incHost').contains(document.activeElement)) renderInc(); }); }
+  if(v==='adv') openAdv();
   if(v==='set') renderSet();
   window.scrollTo(0,0);
 }
 window.go=go;
+$('stripA').onclick=e=>{ if(!e.target.closest('button,a')) go('adv'); };
+$('stripA').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('adv'); } };
 $('stripI').onclick=e=>{ if(!e.target.closest('button')) go('inc'); };
 $('stripI').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('inc'); } };
 document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{ if(b.dataset.go==='cal'){ calSel=dayKey(); calMonth=null; calEdit=null; } go(b.dataset.go); });
@@ -1569,6 +1671,7 @@ async function onBack(){
   if(view==='morning' && (changed.includes(mpDay) || mpDay!==dayKey()) && document.activeElement!==editor) mpLoadEditor();
   if(view==='close' && changed.includes(curKey)) renderDirect(curKey);
   if(view==='inc'){ const c=await pullInc(); if(c&&!$('incHost').contains(document.activeElement)) renderInc(); }
+  if(view==='adv') openAdv();
   if(view==='cal'){ const c=await pullCal(); if(!T&&mrOn()) await loadTodo(dayKey()); if(calEdit==null) renderCal(); }
 }
 document.addEventListener('visibilitychange',onBack);
