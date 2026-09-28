@@ -75,6 +75,10 @@ button{cursor:pointer}
 .tBtn{font-size:.8rem;padding:.3rem .8rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok-2);white-space:nowrap}
 .tBtn:hover{border-color:var(--inju);color:var(--inju)}
 .tBtn.main{border-color:var(--inju);color:var(--inju)}
+#tWorkRow{display:flex;gap:.6rem;align-items:center;margin-top:.5rem;font-size:.75rem;color:var(--meok-2)}
+#tWork{font-size:.78rem;padding:.25rem .4rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok-2);max-width:22rem}
+#tWork:focus{outline:none;border-color:var(--inju)}
+#tWorkNote{color:var(--meok-3);font-size:.7rem}
 #tSent{font-size:.72rem;color:var(--meok-3);margin-top:.3rem;min-height:1.1em}
 
 #cast{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin:1.2rem 0 0;padding:.7rem 0;border-top:1px solid var(--seon);border-bottom:1px solid var(--seon)}
@@ -191,6 +195,7 @@ button{cursor:pointer}
     <button class="tBtn main" id="tSend">스크리브너로</button>
     <button class="tBtn" id="tArch">보관</button>
   </div>
+  <div id="tWorkRow"><label for="tWork">보태기 작품</label><select id="tWork"></select><span id="tWorkNote"></span></div>
   <div id="tSent"></div>
   <div id="cast">
     <span id="chips" style="display:contents"></span>
@@ -275,6 +280,9 @@ var PENDING = load("pending", []);      /* 올리지 못한 몰입 기록 */
 var DIRTY = load("dirty", {});          /* 올려야 할 주제 */
 var GONE = load("gone", {});            /* 지웠는데 아직 Supabase에서 못 지운 주제 */
 var CUR = load("cur", null);            /* 열어 둔 주제 */
+/* 주제 → 보태기 작품. 주제를 지워도 남겨 둔다 — 보태기가 이 표를 보고 떠들기 시간을 작품의 1매당 시간에 나란히 넣는다 */
+var LINKS = load("links", { map:{}, _at:0 });
+var WORKS = [];                          /* 보태기가 올린 작품 목록(끝나지 않은 것) */
 var ONLINE = false, NOTABLE = false, lastBlk = null;
 var AUTO_HOLD = false;   /* 몰입을 중단한 뒤 — 몰입 시작을 누르거나 주제를 다시 열 때까지 저절로 시작하지 않는다 */
 
@@ -314,7 +322,8 @@ function netShow(){
   var e = $("net"), n = PENDING.length + Object.keys(DIRTY).length + Object.keys(GONE).length;
   if(!sbOn()){ e.textContent = "Supabase 없음"; e.classList.add("bad"); return; }
   if(NOTABLE){ e.textContent = "표가 없습니다 · 설정"; e.classList.add("bad"); return; }
-  e.textContent = ONLINE ? (n ? "올리는 중 " + n : "연결됨") : "연결 안 됨" + (n ? " · 대기 " + n : "");
+  /* 연결되어 있으면 올리는 중이어도 조용히 '연결됨' — 끊겼거나 올리지 못했을 때만 대기 수를 알린다 */
+  e.textContent = ONLINE ? "연결됨" : "연결 안 됨" + (n ? " · 대기 " + n : "");
   e.classList.toggle("bad", !ONLINE);
 }
 function missing(r){ return r.status === 404 || r.status === 400; }
@@ -335,6 +344,10 @@ function pull(){
         }
         return;
       }
+      if(row.id === "links" && row.data){
+        if((row.data._at || 0) > (LINKS._at || 0) && !LINKS._dirty){ LINKS = { map:row.data.map || {}, _at:row.data._at }; keep("links", LINKS); changed = true; }
+        return;
+      }
       if(row.id.indexOf("t:") !== 0 || !row.data) return;
       var id = row.id.slice(2);
       if(GONE[id]) return;
@@ -346,6 +359,7 @@ function pull(){
       }
     });
     if(changed){ keep("topics", TOPICS); renderAll(); }
+    loadWorks();
     return push();
   }).catch(function(){ ONLINE = false; netShow(); });
 }
@@ -357,11 +371,14 @@ function push(){
   ids.forEach(function(id){ snap[id] = DIRTY[id]; });
   var rows = ids.map(function(id){ return { id:"t:" + id, data:TOPICS[id], updated_at:new Date().toISOString() }; });
   if(CONF._dirty) rows.push({ id:"conf", data:confOut(), updated_at:new Date().toISOString() });
+  var linkAt = LINKS._dirty ? LINKS._at : null;
+  if(linkAt) rows.push({ id:"links", data:{ map:LINKS.map, _at:LINKS._at }, updated_at:new Date().toISOString() });
   var p = rows.length ? sb("tteodeulgi", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=minimal" }, body:JSON.stringify(rows) })
     .then(function(r){
       if(!r.ok){ if(missing(r)) NOTABLE = true; throw 0; }
       ids.forEach(function(id){ if(DIRTY[id] === snap[id]) delete DIRTY[id]; });   /* 올리는 사이에 또 고쳤으면 남긴다 */
       if(CONF._dirty){ delete CONF._dirty; keep("conf", CONF); }
+      if(linkAt && LINKS._at === linkAt){ delete LINKS._dirty; keep("links", LINKS); }
       keep("dirty", DIRTY); ONLINE = true;
     }) : Promise.resolve();
   return p.then(function(){
@@ -382,6 +399,39 @@ function flushPending(){
     });
 }
 function confOut(){ return { focusMin:CONF.focusMin, restMin:CONF.restMin, dayStart:CONF.dayStart, focusCut:CONF.focusCut, restCut:CONF.restCut, stopCut:CONF.stopCut, autoStart:!!CONF.autoStart, _at:CONF._at }; }
+
+/* ---------- 보태기 작품 ---------- */
+function loadWorks(){
+  if(!sbOn()) return;
+  sb("botaegi_kv?select=data&id=eq.works").then(function(r){ return r.ok ? r.json() : null; }).then(function(rows){
+    if(!rows) return;
+    var d = rows[0] && rows[0].data;
+    WORKS = Array.isArray(d) ? d.filter(function(w){ return w && w.id && w.title; }) : [];
+    if(cur()) renderWork();
+  }).catch(function(){});
+}
+function renderWork(){
+  var t = cur(), sel = $("tWork"); if(!t) return;
+  if(document.activeElement === sel) return;
+  sel.innerHTML = "";
+  function opt(v, label){ var o = document.createElement("option"); o.value = v; o.textContent = label; sel.appendChild(o); }
+  opt("", "잇지 않음");
+  WORKS.forEach(function(w){ opt(w.id, w.title + (w.kind ? " · " + w.kind : "")); });
+  var l = LINKS.map[t.id];
+  if(l && l.work_id && !WORKS.some(function(w){ return w.id === l.work_id; })) opt(l.work_id, (l.work_title || "작품") + " · 완성했거나 목록에 없음");
+  sel.value = l && l.work_id ? l.work_id : "";
+  $("tWorkNote").textContent = l && l.work_id ? "이 주제의 몰입 시간이 이 작품의 1매당 시간 옆에 '떠들기까지'로 들어갑니다" : (WORKS.length ? "" : "보태기 작품 목록을 불러오지 못했습니다");
+}
+function setWork(t, wid){
+  if(wid){
+    var w = WORKS.filter(function(x){ return x.id === wid; })[0];
+    var old = LINKS.map[t.id];
+    LINKS.map[t.id] = { work_id:wid, work_title: w ? w.title : (old && old.work_title) || "", topic:t.title };
+  }else delete LINKS.map[t.id];
+  LINKS._at = Date.now(); LINKS._dirty = true; keep("links", LINKS);
+  schedulePush(); renderWork();
+  toast(wid ? "보태기 작품과 이었습니다" : "잇지 않습니다");
+}
 
 /* ---------- 주제 ---------- */
 function touch(t){
@@ -412,7 +462,8 @@ function go(id){
 function topicRow(t, arch){
   var d = document.createElement("div"); d.className = "topic";
   var names = t.chars.map(function(c){ return c.name; }).join(", ");
-  var sub = [names || "인물 없음", clen(t.blocks.map(function(b){ return b.t; }).join("")) + "자", (topicMs(t) ? "몰입 " + span(topicMs(t)) : ""), md(t.updated)].filter(Boolean).join(" · ");
+  var lk = LINKS.map[t.id];
+  var sub = [names || "인물 없음", lk && lk.work_title ? "보태기 · " + lk.work_title : "", clen(t.blocks.map(function(b){ return b.t; }).join("")) + "자", (topicMs(t) ? "몰입 " + span(topicMs(t)) : ""), md(t.updated)].filter(Boolean).join(" · ");
   d.innerHTML = '<button class="open"><span class="ttl">' + esc(t.title) + '</span><span class="sub">' + esc(sub) + '</span></button><span class="acts"></span>';
   d.querySelector(".open").onclick = function(){ go(t.id); };
   var acts = d.querySelector(".acts");
@@ -446,7 +497,7 @@ function renderTopic(){
   if(document.activeElement !== $("tTitle")) $("tTitle").value = t.title;
   if(document.activeElement !== $("tLink")) $("tLink").value = t.link || "";
   $("tSent").textContent = t.sentAt ? "스크리브너로 보냄 · " + md(t.sentAt) + " " + z2(new Date(t.sentAt).getHours()) + ":" + z2(new Date(t.sentAt).getMinutes()) : "";
-  renderCast(); renderSheet(); renderCount();
+  renderCast(); renderSheet(); renderCount(); renderWork();
 }
 function renderCount(){
   var t = cur(); if(!t) return;
@@ -570,15 +621,17 @@ function renderAll(){
 }
 
 /* ---------- 스크리브너로 — 날짜와 주제를 머리에, 이름은 가운데, 말은 그 아래 ---------- */
+/* 글자 크기는 px로 적는다 — 맥이 붙여 넣은 HTML을 서식 있는 글로 바꿀 때 px를 그대로 포인트로 읽고,
+   pt는 4/3배로 키운다(11pt → 약 14.7포인트). 그래서 10px가 스크리브너에서 10포인트가 된다 */
 function exportParts(t){
   var head = ymd(Date.now()) + " " + t.title;
-  var txt = [head, ""], html = ['<p style="font-family:\'Apple SD Gothic Neo\',sans-serif;font-size:10pt;color:#6b6259;text-align:right">' + esc(head) + '</p>'];
+  var txt = [head, ""], html = ['<p style="font-family:\'Apple SD Gothic Neo\',sans-serif;font-size:10px;color:#6b6259;text-align:right">' + esc(head) + '</p>'];
   t.blocks.forEach(function(b){
     var say = b.t.replace(/\s+$/, ""); if(!say.trim()) return;
     var nm = charName(t, b.c);
     txt.push(nm, say, "");
-    html.push('<p style="font-family:\'Apple SD Gothic Neo\',sans-serif;font-size:10pt;color:#6b6259;text-align:center;margin-top:14pt">' + esc(nm) + '</p>');
-    say.split("\n").forEach(function(line){ if(line.trim()) html.push('<p style="font-family:AppleMyungjo,serif;font-size:11pt;line-height:1.8;text-indent:1em">' + esc(line.trim()) + '</p>'); });
+    html.push('<p style="font-family:\'Apple SD Gothic Neo\',sans-serif;font-size:10px;color:#6b6259;text-align:center;margin-top:14px">' + esc(nm) + '</p>');
+    say.split("\n").forEach(function(line){ if(line.trim()) html.push('<p style="font-family:AppleMyungjo,serif;font-size:10px;line-height:1.8;text-indent:1em">' + esc(line.trim()) + '</p>'); });
   });
   return { text:txt.join("\n").replace(/\n+$/, "\n"), html:html.join("") };
 }
@@ -598,14 +651,29 @@ function plainCopy(s){
   return Promise.resolve(oldCopy(s));
 }
 function oldCopy(s){ var ta = document.createElement("textarea"); ta.value = s; ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); }catch(e){} document.body.removeChild(ta); }
+/* 누른 그 순간에 곧바로 복사한다 — 사파리는 버튼을 누른 동작 안에서만 클립보드에 쓰게 해 주므로,
+   약속(Promise)을 기다린 뒤에 복사하면 조용히 실패한다. 복사는 일반 텍스트로만 */
+function copyNow(text){
+  var ta = document.createElement("textarea"), ok = false, back = document.activeElement;
+  ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.top = "0"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  try{ ok = document.execCommand("copy"); }catch(e){ ok = false; }
+  document.body.removeChild(ta);
+  if(back && back.focus) try{ back.focus(); }catch(e){}
+  return ok;
+}
 function sendToScriv(){
   var t = cur(); if(!t) return;
   if(!t.blocks.some(function(b){ return b.t.trim(); })){ toast("아직 아무 말도 없습니다"); return; }
-  copyOut(exportParts(t)).then(function(){
-    t.sentAt = Date.now(); touch(t); renderTopic();
-    if(t.link && t.link.trim()){ toast("복사했습니다 · 스크리브너에서 ⌘V"); openUrl(t.link.trim()); }
-    else toast("복사했습니다 · 링크가 없어 스크리브너는 열지 않았습니다", 3200);
-  }, function(){ toast("복사하지 못했습니다"); });
+  var text = exportParts(t).text;
+  var ok = copyNow(text);
+  if(!ok && navigator.clipboard && navigator.clipboard.writeText){
+    /* execCommand가 막힌 경우 — 같은 동작 안에서 곧바로 한 번 더 */
+    navigator.clipboard.writeText(text).then(function(){ toast("복사했습니다 · 스크리브너에서 ⌘V"); }, function(){ toast("복사하지 못했습니다 · 다시 눌러 주세요", 3200); });
+  }
+  if(t.link && t.link.trim()) openUrl(t.link.trim());   /* 복사와 같은 동작 안에서 곧바로 연다 */
+  if(ok) toast(t.link && t.link.trim() ? "복사했습니다 · 스크리브너에서 ⌘V" : "복사했습니다 · 링크가 없어 스크리브너는 열지 않았습니다", 3200);
+  t.sentAt = Date.now(); touch(t); renderTopic();
 }
 
 /* ---------- 몰입 — 곁의 '시간별'과 같은 흐름 ---------- */
@@ -789,7 +857,7 @@ function testConn(){
   ]).then(function(){ CONF.sbUrl = keepU; CONF.sbKey = keepK; $("setMsg").textContent = out.join("\n"); });
 }
 function backupOut(){
-  var blob = new Blob([JSON.stringify({ app:"tteodeulgi", at:Date.now(), topics:TOPICS, conf:confOut() }, null, 1)], { type:"application/json" });
+  var blob = new Blob([JSON.stringify({ app:"tteodeulgi", at:Date.now(), topics:TOPICS, links:LINKS.map, conf:confOut() }, null, 1)], { type:"application/json" });
   var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "tteodeulgi-" + ymd(Date.now()) + ".json";
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
@@ -803,6 +871,10 @@ function backupIn(file){
         var t = j.topics[id], mine = TOPICS[id];
         if(!mine || (t.updated || 0) > (mine.updated || 0)){ TOPICS[id] = t; DIRTY[id] = t.updated || Date.now(); delete GONE[id]; n++; }
       });
+      if(j.links && typeof j.links === "object"){
+        Object.keys(j.links).forEach(function(id){ if(!LINKS.map[id]) LINKS.map[id] = j.links[id]; });
+        LINKS._at = Date.now(); LINKS._dirty = true; keep("links", LINKS);
+      }
       keep("topics", TOPICS); keep("dirty", DIRTY); keep("gone", GONE);
       renderAll(); schedulePush(); toast("주제 " + n + "개를 불러왔습니다");
     }catch(e){ toast("떠들기 백업 파일이 아닙니다"); }
@@ -821,6 +893,7 @@ $("archToggle").onclick = function(){ showArch = !showArch; renderHome(); };
 $("tTitle").oninput = function(){ var t = cur(); if(!t) return; t.title = $("tTitle").value.trim() || "제목 없음"; document.title = t.title + " · 떠들기"; touchSoon(t); };
 $("tLink").oninput = function(){ var t = cur(); if(!t) return; t.link = $("tLink").value.trim(); touchSoon(t); };
 $("tSend").onclick = sendToScriv;
+$("tWork").onchange = function(){ var t = cur(); if(t) setWork(t, this.value); this.blur(); };
 $("tArch").onclick = function(){
   var t = cur(); if(!t) return;
   if(NOW && NOW.topic === t.id && NOW.phase === "focus"){ toast("몰입 중에는 보관할 수 없습니다"); return; }
@@ -861,7 +934,7 @@ window.addEventListener("resize", function(){ document.querySelectorAll("#sheet 
 renderAll();
 if(cur()){ var tas = document.querySelectorAll("#sheet textarea"); if(tas.length) focusEnd(tas[tas.length-1]); }
 setInterval(tick, 500);
-pull();
+pull(); loadWorks();
 setInterval(function(){ if(document.visibilityState === "visible" && !Object.keys(DIRTY).length) pull(); }, 60000);
 })();
 </script>
