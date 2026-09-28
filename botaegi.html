@@ -830,7 +830,7 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="sburl">수파베이스 주소</label><input type="text" id="sburl" spellcheck="false"></div>
       <div class="row"><label for="sbkey">열쇠</label><input type="text" id="sbkey" spellcheck="false"></div>
       <p class="note">'모두 올리기'는 모든 원고를 다시 올리고, 완성한 작품의 원고는 아이폰 목록에서 내립니다. 표에 칸을 더해야 할 때는 아래 SQL을 참고하세요.</p>
-      <p class="note">원고를 보내거나 되돌릴 때마다 최신 원고를 올립니다. 원고마다 한 줄만 두고 덮어쓰므로 쌓이지 않습니다. 아이폰에서 손본 것은 왼쪽 표시창에 자국으로 나타나고, '손본 대로 원고에 넣기'를 누르면 원고가 됩니다. 아이폰이 옛 원고를 보고 고친 것은 받지 않습니다. 비워두면 올리지 않습니다.</p>
+      <p class="note">원고를 보내거나 되돌릴 때마다 최신 원고를 올립니다. 원고마다 한 줄만 두고 덮어쓰므로 쌓이지 않습니다. 곁과 아이폰에서 보낸 글은 1분마다 가져와 그대로 원고가 됩니다. 아이폰이나 교열에서 고친 글은 '고친 글 · 스크리브너에 아직 없음'으로 표시되고, 스크리브너로 옮긴 뒤 곁에서 보내면 표시가 사라집니다. 아이폰이 옛 원고를 보고 고친 것은 받지 않습니다. 주소와 열쇠는 이 기기의 사파리에만 저장되고 파일에는 들어 있지 않습니다(백업 파일에는 들어 있음). 비워두면 올리지 않습니다.</p>
       <div class="bak"><button id="sbPull">지금 가져오기</button><button id="sbPush">모두 올리기</button><button id="sbSql">표 만드는 SQL 복사</button></div>
       <p class="note" id="sbState"></p>
 
@@ -1020,8 +1020,9 @@ function fresh(){
     restMin:15,
     pfz:16, plh:1.9, ppad:48, pind:1, pmax:0, ifz:16, ilh:1.9,
     wide:true,
-    sbUrl:"https://pvunctdbsdcgvbqloslg.supabase.co",
-    sbKey:"sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY",
+    sbUrl:"",    /* 주소·열쇠는 파일에 두지 않는다(깃허브에 올라가므로). 설정이나 백업으로 넣는다 */
+    sbKey:"",
+    blank:false,   /* 저장된 자료 없이 처음 열린 보태기 — 작품을 만들거나 백업을 불러오기 전에는 아무것도 올리지 않는다 */
     inputPos:"mid",
     split:50,
     shortcut:"스크리브너",
@@ -1059,10 +1060,11 @@ function fresh(){
 }
 
 function load(){
-  var d = fresh();
+  var d = fresh(), had = false;
   try{
     var raw = localStorage.getItem(KEY);
     if(raw){
+      had = true;
       var p = JSON.parse(raw);
       for(var k in d) if(p[k]!==undefined && p[k]!==null) d[k]=p[k];
       if(p.sel === null) d.sel = null;
@@ -1070,6 +1072,7 @@ function load(){
       if(!p.wide){ d.pmax = 0; d.wide = true; }
     }
   }catch(e){}
+  if(!had) d.blank = true;
   if(!Array.isArray(d.mss)) d.mss = [];
   if(!Array.isArray(d.works)) d.works = [];
   /* 작품이 없는 원고는 각자의 작품이 된다 — 예전 판에서 넘어올 때 */
@@ -1114,7 +1117,7 @@ function load(){
     tidyParts(w);
   });
   if(!d.mss.length){
-    var w0 = newWork("이름 없는 작품", "", null); d.works.push(w0);
+    var w0 = newWork("이름 없는 작품", "", null); w0.auto = true; d.works.push(w0);
     d.mss.push(newMs("이름 없는 작품 · 1", w0.id, 1));
   }
   ["days","net","hit","adv"].forEach(function(k){ if(!d[k] || typeof d[k] !== "object") d[k] = {}; });
@@ -1163,6 +1166,7 @@ if(!S.advSince){
 var frozen = false;
 function save(){
   if(frozen) return;
+  if(S.blank && S.works.some(function(w){ return !isPlaceholder(w); })) S.blank = false;
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e){ toast("저장 공간이 모자랍니다. 백업을 내보내 주세요"); }
 }
@@ -1170,7 +1174,7 @@ function save(){
 function cur(){
   var m = S.mss.filter(function(m){ return m.id===S.current && !m.folded; })[0] || S.mss.filter(function(x){ return !x.folded && !workDone(workOf(x)); })[0] || S.mss.filter(function(x){ return !x.folded; })[0];
   if(!m){   /* 원고가 하나도 없으면 새 작품과 첫 원고를 만든다 */
-    var w = newWork("이름 없는 작품", "", null); S.works.push(w);
+    var w = newWork("이름 없는 작품", "", null); w.auto = true; S.works.push(w);
     m = newMs("이름 없는 작품 · 1", w.id, 1); S.mss.push(m);
   }
   if(S.current !== m.id) S.current = m.id;
@@ -1338,7 +1342,7 @@ function renderHead(){
   if(!openUnit(cur())){
     var open = S.mss.filter(openUnit);
     if(!open.length){
-      var w0 = newWork("이름 없는 작품", "", null); S.works.push(w0);
+      var w0 = newWork("이름 없는 작품", "", null); w0.auto = true; S.works.push(w0);
       open = [nextUnit(w0)];
     }
     S.current = open[0].id; S.sel = null; save();
@@ -1838,7 +1842,8 @@ function genreTteoMinPerMae(kind){
 }
 function confObj(){
   return { focusMin:S.focusMin, restMin:S.restMin, dayStart:S.dayStart, focus1Cut:S.focus1Cut, rest1Cut:S.rest1Cut,
-           stopCut:S.stopCut, ty1Cut:S.ty1Cut, ty2Cut:S.ty2Cut, tyStopCut:S.tyStopCut, tyResCut:S.tyResCut, tyDoneCut:S.tyDoneCut };
+           stopCut:S.stopCut, ty1Cut:S.ty1Cut, ty2Cut:S.ty2Cut, tyStopCut:S.tyStopCut, tyResCut:S.tyResCut, tyDoneCut:S.tyDoneCut,
+           goalH:S.goalH, goalM:S.goalM };   /* 하루 몰입 목표 — 시작 앱의 게이지가 읽는다. 지우지 말 것 */
 }
 var confSent = "";
 function shareConf(){
@@ -2101,7 +2106,12 @@ var SQL = [
 "create policy botaegi_all on botaegi_kv for all to anon using (true) with check (true);"
 ].join("\n");
 
-function cloudOn(){ return !!(S.sbUrl && S.sbKey); }
+function cloudOn(){ return !!(S.sbUrl && S.sbKey) && !S.blank; }
+/* 원고가 하나도 없을 때 저절로 만든 빈 작품 — 이름도 글도 그대로면 수파베이스에 올리지 않는다 */
+function isPlaceholder(w){
+  return !!(w && w.auto && w.title === "이름 없는 작품" && allOf(w).every(function(m){ return !len(m.text); }));
+}
+var BLANK_NOTE = "이 보태기에는 저장된 자료가 없어 수파베이스에 아무것도 올리지 않습니다. 백업 파일을 불러오거나 작품을 만들면 이어집니다.";
 function sb(path, opt){
   opt = opt || {};
   opt.headers = Object.assign({
@@ -2121,6 +2131,7 @@ function sameAt(a, b){ return !!a && !!b && Date.parse(a) === Date.parse(b); }
 function cloudPush(m){
   if(workDone(workOf(m))){ m.dirty = false; return Promise.resolve(true); }   /* 끝난 작품은 아이폰에서 내린다 */
   if(m.folded){ m.dirty = false; return Promise.resolve(true); }   /* 합쳐서 접어 둔 조각은 올리지 않는다 */
+  if(isPlaceholder(workOf(m))){ m.dirty = true; return Promise.resolve(true); }   /* 저절로 만든 빈 작품 — 글이나 이름이 생길 때까지 */
   m.dirty = true;
   if(!cloudOn()) return Promise.resolve(false);
   var at = new Date(m.editedAt || m.createdAt || Date.now()).toISOString();
@@ -2169,7 +2180,7 @@ function newCols(m){
 /* 작품 목록 — 곁이 작품을 고르고 막과 쪽수를 보도록 */
 var worksSent = "";
 function worksObj(){
-  return S.works.filter(function(w){ return !workDone(w); }).map(function(w){
+  return S.works.filter(function(w){ return !workDone(w) && !isPlaceholder(w); }).map(function(w){
     return { id:w.id, title:w.title, kind:w.kind || "", target_mae:w.targetMae || null, due:w.due || "",
              act_mae:w.actMae || null, acts:[], open_act: hasChapters(w) ? 1 : null,
              pages_total:w.pagesTotal || null, pages_now: isRevision(w) ? pagesNow(w) : null, new_kind: isRevision(w) ? w.newKind : null,
@@ -2226,6 +2237,7 @@ function normal(t){ return trimBlank(String(t).replace(/\r/g, "").split("\n")).j
 
 var pulling = false;
 function cloudPull(loud){
+  if(S.blank){ sbNote(BLANK_NOTE); if(loud && S.sbUrl && S.sbKey) toast("이 보태기는 비어 있습니다 · 백업 파일을 불러오세요", 4000); return Promise.resolve(); }
   if(!cloudOn() || pulling){ return Promise.resolve(); }
   pulling = true;
   return flush().then(applyReqs).then(function(){
@@ -4318,6 +4330,7 @@ function renderSet(){
   drawPiece();
   $("#sburl").value = S.sbUrl || "";
   $("#sbkey").value = S.sbKey || "";
+  if(S.blank) sbNote(BLANK_NOTE);
   $("#scut2").value = S.stopCut || "";
   $("#ty1").value = S.ty1Cut || ""; $("#ty2").value = S.ty2Cut || "";
   $("#tystop").value = S.tyStopCut || ""; $("#tyres").value = S.tyResCut || ""; $("#tydone").value = S.tyDoneCut || "";
@@ -4898,6 +4911,7 @@ $("#sburl").addEventListener("change", function(){ S.sbUrl = this.value.trim(); 
 $("#sbkey").addEventListener("change", function(){ S.sbKey = this.value.trim(); save(); cloudPull(true); });
 $("#sbPull").addEventListener("click", function(){ cloudPull(true); });
 $("#sbPush").addEventListener("click", function(){
+  if(S.blank){ toast("이 보태기는 비어 있습니다 · 백업 파일을 불러오세요", 4000); return; }
   /* 끝난 작품의 원고는 올리지 않고, 아이폰 목록에서도 내린다 */
   var off = 0;
   S.mss.forEach(function(m){
@@ -4906,7 +4920,7 @@ $("#sbPush").addEventListener("click", function(){
   });
   save();
   flush().then(function(){
-    var left = S.mss.filter(function(m){ return m.dirty; }).length;
+    var left = S.mss.filter(function(m){ return m.dirty && !isPlaceholder(workOf(m)); }).length;
     if(off && !left){ toast("올렸습니다 · 끝난 작품과 합친 조각의 원고 " + off + "개는 내렸습니다", 3500); return; }
     toast(left ? left + "편을 올리지 못했습니다" : "모두 올렸습니다");
   });
