@@ -248,7 +248,7 @@ button{cursor:pointer}
 
 /* ---------- 기본값 ---------- */
 var SRC = "tteodeulgi";
-var DEF = { focusMin:15, restMin:15, dayStart:4, focusCut:"몰입1", restCut:"휴식", stopCut:"중단", autoStart:false,
+var DEF = { focusMin:15, restMin:15, dayStart:4, focusCut:"몰입", restCut:"휴식", stopCut:"중단", autoStart:false,
             sbUrl:"https://pvunctdbsdcgvbqloslg.supabase.co", sbKey:"sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY" };
 var SQL = [
 "-- 떠들기 — 주제와 인물과 쓴 글, 설정(conf)",
@@ -267,6 +267,8 @@ function load(k, d){ try{ var v = localStorage.getItem("tteo." + k); return v ==
 function keep(k, v){ try{ localStorage.setItem("tteo." + k, JSON.stringify(v)); }catch(e){ toast("이 기기에 저장하지 못했습니다"); } }
 
 var CONF = Object.assign({}, DEF, load("conf", {}));
+/* 몰입 단축어 이름을 '몰입1'에서 '몰입'으로 — 저장된 값도 한 번 바꿔 둔다 */
+if(CONF.focusCut === "몰입1"){ CONF.focusCut = "몰입"; CONF._at = Date.now(); CONF._dirty = true; keep("conf", CONF); }
 var TOPICS = load("topics", {});        /* id → {id,title,link,chars,blocks,archived,created,updated,sentAt,log} */
 var NOW = load("now", null);            /* {topic,title,start,ends_at,rest_ends,phase,mins,logged,restDue} */
 var PENDING = load("pending", []);      /* 올리지 못한 몰입 기록 */
@@ -287,13 +289,15 @@ function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c
 function toast(t, ms){ var e = $("toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(function(){ e.classList.remove("on"); }, ms || 2200); }
 function clen(t){ return String(t || "").replace(/\n/g, "").length; }
 
-/* 단축어·스크리브너 — 링크를 누르는 방식으로 */
+/* 스크리브너 링크 — 버튼을 누른 동작 안에서 링크를 누르는 방식으로 */
 function openUrl(url){ var a = document.createElement("a"); a.href = url; a.rel = "noopener"; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
 function runShortcut(name, input){
   if(!name || !String(name).trim()) return;
   var url = "shortcuts://run-shortcut?name=" + encodeURIComponent(String(name).trim());
   if(input != null && input !== "") url += "&input=text&text=" + encodeURIComponent(String(input));
-  openUrl(url);
+  /* 사파리에서는 주소를 직접 넣는다(보태기와 같은 방식). 스크립트로 링크를 누르면
+     버튼을 누른 때가 아닌 타이머(자동 시작 2초 뒤, 휴식)에서는 사파리가 막는다 */
+  try{ window.location.href = url; }catch(e){}
 }
 
 /* ---------- Supabase ---------- */
