@@ -102,6 +102,11 @@ html{scroll-padding-top:var(--stickH,7rem)}
   font-family:var(--ui);font-size:.8rem;letter-spacing:.18em;color:var(--meok-3)}
 .blk .who:hover{color:var(--meok-2)}
 .blk.cur .who{color:var(--inju)}
+/* 속말 — 다른 인물에게 들리지 않는 말. 괄호는 글자가 아니라 표시로만 두른다 */
+.say{position:relative}
+.blk.inner .say::before,.blk.inner .say::after{position:absolute;font-family:var(--body);font-size:1.1rem;line-height:1.95;color:var(--meok-3)}
+.blk.inner .say::before{content:"(";left:-.7em;top:0}
+.blk.inner .say::after{content:")";right:-.7em;bottom:0}
 .blk textarea{display:block;width:100%;border:0;background:transparent;resize:none;overflow:hidden;padding:0;
   font-family:var(--body);font-size:1.1rem;line-height:1.95;color:var(--meok);min-height:1.95em}
 .blk textarea:focus{outline:none}
@@ -334,7 +339,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <p class="note">몰입이 돌지 않을 때 원고에 첫 글자를 치면, 그 순간부터 기본 몰입 시간만큼 몰입합니다. 몰입 단축어는 타이핑이 2초 멈췄을 때 부릅니다. '몰입 중단'을 누른 뒤에는 몰입 시작을 한 번 누르거나 씬을 다시 열 때까지 저절로 시작되지 않습니다. 휴식이 끝난 뒤 다시 말하기 시작하면 다음 몰입이 이어집니다.</p>
 
     <h3>키</h3>
-    <p class="note">⌃1~⌃9 그 인물이 말하게 · ⌃0 지문 · ⌃/ 질문 · ⌃⇧/ 질문 카드 · 빈 줄에서 엔터를 한 번 더 치면 다음 사람 · ⌘↩ 곧바로 다음 사람 · 빈 칸에서 백스페이스는 앞 칸으로 · ⌘⇧F 찾기. 칩이나 이 키를 쓸 때 지금 칸이 화면 밖에 있으면 화면 가운데로 끌어옵니다.</p>
+    <p class="note">⌃1~⌃9 그 인물이 말하게 · ⌃0 지문 · ⌃/ 질문 · ⌃⇧/ 질문 카드 · ⌃. 속말(괄호) 켜고 끄기 — 질문에 답하는 칸은 저절로 속말 · 빈 줄에서 엔터를 한 번 더 치면 다음 사람 · ⌘↩ 곧바로 다음 사람 · 빈 칸에서 백스페이스는 앞 칸으로 · ⌘⇧F 찾기. 칩이나 이 키를 쓸 때 지금 칸이 화면 밖에 있으면 화면 가운데로 끌어옵니다.</p>
 
     <h3>지문</h3>
     <label class="chk"><input type="checkbox" id="sStage"><span>지문 쓰기</span></label>
@@ -757,7 +762,9 @@ function renderSheet(){
     ta.addEventListener("keydown", function(e){ onKey(e, t, b, ta); });
     ["mouseup","keyup","select"].forEach(function(ev){ ta.addEventListener(ev, function(){ pickShow(t, b, ta, d); }); });
     ta.addEventListener("blur", function(){ setTimeout(pickHideIfIdle, 150); });
-    d.appendChild(w); d.appendChild(ta);
+    var say = document.createElement("div"); say.className = "say"; say.appendChild(ta);
+    if(b.inner && isChar(b.c)){ d.classList.add("inner"); w.title = "속말 — 괄호에 들어갑니다 · ⌃. 로 켜고 끄기"; }
+    d.appendChild(w); d.appendChild(say);
     var nf = (t.facts || []).filter(function(f){ return f.blk === b.id; }).length;
     if(nf){ var fb = document.createElement("button"); fb.className = "fbadge"; fb.textContent = "사실 " + nf; fb.title = "모은 사실 보기"; fb.onclick = function(){ openFacts(); }; d.appendChild(fb); }
     S.appendChild(d);
@@ -795,6 +802,7 @@ function nextSpeaker(t, i){
 }
 function newBlock(t, i, who){
   var b = { id:uid(), c:who || nextSpeaker(t, i), t:"" };
+  if(t.blocks[i] && t.blocks[i].c === ASK) b.inner = true;   /* 질문에 답하는 말은 속말로 */
   t.blocks.splice(i + 1, 0, b); lastBlk = b.id; touch(t); renderSheet(); renderCast();
   var ta = taOf(b.id); if(ta){ focusEnd(ta); ta.scrollIntoView({ block:"center", behavior:"smooth" }); }
 }
@@ -806,6 +814,15 @@ function setSpeaker(cid){
   if(bx){ bx.classList.toggle("stage", cid === STAGE); bx.classList.toggle("ask", cid === ASK); var d = bx.querySelector(".who"); if(d) d.textContent = charName(t, cid); }
   markCur();
   var ta = taOf(b.id); if(ta && document.activeElement !== ta) focusEnd(ta);
+  revealBlk(b.id);
+}
+function toggleInner(){
+  var t = cur(), i = curBlkIdx(); if(!t || i < 0) return;
+  var b = t.blocks[i];
+  if(!isChar(b.c)){ toast("속말은 인물의 말에만 씁니다"); return; }
+  b.inner = !b.inner; touch(t);
+  var bx = document.querySelector('#sheet .blk[data-id="' + b.id + '"]'); if(bx) bx.classList.toggle("inner", !!b.inner);
+  toast(b.inner ? "속말 · 괄호에 들어갑니다" : "보통 말로");
   revealBlk(b.id);
 }
 function cycleSpeaker(dir){
@@ -823,6 +840,10 @@ function onKey(e, t, b, ta){
   /* 질문 칸에서는 엔터 한 번이면 답하는 칸으로 */
   if(b.c === ASK && e.key === "Enter" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && ta.value.trim()){
     e.preventDefault(); b.t = ta.value.replace(/\n+$/, ""); ta.value = b.t; newBlock(t, i); return;
+  }
+  /* ⌃. — 속말 켜고 끄기 */
+  if(e.ctrlKey && !e.metaKey && e.code === "Period"){
+    e.preventDefault(); lastBlk = b.id; toggleInner(); return;
   }
   /* ⌃0 — 지문 */
   if(e.ctrlKey && !e.metaKey && e.code === "Digit0"){
@@ -876,7 +897,7 @@ function askHere(card){
   var qi = t.blocks.indexOf(qb);
   if(card){
     qb.t = q;
-    var ans = { id:uid(), c:nextSpeaker(t, qi), t:"" };
+    var ans = { id:uid(), c:nextSpeaker(t, qi), t:"", inner:true };
     t.blocks.splice(qi + 1, 0, ans); lastBlk = ans.id;
   }else lastBlk = qb.id;
   touch(t); renderSheet(); renderCast();
@@ -1146,6 +1167,7 @@ function printScene(){
       prev = STAGE; return;
     }
     if(prev !== b.c) h.push('<div class="pn">' + esc(charName(t, b.c)) + '</div>');   /* 같은 사람이 이어 말하면 이름을 다시 쓰지 않는다 */
+    if(b.inner){ lines[0] = "(" + lines[0]; lines[lines.length - 1] += ")"; }   /* 속말 — 말 전체를 괄호로 */
     lines.forEach(function(x){ h.push('<p class="pp">' + esc(x) + '</p>'); });
     prev = b.c;
   });
@@ -1285,7 +1307,7 @@ function fillTail(){
     for(var i = t.blocks.length - 1; i >= 0 && picks.length < 3; i--){
       if(t.blocks[i].c === ASK) continue;   /* 질문은 흘려보내지 않는다 */
       var ss = sentences(t.blocks[i].t);
-      for(var j = ss.length - 1; j >= 0 && picks.length < 3; j--) picks.unshift({ who:t.blocks[i].c, s:ss[j] });
+      for(var j = ss.length - 1; j >= 0 && picks.length < 3; j--) picks.unshift({ who:t.blocks[i].c, s: t.blocks[i].inner && isChar(t.blocks[i].c) ? "(" + ss[j] + ")" : ss[j] });
     }
   }
   if(!picks.length){ tail.style.visibility = "hidden"; return; }
@@ -1430,6 +1452,7 @@ document.addEventListener("keydown", function(e){
   if(e.ctrlKey && /^Digit[1-9]$/.test(e.code)){ var t = cur(), n = +e.code.slice(5) - 1; if(t.chars[n]){ e.preventDefault(); setSpeaker(t.chars[n].id); } }
   if(e.ctrlKey && e.code === "Digit0" && CONF.stageOn){ e.preventDefault(); setSpeaker(STAGE); }
   if(e.ctrlKey && e.code === "Slash"){ e.preventDefault(); askHere(e.shiftKey); }
+  if(e.ctrlKey && e.code === "Period"){ e.preventDefault(); toggleInner(); }
 });
 /* ⌘⇧F — 찾기, esc — 닫기 */
 document.addEventListener("keydown", function(e){
