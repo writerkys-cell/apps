@@ -67,9 +67,10 @@ a.strip:hover{background:rgba(155,59,50,.035)}
 .strip-sub{font-size:14px;color:var(--ink-soft);min-height:1.6em}
 /* 글쓰기 칸 — 칸 전체는 보태기로, 오른쪽 아래의 '떠들기'만 떠들기로 (링크 안에 링크를 둘 수 없어 겹쳐 놓는다) */
 .wbox{position:relative}
-.wbox #stripW .strip-sub{padding-right:4.5em}
-.wbox .tteo{position:absolute;right:2px;bottom:24px;font-size:14px;line-height:1.6;color:var(--ink-soft);border-bottom:1px solid var(--line);text-decoration:none}
-.wbox .tteo:hover{color:var(--seal);border-bottom-color:var(--seal)}
+.wbox #stripW .strip-sub{padding-right:8.5em}
+.wbox .wlinks{position:absolute;right:2px;bottom:24px;display:flex;gap:.9em;font-size:14px;line-height:1.6}
+.wbox .wlinks a{color:var(--ink-soft);border-bottom:1px solid var(--line);text-decoration:none}
+.wbox .wlinks a:hover{color:var(--seal);border-bottom-color:var(--seal)}
 .strip-sub .live{color:var(--seal)}
 .stamp{position:absolute;right:-6px;top:10px;width:46px;height:46px;border:2px solid var(--seal);border-radius:50%;
   color:var(--seal);font-size:13px;display:flex;align-items:center;justify-content:center;letter-spacing:.05em;
@@ -300,7 +301,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
   <section data-v="today">
     <div class="day"><span class="d" id="dayD"></span><span class="w" id="dayW"></span><span class="mp" id="dayMp"></span></div>
     <div class="agenda" id="agenda"></div>
-    <div class="wbox"><a class="strip" id="stripW" target="sijak_write" rel="opener"></a><a class="tteo" id="tteoLink" target="sijak_tteo" rel="opener">떠들기</a></div>
+    <div class="wbox"><a class="strip" id="stripW" target="sijak_write" rel="opener"></a><span class="wlinks"><a id="tteoLink" target="sijak_tteo" rel="opener">떠들기</a><a id="typeLink" target="sijak_typewriter" rel="opener">타자기</a></span></div>
     <div class="strip inc" id="stripA" role="button" tabindex="0" title="원고 보기"></div>
     <a class="strip" id="stripR" target="sijak_read" rel="opener"></a>
     <div class="strip inc" id="stripP" role="button" tabindex="0" title="쪽수 보기"></div>
@@ -404,7 +405,7 @@ function myDevice(){
 
 /* ─────────── 설정 ─────────── */
 const CFG_KEY='sijak.cfg';
-const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', tteo:'./tteodeulgi.html' };
+const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html' };
 let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
 let autoNote = '';
@@ -564,7 +565,7 @@ function renderToday(){
   renderAgenda();
 
   /* 글쓰기 */
-  const sw=$('stripW'); sw.href=linkFor('write'); $('tteoLink').href=linkFor('tteo');
+  const sw=$('stripW'); sw.href=linkFor('write'); $('tteoLink').href=linkFor('tteo'); $('typeLink').href=linkFor('typewriter');
   if(Werr==='setup'){ sw.removeAttribute('href'); sw.innerHTML=`<div class="strip-head"><span class="strip-name">글쓰기</span></div><div class="strip-sub">${setupMsg()}</div>`; sw.classList.remove('met'); }
   else if(!W){ sw.innerHTML=`<div class="strip-head"><span class="strip-name">글쓰기</span></div><div class="strip-sub">${Werr?'<span class="err">'+esc(Werr)+'</span>':'불러오는 중'}</div>`; }
   else{
@@ -1235,6 +1236,7 @@ function renderSet(){
   <div class="field"><label>글쓰기 · 맥</label><input id="lkW" value="${esc(L.write)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>글쓰기 · 아이폰·아이패드</label><input id="lkWP" value="${esc(L.writePhone)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>떠들기</label><input id="lkD" value="${esc(L.tteo||DEF_LINKS.tteo)}" autocapitalize="off" spellcheck="false"></div>
+  <div class="field"><label>타자기</label><input id="lkY" value="${esc(L.typewriter||DEF_LINKS.typewriter)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>독서</label><input id="lkR" value="${esc(L.read)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>할 일</label><input id="lkT" value="${esc(L.todo)}" autocapitalize="off" spellcheck="false"></div>
   <div class="btnrow"><button class="btn" id="saveLinks">저장</button><button class="btn" id="resetLinks">처음 값으로</button></div>
@@ -1262,7 +1264,7 @@ function renderSet(){
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
-  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo}; saveCfg(); toast('저장했습니다'); };
+  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo}; saveCfg(); toast('저장했습니다'); };
   $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
   $('sound').onclick=()=>{ MP.soundOn=MP.soundOn===false; mpPersist(); renderSet(); };
   $('reImport').onclick=()=>{ const old=lsGet('morningpages_v1',null); if(!old){ toast('이 기기에는 예전 모닝페이지 기록이 없습니다'); return; } const n=mergeOld(old); toast(n?n+'일치를 더하거나 합쳤습니다':'새로 가져올 것이 없습니다'); renderSet(); };
