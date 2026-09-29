@@ -346,6 +346,8 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <h2>동 기 화</h2>
   <p id="syncState">…</p>
   <div id="syncIn">
+    <div class="row"><label>수파베이스 주소</label><input type="text" id="fSbUrl" spellcheck="false" autocomplete="off" placeholder="https://….supabase.co"></div>
+    <div class="row"><label>공개 열쇠</label><input type="text" id="fSbKey" spellcheck="false" autocomplete="off" placeholder="sb_publishable_…"></div>
     <div class="row"><label>메일</label><input type="email" id="fMail" spellcheck="false" autocomplete="username" placeholder="수파베이스에 만든 계정"></div>
     <div class="row"><label>비밀번호</label><input type="password" id="fPw" autocomplete="current-password"></div>
     <div class="actions"><button class="p" id="bLogin">들어가기</button></div>
@@ -359,6 +361,7 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
     </div>
   </div>
   <p class="hint">
+  수파베이스 주소와 열쇠는 <b>이 기기에만</b> 저장되고 파일에는 들어가지 않습니다. 기기마다 한 번씩 적어 주십시오. 다른 곳으로 옮기려면 나간 뒤 새로 적고 들어가면 됩니다.<br><br>
   원고는 이 기기에도 그대로 남고, 수파베이스는 그 거울입니다. 연결이 끊겨도 계속 쓸 수 있고, 이어지면 밀린 것이 올라갑니다.<br><br>
   <b>한 번에 한 기기.</b> 쓰던 기기를 덮거나 다른 창으로 넘어가는 순간 밀어 올리고, 돌아오는 기기는 열릴 때 받아옵니다. 그러니 <b>떠날 때 창을 한 번 덮어 주십시오.</b> 그것이 바통을 넘기는 동작입니다.<br><br>
   두 기기에서 같은 원고를 동시에 고치면 나중 것을 덮어쓰지 않고 <b>사본</b>으로 서랍에 따로 세웁니다. 원고는 잃어버리면 안 되니까요.<br><br>
@@ -381,7 +384,6 @@ kbd{font-family:var(--font-type);font-size:11.5px;background:var(--desk-2);borde
   <p class="hint">본문 첫 줄이 제목 줄입니다. 여기에 친 글이 그대로 원고의 제목이 되고, <kbd>Enter</kbd>를 쳐야 본문이 시작됩니다.</p>
   <div class="row"><label>줄 간격</label><input type="number" id="fLh" min="1.2" max="3" step="0.1"></div>
   <div class="row"><label>따옴표 굽히기 <span style="font-family:var(--font-type);color:var(--ink-3)">“ ” ‘ ’</span></label><input type="checkbox" id="fSmart"></div>
-  <div class="row"><label>스페이스 두 번에 마침표</label><input type="checkbox" id="fDot"></div>
   <div class="row"><label>타건음 · 마진벨 · 캐리지 리턴</label><input type="checkbox" id="fSound"></div>
   <div class="row"><label>종이가 올라오게 (타이핑 줄을 화면 한자리에 고정)</label><input type="checkbox" id="fHold"></div>
   <div class="row"><label>화면 좌우 여백</label><input type="number" id="fSM" min="0" max="6" step="0.5"> cm</div>
@@ -488,7 +490,7 @@ const sheet=$('#sheet'), desk=$('#desk'), paper=$('#paper'), ime=$('#ime');
 
 /* ── 상태 ─────────────────────────────────────────── */
 let DB={v:1,docs:[]};
-let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true,dot:true,tfont:'',tsize:22};
+let CFG={font:'',size:17,lh:1.9,sound:true,hold:true,paper:'a5',loose:false,sm:1,pm:3,shortcut:'',smart:true,tfont:'',tsize:22};
 const S={id:null,cells:[],cur:0,anchor:null,comp:'',lastTyped:null,insMode:false,dirty:false,chain:null,floor:0,pasteOK:false,memo:false};
 const LOCK={on:false,endAt:0,escapes:0,tick:null};
 let SESS=null, saveTimer=null, escHold=null;
@@ -869,26 +871,11 @@ function curl(str){
   }
   return out;
 }
-/* 앞이 이런 글자일 때만 마침표를 찍는다 — 공백도 문장부호도 아닌 것 */
-const DOTAFTER=/[^\s.,!?;:\u2026\u00b7'"\u201c\u201d\u2018\u2019()\[\]{}\u300c\u300d\u300e\u300f]/;
 function insertText(str,fromIME){
   if(!str) return;
   if(!canType()){ if(!composing) ime.value=''; S.comp=''; render(false); refuse(); return; }
   str=curl(str.normalize('NFC'));
   beginSession();
-
-  /* 스페이스 두 번이면 마침표. 손에 밴 버릇을 그대로 둔다 */
-  if(CFG.dot&&str===' '&&S.cur>1&&S.lastTyped===S.cur-1&&!composing){
-    const p1=S.cells[S.cur-1], p2=S.cells[S.cur-2];
-    if(p1&&p2&&!p1.d&&!p2.d&&!p1.k&&!p2.k&&p1.c===' '&&DOTAFTER.test(p2.c)){
-      p1.c='.';
-      S.cells.splice(S.cur,0,{c:' ',k:false,i:p1.i,d:false,h:false,m:p1.m});
-      S.cur++; S.lastTyped=S.cur-1; S.chain=null;
-      S.anchor=null; S.dirty=true;
-      wrapSound=true; render(true); autosave(); markTyping();
-      return;
-    }
-  }
   /* 원고 끝에서는 늘 검정. 문장 속을 고칠 때만 푸른색이다 */
   const prevC=S.cur>0?S.cells[S.cur-1]:null;
   const mem=S.memo||!!(prevC&&prevC.m);
@@ -1612,7 +1599,7 @@ function applyCFG(){
   R.setProperty('--pgh',pg[1]+'cm');
   R.setProperty('--sm',CFG.sm+'cm');
   $('#fFont').value=CFG.font; $('#fSize').value=CFG.size; $('#fLh').value=CFG.lh;
-  $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold; $('#fSmart').checked=CFG.smart; $('#fDot').checked=CFG.dot!==false;
+  $('#fSound').checked=CFG.sound; $('#fHold').checked=CFG.hold; $('#fSmart').checked=CFG.smart;
   $('#fPaper').value=CFG.paper; $('#fLoose').checked=CFG.loose;
   $('#fTFont').value=CFG.tfont||''; $('#fTSize').value=CFG.tsize;
   $('#fSM').value=CFG.sm; $('#fPM').value=CFG.pm; $('#fSC').value=CFG.shortcut||'';
@@ -1627,7 +1614,6 @@ $('#fSize').addEventListener('input',e=>{CFG.size=Math.max(11,Math.min(30,+e.tar
 $('#fLh').addEventListener('input',e=>{CFG.lh=Math.max(1.2,Math.min(3,+e.target.value||1.9)); saveCFG(); applyCFG();});
 $('#fSound').addEventListener('change',e=>{CFG.sound=e.target.checked; saveCFG();});
 $('#fSmart').addEventListener('change',e=>{CFG.smart=e.target.checked; saveCFG();});
-$('#fDot').addEventListener('change',e=>{CFG.dot=e.target.checked; saveCFG();});
 $('#fHold').addEventListener('change',e=>{CFG.hold=e.target.checked; saveCFG();});
 $('#fPaper').addEventListener('change',e=>{CFG.paper=e.target.value; saveCFG(); applyCFG();});
 $('#fLoose').addEventListener('change',e=>{CFG.loose=e.target.checked; saveCFG();});
@@ -1702,8 +1688,18 @@ function params(){
    원고를 통째로 갈아 끼우되, rev가 어긋나면 덮어쓰는 대신 사본을 세운다.
    이 기기의 localStorage가 여전히 원본이고 서버는 그 거울이다.
    끊겨도 계속 쓸 수 있어야 하니까. ─────────────────────── */
-const SB_URL='https://qhwtlhzyxnlvrljlcndv.supabase.co';
-const SB_KEY='sb_publishable_JEZTEzfpFuB_LwvbVTl9PQ_p4aiUOe-';
+/* 주소와 열쇠는 파일에 두지 않는다(깃허브에 올라가므로). 기기마다 동기화 창에서 적는다 */
+const SBC='타자기.sb', SBREF='타자기.sbref';
+function sbConf(){ try{ return JSON.parse(localStorage.getItem(SBC))||{}; }catch(e){ return {}; } }
+function sbRef(u){ const m=/^https:\/\/([a-z0-9]+)\.supabase\.co\/?$/i.exec((u||'').trim()); return m?m[1]:''; }
+function sbReady(){ const c=sbConf(); return !!(sbRef(c.url)&&c.key); }
+/* 다른 수파베이스로 옮겨 왔으면 예전 곳의 rev는 뜻이 없다. 처음 맞추는 것처럼 되돌린다 */
+function sbAdopt(ref){
+  if(localStorage.getItem(SBREF)===ref) return;
+  DB.docs.forEach(d=>{ d.rev=null; delete d.pushed; d.spush=0; });
+  saveDB(); localStorage.setItem(SBREF,ref); SY.seeded=false;
+  try{ localStorage.removeItem('typewriter-auth'); }catch(e){}   /* 예전 판이 남긴 로그인 */
+}
 const PUSH_GAP=8000;                      /* 쓰는 동안 밀어 올리는 간격 */
 const SY={sb:null,user:null,ch:null,rt:'',busy:0,err:'',pend:new Set(),last:0,timer:null,pullT:null,boot:false,seeded:false};
 
@@ -1722,9 +1718,12 @@ const hhmm=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+'
 
 async function sbGet(){
   if(SY.sb) return SY.sb;
+  const c=sbConf(), ref=sbRef(c.url);
+  if(!ref||!c.key) throw new Error('수파베이스 주소와 열쇠를 먼저 적어 주세요');
+  sbAdopt(ref);
   const m=await import('https://esm.sh/@supabase/supabase-js@2');
-  SY.sb=m.createClient(SB_URL,SB_KEY,{
-    auth:{persistSession:true,autoRefreshToken:true,storageKey:'typewriter-auth'},
+  SY.sb=m.createClient('https://'+ref+'.supabase.co',c.key,{
+    auth:{persistSession:true,autoRefreshToken:true,storageKey:'typewriter-auth-'+ref},
     realtime:{params:{eventsPerSecond:2}}
   });
   return SY.sb;
@@ -1739,11 +1738,16 @@ function syncUI(){
   const st=$('#syncState'); if(!st) return;
   const n=DB.docs.length, ch=DB.docs.reduce((s,d)=>s+(d.t||'').length,0);
   if(!SY.user){
-    st.innerHTML='아직 이 기기 안에만 있습니다. 원고 '+n+'편 · '+ch.toLocaleString()+'자.';
+    st.innerHTML='아직 이 기기 안에만 있습니다. 원고 '+n+'편 · '+ch.toLocaleString()+'자.'
+      +(SY.err?'<br><span class="bad">'+esc(SY.err)+'</span>':'');
     $('#syncIn').style.display=''; $('#syncOn').style.display='none';
+    const c=sbConf();
+    if(document.activeElement!==$('#fSbUrl')) $('#fSbUrl').value=c.url||'';
+    if(document.activeElement!==$('#fSbKey')) $('#fSbKey').value=c.key||'';
   }else{
     const p=SY.pend.size;
     st.innerHTML='<b>'+SY.user.email+'</b> · '+DEV+'<br>'
+      +'수파베이스 '+esc(sbRef(sbConf().url))+'<br>'
       +'원고 '+n+'편 · '+ch.toLocaleString()+'자<br>'
       +(SY.err?'<span class="bad">'+esc(SY.err)+'</span>'
         :SY.rt==='SUBSCRIBED'?'<span class="ok">실시간으로 이어져 있습니다.</span>':'잇는 중입니다…')
@@ -1914,6 +1918,7 @@ async function syncWatch(){
 }
 async function syncBoot(){
   if(SY.boot) return; SY.boot=true;
+  if(!sbReady()){ syncUI(); return; }
   try{
     const sb=await sbGet();
     const {data}=await sb.auth.getSession();
@@ -1929,19 +1934,29 @@ async function syncBoot(){
 }
 async function syncLogin(){
   const mail=$('#fMail').value.trim(), pw=$('#fPw').value;
+  const url=$('#fSbUrl').value.trim(), key=$('#fSbKey').value.trim();
+  if(!sbRef(url)||!key){ toast('수파베이스 주소(https://….supabase.co)와 공개 열쇠를 적어 주세요'); return; }
   if(!mail||!pw){ toast('메일과 비밀번호를 적어 주세요'); return; }
-  SY.busy++; syncMark();
+  const old=sbConf();
+  if(sbRef(old.url)!==sbRef(url)||old.key!==key){
+    if(SY.sb){ try{ if(SY.ch) SY.sb.removeChannel(SY.ch); }catch(e){} }
+    SY.sb=null; SY.ch=null; SY.rt='';
+    localStorage.setItem(SBC,JSON.stringify({url:'https://'+sbRef(url)+'.supabase.co',key:key}));
+  }
+  SY.busy++; syncMark(); let held=true;
   try{
     const sb=await sbGet();
     const {data,error}=await sb.auth.signInWithPassword({email:mail,password:pw});
     if(error) throw error;
     SY.user=data.user; SY.err=''; $('#fPw').value='';
+    SY.busy--; held=false; syncMark();     /* 받아오기가 바쁨에 막혀 건너뛰지 않게, 들어간 뒤엔 내려 둔다 */
     await syncWatch(); await syncPull();
     DB.docs.forEach(d=>{ if(!d.pushed||(d.updated||0)>d.pushed) syncPush(d.id); });
     syncFlush();
     toast('이어졌습니다');
   }catch(e){ SY.err='들어가지 못했습니다 · '+(e.message||e); }
-  SY.busy--; syncUI();
+  if(held) SY.busy--;
+  syncUI();
 }
 async function syncLogout(){
   try{
