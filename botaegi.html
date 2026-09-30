@@ -1362,9 +1362,14 @@ function renderHead(){
   /* 작품 전체의 분량 */
   var n = cw ? workChars(cw) : len(cur().text);
   var tg = cw && cw.targetMae ? cw.targetMae * 200 : 0;
-  /* 목표가 있으면 원고 탭처럼 "28.8 / 40매 (72%)" — 남은 분량을 매수로 가늠하게 */
-  elTally.innerHTML = tg ? "<b>"+mae(n)+"</b> / "+cw.targetMae+"매 ("+Math.round(n / tg * 100)+"%)"
-                         : "<b>"+fmt(n)+"</b>자 · "+mae(n)+"매";
+  /* 목표가 있으면 "남은 7.1매(56% 달성)" — 남은 매수가 먼저. 넘기면 "다 채움(108% 달성)".
+     남은 매수는 글자에서 바로 세고 0.1매 단위로 올린다(조금이라도 남으면 0.0이 아니게). 원고 탭의 작품 머리는 "쓴 / 총" 그대로 */
+  var pct = tg ? Math.round(n / tg * 100) : 0;
+  if(tg && n < tg && pct > 99) pct = 99;
+  elTally.innerHTML = !tg ? "<b>"+fmt(n)+"</b>자 · "+mae(n)+"매"
+                    : n >= tg ? "<b>다 채움</b>("+pct+"% 달성)"
+                    : "남은 <b>"+(Math.ceil((tg - n) / 20) / 10).toFixed(1)+"</b>매("+pct+"% 달성)";
+  elTally.title = tg ? mae(n)+" / "+cw.targetMae+"매" : "";
   elTally.classList.toggle("full", !!tg && n >= tg);
   renderNet();
 }
@@ -1377,8 +1382,9 @@ function renderDue(){
 function renderNet(){
   var v = todayAdv();
   var sign = v > 0 ? "+" : "";
-  elNet.textContent = "오늘 " + sign + fmt(v) + (S.daily ? " / " + fmt(S.daily) : "") + "자";
-  elNet.classList.toggle("met", !!S.daily && v >= S.daily);
+  /* 목표는 머리줄에 보이지 않는다(설정·달력·도장에서는 그대로 쓴다) */
+  elNet.textContent = "오늘 " + sign + fmt(v) + "자";
+  elNet.classList.remove("met");
 }
 
 /* ---------- 아이폰에서 손본 자국 ---------- */
@@ -4720,14 +4726,9 @@ function liveMs(){
 }
 function renderToday(){
   var ms = todayMs() + liveMs();
-  var goal = ((S.goalH||0)*60 + (S.goalM||0)) * 60000;
-  if(!goal){
-    elToday.textContent = ms >= 30000 ? "몰입 " + spanText(ms) : "";
-    elToday.classList.remove("met");
-    return;
-  }
-  elToday.textContent = "몰입 " + (ms < 60000 ? "0분" : spanText(ms)) + " / " + spanText(goal);
-  elToday.classList.toggle("met", ms >= goal);
+  /* 일한 시간만 — 하루 몰입 목표는 머리줄에 보이지 않는다 */
+  elToday.textContent = "몰입 " + (ms < 60000 ? "0분" : spanText(ms));
+  elToday.classList.remove("met");
 }
 var lastDay = dayKey(Date.now());
 function tick(){
