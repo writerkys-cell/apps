@@ -287,9 +287,12 @@ function save(){
   queueSync();
 }
 function touch(b){ b.updated=new Date().toISOString(); }
-function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function dayOfYear(){ const d=new Date(), s=new Date(d.getFullYear(),0,0); return Math.min(365,Math.floor((d-s)/86400000)); }
-function fullDayLabel(){ const d=new Date(), w=['일','월','화','수','목','금','토'][d.getDay()];
+/* 하루는 새벽 4시에 바뀐다(다른 앱들과 같은 기준). 4시 전은 전날로 친다. 기기의 현지 시각 기준.
+   dayDate(t)는 시각 t(없으면 지금)에서 4시간을 뺀 Date — 여기서 연·월·일만 쓴다. */
+function dayDate(t){ const DAY_START_HOUR=4; return new Date((t==null?Date.now():+new Date(t))-DAY_START_HOUR*3600000); }
+function today(){ return dstr(dayDate()); }
+function dayOfYear(){ const d=dayDate(), s=new Date(d.getFullYear(),0,0), m=new Date(d.getFullYear(),d.getMonth(),d.getDate()); return Math.min(365,Math.round((m-s)/86400000)); }
+function fullDayLabel(){ const d=dayDate(), w=['일','월','화','수','목','금','토'][d.getDay()];
   return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+w+'요일'; }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -312,7 +315,7 @@ function outOfRank(b){
   if(b.discarded||b.binAt||!b.category) return false;
   const r=rankOf(b); return r>0 && r>(b.category==='best'?BEST_MAX:nextMax());
 }
-function inGrace(b){ const g=graceDays(); if(!g||!b.added) return false; return daysBetween(b.added.slice(0,10),today())<g; }
+function inGrace(b){ const g=graceDays(); if(!g||!b.added) return false; return daysBetween(dstr(dayDate(b.added)),today())<g; }
 function isWaiting(b){ return outOfRank(b)&&!b.keep&&!!b.location&&!inGrace(b); }
 function isRemovable(b){ return outOfRank(b)&&!b.location&&!inGrace(b); }
 const locKey=l=>(l||'').replace(/\d+/g,n=>n.padStart(4,'0'));
@@ -467,7 +470,7 @@ function noticeLine(){
 function judgeCard(){
   const w=waiting(); if(!w.length) return '';
   const b=w[0], r=rankOf(b);
-  const info=[CAT[b.category].name+' '+r+'위', b.added?'담은 날 '+b.added.slice(0,10):''].filter(Boolean).join(' · ');
+  const info=[CAT[b.category].name+' '+r+'위', b.added?'담은 날 '+dstr(dayDate(b.added)):''].filter(Boolean).join(' · ');
   return `<section class="judge" style="margin-bottom:34px">
     <h2 class="sec"><span class="tagdot d-none"></span>판단을 기다리는 책 · ${w.length}권 중 1</h2>
     <div class="now-book">
@@ -1043,7 +1046,7 @@ function dayMinutes(){ const m=new Map(); sessions().forEach(s=>m.set(s.date,(m.
    평균이 목표의 90~110%면 그대로 두고, 그 밖이면 차이의 25%만큼 옮긴다. 한 번에 ±15%까지, 5분 단위, 최소 시간 아래로는 내려가지 않는다. */
 function daysBetween(a,b){ return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000); }
 function avgWindow(){
-  const first=R.settings.startDate||'', m=dayMinutes(), d=new Date(); d.setDate(d.getDate()-1);
+  const first=R.settings.startDate||'', m=dayMinutes(), d=dayDate(); d.setDate(d.getDate()-1);
   if(!first||!sessions().length&&dstr(d)<first) return null;
   let n=0, sum=0;
   for(let i=0;i<14;i++){ const k=dstr(d); if(k<first) break; sum+=m.get(k)||0; n++; d.setDate(d.getDate()-1); }
@@ -1167,9 +1170,9 @@ function statsHTML(){
   const m=dayMinutes(), dt=dayTargets(), t=today(), ym=t.slice(0,7), y=t.slice(0,4), tg=R.settings.target;
   const sum=f=>s.filter(f).reduce((a,x)=>{ a.mi+=x.minutes; a.p+=Math.max(0,x.toPage-x.fromPage); return a; },{mi:0,p:0});
   const mo=sum(x=>x.date.startsWith(ym)), yr=sum(x=>x.date.startsWith(y));
-  let streak=0; const d=new Date(); if(!m.get(t)) d.setDate(d.getDate()-1);
+  let streak=0; const d=dayDate(); if(!m.get(t)) d.setDate(d.getDate()-1);
   while(m.get(dstr(d))){ streak++; d.setDate(d.getDate()-1); }
-  const now=new Date(), first=new Date(now.getFullYear(),now.getMonth(),1).getDay(), last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const now=dayDate(), first=new Date(now.getFullYear(),now.getMonth(),1).getDay(), last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   let cal=['일','월','화','수','목','금','토'].map(w=>`<div class="h">${w}</div>`).join('')+'<div></div>'.repeat(first);
   for(let i=1;i<=last;i++){ const k=ym+'-'+String(i).padStart(2,'0'), v=m.get(k)||0;
     cal+=`<div class="d${v>=(dt.get(k)||tg)?' full':v?' part':''}${k===t?' today':''}"${v?` title="${fmtMin(v)}"`:''}>${i}</div>`; }
@@ -1235,7 +1238,7 @@ function stamp(){
   let minutes=Math.max(1,Math.round((a.endedAt-a.startedAt)/60000));
   if(g('r-min')){ const v=parseInt(g('r-min').value,10); if(v>0) minutes=v; }
   const now=new Date().toISOString(), st=new Date(a.startedAt);
-  const rec={id:uid(),kind:'read',bookId:a.bookId,title:b?b.title:(a.title||''),date:dstr(st),start:st.toISOString(),minutes,target:R.settings.target,
+  const rec={id:uid(),kind:'read',bookId:a.bookId,title:b?b.title:(a.title||''),date:dstr(dayDate(st)),start:st.toISOString(),minutes,target:R.settings.target,
     fromPage:a.fromPage||0,toPage:to,memory:mem,scans:a.scans||0,finished:!!(b&&b.total&&to>=b.total),updated:now};
   R.reads.push(rec);
   if(b){ b.page=to; b.pageAt=today(); touch(b); }
@@ -1527,12 +1530,21 @@ window.addEventListener('beforeunload',()=>{ try{ localStorage.setItem(KEY,JSON.
 activeSig=JSON.stringify(R.active||null);
 adjustTarget();
 render();
-setInterval(updClock,1000);
+/* 새벽 4시가 지나 날이 바뀌면 화면을 새로 그린다. 입력 중·견주기·책 고치기·쪽 적기·읽는 화면에서는 미뤘다가 끝난 뒤 그린다. */
+let dayKey=today();
+function dayTurn(){
+  const t=today(); if(t===dayKey) return false;
+  const ae=document.activeElement;
+  if((ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName))||cmp||editId||pageFor||(R.active&&view==='read')) return false;
+  dayKey=t; adjustTarget(); render(); return true;
+}
+setInterval(()=>{ updClock(); dayTurn(); },1000);
 if(sbCfg.url&&sbCfg.key) sbConnect(false);
 window.addEventListener('online',()=>{ if(sbCfg.url) syncAll(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') return;
   adjustTarget();
   if(R.active&&!elsewhere(R.active)&&view!=='read'){ view='read'; render(true); } else updClock();
+  dayTurn();
   if(sbCfg.url) syncAll(); });
 </script>
 </body>
