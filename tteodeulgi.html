@@ -77,6 +77,11 @@ button{cursor:pointer}
 .sr textarea{flex:1;font-family:var(--ui);font-size:.86rem;line-height:1.55;padding:.1rem .3rem;margin:-.1rem -.3rem;border:0;border-bottom:1px solid var(--inju);background:var(--jongi);color:var(--meok);resize:none;overflow:hidden}
 .sr textarea:focus{outline:none}
 .sr.ed{background:rgba(168,50,45,.05)}
+.sr .x{flex:none;visibility:hidden;background:none;border:0;padding:0 .2rem;font-size:.85rem;line-height:1;color:var(--meok-3);cursor:pointer}
+.sr:hover .x{visibility:visible}
+.sr .x:hover{color:var(--inju)}
+/* 되살리기 토스트 */
+#toast button{margin-left:.8rem;background:none;border:0;padding:0;font:inherit;color:#f0d9b5;border-bottom:1px solid rgba(240,217,181,.6);cursor:pointer}
 #synRead .empty{padding:1.2rem 0}
 #wJump{width:7.5rem;font-size:.78rem;padding:.3rem .5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok)}
 #wJump:focus{outline:none;border-color:var(--inju)}
@@ -253,6 +258,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
 #toast{position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);background:var(--meok);color:var(--jongi);
   padding:.45rem .9rem;border-radius:2px;font-size:.8rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:80;white-space:nowrap}
 #toast.on{opacity:1}
+#toast.on.undo{pointer-events:auto}
 
 @media (max-width:700px){
   #bar{flex-wrap:wrap;gap:.5rem}
@@ -539,7 +545,7 @@ function dayKey(t){ var d = new Date(t); if(d.getHours() < (+CONF.dayStart||0)) 
 function ymd(t){ var d = new Date(t); return d.getFullYear()+"-"+z2(d.getMonth()+1)+"-"+z2(d.getDate()); }
 function md(t){ var d = new Date(t); return (d.getMonth()+1)+"월 "+d.getDate()+"일"; }
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
-function toast(t, ms){ var e = $("toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(function(){ e.classList.remove("on"); }, ms || 2200); }
+function toast(t, ms){ var e = $("toast"); e.textContent = t; e.classList.remove("undo"); e.classList.add("on"); clearTimeout(toast.t); toast.t = setTimeout(function(){ e.classList.remove("on"); }, ms || 2200); }
 function clen(t){ return String(t || "").replace(/\n/g, "").length; }
 
 function runShortcut(name, input){
@@ -937,6 +943,9 @@ function synRow(r){
     requestAnimationFrame(function(){ autosize(ta); focusEnd(ta); });
   }else{
     var tx = document.createElement("span"); tx.className = "tx"; tx.innerHTML = synMark(r.t) || "&nbsp;"; row.appendChild(tx);
+    var x = document.createElement("button"); x.className = "x"; x.textContent = "×"; x.title = "이 줄 지우기 — 몇 초 안에 되살릴 수 있습니다"; x.setAttribute("aria-label", "지우기");
+    x.onclick = function(e){ e.stopPropagation(); synDeleteLine(r); };
+    row.appendChild(x);
     row.onclick = function(){ synLine = r.li; renderSynList(); };
   }
   return row;
@@ -959,6 +968,27 @@ function synCommit(r, val, after){
     synLine = (nextLi < lines.length && k !== "h") ? nextLi : null;
   }else synLine = null;
   renderSynList(); renderWorkMeta();
+}
+/* 줄 지우기 — 바로 지우고, 토스트의 '되살리기'로 몇 초 안에 되돌린다 */
+var synUndo = null;
+function synDeleteLine(r){
+  var wid = W_CUR, lines = synLinesOf(wid);
+  if(lines[r.li] == null) return;
+  var removed = lines.splice(r.li, 1)[0];
+  synUndo = { wid:wid, li:r.li, text:removed };
+  synSaveLines(lines); if(synLine === r.li) synLine = null;
+  renderSynList(); renderWorkMeta();
+  toastUndo((r.n != null ? r.n + "번 " : "") + "지웠습니다", function(){
+    if(!synUndo || W_CUR !== synUndo.wid) return;
+    var L = synLinesOf(synUndo.wid); L.splice(Math.min(synUndo.li, L.length), 0, synUndo.text);
+    synSaveLines(L); synUndo = null; renderSynList(); renderWorkMeta(); toast("되살렸습니다");
+  });
+}
+function toastUndo(msg, fn){
+  var e = $("toast"); e.textContent = msg;
+  var b = document.createElement("button"); b.textContent = "되살리기"; b.onclick = function(){ e.classList.remove("on"); fn(); };
+  e.appendChild(b); e.classList.add("on"); e.classList.add("undo"); clearTimeout(toast.t);
+  toast.t = setTimeout(function(){ e.classList.remove("on"); e.classList.remove("undo"); }, 6000);
 }
 function synSaveLines(lines){
   var wid = W_CUR, sy = synOf(wid), text = lines.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
