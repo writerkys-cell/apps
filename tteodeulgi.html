@@ -60,16 +60,26 @@ button{cursor:pointer}
 #wMeta{font-size:.75rem;color:var(--meok-3)}
 #wTools{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:0 0 1.2rem}
 #wHist{font-size:.75rem;padding:.25rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok-2);max-width:13rem}
-#synRead{min-height:3rem}
-#synRead h3{font-family:var(--ui);font-weight:600;font-size:.78rem;letter-spacing:.14em;color:var(--meok-2);margin:1.6rem 0 .5rem;padding-bottom:.25rem;border-bottom:1px solid var(--seon)}
-#synRead h3:first-child{margin-top:.2rem}
-#synRead .si{display:flex;gap:.7rem;align-items:baseline;padding:.2rem 0;cursor:text;border-radius:2px}
-#synRead .si:hover{background:rgba(120,110,90,.08)}
-#synRead .si .n{flex:none;min-width:1.5rem;text-align:right;font-family:var(--ui);font-size:.7rem;color:var(--meok-3);font-variant-numeric:tabular-nums}
-#synRead .si .tx,#synRead p{font-family:var(--body);font-size:1.02rem;line-height:1.85;margin:0;word-break:keep-all;overflow-wrap:break-word}
-#synRead p{padding:.2rem 0;cursor:text}
-#synRead .tag{font-family:var(--ui);font-size:.7rem;color:var(--meok-3);letter-spacing:.02em}
-#synRead .empty{padding:1.4rem 0}
+/* 시놉시스 — 화면은 종이의 수정을 빨리 옮기는 입력 도구. 작은 고딕, 차례마다 접힘, 줄마다 그 자리에서 고침 */
+#synRead{min-height:2rem;font-family:var(--ui)}
+.ss{margin:0 0 .2rem}
+.ss .sh{display:flex;gap:.5rem;align-items:baseline;width:100%;background:none;border:0;border-top:1px solid var(--seon);padding:.45rem .2rem .4rem;text-align:left;font-size:.78rem;letter-spacing:.1em;color:var(--meok-2);cursor:pointer}
+.ss .sh:hover{color:var(--inju)}
+.ss .sh .car{font-size:.65rem;width:.9rem;color:var(--meok-3)}
+.ss .sh b{font-weight:600;letter-spacing:.1em}
+.ss .sh .cnt{font-size:.7rem;color:var(--meok-3);letter-spacing:0}
+.ss .body{padding:.1rem 0 .5rem}
+.sr{display:flex;gap:.6rem;align-items:baseline;padding:.12rem .2rem;border-radius:2px;cursor:text}
+.sr:hover{background:rgba(120,110,90,.08)}
+.sr .n{flex:none;min-width:1.5rem;text-align:right;font-size:.68rem;color:var(--meok-3);font-variant-numeric:tabular-nums;padding-top:.1rem}
+.sr .tx{flex:1;font-size:.86rem;line-height:1.55;color:var(--meok);word-break:keep-all;overflow-wrap:break-word}
+.sr .tx .tag{font-size:.68rem;color:var(--meok-3)}
+.sr textarea{flex:1;font-family:var(--ui);font-size:.86rem;line-height:1.55;padding:.1rem .3rem;margin:-.1rem -.3rem;border:0;border-bottom:1px solid var(--inju);background:var(--jongi);color:var(--meok);resize:none;overflow:hidden}
+.sr textarea:focus{outline:none}
+.sr.ed{background:rgba(168,50,45,.05)}
+#synRead .empty{padding:1.2rem 0}
+#wJump{width:7.5rem;font-size:.78rem;padding:.3rem .5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok)}
+#wJump:focus{outline:none;border-color:var(--inju)}
 #synEdit{width:100%;min-height:16rem;font-family:var(--ui);font-size:.9rem;line-height:1.75;padding:.7rem .8rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok);resize:vertical}
 #synEdit:focus{outline:none;border-color:var(--inju)}
 #synNote{font-size:.72rem;color:var(--meok-3);margin:.4rem 0 0}
@@ -291,7 +301,8 @@ html{scroll-padding-top:var(--stickH,7rem)}
 <main id="work" hidden>
   <div id="wHead"><h1 id="wName"></h1><span id="wMeta"></span></div>
   <div id="wTools">
-    <button class="tBtn" id="wEdit">고치기</button>
+    <input id="wJump" placeholder="번호로 · 인물 7" aria-label="번호로 가기" autocomplete="off">
+    <button class="tBtn" id="wEdit">전체 고치기</button>
     <button class="tBtn main" id="wSave" hidden>시놉시스 저장</button>
     <button class="tBtn" id="wCancel" hidden>그만두기</button>
     <select id="wHist" aria-label="이전 판"></select>
@@ -745,7 +756,7 @@ function go(id){
 /* 작품 화면으로. null이면 첫 화면 */
 function openWork(wid){
   if(synDirty() && !confirm("저장하지 않은 시놉시스가 있습니다. 그대로 나갈까요?")) return;
-  SYN_EDIT = false;
+  SYN_EDIT = false; synLine = null;
   W_CUR = wid || null; keep("curWork", W_CUR);
   CUR = null; keep("cur", null);
   renderAll(); window.scrollTo(0, 0);
@@ -821,6 +832,9 @@ function synPreview(text){
 
 /* ---------- 화면: 작품 — 시놉시스가 얼굴, 그 아래 떠들기 ---------- */
 var SYN_EDIT = false, showWArch = false;
+var SYN_OPEN = load("synOpen", {});     /* 작품 → 펼쳐 둔 차례 */
+var synLine = null;                      /* 그 자리에서 고치는 줄의 번호 */
+var SYN_MERGE_MS = 10 * 60 * 1000;      /* 줄 단위 고침 — 마지막 저장에서 이 안이면 같은 판 */
 /* 시놉시스 글을 줄 단위로 읽는다: [제목] 줄은 차례, '-' 줄은 항목(차례 안에서 번호), 나머지는 문단 */
 function synParse(text){
   var out = [], n = 0, lines = String(text || "").replace(/\r/g, "").split("\n"), pos = 0;
@@ -839,24 +853,15 @@ function renderWorkPage(){
   var wid = W_CUR; if(!wid) return;
   var sy = synOf(wid), name = workName(wid), live = workScenes(wid), arch = workScenes(wid, true).filter(function(t){ return t.archived; });
   $("wName").textContent = name; document.title = name + " · 떠들기";
-  $("wMeta").textContent = sy && sy.text.trim() ? "시놉시스 " + clen(sy.text) + "자 · " + md(sy.at) + " 저장" : "시놉시스 아직 없음";
+  renderWorkMeta();
   var hasText = !!(sy && sy.text.trim()), edit = SYN_EDIT || !hasText;
   $("synRead").hidden = edit; $("synEdit").hidden = !edit;
   $("wEdit").hidden = edit; $("wSave").hidden = !edit; $("wCancel").hidden = !edit || !hasText;
   $("wPrint").disabled = !hasText;
   if(edit){ if(document.activeElement !== $("synEdit") && !synDirty()) $("synEdit").value = sy ? sy.text : ""; }
-  else {
-    var R = $("synRead"); R.innerHTML = "";
-    synParse(sy.text).forEach(function(it){
-      var el;
-      if(it.k === "h"){ el = document.createElement("h3"); el.textContent = it.t; }
-      else if(it.k === "i"){ el = document.createElement("div"); el.className = "si"; el.innerHTML = '<span class="n">' + it.n + '</span><span class="tx">' + synMark(it.t) + '</span>'; el.title = "눌러서 이 항목 고치기"; }
-      else { el = document.createElement("p"); el.innerHTML = synMark(it.t); el.title = "눌러서 고치기"; }
-      if(it.k !== "h") el.onclick = function(){ editSynAt(it.at); };
-      R.appendChild(el);
-    });
-  }
-  $("synNote").textContent = edit ? (hasText ? "고친 뒤 '시놉시스 저장'을 누르면 새 판이 되고, 이전 판은 남습니다." : "클로드에게 떠들기를 건네 받은 시놉시스를 붙여 넣고 저장하세요. 코드 블록 표시(```)가 딸려 와도 괜찮습니다.") : "항목을 누르면 그 자리를 고칠 수 있습니다. 종이에서 고친 번호를 찾아 누르세요.";
+  else renderSynList();
+  $("synNote").textContent = edit ? (hasText ? "고친 뒤 '시놉시스 저장'을 누르면 새 판이 되고, 이전 판은 남습니다." : "클로드에게 떠들기를 건네 받은 시놉시스를 붙여 넣고 저장하세요. 코드 블록 표시(```)가 딸려 와도 괜찮습니다.") : "차례를 눌러 펼치고, 줄을 눌러 그 자리에서 고칩니다. 엔터는 저장하고 다음 줄, ⌘↩는 아래에 새 항목, 비운 채 엔터는 지우기, esc는 그만두기. 10분 안의 고침은 한 판으로 묶입니다.";
+  $("wJump").hidden = edit || !hasText;
   /* 이전 판 */
   var h = $("wHist"); h.innerHTML = "";
   var hist = sy && sy.hist ? sy.hist : [];
@@ -875,16 +880,112 @@ function renderWorkPage(){
   arch.slice().sort(function(a, b){ return b.updated - a.updated; }).forEach(function(t){ A.appendChild(topicRow(t, true)); });
 }
 function whenAt(t){ var d = new Date(t); return md(t) + " " + z2(d.getHours()) + ":" + z2(d.getMinutes()); }
-function editSynAt(at){
-  var sy = synOf(W_CUR); SYN_EDIT = true; renderWorkPage();
-  var ta = $("synEdit"); ta.value = sy ? sy.text : "";
-  ta.focus();
-  var txt = ta.value, end = txt.indexOf("\n", at); if(end < 0) end = txt.length;
-  ta.setSelectionRange(end, end);
-  /* 그 줄이 보이게 — 줄 높이로 어림해 스크롤 */
-  var lineNo = txt.slice(0, at).split("\n").length, lh = parseFloat(getComputedStyle(ta).lineHeight) || 24;
-  ta.scrollTop = Math.max(0, (lineNo - 4) * lh);
-  ta.scrollIntoView({ block:"center" });
+/* 줄 단위 — 시놉시스를 줄로 다룬다. 차례 제목 줄, '-' 항목 줄, 그 밖의 줄 */
+function synLinesOf(wid){ var sy = synOf(wid); return sy && sy.text ? sy.text.replace(/\r/g, "").split("\n") : []; }
+function lineKind(x){ x = x.trim(); if(!x) return "e"; if(/^\[[^\]]+\]$/.test(x)) return "h"; if(/^[-•·]\s*/.test(x)) return "i"; return "p"; }
+function synSections(lines){
+  var secs = [], cur = { title:"", head:-1, rows:[] }, n = 0;
+  lines.forEach(function(raw, li){
+    var k = lineKind(raw);
+    if(k === "e") return;
+    if(k === "h"){ if(cur.rows.length || cur.head > -1) secs.push(cur); cur = { title:raw.trim().slice(1, -1), head:li, rows:[] }; n = 0; return; }
+    if(k === "i") n++;
+    cur.rows.push({ li:li, k:k, n:k === "i" ? n : null, t:k === "i" ? raw.trim().replace(/^[-•·]\s*/, "") : raw.trim() });
+  });
+  if(cur.rows.length || cur.head > -1) secs.push(cur);
+  return secs;
+}
+function isOpen(wid, title){ var o = SYN_OPEN[wid] || {}; return title === "" ? true : !!o[title]; }
+function setOpen(wid, title, v){ SYN_OPEN[wid] = SYN_OPEN[wid] || {}; if(v) SYN_OPEN[wid][title] = 1; else delete SYN_OPEN[wid][title]; keep("synOpen", SYN_OPEN); }
+function renderSynList(){
+  var wid = W_CUR, R = $("synRead"); R.innerHTML = "";
+  var lines = synLinesOf(wid), secs = synSections(lines);
+  if(!secs.length){ R.innerHTML = '<div class="empty">시놉시스가 비어 있습니다.</div>'; return; }
+  secs.forEach(function(sec){
+    var d = document.createElement("div"); d.className = "ss";
+    var open = isOpen(wid, sec.title), items = sec.rows.filter(function(r){ return r.k === "i"; }).length;
+    if(sec.title !== ""){
+      var hb = document.createElement("button"); hb.className = "sh";
+      hb.innerHTML = '<span class="car">' + (open ? "▾" : "▸") + '</span><b>' + esc(sec.title) + '</b><span class="cnt">' + (items || sec.rows.length) + '</span>';
+      hb.onclick = function(){ setOpen(wid, sec.title, !open); synLine = null; renderSynList(); };
+      d.appendChild(hb);
+    }
+    if(open){
+      var body = document.createElement("div"); body.className = "body";
+      sec.rows.forEach(function(r){ body.appendChild(synRow(r)); });
+      d.appendChild(body);
+    }
+    R.appendChild(d);
+  });
+}
+function synRow(r){
+  var row = document.createElement("div"); row.className = "sr" + (synLine === r.li ? " ed" : ""); row.dataset.li = r.li;
+  var n = document.createElement("span"); n.className = "n"; n.textContent = r.n == null ? "" : r.n; row.appendChild(n);
+  if(synLine === r.li){
+    var ta = document.createElement("textarea"); ta.value = r.t; ta.rows = 1; ta.spellcheck = false;
+    ta.addEventListener("input", function(){ autosize(ta); });
+    ta.addEventListener("keydown", function(e){
+      if(e.isComposing || e.keyCode === 229) return;
+      if(e.key === "Escape"){ e.preventDefault(); e.stopPropagation(); synLine = null; renderSynList(); return; }
+      if(e.key === "Enter" && !e.shiftKey){
+        e.preventDefault();
+        if(e.metaKey || e.ctrlKey) synCommit(r, ta.value, "new"); else synCommit(r, ta.value, "next");
+      }
+    });
+    ta.addEventListener("blur", function(){ setTimeout(function(){ if(synLine === r.li && document.activeElement !== ta){ var v = ta.value; if(v !== r.t) synCommit(r, v, "stay"); } }, 120); });
+    row.appendChild(ta);
+    requestAnimationFrame(function(){ autosize(ta); focusEnd(ta); });
+  }else{
+    var tx = document.createElement("span"); tx.className = "tx"; tx.innerHTML = synMark(r.t) || "&nbsp;"; row.appendChild(tx);
+    row.onclick = function(){ synLine = r.li; renderSynList(); };
+  }
+  return row;
+}
+/* 줄을 저장한다. after: "next"(다음 항목으로) · "new"(아래에 새 항목) · "stay" */
+function synCommit(r, val, after){
+  var wid = W_CUR, lines = synLinesOf(wid), v = val.replace(/\r/g, "").replace(/\n+/g, " ").trim();
+  var nextLi = null;
+  if(!v){ lines.splice(r.li, 1); nextLi = after === "stay" ? null : r.li; }
+  else {
+    lines[r.li] = r.k === "i" ? "- " + v : v;
+    if(after === "new"){ lines.splice(r.li + 1, 0, "- "); nextLi = r.li + 1; }
+    else if(after === "next"){ nextLi = r.li + 1; }
+  }
+  synSaveLines(lines);
+  if(nextLi != null){
+    /* 같은 차례 안의 다음 줄까지만 */
+    var k = nextLi < lines.length ? lineKind(lines[nextLi]) : "h";
+    while(nextLi < lines.length && k === "e"){ nextLi++; k = nextLi < lines.length ? lineKind(lines[nextLi]) : "h"; }
+    synLine = (nextLi < lines.length && k !== "h") ? nextLi : null;
+  }else synLine = null;
+  renderSynList(); renderWorkMeta();
+}
+function synSaveLines(lines){
+  var wid = W_CUR, sy = synOf(wid), text = lines.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
+  if(sy && text === sy.text) return;
+  var now = Date.now();
+  if(sy && now - (sy.at || 0) < SYN_MERGE_MS){ sy.text = text; sy.at = now; }
+  else {
+    var hist = sy ? [{ text:sy.text, at:sy.at }].concat(sy.hist || []).slice(0, SYN_KEEP) : [];
+    SYNS.map[wid] = { text:text, at:now, hist:hist, name:workName(wid) };
+  }
+  SYNS._at = now; SYNS._dirty = true; keep("syns", SYNS); schedulePush();
+}
+function renderWorkMeta(){
+  var sy = synOf(W_CUR); $("wMeta").textContent = sy && sy.text.trim() ? "시놉시스 " + clen(sy.text) + "자 · " + whenAt(sy.at) + " 저장" : "시놉시스 아직 없음";
+}
+/* '인물 7' — 그 차례를 펼치고 7번을 입력칸으로 */
+function synJump(q){
+  var wid = W_CUR, m = /^(.*?)\s*(\d+)\s*$/.exec(q.trim()); if(!m) return false;
+  var name = m[1].trim(), num = +m[2], secs = synSections(synLinesOf(wid));
+  var sec = secs.filter(function(x){ return x.title && (!name || x.title.indexOf(name) === 0 || x.title.replace(/\s/g, "").indexOf(name.replace(/\s/g, "")) === 0); })[0];
+  if(!sec && !name) sec = secs.filter(function(x){ return x.title; })[0];
+  if(!sec){ toast("그런 차례가 없습니다"); return false; }
+  var row = sec.rows.filter(function(r){ return r.n === num; })[0];
+  if(!row){ toast(sec.title + "에 " + num + "번이 없습니다"); return false; }
+  setOpen(wid, sec.title, true); synLine = row.li; renderSynList();
+  var el = document.querySelector('.sr[data-li="' + row.li + '"]'); if(el) el.scrollIntoView({ block:"center" });
+  return true;
 }
 function synDirty(){
   if(!W_CUR || $("synEdit").hidden) return false;
@@ -900,7 +1001,7 @@ function saveSyn(){
   if(!text){ if(!confirm("시놉시스를 비웁니다. 지금 판은 이전 판으로 남습니다.")) return; }
   SYNS.map[wid] = { text:text, at:Date.now(), hist:hist, name:workName(wid) };
   SYNS._at = Date.now(); SYNS._dirty = true; keep("syns", SYNS); schedulePush();
-  SYN_EDIT = false; $("synEdit").value = text; renderWorkPage();
+  SYN_EDIT = false; synLine = null; $("synEdit").value = text; renderWorkPage();
   toast("시놉시스를 저장했습니다");
   if(text) offerArchive(wid);
 }
@@ -1635,7 +1736,8 @@ $("wNewGo").onclick = function(){
   else $("addChar").focus();
 };
 $("wNewTitle").onkeydown = function(e){ if(e.key === "Enter" && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); $("wNewGo").click(); } };
-$("wEdit").onclick = function(){ SYN_EDIT = true; renderWorkPage(); $("synEdit").focus(); };
+$("wEdit").onclick = function(){ SYN_EDIT = true; synLine = null; renderWorkPage(); $("synEdit").focus(); };
+$("wJump").onkeydown = function(e){ if(e.key === "Enter" && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); if(synJump(this.value)) this.value = ""; } };
 $("wCancel").onclick = function(){ if(synDirty() && !confirm("고친 것을 버리고 읽기로 돌아갈까요?")) return; SYN_EDIT = false; $("synEdit").value = ""; renderWorkPage(); };
 $("wSave").onclick = saveSyn;
 $("wPrint").onclick = printSyn;
