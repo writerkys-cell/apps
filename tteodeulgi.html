@@ -176,6 +176,16 @@ html{scroll-padding-top:var(--stickH,7rem)}
 .wgrp{display:flex;gap:.6rem;align-items:baseline;margin:2rem 0 .2rem;font-size:.75rem;color:var(--meok-2);letter-spacing:.06em}
 .wgrp:first-child{margin-top:0}
 .wgrp b{font-weight:600;color:var(--meok)}
+.wgrp .toC{background:none;border:0;padding:0;font-size:.75rem;letter-spacing:0;color:var(--inju);border-bottom:1px solid rgba(168,50,45,.35)}
+.wgrp .toC:hover{border-bottom-color:var(--inju)}
+/* 클로드에게 창 */
+#claudeDlg{padding-top:5vh}
+#claudeDlg .dlgBox{width:min(42rem,94vw)}
+#cInfo{font-size:.75rem;color:var(--meok-3);margin:-.3rem 0 .9rem}
+#cPrompt{width:100%;height:min(24rem,52vh);font-size:.82rem;line-height:1.7;padding:.6rem .7rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok);resize:vertical}
+#cPrompt:focus{outline:none;border-color:var(--inju)}
+#cNote{font-size:.7rem;color:var(--meok-3);margin:.3rem 0 0}
+#cArchRow{display:flex;gap:.4rem;align-items:center;font-size:.78rem;color:var(--meok-2);margin:.2rem 0 .3rem}
 .newRow select{font-size:.8rem;padding:.4rem .4rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok-2);max-width:15rem}
 /* 인쇄 — 화면에서는 숨기고, 인쇄할 때는 이것만 */
 #print{display:none}
@@ -306,6 +316,17 @@ html{scroll-padding-top:var(--stickH,7rem)}
   </div>
 </div>
 
+<div class="dlg" id="claudeDlg" hidden>
+  <div class="dlgBox">
+    <h3 id="cTitle">클로드에게</h3>
+    <p id="cInfo"></p>
+    <div class="f"><label for="cPrompt">지시문 — 이 작품에만 저장되고, 고치는 대로 남습니다</label><textarea id="cPrompt" spellcheck="false"></textarea>
+      <p id="cNote">{작품}은 복사할 때 작품 이름으로 바뀝니다. 지시문 아래에 이 작품에 이어진 씬과 그 씬에서 모은 사실이 붙습니다. 클로드 프로젝트에 지시문을 두었다면 '떠들기만 복사'를 쓰세요.</p></div>
+    <label class="chk" id="cArchRow"><input type="checkbox" id="cArch"><span>보관한 씬도 넣기</span></label>
+    <div class="row"><button class="tBtn main" id="cGo">복사하고 클로드 열기</button><button class="tBtn" id="cBare">떠들기만 복사하고 열기</button><button class="tBtn" id="cReset">기본 지시문으로</button><button class="tBtn" id="cClose">닫기</button></div>
+  </div>
+</div>
+
 <div id="search" hidden>
   <div id="sPanel">
     <div class="sRow">
@@ -419,6 +440,28 @@ var SQL = [
 "-- 몰입 기록은 보태기가 이미 만든 botaegi_sessions에 올라갑니다(따로 만들 것 없음)."
 ].join("\n");
 
+/* 클로드에게 — 작품마다 고쳐 쓰는 지시문의 기본값 */
+var CLAUDE_URL = "https://claude.ai/new";
+var PROMPT_DEF = [
+"너는 내가 쓰고 있는 소설 『{작품}』의 세계를 함께 지키고 넓혀 가는 설정 담당이다. 아래의 '떠들기'는 인물들이 각자의 목소리로 말한 기록이다. 인물의 말(이름: 말), 속말(다른 인물에게 들리지 않는 혼잣생각), 지문, 작가인 나의 질문, 그리고 내가 말에서 골라 모은 사실로 이루어져 있다.",
+"",
+"앞으로 내가 인물, 사건, 장소, 시대에 대해 물으면 다음 원칙에 따라 답해 줘.",
+"",
+"1. 떠들기에 나온 내용이 있으면 그것을 근거로 답하고, 어느 씬에서 누가 한 말인지 밝힌다.",
+"2. 인물의 말은 인물의 기억이고 입장이다. 틀렸거나 거짓일 수 있으니 인물이 말한 것과 사실을 구분해서 다룬다. '고쳐짐'이 붙은 사실은 나중에 고쳐 말해진 것이다.",
+"3. 떠들기에 없는 것은 추론해서 지어낸다. 다만 지어내기 전에 반드시 웹 검색으로 시대·장소·제도·물건·값·날씨·사건 같은 사실관계를 확인하고, 확인한 내용과 출처를 짧게 밝힌다. 검색으로 확인하지 못한 것은 확인하지 못했다고 말한다.",
+"4. 지어낼 때는 가능성을 늘어놓지 말고, 하나의 소설 세계로 쓸 수 있을 만큼 구체적으로 정한다. 이름, 나이, 날짜, 주소, 값, 물건, 냄새와 소리까지. 여러 안을 나열하기보다 하나로 정해서 말한다.",
+"5. 떠들기의 내용이나 앞서 지어낸 내용과 모순되지 않게 한다. 모순이 보이면 먼저 알린다.",
+"6. 떠들기에서 가져온 것과 새로 지어낸 것을 섞지 않는다. 지어낸 부분 앞에는 [지어냄]을 붙인다.",
+"",
+"작품 정보",
+"- 시대:",
+"- 장소:",
+"- 그 밖에:",
+"",
+"먼저 떠들기를 읽고, 지금까지 드러난 인물·장소·시대를 짧게 정리한 뒤 내 질문을 기다려 줘."
+].join("\n");
+
 var $ = function(id){ return document.getElementById(id); };
 function load(k, d){ try{ var v = localStorage.getItem("tteo." + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } }
 function keep(k, v){ try{ localStorage.setItem("tteo." + k, JSON.stringify(v)); }catch(e){ toast("이 기기에 저장하지 못했습니다"); } }
@@ -435,6 +478,8 @@ var CUR = load("cur", null);            /* 열어 둔 씬 */
 /* 씬 → 보태기 작품. 씬을 지워도 남겨 둔다 — 보태기가 이 표를 보고 떠들기 시간을 작품의 1매당 시간에 나란히 넣는다 */
 var LINKS = load("links", { map:{}, _at:0 });
 var WORKS = [];                          /* 보태기가 올린 작품 목록(끝나지 않은 것) */
+/* 작품 → 클로드에게 줄 지시문. 기본값과 같으면 지운다 */
+var PROMPTS = load("prompts", { map:{}, _at:0 });
 var ONLINE = false, NOTABLE = false, lastBlk = null;
 var AUTO_HOLD = false;   /* 몰입을 중단한 뒤 — 몰입 시작을 누르거나 씬을 다시 열 때까지 저절로 시작하지 않는다 */
 
@@ -498,6 +543,10 @@ function pull(){
         if((row.data._at || 0) > (LINKS._at || 0) && !LINKS._dirty){ LINKS = { map:row.data.map || {}, _at:row.data._at }; keep("links", LINKS); changed = true; }
         return;
       }
+      if(row.id === "prompts" && row.data){
+        if((row.data._at || 0) > (PROMPTS._at || 0) && !PROMPTS._dirty){ PROMPTS = { map:row.data.map || {}, _at:row.data._at }; keep("prompts", PROMPTS); }
+        return;
+      }
       if(row.id.indexOf("t:") !== 0 || !row.data) return;
       var id = row.id.slice(2);
       if(GONE[id]) return;
@@ -523,12 +572,15 @@ function push(){
   if(CONF._dirty) rows.push({ id:"conf", data:confOut(), updated_at:new Date().toISOString() });
   var linkAt = LINKS._dirty ? LINKS._at : null;
   if(linkAt) rows.push({ id:"links", data:{ map:LINKS.map, _at:LINKS._at }, updated_at:new Date().toISOString() });
+  var promptAt = PROMPTS._dirty ? PROMPTS._at : null;
+  if(promptAt) rows.push({ id:"prompts", data:{ map:PROMPTS.map, _at:PROMPTS._at }, updated_at:new Date().toISOString() });
   var p = rows.length ? sb("tteodeulgi", { method:"POST", headers:{ Prefer:"resolution=merge-duplicates,return=minimal" }, body:JSON.stringify(rows) })
     .then(function(r){
       if(!r.ok){ if(missing(r)) NOTABLE = true; throw 0; }
       ids.forEach(function(id){ if(DIRTY[id] === snap[id]) delete DIRTY[id]; });   /* 올리는 사이에 또 고쳤으면 남긴다 */
       if(CONF._dirty){ delete CONF._dirty; keep("conf", CONF); }
       if(linkAt && LINKS._at === linkAt){ delete LINKS._dirty; keep("links", LINKS); }
+      if(promptAt && PROMPTS._at === promptAt){ delete PROMPTS._dirty; keep("prompts", PROMPTS); }
       keep("dirty", DIRTY); ONLINE = true;
     }) : Promise.resolve();
   return p.then(function(){
@@ -667,6 +719,12 @@ function renderHome(){
     if(groups.length > 1 || g.key){
       var hd = document.createElement("div"); hd.className = "wgrp";
       hd.innerHTML = (g.key ? "<b>" + esc(g.name) + "</b>" : esc(g.name)) + "<span>씬 " + g.list.length + "</span>";
+      if(g.key){
+        var cb = document.createElement("button"); cb.className = "toC"; cb.textContent = "클로드에게";
+        cb.title = "이 작품의 떠들기를 지시문과 함께 복사해 클로드에게 건넵니다";
+        (function(k, n){ cb.onclick = function(){ openClaude(k, n); }; })(g.key, g.name);
+        hd.appendChild(cb);
+      }
       L.appendChild(hd);
     }
     g.list.forEach(function(t){ L.appendChild(topicRow(t, false)); });
@@ -1111,6 +1169,78 @@ function runSearch(){
   });
 }
 
+/* ---------- 클로드에게 — 작품의 떠들기를 지시문과 함께 복사한다 ---------- */
+var C_WORK = null, cSaveT = null;
+/* 보관한 씬은 기본으로 뺀다 — 정리가 끝난 씬은 보관하고, 클로드에게는 설정집과 새 떠들기만 건네는 흐름 */
+var C_ARCH = load("cArch", false);
+function workScenes(wid, withArch){
+  return Object.keys(TOPICS).map(function(k){ return TOPICS[k]; })
+    .filter(function(t){ var l = LINKS.map[t.id]; return l && l.work_id === wid && (withArch || !t.archived); })
+    .sort(function(a, b){ return (a.created || 0) - (b.created || 0); });
+}
+function promptOf(wid){ var p = PROMPTS.map[wid]; return p == null ? PROMPT_DEF : p; }
+function setPrompt(wid, text){
+  if(text === PROMPT_DEF) delete PROMPTS.map[wid]; else PROMPTS.map[wid] = text;
+  PROMPTS._at = Date.now(); PROMPTS._dirty = true; keep("prompts", PROMPTS); schedulePush();
+}
+function claudeText(wid, name, bare){
+  var sc = workScenes(wid, C_ARCH), out = [];
+  if(!bare) out.push(promptOf(wid).replace(/\{작품\}/g, name).trim(), "", "");
+  out.push("=== 떠들기 · " + name + " ===", "씬 " + sc.length + "개, 만든 순서대로" + (C_ARCH ? " (보관한 씬 포함)" : " (보관한 씬은 뺌)"), "");
+  sc.forEach(function(t, i){
+    var names = t.chars.map(function(c){ return c.name; }).join(", ");
+    out.push("## 씬 " + (i + 1) + ". " + t.title + " (" + ymd(t.created || t.updated) + (names ? " · 등장: " + names : "") + (t.archived ? " · 보관함" : "") + ")", "");
+    t.blocks.forEach(function(b){
+      var x = String(b.t || "").replace(/\n{3,}/g, "\n\n").trim(); if(!x) return;
+      var head = b.c === STAGE ? "[지문]" : b.c === ASK ? "[작가의 질문]" : charName(t, b.c) + (b.inner ? "(속말)" : "") + ":";
+      out.push(head + " " + x, "");
+    });
+  });
+  var facts = []; sc.forEach(function(s){ (s.facts || []).forEach(function(f){ facts.push({ f:f, s:s }); }); });
+  if(facts.length){
+    out.push("=== 모은 사실 ===", "");
+    var byW = {}, order = [];
+    facts.forEach(function(x){ var k = x.f.who || "(누구인지 모름)"; if(!byW[k]){ byW[k] = []; order.push(k); } byW[k].push(x); });
+    order.forEach(function(k){
+      out.push("## " + k);
+      byW[k].sort(function(a, b){ return a.f.at - b.f.at; }).forEach(function(x){
+        out.push("- " + x.f.text + (x.f.old ? " (고쳐짐)" : "") + " — " + x.s.title + (x.f.by ? " · " + x.f.by + "의 말" : ""));
+      });
+      out.push("");
+    });
+  }
+  return out.join("\n").trim() + "\n";
+}
+function openClaude(wid, name){
+  C_WORK = { id:wid, name:name };
+  $("cTitle").textContent = "클로드에게 · " + name;
+  $("cArch").checked = !!C_ARCH;
+  renderCInfo();
+  $("cPrompt").value = promptOf(wid);
+  $("claudeDlg").hidden = false;
+}
+function renderCInfo(){
+  if(!C_WORK) return;
+  var wid = C_WORK.id, sc = workScenes(wid, C_ARCH), chars = 0, nf = 0;
+  sc.forEach(function(t){ chars += topicChars(t); nf += (t.facts || []).length; });
+  var nArch = workScenes(wid, true).length - workScenes(wid, false).length;
+  $("cArchRow").hidden = !nArch;
+  $("cArch").nextElementSibling.textContent = "보관한 씬도 넣기 · " + nArch;
+  $("cInfo").textContent = "씬 " + sc.length + "개 · " + chars + "자" + (nf ? " · 사실 " + nf + "개" : "") + (PROMPTS.map[wid] != null ? " · 고친 지시문" : " · 기본 지시문");
+}
+function closeClaude(){ flushPrompt(); $("claudeDlg").hidden = true; C_WORK = null; }
+function flushPrompt(){ clearTimeout(cSaveT); if(C_WORK && $("cPrompt").value !== promptOf(C_WORK.id)) setPrompt(C_WORK.id, $("cPrompt").value.replace(/\r/g, "")); }
+function sendClaude(bare){
+  if(!C_WORK) return;
+  flushPrompt();
+  if(!workScenes(C_WORK.id, C_ARCH).length){ toast("넣을 씬이 없습니다"); return; }
+  var text = claudeText(C_WORK.id, C_WORK.name, bare);
+  plainCopy(text);                       /* 누른 동작 안에서 복사하고 곧바로 연다 — 사파리가 막지 않도록 */
+  window.open(CLAUDE_URL, "_blank");
+  closeClaude();
+  toast("복사했습니다 · 클로드에 붙여 넣으세요", 3200);
+}
+
 function renderAll(){
   var t = cur();
   if(CUR && !t){ CUR = null; keep("cur", null); }
@@ -1367,7 +1497,7 @@ function testConn(){
   ]).then(function(){ CONF.sbUrl = keepU; CONF.sbKey = keepK; $("setMsg").textContent = out.join("\n"); });
 }
 function backupOut(){
-  var blob = new Blob([JSON.stringify({ app:"tteodeulgi", at:Date.now(), topics:TOPICS, links:LINKS.map, conf:confOut() }, null, 1)], { type:"application/json" });
+  var blob = new Blob([JSON.stringify({ app:"tteodeulgi", at:Date.now(), topics:TOPICS, links:LINKS.map, prompts:PROMPTS.map, conf:confOut() }, null, 1)], { type:"application/json" });
   var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "tteodeulgi-" + ymd(Date.now()) + ".json";
   document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
@@ -1384,6 +1514,10 @@ function backupIn(file){
       if(j.links && typeof j.links === "object"){
         Object.keys(j.links).forEach(function(id){ if(!LINKS.map[id]) LINKS.map[id] = j.links[id]; });
         LINKS._at = Date.now(); LINKS._dirty = true; keep("links", LINKS);
+      }
+      if(j.prompts && typeof j.prompts === "object"){
+        Object.keys(j.prompts).forEach(function(w){ if(PROMPTS.map[w] == null) PROMPTS.map[w] = j.prompts[w]; });
+        PROMPTS._at = Date.now(); PROMPTS._dirty = true; keep("prompts", PROMPTS);
       }
       keep("topics", TOPICS); keep("dirty", DIRTY); keep("gone", GONE);
       renderAll(); schedulePush(); toast("씬 " + n + "개를 불러왔습니다");
@@ -1413,6 +1547,13 @@ $("dSave").onclick = saveFactDlg;
 $("dCancel").onclick = function(){ $("factDlg").hidden = true; };
 $("dText").onkeydown = $("dWho").onkeydown = function(e){ if(e.key === "Enter" && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); saveFactDlg(); } };
 $("factDlg").onclick = function(e){ if(e.target === $("factDlg")) $("factDlg").hidden = true; };
+$("cGo").onclick = function(){ sendClaude(false); };
+$("cBare").onclick = function(){ sendClaude(true); };
+$("cArch").onchange = function(){ C_ARCH = this.checked; keep("cArch", C_ARCH); renderCInfo(); };
+$("cClose").onclick = closeClaude;
+$("cReset").onclick = function(){ if(!C_WORK) return; $("cPrompt").value = PROMPT_DEF; setPrompt(C_WORK.id, PROMPT_DEF); openClaude(C_WORK.id, C_WORK.name); toast("기본 지시문으로 되돌렸습니다"); };
+$("cPrompt").oninput = function(){ clearTimeout(cSaveT); cSaveT = setTimeout(flushPrompt, 600); };
+$("claudeDlg").onclick = function(e){ if(e.target === $("claudeDlg")) closeClaude(); };
 $("findBtn").onclick = openSearch;
 $("sClose").onclick = closeSearch;
 $("search").onclick = function(e){ if(e.target === $("search")) closeSearch(); };
@@ -1460,6 +1601,7 @@ document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
     if(!$("search").hidden){ closeSearch(); e.preventDefault(); }
     else if(!$("factDlg").hidden){ $("factDlg").hidden = true; e.preventDefault(); }
+    else if(!$("claudeDlg").hidden){ closeClaude(); e.preventDefault(); }
   }
 }, true);
 document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible"){ tick(); fireRestCut(); if(NOW && NOW.cutDue) waitCut(); pull(); } });
