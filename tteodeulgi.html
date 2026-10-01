@@ -280,7 +280,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
   <p class="lead">씬을 만들고 인물을 들인 뒤, 그 인물의 입으로 말하게 하세요.</p>
   <div class="newRow">
     <input id="newTitle" placeholder="새 씬" aria-label="새 씬 이름">
-    <select id="newFrom" aria-label="인물 가져오기" title="이 씬의 인물을 새 씬에 그대로 들입니다. 그 씬이 보태기 작품과 이어져 있으면 새 씬도 같은 작품에 잇습니다"></select>
+    <select id="newFrom" aria-label="인물 가져오기" title="이 씬의 인물을, 또는 한 작품의 인물 모두를 새 씬에 들입니다. 작품과 이어져 있으면 새 씬도 같은 작품에 잇습니다"></select>
     <button id="newGo">만들기</button>
   </div>
   <div id="list"></div>
@@ -694,8 +694,27 @@ function touch(t){
 var saveT = null;
 function touchSoon(t){ clearTimeout(saveT); saveT = setTimeout(function(){ touch(t); renderCount(); }, 400); }
 function cur(){ return CUR && TOPICS[CUR] ? TOPICS[CUR] : null; }
+/* 작품 이름 — 보태기 목록, 없으면 잇기에 적어 둔 이름, 없으면 시놉시스에 적어 둔 이름 */
+function workName(wid){
+  var w = WORKS.filter(function(x){ return x.id === wid; })[0]; if(w) return w.title;
+  for(var k in LINKS.map){ var l = LINKS.map[k]; if(l && l.work_id === wid && l.work_title) return l.work_title; }
+  var sy = SYNS.map[wid]; return sy && sy.name ? sy.name : "작품";
+}
+/* 작품에 나온 인물 모두 — 보관한 씬까지, 씬을 만든 순서대로 처음 나온 순서. 같은 이름은 하나로 */
+function workCast(wid){
+  var seen = {}, out = [];
+  workScenes(wid, true).forEach(function(t){ t.chars.forEach(function(c){ var n = c.name.trim(); if(n && !seen[n]){ seen[n] = 1; out.push(n); } }); });
+  return out;
+}
 function makeTopic(title, fromId){
   var t = { id:uid(), title:title, chars:[], blocks:[], archived:false, created:Date.now(), updated:Date.now(), log:[] };
+  if(fromId && fromId.indexOf("w:") === 0){
+    var wid = fromId.slice(2);
+    t.chars = workCast(wid).map(function(n){ return { id:uid(), name:n }; });
+    LINKS.map[t.id] = { work_id:wid, work_title:workName(wid), topic:title };
+    LINKS._at = Date.now(); LINKS._dirty = true; keep("links", LINKS);
+    TOPICS[t.id] = t; touch(t); return t;
+  }
   var src = fromId && TOPICS[fromId];
   if(src){
     /* 인물을 그대로 — 이름과 순서(⌃ 번호)만 옮기고, 말은 옮기지 않는다 */
@@ -749,6 +768,7 @@ function renderHome(){
   var live = all.filter(function(t){ return !t.archived; }), arch = all.filter(function(t){ return t.archived; });
   var L = $("list"); L.innerHTML = "";
   if(!live.length) L.innerHTML = '<div class="empty">진행 중인 씬이 없습니다. 위에 씬 이름을 적고 만드세요.</div>';
+  var emptyMsg = !live.length;
   /* 작품별로 묶는다 — 최근에 고친 씬이 있는 작품부터, 잇지 않은 씬은 맨 끝 */
   var groups = [], byW = {};
   live.forEach(function(t){
@@ -760,9 +780,15 @@ function renderHome(){
     }
     byW[k].list.push(t);
   });
+  /* 씬을 모두 보관해도 시놉시스가 있는 작품은 남긴다 — 시놉시스를 보고 고칠 수 있게 */
+  Object.keys(SYNS.map).forEach(function(k){
+    if(!k || byW[k] || !SYNS.map[k] || !(SYNS.map[k].text || "").trim()) return;
+    byW[k] = { key:k, name:workName(k), list:[] }; groups.push(byW[k]);
+  });
   groups.sort(function(a, b){ return (a.key === "") - (b.key === ""); });
   groups.forEach(function(g){
     if(groups.length > 1 || g.key){
+      if(emptyMsg){ L.innerHTML = ""; emptyMsg = false; }
       var hd = document.createElement("div"); hd.className = "wgrp";
       hd.innerHTML = (g.key ? "<b>" + esc(g.name) + "</b>" : esc(g.name)) + "<span>씬 " + g.list.length + "</span>";
       if(g.key){
@@ -775,17 +801,32 @@ function renderHome(){
     }
     g.list.forEach(function(t){ L.appendChild(topicRow(t, false)); });
   });
-  /* 인물 가져오기 — 기본은 가장 최근에 고친 씬 */
+  /* 인물 가져오기 — 작품별로 묶는다. 작품마다 '인물 모두'와 그 작품의 씬(보관한 씬 포함). 기본은 가장 최근에 고친 씬 */
   var nf = $("newFrom"), keepV = nf.value; nf.innerHTML = "";
   var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "인물 없이"; nf.appendChild(o0);
-  live.forEach(function(t){
-    if(!t.chars.length) return;
-    var lk = LINKS.map[t.id], o = document.createElement("option"); o.value = t.id;
-    o.textContent = "인물 가져오기 · " + t.title + (lk && lk.work_title ? " (" + lk.work_title + ")" : "");
-    nf.appendChild(o);
+  var wOrder = [], wList = {}, loose = [];
+  all.filter(function(t){ return t.chars.length; }).forEach(function(t){
+    var lk = LINKS.map[t.id], k = lk && lk.work_id ? lk.work_id : "";
+    if(!k){ loose.push(t); return; }
+    if(!wList[k]){ wList[k] = []; wOrder.push(k); }
+    wList[k].push(t);
   });
+  function sceneOpt(t){ var o = document.createElement("option"); o.value = t.id; o.textContent = "인물 가져오기 · " + t.title + (t.archived ? " (보관)" : ""); return o; }
+  wOrder.forEach(function(k){
+    var og = document.createElement("optgroup"), nm = workName(k), cast = workCast(k);
+    og.label = nm;
+    if(cast.length){ var ow = document.createElement("option"); ow.value = "w:" + k; ow.textContent = "인물 가져오기 · " + nm + " 인물 모두 (" + cast.length + "명)"; ow.title = cast.join(", "); og.appendChild(ow); }
+    wList[k].forEach(function(t){ og.appendChild(sceneOpt(t)); });
+    nf.appendChild(og);
+  });
+  if(loose.length){
+    var ol = document.createElement("optgroup"); ol.label = "작품과 잇지 않은 씬";
+    loose.forEach(function(t){ ol.appendChild(sceneOpt(t)); });
+    nf.appendChild(ol);
+  }
   var first = live.filter(function(t){ return t.chars.length; })[0];
-  nf.value = keepV && TOPICS[keepV] ? keepV : (first ? first.id : "");
+  var okKeep = keepV && (TOPICS[keepV] || (keepV.indexOf("w:") === 0 && wList[keepV.slice(2)]));
+  nf.value = okKeep ? keepV : (first ? first.id : "");
   $("archToggle").hidden = !arch.length;
   $("archToggle").textContent = (showArch ? "보관함 닫기" : "보관함 열기") + " · " + arch.length;
   var A = $("archList"); A.hidden = !showArch || !arch.length; A.innerHTML = "";
@@ -1319,7 +1360,7 @@ function saveSyn(){
   if(!text && !sy){ toast("붙여 넣은 시놉시스가 없습니다"); return; }
   var hist = sy ? [{ text:sy.text, at:sy.at }].concat(sy.hist || []).slice(0, SYN_KEEP) : [];
   if(!text){ if(!confirm("시놉시스를 비웁니다. 지금 판은 이전 판으로 남습니다.")) return; }
-  SYNS.map[wid] = { text:text, at:Date.now(), hist:hist };
+  SYNS.map[wid] = { text:text, at:Date.now(), hist:hist, name:C_WORK.name };
   SYNS._at = Date.now(); SYNS._dirty = true; keep("syns", SYNS); schedulePush();
   $("cSyn").value = text; renderCInfo(); renderSynMeta();
   toast("시놉시스를 저장했습니다");
