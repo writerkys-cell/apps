@@ -342,6 +342,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
   <div id="tTools">
     <div id="tWorkRow"><label for="tWork">보태기 작품</label><select id="tWork"></select><span id="tWorkNote"></span></div>
     <span id="tZoom" style="margin-left:auto"><button id="zOut" title="원고 글자 작게 · ⌃−">가−</button><span id="zPct"></span><button id="zIn" title="원고 글자 크게 · ⌃=">가+</button></span>
+    <button class="tBtn" id="tNovel" title="이 씬의 떠들기를 모델 문장의 문체로 소설화 — 복사하고 클로드를 엽니다">소설화</button>
     <button class="tBtn main" id="tPrint">인쇄</button>
     <button class="tBtn" id="tArch">보관</button>
     <button class="tBtn" id="tDel">지우기</button>
@@ -401,6 +402,12 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <h3>지문</h3>
     <label class="chk"><input type="checkbox" id="sStage"><span>지문 쓰기</span></label>
     <p class="note">켜면 인물 옆에 '지문'이 생깁니다. ⌃0이나 '지문'을 누르면 그 칸이 지문이 되고, 고딕으로 쓰고 인쇄합니다. 지문 다음에 엔터를 두 번 치면 지문 앞에서 주고받던 흐름대로 다음 사람이 옵니다. 꺼도 이미 쓴 지문은 그대로 남습니다.</p>
+
+    <h3>소설화</h3>
+    <p class="note">씬 화면의 '소설화'를 누르면 아래 지시문, 모델 문장, 그 씬의 떠들기만 복사되고 클로드가 열립니다. 시놉시스는 넣지 않습니다. 모델 문장의 문체를 따르되 표현은 가져오지 않게 지시문에 적혀 있습니다.</p>
+    <div class="f"><label for="sModel">모델 문장 — 이렇게 쓰인 소설이면 좋겠다 싶은 문장을 몇 단락 붙여 넣으세요</label><textarea id="sModel" spellcheck="false" style="width:100%;height:12rem;font-size:.82rem;line-height:1.7;padding:.5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);resize:vertical"></textarea></div>
+    <div class="f"><label for="sNovelP">소설화 지시문</label><textarea id="sNovelP" spellcheck="false" style="width:100%;height:14rem;font-size:.82rem;line-height:1.7;padding:.5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);resize:vertical"></textarea>
+      <div class="row"><button class="tBtn" id="sNovelReset">기본 지시문으로</button></div></div>
 
     <h3>질문</h3>
     <p class="note">⌃/를 누르면 질문 칸이 생겨 직접 묻고, ⌃⇧/나 '질문 카드'를 누르면 아래 목록에서 하나가 무작위로 나옵니다. 같은 씬에서 이미 나온 질문은 다시 뽑지 않습니다. 질문은 바로 앞에 말하던 인물에게 던지는 것으로 보고, 다음 칸은 그 인물이 받습니다. 질문 칸에서는 엔터 한 번이면 답하는 칸으로 넘어갑니다.</p>
@@ -467,9 +474,9 @@ var STAGE = "_stage";   /* 지문 칸의 화자 표시 */
 var ASK = "_ask";       /* 질문 칸 — 작가가 인물에게 묻는, 인물들에게는 들리지 않는 목소리 */
 var MEMO = "_memo";     /* 메모 칸 — 쓰다가 떠오르는 작가 자신의 생각. 세계 밖의 목소리 */
 function isChar(c){ return c !== STAGE && c !== ASK && c !== MEMO; }
-var PRINT_KEYS = ["stageOn","zoom","deck","pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent","pAlign","pHead"];
+var PRINT_KEYS = ["stageOn","zoom","deck","model","novelP","pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent","pAlign","pHead"];
 var DEF = { focusMin:15, restMin:15, dayStart:4, focusCut:"몰입", restCut:"휴식", stopCut:"중단", autoStart:false,
-            stageOn:true, zoom:1, deck:"그때 무슨 소리가 들렸나요?\n그 방에서는 어떤 냄새가 났나요?\n그날 아침 무엇을 먹었나요?\n지금 주머니에 무엇이 들어 있나요?\n그때 입고 있던 옷을 말해 주세요.\n손에 무엇을 쥐고 있었나요?\n날씨는 어땠나요? 춥거나 덥지는 않았나요?\n그때 몸의 어디가 아팠나요?\n가장 오래 간직한 물건은 무엇인가요?\n잠들기 전에 늘 떠오르는 장면이 있나요?\n누구에게 가장 미안한가요?\n누구를 미워하나요? 왜요?\n아무에게도 말하지 않은 것이 있나요?\n그 사람을 처음 본 날을 기억하나요?\n그 사람이 당신을 부르던 이름은 무엇이었나요?\n어머니는 그때 무엇을 하고 있었나요?\n가장 무서웠던 순간은 언제였나요?\n그때 웃은 적이 있나요? 무엇 때문에요?\n그 일이 없었다면 지금 무엇을 하고 있을까요?\n그날 이후 달라진 버릇이 있나요?\n잘못 기억하고 있는 것 같은 일이 있나요?\n그때 몇 살이었나요?\n그곳까지 무엇을 타고 갔나요? 얼마나 걸렸나요?\n그 자리에는 또 누가 있었나요?\n그 사람은 마지막으로 무슨 말을 했나요?\n지금 가장 갖고 싶은 것은 무엇인가요?\n누구의 편지를 기다리나요?\n어릴 때 살던 집의 문을 열면 무엇이 보였나요?\n돈은 얼마나 가지고 있었나요?\n무엇을 버리고 왔나요?\n그 노래를 누가 불렀나요?\n가장 자주 하는 거짓말은 무엇인가요?\n그때 창밖에는 무엇이 보였나요?\n두 손은 무엇을 하고 있었나요?\n무엇을 끝내 묻지 못했나요?\n누가 당신을 지켜보고 있었나요?\n그 이야기를 처음 들은 것은 누구에게서였나요?\n그 일을 다시 하라면 하겠습니까?\n하루 중 가장 좋아하는 시간은 언제인가요?\n당신이 죽은 뒤 누가 당신을 기억할까요?", pSize:10, pLead:1.8, sLead:2.3, pTop:20, pBottom:22, pLeft:18, pRight:18, pIndent:1, pAlign:"char", pHead:true,
+            stageOn:true, zoom:1, model:"", novelP:"", deck:"그때 무슨 소리가 들렸나요?\n그 방에서는 어떤 냄새가 났나요?\n그날 아침 무엇을 먹었나요?\n지금 주머니에 무엇이 들어 있나요?\n그때 입고 있던 옷을 말해 주세요.\n손에 무엇을 쥐고 있었나요?\n날씨는 어땠나요? 춥거나 덥지는 않았나요?\n그때 몸의 어디가 아팠나요?\n가장 오래 간직한 물건은 무엇인가요?\n잠들기 전에 늘 떠오르는 장면이 있나요?\n누구에게 가장 미안한가요?\n누구를 미워하나요? 왜요?\n아무에게도 말하지 않은 것이 있나요?\n그 사람을 처음 본 날을 기억하나요?\n그 사람이 당신을 부르던 이름은 무엇이었나요?\n어머니는 그때 무엇을 하고 있었나요?\n가장 무서웠던 순간은 언제였나요?\n그때 웃은 적이 있나요? 무엇 때문에요?\n그 일이 없었다면 지금 무엇을 하고 있을까요?\n그날 이후 달라진 버릇이 있나요?\n잘못 기억하고 있는 것 같은 일이 있나요?\n그때 몇 살이었나요?\n그곳까지 무엇을 타고 갔나요? 얼마나 걸렸나요?\n그 자리에는 또 누가 있었나요?\n그 사람은 마지막으로 무슨 말을 했나요?\n지금 가장 갖고 싶은 것은 무엇인가요?\n누구의 편지를 기다리나요?\n어릴 때 살던 집의 문을 열면 무엇이 보였나요?\n돈은 얼마나 가지고 있었나요?\n무엇을 버리고 왔나요?\n그 노래를 누가 불렀나요?\n가장 자주 하는 거짓말은 무엇인가요?\n그때 창밖에는 무엇이 보였나요?\n두 손은 무엇을 하고 있었나요?\n무엇을 끝내 묻지 못했나요?\n누가 당신을 지켜보고 있었나요?\n그 이야기를 처음 들은 것은 누구에게서였나요?\n그 일을 다시 하라면 하겠습니까?\n하루 중 가장 좋아하는 시간은 언제인가요?\n당신이 죽은 뒤 누가 당신을 기억할까요?", pSize:10, pLead:1.8, sLead:2.3, pTop:20, pBottom:22, pLeft:18, pRight:18, pIndent:1, pAlign:"char", pHead:true,
             sbUrl:"https://pvunctdbsdcgvbqloslg.supabase.co", sbKey:"sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY" };
 var SQL = [
 "-- 떠들기 — 씬과 인물과 쓴 글, 설정(conf)",
@@ -519,6 +526,22 @@ var PROMPT_DEF = [
 "- 그 밖에:",
 "",
 "먼저 1의 정리를 내놓고 내 질문을 기다려 줘."
+].join("\n");
+
+/* 소설화 — 씬 하나의 떠들기를 모델 문장의 문체로 소설 장면으로. 설정에서 고친 지시문이 비어 있으면 이것 */
+var NOVEL_DEF = [
+"아래의 '떠들기'를 한 편의 소설 장면으로 옮겨 줘.",
+"",
+"'떠들기'는 인물들이 각자의 목소리로 한 독백의 기록이다. 서로 주고받는 대화가 아니라, 한 인물이 독백을 마치면 다른 인물이 그 독백을 듣고 자기 독백을 이어 간 것이다. 인물의 독백(이름: 말), 속말(다른 인물에게 들리지 않는 혼잣생각), 지문, 작가인 나의 질문과 메모로 이루어져 있다.",
+"",
+"원칙",
+"1. 문체는 '모델 문장'을 따른다. 문장의 길이와 리듬, 시제, 시점, 묘사의 밀도, 대화를 처리하는 방식을 본뜬다. 모델 문장의 내용이나 표현, 고유한 구절은 가져오지 않는다.",
+"2. 떠들기에 나온 사실(이름, 나이, 장소, 물건, 일어난 일)과 인물의 말투는 바꾸지 않는다. 인물의 독백에서 쓸 만한 말은 살리되, 소설의 문장으로 다듬는다.",
+"3. [작가의 질문]은 소설에 쓰지 않는다. 질문 다음의 독백(질문에 대한 답)만 살린다.",
+"4. [작가의 메모]는 작가의 의도로 참고만 하고 소설에 그대로 옮기지 않는다.",
+"5. 장면을 잇는 데 꼭 필요한 것만 지어낸다. 새 사건이나 새 인물은 들이지 않는다.",
+"6. 소설은 코드 블록 하나 안에 쓴다. 블록 안에서는 마크다운 기호를 쓰지 않는다.",
+"7. 코드 블록 아래에 '지어낸 것'이라는 제목으로, 떠들기에 없어서 지어낸 것을 짧은 목록으로 적는다."
 ].join("\n");
 
 var $ = function(id){ return document.getElementById(id); };
@@ -800,6 +823,27 @@ function topicRow(t, arch){
   b(armedDel === t.id ? "한 번 더 누르면 지웁니다" : "지우기", function(){ deleteTopic(t); }, armedDel === t.id ? "armed" : "");
   return d;
 }
+/* 소설화 — 지시문 + 모델 문장 + 이 씬의 떠들기만 */
+function sceneText(t){
+  var out = ["## " + t.title + (t.chars.length ? " (등장: " + t.chars.map(function(c){ return c.name; }).join(", ") + ")" : ""), ""];
+  t.blocks.forEach(function(b){
+    var x = String(b.t || "").replace(/\n{3,}/g, "\n\n").trim(); if(!x) return;
+    var head = b.c === STAGE ? "[지문]" : b.c === ASK ? "[작가의 질문]" : b.c === MEMO ? "[작가의 메모]" : charName(t, b.c) + (b.inner && isChar(b.c) ? "(속말)" : "") + ":";
+    out.push(head + " " + x, "");
+  });
+  return out.join("\n").trim();
+}
+function novelize(){
+  var t = cur(); if(!t) return;
+  var model = String(CONF.model || "").trim();
+  if(!model){ toast("설정에서 모델 문장을 넣으세요", 3200); openSet(); setTimeout(function(){ $("sModel").focus(); $("sModel").scrollIntoView({ block:"center" }); }, 50); return; }
+  if(!t.blocks.some(function(b){ return isChar(b.c) && String(b.t || "").trim(); })){ toast("소설화할 독백이 없습니다"); return; }
+  var text = [(CONF.novelP && CONF.novelP.trim() ? CONF.novelP : NOVEL_DEF).trim(), "", "", "=== 모델 문장 ===", "", model, "", "", "=== 떠들기 ===", "", sceneText(t)].join("\n") + "\n";
+  plainCopy(text);
+  window.open(CLAUDE_URL, "_blank");
+  toast("복사했습니다 · 클로드에 붙여 넣으세요", 3200);
+}
+
 /* 씬 지우기 — 두 번 눌러야(4초 안). 몰입 중인 씬은 안 됨. 몰입 시간은 보태기 쪽 기록에 남는다 */
 function deleteTopic(t){
   if(NOW && NOW.topic === t.id){ toast("몰입 중인 씬은 지울 수 없습니다"); return; }
@@ -1740,6 +1784,7 @@ function openSet(){
   $("sFocusCut").value = CONF.focusCut || ""; $("sRestCut").value = CONF.restCut || ""; $("sStopCut").value = CONF.stopCut || ""; $("sAuto").checked = !!CONF.autoStart;
   $("sUrl").value = CONF.sbUrl || ""; $("sKey").value = CONF.sbKey || ""; $("sql").value = SQL; $("setMsg").textContent = "";
   $("sStage").checked = !!CONF.stageOn; $("sDeck").value = CONF.deck || "";
+  $("sModel").value = CONF.model || ""; $("sNovelP").value = CONF.novelP || NOVEL_DEF;
   ["pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent"].forEach(function(k){ $(k).value = CONF[k]; });
   $("pAlign").value = CONF.pAlign === "word" ? "word" : "char"; $("pHead").checked = !!CONF.pHead;
   $("settings").hidden = false;
@@ -1751,6 +1796,8 @@ function saveSet(){
   CONF.focusCut = $("sFocusCut").value.trim(); CONF.restCut = $("sRestCut").value.trim(); CONF.stopCut = $("sStopCut").value.trim(); CONF.autoStart = $("sAuto").checked;
   CONF.sbUrl = $("sUrl").value.trim(); CONF.sbKey = $("sKey").value.trim();
   CONF.stageOn = $("sStage").checked; CONF.deck = $("sDeck").value.replace(/\r/g, "");
+  CONF.model = $("sModel").value.replace(/\r/g, "");
+  var np = $("sNovelP").value.replace(/\r/g, ""); CONF.novelP = np.trim() === NOVEL_DEF.trim() || !np.trim() ? "" : np;
   function num(id, lo, hi){ var v = parseFloat($(id).value); return isNaN(v) ? DEF[id] : Math.min(hi, Math.max(lo, v)); }
   CONF.pSize = num("pSize", 6, 20); CONF.pLead = num("pLead", 1, 3); CONF.sLead = num("sLead", 1, 4); CONF.pIndent = num("pIndent", 0, 4);
   CONF.pTop = num("pTop", 0, 60); CONF.pBottom = num("pBottom", 0, 60); CONF.pLeft = num("pLeft", 0, 60); CONF.pRight = num("pRight", 0, 60);
@@ -1866,6 +1913,8 @@ $("tArch").onclick = function(){
   toast("보관함으로 옮겼습니다");
 };
 $("tDel").onclick = function(){ var t = cur(); if(t) deleteTopic(t); };
+$("tNovel").onclick = novelize;
+$("sNovelReset").onclick = function(){ $("sNovelP").value = NOVEL_DEF; toast("기본 지시문을 넣었습니다 · 닫으면 저장됩니다"); };
 $("addChar").onkeydown = function(e){
   if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
