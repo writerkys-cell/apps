@@ -122,6 +122,7 @@ button{cursor:pointer}
 .tBtn{font-size:.8rem;padding:.3rem .8rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok-2);white-space:nowrap}
 .tBtn:hover{border-color:var(--inju);color:var(--inju)}
 .tBtn.main{border-color:var(--inju);color:var(--inju)}
+.tBtn.armed{border-color:var(--inju);color:var(--inju);background:rgba(168,50,45,.08)}
 #tWorkRow{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;font-size:.75rem;color:var(--meok-2)}
 #tWork{font-size:.78rem;padding:.25rem .4rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok-2);max-width:22rem}
 #tWork:focus{outline:none;border-color:var(--inju)}
@@ -343,6 +344,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <span id="tZoom" style="margin-left:auto"><button id="zOut" title="원고 글자 작게 · ⌃−">가−</button><span id="zPct"></span><button id="zIn" title="원고 글자 크게 · ⌃=">가+</button></span>
     <button class="tBtn main" id="tPrint">인쇄</button>
     <button class="tBtn" id="tArch">보관</button>
+    <button class="tBtn" id="tDel">지우기</button>
   </div>
   <div id="cast">
     <span id="chips" style="display:contents"></span>
@@ -790,16 +792,24 @@ function topicRow(t, arch){
   d.querySelector(".open").onclick = function(){ go(t.id); };
   var acts = d.querySelector(".acts");
   function b(label, fn, cls){ var x = document.createElement("button"); x.textContent = label; x.onclick = fn; if(cls) x.className = cls; acts.appendChild(x); }
-  if(arch){
-    b("되살리기", function(){ t.archived = false; touch(t); renderAll(); });
-    b(armedDel === t.id ? "한 번 더 누르면 지웁니다" : "지우기", function(){
-      if(NOW && NOW.topic === t.id){ toast("몰입 중인 씬은 지울 수 없습니다"); return; }
-      if(armedDel !== t.id){ armedDel = t.id; renderAll(); setTimeout(function(){ if(armedDel === t.id){ armedDel = null; renderAll(); } }, 4000); return; }
-      armedDel = null; delete TOPICS[t.id]; delete DIRTY[t.id]; GONE[t.id] = 1;
-      keep("topics", TOPICS); keep("dirty", DIRTY); keep("gone", GONE); schedulePush(); renderAll(); toast("지웠습니다");
-    }, armedDel === t.id ? "armed" : "");
-  }
+  if(arch) b("되살리기", function(){ t.archived = false; touch(t); renderAll(); });
+  else b("보관", function(){
+    if(NOW && NOW.topic === t.id && NOW.phase === "focus"){ toast("몰입 중에는 보관할 수 없습니다"); return; }
+    t.archived = true; touch(t); renderAll(); toast("보관함으로 옮겼습니다");
+  });
+  b(armedDel === t.id ? "한 번 더 누르면 지웁니다" : "지우기", function(){ deleteTopic(t); }, armedDel === t.id ? "armed" : "");
   return d;
+}
+/* 씬 지우기 — 두 번 눌러야(4초 안). 몰입 중인 씬은 안 됨. 몰입 시간은 보태기 쪽 기록에 남는다 */
+function deleteTopic(t){
+  if(NOW && NOW.topic === t.id){ toast("몰입 중인 씬은 지울 수 없습니다"); return; }
+  if(armedDel !== t.id){ armedDel = t.id; renderAll(); setTimeout(function(){ if(armedDel === t.id){ armedDel = null; renderAll(); } }, 4000); return; }
+  armedDel = null;
+  var lk = LINKS.map[t.id], wasCur = CUR === t.id;
+  delete TOPICS[t.id]; delete DIRTY[t.id]; GONE[t.id] = 1;
+  keep("topics", TOPICS); keep("dirty", DIRTY); keep("gone", GONE); schedulePush();
+  if(wasCur){ CUR = null; keep("cur", null); if(lk && lk.work_id){ W_CUR = lk.work_id; keep("curWork", W_CUR); } }
+  renderAll(); toast("지웠습니다");
 }
 function renderHome(){
   var all = Object.keys(TOPICS).map(function(k){ return TOPICS[k]; }).sort(function(a, b){ return b.updated - a.updated; });
@@ -1064,6 +1074,7 @@ function renderTopic(){
   var t = cur(); if(!t) return;
   if(document.activeElement !== $("tTitle")) $("tTitle").value = t.title;
   var lk = LINKS.map[t.id]; $("tBack").hidden = !(lk && lk.work_id);
+  $("tDel").textContent = armedDel === t.id ? "한 번 더 누르면 지웁니다" : "지우기"; $("tDel").classList.toggle("armed", armedDel === t.id);
   renderCast(); renderSheet(); renderCount(); renderWork(); applyZoom();
 }
 function applyZoom(){
@@ -1854,6 +1865,7 @@ $("tArch").onclick = function(){
   if(lk && lk.work_id) openWork(lk.work_id); else go(null);
   toast("보관함으로 옮겼습니다");
 };
+$("tDel").onclick = function(){ var t = cur(); if(t) deleteTopic(t); };
 $("addChar").onkeydown = function(e){
   if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
