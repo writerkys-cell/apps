@@ -146,7 +146,8 @@ html{scroll-padding-top:var(--stickH,7rem)}
 /* 원고의 글자 크기 — --z로 한꺼번에(가−·가+, ⌃−·⌃=). 안쪽은 em이라 함께 줄고 커진다 */
 #sheet{position:relative;background:var(--jongi);border:1px solid var(--seon);border-radius:2px;margin-top:1.4rem;padding:2.2rem 3rem 2.6rem;min-height:50vh;font-size:calc(1rem * var(--z, 1))}
 #tZoom{display:flex;gap:.2rem;align-items:center;font-size:.72rem;color:var(--meok-3)}
-#tZoom button{background:none;border:1px solid var(--seon);border-radius:2px;padding:.2rem .45rem;font-size:.78rem;color:var(--meok-2)}
+#tZoom button{background:none;border:1px solid var(--seon);border-radius:2px;padding:.2rem .45rem;font-size:.78rem;color:var(--meok-2);white-space:nowrap}
+#tZoom{white-space:nowrap;flex:none}
 #tZoom button:hover{border-color:var(--inju);color:var(--inju)}
 .blk{margin:0 0 1.6em}
 .blk .who{display:block;margin:0 auto .45em;background:none;border:0;padding:.1em .4em;
@@ -177,6 +178,19 @@ html{scroll-padding-top:var(--stickH,7rem)}
 .blk.memo .who{margin:0 0 .15em;padding:0;font-size:.66em;letter-spacing:.12em;color:var(--meok-3)}
 .blk.memo textarea{font-family:var(--ui);font-size:.85em;line-height:1.7;color:var(--meok-2);background:transparent}
 .chip.mm .pick{font-family:var(--ui);color:var(--meok-2)}
+/* 소설화 — 명조 그대로, 왼쪽에 가는 이중선. 지어낸 것 — 점선 상자의 작은 고딕 */
+.blk.novel{padding-left:1em;border-left:3px double var(--seon)}
+.blk.novel .who{cursor:default}
+.blk.made{border:1px dotted var(--seon);border-radius:2px;padding:.35em .6em .45em;margin-left:1.2em}
+.blk.made .who{margin:0 0 .15em;padding:0;font-size:.66em;letter-spacing:.12em;color:var(--meok-3);cursor:default}
+.blk.made textarea{font-family:var(--ui);font-size:.82em;line-height:1.7;color:var(--meok-2);background:transparent}
+#novelPaste{margin-top:1rem;border:1px solid var(--inju);border-radius:2px;background:var(--jongi);padding:.8rem 1rem}
+#novelPaste label{display:block;font-size:.75rem;color:var(--meok-2);margin-bottom:.35rem}
+#npText{width:100%;height:12rem;font-family:var(--body);font-size:.92rem;line-height:1.75;padding:.5rem .6rem;border:1px solid var(--seon);border-radius:2px;background:#fff;color:var(--meok);resize:vertical}
+#npText:focus{outline:none;border-color:var(--inju)}
+#npNote{font-size:.7rem;color:var(--meok-3);margin:.35rem 0 0}
+#origDlg .dlgBox{width:min(42rem,94vw)}
+#origBody{max-height:60vh;overflow:auto;font-family:var(--body);font-size:.88rem;line-height:1.75;white-space:pre-wrap;border:1px solid var(--seon);border-radius:2px;padding:.6rem .8rem;background:var(--jongi);margin:0 0 .6rem}
 .chip.mm.cur{border-color:var(--meok-2)}
 .chip.qa.cur{border-color:var(--inju)}
 .blk{position:relative}
@@ -343,6 +357,8 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <div id="tWorkRow"><label for="tWork">보태기 작품</label><select id="tWork"></select><span id="tWorkNote"></span></div>
     <span id="tZoom" style="margin-left:auto"><button id="zOut" title="원고 글자 작게 · ⌃−">가−</button><span id="zPct"></span><button id="zIn" title="원고 글자 크게 · ⌃=">가+</button></span>
     <button class="tBtn" id="tNovel" title="이 씬의 떠들기를 모델 문장의 문체로 소설화 — 복사하고 클로드를 엽니다">소설화</button>
+    <button class="tBtn" id="tFinal" title="스크리브너에서 다듬은 최종 문장을 붙여 넣어 이 씬을 덮어씌웁니다">최종 문장</button>
+    <button class="tBtn" id="tOrig" hidden title="최종 문장으로 덮어씌운 원래 독백을 봅니다">원문</button>
     <button class="tBtn main" id="tPrint">인쇄</button>
     <button class="tBtn" id="tArch">보관</button>
     <button class="tBtn" id="tDel">지우기</button>
@@ -351,8 +367,23 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <span id="chips" style="display:contents"></span>
     <input id="addChar" placeholder="+ 인물 추가" aria-label="인물 추가">
   </div>
+  <div id="novelPaste" hidden>
+    <label for="npText">최종 문장 붙여 넣기 — 스크리브너에서 다듬은 소설 문장과 그 아래 '=== 메모 ===' 부분까지</label>
+    <textarea id="npText" spellcheck="false"></textarea>
+    <p id="npNote">덮어씌우면 이 씬은 '끝남'이 됩니다. 지금의 독백·지문·질문·메모는 '원문'으로 숨겨 남고(언제든 보고 되돌릴 수 있음), '=== 메모 ===' 아래는 메모 칸이 됩니다. 메모 줄이 없으면 지금의 메모 칸을 그대로 남깁니다. 글자수는 원문 기준으로 셉니다.</p>
+    <div class="row"><button class="tBtn main" id="npGo">덮어씌우기</button><button class="tBtn" id="npClose">닫기</button></div>
+  </div>
   <div id="sheet"></div>
 </main>
+
+<div class="dlg" id="origDlg" hidden>
+  <div class="dlgBox">
+    <h3 id="origTitle">원문</h3>
+    <p id="origInfo" class="note"></p>
+    <div id="origBody"></div>
+    <div class="row"><button class="tBtn" id="origPrev">더 이전 원문</button><button class="tBtn main" id="origBack">이 원문으로 되돌리기</button><button class="tBtn" id="origClose">닫기</button></div>
+  </div>
+</div>
 
 <div class="dlg" id="claudeDlg" hidden>
   <div class="dlgBox">
@@ -360,7 +391,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <p id="cInfo"></p>
     <div class="f"><label for="cPrompt">지시문 — 이 작품에만 저장되고, 고치는 대로 남습니다</label>
       <textarea id="cPrompt" spellcheck="false"></textarea>
-      <p id="cNote">{작품}은 복사할 때 작품 이름으로 바뀝니다. 복사하면 지시문, 시놉시스, 보관하지 않은 씬이 차례로 붙습니다. 보관한 씬은 들어가지 않습니다.</p></div>
+      <p id="cNote">{작품}은 복사할 때 작품 이름으로 바뀝니다. 복사하면 지시문, 시놉시스, 그리고 씬들이 붙습니다 — 보관하지 않은 씬 전부(끝난 씬과 독백 씬)와 보관한 씬 가운데 끝난 씬. 보관한 독백 씬은 들어가지 않습니다.</p></div>
     <div class="row"><button class="tBtn main" id="cGo">복사하고 클로드 열기</button><button class="tBtn" id="cReset">기본 지시문으로</button><button class="tBtn" id="cClose">닫기</button></div>
   </div>
 </div>
@@ -473,7 +504,9 @@ var SRC = "tteodeulgi";
 var STAGE = "_stage";   /* 지문 칸의 화자 표시 */
 var ASK = "_ask";       /* 질문 칸 — 작가가 인물에게 묻는, 인물들에게는 들리지 않는 목소리 */
 var MEMO = "_memo";     /* 메모 칸 — 쓰다가 떠오르는 작가 자신의 생각. 세계 밖의 목소리 */
-function isChar(c){ return c !== STAGE && c !== ASK && c !== MEMO; }
+var NOVEL = "_novel";   /* 소설화 칸 — 그때까지의 독백·지문을 덮어씌운 소설 문장 */
+var MADE = "_made";     /* 소설화하며 클로드가 지어낸 것 — 소설 문장 끝에 따로 */
+function isChar(c){ return c !== STAGE && c !== ASK && c !== MEMO && c !== NOVEL && c !== MADE; }
 var PRINT_KEYS = ["stageOn","zoom","deck","model","novelP","pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent","pAlign","pHead"];
 var DEF = { focusMin:15, restMin:15, dayStart:4, focusCut:"몰입", restCut:"휴식", stopCut:"중단", autoStart:false,
             stageOn:true, zoom:1, model:"", novelP:"", deck:"그때 무슨 소리가 들렸나요?\n그 방에서는 어떤 냄새가 났나요?\n그날 아침 무엇을 먹었나요?\n지금 주머니에 무엇이 들어 있나요?\n그때 입고 있던 옷을 말해 주세요.\n손에 무엇을 쥐고 있었나요?\n날씨는 어땠나요? 춥거나 덥지는 않았나요?\n그때 몸의 어디가 아팠나요?\n가장 오래 간직한 물건은 무엇인가요?\n잠들기 전에 늘 떠오르는 장면이 있나요?\n누구에게 가장 미안한가요?\n누구를 미워하나요? 왜요?\n아무에게도 말하지 않은 것이 있나요?\n그 사람을 처음 본 날을 기억하나요?\n그 사람이 당신을 부르던 이름은 무엇이었나요?\n어머니는 그때 무엇을 하고 있었나요?\n가장 무서웠던 순간은 언제였나요?\n그때 웃은 적이 있나요? 무엇 때문에요?\n그 일이 없었다면 지금 무엇을 하고 있을까요?\n그날 이후 달라진 버릇이 있나요?\n잘못 기억하고 있는 것 같은 일이 있나요?\n그때 몇 살이었나요?\n그곳까지 무엇을 타고 갔나요? 얼마나 걸렸나요?\n그 자리에는 또 누가 있었나요?\n그 사람은 마지막으로 무슨 말을 했나요?\n지금 가장 갖고 싶은 것은 무엇인가요?\n누구의 편지를 기다리나요?\n어릴 때 살던 집의 문을 열면 무엇이 보였나요?\n돈은 얼마나 가지고 있었나요?\n무엇을 버리고 왔나요?\n그 노래를 누가 불렀나요?\n가장 자주 하는 거짓말은 무엇인가요?\n그때 창밖에는 무엇이 보였나요?\n두 손은 무엇을 하고 있었나요?\n무엇을 끝내 묻지 못했나요?\n누가 당신을 지켜보고 있었나요?\n그 이야기를 처음 들은 것은 누구에게서였나요?\n그 일을 다시 하라면 하겠습니까?\n하루 중 가장 좋아하는 시간은 언제인가요?\n당신이 죽은 뒤 누가 당신을 기억할까요?", pSize:10, pLead:1.8, sLead:2.3, pTop:20, pBottom:22, pLeft:18, pRight:18, pIndent:1, pAlign:"char", pHead:true,
@@ -495,27 +528,29 @@ var CLAUDE_URL = "https://claude.ai/new";
 var PROMPT_DEF = [
 "너는 내가 쓰고 있는 소설 『{작품}』의 떠들기를 정리하고, 그 세계에 대한 질문에 답하는 일을 맡는다. 아래에는 두 가지가 붙는다.",
 "- 시놉시스: 지금까지의 떠들기를 정리해 둔 것. 지난번에 너와 함께 만들었다. 처음에는 없을 수 있다.",
-"- 새 떠들기: 시놉시스 이후에 새로 쓴 기록. 인물들의 말은 서로 주고받는 대화가 아니라 각자의 독백이다. 한 인물이 독백을 마치면 다른 인물이 그 독백을 듣고 자기 독백을 이어 간다. 인물의 독백(이름: 말), 속말(다른 인물에게 들리지 않는 혼잣생각), 지문, 작가인 나의 질문과 메모로 이루어져 있다. 질문 다음 칸은 그 질문을 받은 인물의 독백이다.",
+"- 떠들기: 이 작품의 씬들. 씬은 두 가지다.",
+"  · '끝남' 씬: 독백을 소설로 옮긴 뒤 작가가 직접 다듬어 확정한 문장([확정된 소설 문장])과 그 아래 [작가의 메모]로 되어 있다. 확정된 문장은 이 소설의 사실로 받아들인다. 보관함에 있는 끝난 씬도 함께 온다.",
+"  · '독백' 씬: 아직 소설로 옮기지 않은 재료. 인물들의 말은 서로 주고받는 대화가 아니라 각자의 독백이다. 한 인물이 독백을 마치면 다른 인물이 그 독백을 듣고 자기 독백을 이어 간다. 인물의 독백(이름: 말), 속말(다른 인물에게 들리지 않는 혼잣생각), 지문, 작가인 나의 질문과 메모로 이루어져 있고, 질문 다음 칸은 그 질문을 받은 인물의 독백이다. 독백 씬은 이야기가 갈 수 있는 열린 가능성으로 다룬다.",
 "",
 "1. 먼저 정리한다",
-"시놉시스와 새 떠들기를 합쳐 정리한다. 시놉시스가 없으면 새 떠들기만으로 정리한다. 시놉시스의 내용은 지우거나 줄이지 말고 그대로 두고, 새 떠들기에서 드러난 것을 빠짐없이 더한다. 작은 디테일(이름, 나이, 날짜, 장소, 물건, 값, 버릇, 냄새와 소리)까지 남긴다. 새 떠들기에서 온 항목에는 출처(씬 이름, 말한 사람)를 달고, 시놉시스에 달린 출처와 표시는 그대로 둔다. 인물의 말은 인물의 기억이고 입장이므로 '누가 이렇게 말했다'로 적는다.",
+"시놉시스와 떠들기를 합쳐 정리한다. 시놉시스가 없으면 떠들기만으로 정리한다. 끝난 씬과 독백 씬을 함께 보며, 확정된 것 위에서 이야기가 갈 수 있는 여러 길을 살핀다. 시놉시스의 내용은 지우거나 줄이지 말고 그대로 두고, 떠들기에서 드러난 것을 빠짐없이 더한다. 작은 디테일(이름, 나이, 날짜, 장소, 물건, 값, 버릇, 냄새와 소리)까지 남긴다. 떠들기에서 온 항목에는 출처(씬 이름, 그리고 독백 씬이면 말한 사람)를 달고, 시놉시스에 달린 출처와 표시는 그대로 둔다. 독백 씬에서 온 인물의 말은 인물의 기억이고 입장이므로 '누가 이렇게 말했다'로 적는다.",
 "- 인물: 인물마다 이름, 나이, 생김새, 말버릇, 사는 곳, 하는 일, 다른 인물과의 관계, 지난 일, 감추는 것",
 "- 장소",
 "- 시대와 사회",
 "- 사건: 일어난 순서대로",
-"- 모순: 같은 일을 서로 다르게 말한 곳. 새 떠들기 안에서도, 시놉시스와 새 떠들기 사이에서도 찾는다. 어느 쪽이 맞는지 정하거나 맞추지 말고, 양쪽의 말을 출처와 함께 나란히 그대로 보여 준다.",
+"- 모순: 같은 일을 서로 다르게 말하거나 쓴 곳. 씬들 사이에서도, 끝난 씬과 독백 씬 사이에서도, 시놉시스와 떠들기 사이에서도 찾는다. 모순은 이야기가 새로 뻗어 나갈 가능성이므로 어느 쪽으로도 정리하거나 맞추지 말고, 양쪽의 말을 출처와 함께 나란히 그대로 보여 준다.",
 "- 작가의 메모: 메모에 적힌 내 생각. 메모는 아직 정하지 않은 구상이지 세계의 사실이 아니므로, 위의 정리에 섞지 말고 여기에만 모은다.",
 "- 빈칸: 이야기에 필요한데 아직 나오지 않은 것",
 "",
 "2. 그다음 질문에 답한다",
-"- 시놉시스나 새 떠들기에 있는 내용이면 그것을 근거로 답하고 출처를 밝힌다.",
+"- 시놉시스나 떠들기에 있는 내용이면 그것을 근거로 답하고 출처를 밝힌다.",
 "- 없으면 추론해서 지어내 채운다. 지어내기 전에 반드시 웹 검색으로 시대·장소·제도·물건·값·날씨·사건 같은 사실관계를 확인하고, 확인한 내용과 출처를 밝힌다. 확인하지 못한 것은 확인하지 못했다고 말한다.",
 "- 지어낼 때는 가능성을 늘어놓지 말고 하나로 정한다. 하나의 소설 세계로 쓸 수 있을 만큼 구체적으로, 이름·나이·날짜·주소·값·물건·냄새와 소리까지.",
-"- 지어낸 것은 시놉시스와 떠들기에 어긋나지 않게 하고, 앞에 [지어냄]을 붙인다.",
+"- 지어낸 것은 끝난 씬의 확정된 문장과 어긋나지 않게 하고, 앞에 [지어냄]을 붙인다.",
 "",
 "3. \"정리해 줘\"라고 하면 새 시놉시스를 쓴다",
-"1의 정리를 이번 대화까지 반영해 새 시놉시스로 쓴다. 이것이 다음 번의 시놉시스가 되어 새 떠들기와 함께 다시 너에게 온다.",
-"- 1의 차례를 그대로 따른다. 시놉시스에 있던 것, 새 떠들기에서 나온 것, 질문과 대답에서 나온 것을 모두 넣는다. 내가 아니라고 하거나 다르게 정한 것은 내가 정한 대로 쓴다.",
+"1의 정리를 이번 대화까지 반영해 새 시놉시스로 쓴다. 이것이 다음 번의 시놉시스가 되어 떠들기와 함께 다시 너에게 온다.",
+"- 1의 차례를 그대로 따른다. 시놉시스에 있던 것, 떠들기에서 나온 것, 질문과 대답에서 나온 것을 모두 넣는다. 내가 아니라고 하거나 다르게 정한 것은 내가 정한 대로 쓴다.",
 "- 지어낸 내용은 [지어냄] 표시를 단 채 넣고, 이번에 검색으로 확인한 사실은 해당 항목에 [확인: 출처]로 단다. 출처와 표시는 지우지 않는다.",
 "- 맨 끝에 [질문] 차례를 둔다. 인물마다 이 시놉시스와 관련해 그 인물에게 직접 묻는 질문을 '- 이름: 질문' 꼴로 두세 개씩 적는다. 빈칸과 모순을 메울 질문을 우선하고, 인물이 자기 입으로 답할 수 있게 묻는다. 이 질문들은 다음 떠들기에서 질문 카드로 쓰인다.",
 "- 시놉시스 전체를 코드 블록 하나 안에 쓴다. 블록 안에서는 마크다운 기호(#, **, 표)를 쓰지 않는다. 차례 제목은 [인물]처럼 대괄호로, 항목은 줄머리에 '-'로 쓴다. 블록 밖에는 덧붙이지 않는다.",
@@ -538,10 +573,10 @@ var NOVEL_DEF = [
 "1. 문체는 '모델 문장'을 따른다. 문장의 길이와 리듬, 시제, 시점, 묘사의 밀도, 대화를 처리하는 방식을 본뜬다. 모델 문장의 내용이나 표현, 고유한 구절은 가져오지 않는다.",
 "2. 떠들기에 나온 사실(이름, 나이, 장소, 물건, 일어난 일)과 인물의 말투는 바꾸지 않는다. 인물의 독백에서 쓸 만한 말은 살리되, 소설의 문장으로 다듬는다.",
 "3. [작가의 질문]은 소설에 쓰지 않는다. 질문 다음의 독백(질문에 대한 답)만 살린다.",
-"4. [작가의 메모]는 작가의 의도로 참고만 하고 소설에 그대로 옮기지 않는다.",
+"4. [작가의 메모]는 작가의 의도로 참고만 하고 소설에 옮기지 않는다. 대신 아래 7처럼 따로 정리한다.",
 "5. 장면을 잇는 데 꼭 필요한 것만 지어낸다. 새 사건이나 새 인물은 들이지 않는다.",
-"6. 소설은 코드 블록 하나 안에 쓴다. 블록 안에서는 마크다운 기호를 쓰지 않는다.",
-"7. 코드 블록 아래에 '지어낸 것'이라는 제목으로, 떠들기에 없어서 지어낸 것을 짧은 목록으로 적는다."
+"6. 소설과 메모 정리를 함께 코드 블록 하나 안에 쓴다. 블록 안에서는 마크다운 기호를 쓰지 않는다. 블록 밖에는 덧붙이지 않는다.",
+"7. 소설 문장이 끝나면 빈 줄 다음에 '=== 메모 ===' 한 줄을 두고, 그 아래에 떠들기의 [작가의 메모]를 겹치는 것은 합치고 뜻이 잘 보이게 정리해 줄머리 '- ' 항목으로 적는다. 메모가 없으면 이 줄과 함께 뺀다. 이 메모는 작가가 소설을 다듬는 동안 문서 끝에 함께 남는다."
 ].join("\n");
 
 var $ = function(id){ return document.getElementById(id); };
@@ -774,9 +809,11 @@ function makeTopic(title, fromId){
   }
   TOPICS[t.id] = t; touch(t); return t;
 }
-function topicChars(t){ return t.blocks.reduce(function(a, b){ return a + (b.c === ASK || b.c === MEMO ? 0 : clen(b.t)); }, 0); }   /* 질문과 메모는 세지 않는다 */
+/* 질문·메모·소설화·지어낸 것은 세지 않는다. 소설화로 덮어씌운 원문은 세어 넣는다 — 글자수는 늘 작가가 쓴 독백 기준 */
+function rawChars(blocks){ return blocks.reduce(function(a, b){ return a + (b.c === ASK || b.c === MEMO || b.c === NOVEL || b.c === MADE ? 0 : clen(b.t)); }, 0); }
+function topicChars(t){ return rawChars(t.blocks) + (t.origs || []).reduce(function(a, o){ return a + rawChars(o.blocks || []); }, 0); }
 function topicMs(t){ return (t.log || []).reduce(function(a, x){ return a + (x.e - x.s); }, 0); }
-function charName(t, cid){ if(cid === STAGE) return "지문"; if(cid === ASK) return "질문"; if(cid === MEMO) return "메모"; var c = t.chars.filter(function(x){ return x.id === cid; })[0]; return c ? c.name : "?"; }
+function charName(t, cid){ if(cid === STAGE) return "지문"; if(cid === ASK) return "질문"; if(cid === MEMO) return "메모"; if(cid === NOVEL) return "최종 문장"; if(cid === MADE) return "지어낸 것"; var c = t.chars.filter(function(x){ return x.id === cid; })[0]; return c ? c.name : "?"; }
 /* 화자를 돌려 볼 차례 — 인물들, 지문을 켰으면 지문까지 */
 function speakers(t){ var a = t.chars.map(function(c){ return c.id; }); if(CONF.stageOn) a.push(STAGE); return a; }
 
@@ -810,7 +847,7 @@ function topicRow(t, arch){
   var d = document.createElement("div"); d.className = "topic";
   var names = t.chars.map(function(c){ return c.name; }).join(", ");
   var lk = LINKS.map[t.id];
-  var sub = [names || "인물 없음", arch && lk && lk.work_title ? "보태기 · " + lk.work_title : "", clen(t.blocks.map(function(b){ return b.t; }).join("")) + "자", (topicMs(t) ? "몰입 " + span(topicMs(t)) : ""), md(t.updated)].filter(Boolean).join(" · ");
+  var sub = [isFinal(t) ? "끝남" : "", names || "인물 없음", arch && lk && lk.work_title ? "보태기 · " + lk.work_title : "", clen(t.blocks.map(function(b){ return b.t; }).join("")) + "자", (topicMs(t) ? "몰입 " + span(topicMs(t)) : ""), md(t.updated)].filter(Boolean).join(" · ");
   d.innerHTML = '<button class="open"><span class="ttl">' + esc(t.title) + '</span><span class="sub">' + esc(sub) + '</span></button><span class="acts"></span>';
   d.querySelector(".open").onclick = function(){ go(t.id); };
   var acts = d.querySelector(".acts");
@@ -828,10 +865,53 @@ function sceneText(t){
   var out = ["## " + t.title + (t.chars.length ? " (등장: " + t.chars.map(function(c){ return c.name; }).join(", ") + ")" : ""), ""];
   t.blocks.forEach(function(b){
     var x = String(b.t || "").replace(/\n{3,}/g, "\n\n").trim(); if(!x) return;
-    var head = b.c === STAGE ? "[지문]" : b.c === ASK ? "[작가의 질문]" : b.c === MEMO ? "[작가의 메모]" : charName(t, b.c) + (b.inner && isChar(b.c) ? "(속말)" : "") + ":";
-    out.push(head + " " + x, "");
+    var head = b.c === STAGE ? "[지문]" : b.c === ASK ? "[작가의 질문]" : b.c === MEMO ? "[작가의 메모]" : b.c === NOVEL ? "[확정된 소설 문장]\n" : b.c === MADE ? "[소설화에서 지어낸 것]\n" : charName(t, b.c) + (b.inner && isChar(b.c) ? "(속말)" : "") + ":";
+    out.push(head + (b.c === NOVEL || b.c === MADE ? "" : " ") + x, "");
   });
   return out.join("\n").trim();
+}
+/* 소설화 결과 — 코드 블록 안은 소설, 그 뒤(또는 '지어낸 것' 제목 뒤)는 지어낸 것 */
+/* 최종 문장 — 코드 블록 표시가 있으면 걷어 내고, '=== 메모 ===' 줄 위는 소설, 아래는 메모 */
+function parseNovel(raw){
+  var x = String(raw || "").replace(/\r/g, "");
+  var m = /```[^\n]*\n([\s\S]*?)\n?```/.exec(x); if(m) x = m[1];
+  x = x.replace(/^\s*```[^\n]*\n?/, "").replace(/\n?```\s*$/, "");
+  var h = /^[ \t]*=+[ \t]*메모[ \t]*=+[ \t]*$/m.exec(x), prose = x, memo = null;
+  if(h){ prose = x.slice(0, h.index); memo = x.slice(h.index + h[0].length); }
+  return { prose:prose.replace(/^\s+|\s+$/g, ""), memo:memo == null ? null : memo.replace(/^\s+|\s+$/g, "") };
+}
+function isFinal(t){ return !!(t.origs && t.origs.length); }
+var NP_FOR = null;   /* 붙여 넣기 칸이 열린 씬 */
+function openNovelPaste(t){ NP_FOR = t.id; $("npText").value = ""; $("novelPaste").hidden = false; setTimeout(function(){ $("npText").focus(); $("novelPaste").scrollIntoView({ block:"center" }); }, 30); }
+function overlayNovel(){
+  var t = cur(); if(!t) return;
+  var r = parseNovel($("npText").value);
+  if(!r.prose){ toast("붙여 넣은 소설 문장이 없습니다"); return; }
+  var memos = r.memo != null ? (r.memo ? [{ id:uid(), c:MEMO, t:r.memo }] : [])
+    : t.blocks.filter(function(b){ return b.c === MEMO && String(b.t || "").trim(); }).map(function(b){ return { id:uid(), c:MEMO, t:b.t }; });
+  t.origs = (t.origs || []).concat([{ at:Date.now(), blocks:JSON.parse(JSON.stringify(t.blocks)) }]);
+  var nb = [{ id:uid(), c:NOVEL, t:r.prose }].concat(memos);
+  t.blocks = nb; t.novelAt = Date.now(); lastBlk = nb[0].id;
+  NP_FOR = null; $("novelPaste").hidden = true;
+  touch(t); renderTopic(); toast("최종 문장으로 덮어씌웠습니다 · 이 씬은 끝남 · 원래 독백은 '원문'에", 3600);
+}
+/* 원문 — 덮어씌운 차례대로 남은 것들. 마지막 것부터 보고, 되돌리면 그 원문이 다시 씬이 된다 */
+var ORIG_I = null;
+function openOrig(){ var t = cur(); if(!t || !t.origs || !t.origs.length) return; ORIG_I = t.origs.length - 1; renderOrig(); $("origDlg").hidden = false; }
+function renderOrig(){
+  var t = cur(), o = t.origs[ORIG_I];
+  $("origTitle").textContent = "원문 · " + t.title;
+  $("origInfo").textContent = whenAt(o.at) + "에 최종 문장으로 덮어씌운 것" + (t.origs.length > 1 ? " · " + (ORIG_I + 1) + "/" + t.origs.length : "");
+  $("origBody").textContent = sceneText({ title:t.title, chars:t.chars, blocks:o.blocks }).replace(/^## [^\n]*\n+/, "");
+  $("origPrev").hidden = ORIG_I === 0;
+}
+function restoreOrig(){
+  var t = cur(); if(!t) return;
+  if(!confirm("지금의 최종 문장을 지우고 이 원문으로 되돌릴까요? 이 씬은 다시 독백 씬이 됩니다. (지금 상태는 남지 않습니다 — 스크리브너에 있는 글은 그대로입니다)")) return;
+  var o = t.origs[ORIG_I]; t.blocks = JSON.parse(JSON.stringify(o.blocks)); t.origs = t.origs.slice(0, ORIG_I);
+  if(!t.origs.length){ delete t.origs; delete t.novelAt; }
+  lastBlk = t.blocks.length ? t.blocks[t.blocks.length - 1].id : null;
+  $("origDlg").hidden = true; touch(t); renderTopic(); toast("원문으로 되돌렸습니다");
 }
 function novelize(){
   var t = cur(); if(!t) return;
@@ -841,7 +921,7 @@ function novelize(){
   var text = [(CONF.novelP && CONF.novelP.trim() ? CONF.novelP : NOVEL_DEF).trim(), "", "", "=== 모델 문장 ===", "", model, "", "", "=== 떠들기 ===", "", sceneText(t)].join("\n") + "\n";
   plainCopy(text);
   window.open(CLAUDE_URL, "_blank");
-  toast("복사했습니다 · 클로드에 붙여 넣으세요", 3200);
+  toast("복사했습니다 · 스크리브너에서 다듬은 뒤 '최종 문장'으로 덮어씌우세요", 4200);
 }
 
 /* 씬 지우기 — 두 번 눌러야(4초 안). 몰입 중인 씬은 안 됨. 몰입 시간은 보태기 쪽 기록에 남는다 */
@@ -1118,6 +1198,8 @@ function renderTopic(){
   var t = cur(); if(!t) return;
   if(document.activeElement !== $("tTitle")) $("tTitle").value = t.title;
   var lk = LINKS.map[t.id]; $("tBack").hidden = !(lk && lk.work_id);
+  $("tOrig").hidden = !(t.origs && t.origs.length);
+  if(NP_FOR !== t.id){ $("novelPaste").hidden = true; }
   $("tDel").textContent = armedDel === t.id ? "한 번 더 누르면 지웁니다" : "지우기"; $("tDel").classList.toggle("armed", armedDel === t.id);
   renderCast(); renderSheet(); renderCount(); renderWork(); applyZoom();
 }
@@ -1192,10 +1274,11 @@ function renderSheet(){
   if(!t.blocks.length){ t.blocks.push({ id:uid(), c:t.chars[0].id, t:"" }); lastBlk = t.blocks[0].id; }
   var bi = curBlkIdx();
   t.blocks.forEach(function(b, i){
-    var d = document.createElement("div"); d.className = "blk" + (i === bi ? " cur" : "") + (b.c === STAGE ? " stage" : "") + (b.c === ASK ? " ask" : "") + (b.c === MEMO ? " memo" : ""); d.dataset.id = b.id;
+    var d = document.createElement("div"); d.className = "blk" + (i === bi ? " cur" : "") + (b.c === STAGE ? " stage" : "") + (b.c === ASK ? " ask" : "") + (b.c === MEMO ? " memo" : "") + (b.c === NOVEL ? " novel" : "") + (b.c === MADE ? " made" : ""); d.dataset.id = b.id;
     var w = document.createElement("button"); w.className = "who"; w.textContent = charName(t, b.c); w.title = "눌러서 다음으로 — 인물, 지문, 질문, 메모 · ⇧ 누르고 누르면 거꾸로 · ⌃숫자";
     w.onmousedown = function(e){ e.preventDefault(); };
-    w.onclick = function(e){ lastBlk = b.id; cycleSpeaker(e.shiftKey ? -1 : 1); };
+    if(b.c === NOVEL || b.c === MADE){ w.title = b.c === NOVEL ? "최종 문장 — 원래 독백은 '원문'에" : "소설화하며 지어낸 것"; w.onclick = null; }
+    else w.onclick = function(e){ lastBlk = b.id; cycleSpeaker(e.shiftKey ? -1 : 1); };
     var ta = document.createElement("textarea"); ta.value = b.t; ta.rows = 1; ta.spellcheck = false;
     ta.placeholder = i === t.blocks.length - 1 ? (b.c === STAGE ? "지문" : b.c === ASK ? "묻고 싶은 것" : b.c === MEMO ? "떠오른 생각" : "말하세요") : "";
     ta.addEventListener("focus", function(){ if(lastBlk !== b.id){ lastBlk = b.id; markCur(); } });
@@ -1414,7 +1497,7 @@ function openSearch(){
   var names = {}, sel = $("sWho"), keepV = sel.value;
   Object.keys(TOPICS).forEach(function(k){ TOPICS[k].chars.forEach(function(c){ names[c.name] = 1; }); });
   sel.innerHTML = '<option value="">모든 말</option>' + Object.keys(names).sort().map(function(n){ return '<option value="c:' + esc(n) + '">' + esc(n) + '의 말만</option>'; }).join("") +
-    '<option value="stage">지문만</option><option value="ask">질문만</option><option value="memo">메모만</option>';
+    '<option value="stage">지문만</option><option value="ask">질문만</option><option value="memo">메모만</option><option value="novel">최종 문장만</option>';
   if(keepV && [].some.call(sel.options, function(o){ return o.value === keepV; })) sel.value = keepV;
   $("search").hidden = false; $("sQ").focus(); $("sQ").select(); runSearch();
 }
@@ -1437,6 +1520,7 @@ function runSearch(){
         if(who === "stage" && b.c !== STAGE) return;
         if(who === "ask" && b.c !== ASK) return;
         if(who === "memo" && b.c !== MEMO) return;
+        if(who === "novel" && b.c !== NOVEL && b.c !== MADE) return;
         if(who.indexOf("c:") === 0 && (!isChar(b.c) || charName(t, b.c) !== who.slice(2))) return;
         var nm = charName(t, b.c);
         if(!q){ total++; if(out.length < LIMIT) out.push({ html:'<span class="hm">' + esc(where + " · " + nm) + '</span><span class="hx">' + esc(b.t.length > 140 ? b.t.slice(0, 140) + "…" : b.t) + '</span>', go:[t.id, b.id, null, 0, 0] }); return; }
@@ -1475,19 +1559,22 @@ function setPrompt(wid, text){
   PROMPTS._at = Date.now(); PROMPTS._dirty = true; keep("prompts", PROMPTS); schedulePush();
 }
 function synOf(wid){ return SYNS.map[wid] || null; }
+/* 클로드에게 건넬 씬 — 보관하지 않은 씬 전부(끝남·독백) + 보관한 씬 가운데 끝난 씬. 보관한 독백 씬은 시놉시스에 녹아 있으므로 뺀다 */
+function claudeScenes(wid){ return workScenes(wid, true).filter(function(t){ return !t.archived || isFinal(t); }); }
 function claudeText(wid, name){
-  var sc = workScenes(wid), out = [], sy = synOf(wid);
+  var sc = claudeScenes(wid), out = [], sy = synOf(wid);
   out.push(promptOf(wid).replace(/\{작품\}/g, name).trim(), "", "");
   if(sy && sy.text.trim()) out.push("=== 시놉시스 · " + name + " (" + ymd(sy.at) + "에 저장) ===", "", sy.text.trim(), "", "");
   else out.push("=== 시놉시스 · " + name + " ===", "아직 없음. 이번이 첫 정리다.", "", "");
-  out.push("=== 새 떠들기 · " + name + " ===", "씬 " + sc.length + "개, 만든 순서대로", "");
+  var nFin = sc.filter(isFinal).length;
+  out.push("=== 떠들기 · " + name + " ===", "씬 " + sc.length + "개(끝남 " + nFin + " · 독백 " + (sc.length - nFin) + "), 만든 순서대로", "");
   sc.forEach(function(t, i){
     var names = t.chars.map(function(c){ return c.name; }).join(", ");
-    out.push("## 씬 " + (i + 1) + ". " + t.title + " (" + ymd(t.created || t.updated) + (names ? " · 등장: " + names : "") + (t.archived ? " · 보관함" : "") + ")", "");
+    out.push("## 씬 " + (i + 1) + ". " + t.title + " (" + (isFinal(t) ? "끝남 — 작가가 다듬어 확정한 문장" : "독백 — 아직 열린 재료") + " · " + ymd(t.created || t.updated) + (names ? " · 등장: " + names : "") + (t.archived ? " · 보관함" : "") + ")", "");
     t.blocks.forEach(function(b){
       var x = String(b.t || "").replace(/\n{3,}/g, "\n\n").trim(); if(!x) return;
-      var head = b.c === STAGE ? "[지문]" : b.c === ASK ? "[작가의 질문]" : b.c === MEMO ? "[작가의 메모]" : charName(t, b.c) + (b.inner && isChar(b.c) ? "(속말)" : "") + ":";
-      out.push(head + " " + x, "");
+      var head = b.c === STAGE ? "[지문]" : b.c === ASK ? "[작가의 질문]" : b.c === MEMO ? "[작가의 메모]" : b.c === NOVEL ? "[확정된 소설 문장]\n" : b.c === MADE ? "[소설화에서 지어낸 것]\n" : charName(t, b.c) + (b.inner && isChar(b.c) ? "(속말)" : "") + ":";
+      out.push(head + (b.c === NOVEL || b.c === MADE ? "" : " ") + x, "");
     });
   });
   return out.join("\n").trim() + "\n";
@@ -1502,12 +1589,13 @@ function openClaude(wid, name){
 }
 function renderCInfo(){
   if(!C_WORK) return;
-  var wid = C_WORK.id, sc = workScenes(wid), chars = 0;
-  sc.forEach(function(t){ chars += topicChars(t); });
-  var nArch = workScenes(wid, true).length - sc.length, sy = synOf(wid);
-  $("cInfo").textContent = "새 떠들기 " + sc.length + "개 · " + chars + "자" +
+  var wid = C_WORK.id, sc = claudeScenes(wid), sy = synOf(wid);
+  var nFin = sc.filter(isFinal).length, nFinArch = sc.filter(function(t){ return t.archived; }).length;
+  var nSkip = workScenes(wid, true).length - sc.length, total = clen(claudeText(wid, C_WORK.name));
+  $("cInfo").textContent = "끝난 씬 " + nFin + (nFinArch ? "(보관 " + nFinArch + " 포함)" : "") + " · 독백 씬 " + (sc.length - nFin) +
     (sy && sy.text.trim() ? " · 시놉시스 " + clen(sy.text) + "자" : " · 시놉시스 없음 — 첫 정리") +
-    (nArch ? " · 보관한 씬 " + nArch + "개는 넣지 않음" : "") +
+    (nSkip ? " · 보관한 독백 씬 " + nSkip + "개는 넣지 않음" : "") +
+    " · 복사할 글 모두 " + total.toLocaleString() + "자" +
     (PROMPTS.map[wid] != null ? " · 고친 지시문" : "");
 }
 function offerArchive(wid){
@@ -1533,8 +1621,8 @@ function flushPrompt(){ clearTimeout(cSaveT); if(C_WORK && $("cPrompt").value !=
 function sendClaude(){
   if(!C_WORK) return;
   flushPrompt();
-  var sc = workScenes(C_WORK.id);
-  if(!sc.length){ toast("새 떠들기가 없습니다"); return; }
+  var sc = claudeScenes(C_WORK.id);
+  if(!sc.length){ toast("건넬 씬이 없습니다"); return; }
   var text = claudeText(C_WORK.id, C_WORK.name);
   plainCopy(text);                       /* 누른 동작 안에서 복사하고 곧바로 연다 — 사파리가 막지 않도록 */
   window.open(CLAUDE_URL, "_blank");
@@ -1590,6 +1678,7 @@ function printCss(){
     "#print .ask .lb{color:#a77}" +
     "#print .memo{font-family:" + gothic + ";font-size:" + (F*0.82).toFixed(1) + "pt;color:#444;margin:1.3em 0 1.3em 1.5em;padding:.45em .75em .55em;border:.75pt dotted #777;break-inside:avoid;page-break-inside:avoid}" +
     "#print .pin{border-left:.75pt solid #999;padding-left:.8em}" +
+    "#print .pnov{margin:0 0 1.2em}" +
     "#print .pm{font-family:" + gothic + ";font-size:" + (F*0.75).toFixed(1) + "pt;color:#777;text-decoration:none}" +
     /* 시놉시스 — 차례는 고딕 소제목, 항목은 번호와 내어쓰기, 표시는 작은 회색. 줄 간격은 따로 */
     "#print .syn{line-height:" + CONF.sLead + "}" +
@@ -1616,6 +1705,8 @@ function printScene(){
     if(b.c === ASK){ h.push(box("ask", "질문", lines)); return; }
     if(b.c === MEMO){ h.push(box("memo", "메모", lines)); return; }
     if(b.c === STAGE){ h.push(box("stg", "지문", lines)); return; }
+    if(b.c === NOVEL){ h.push('<div class="pnov"><div class="lb">최종 문장</div>' + lines.map(function(x){ return '<p class="pp">' + esc(x) + '</p>'; }).join("") + '</div>'); return; }
+    if(b.c === MADE){ h.push(box("memo", "지어낸 것", lines)); return; }
     h.push('<div class="pn">' + esc(charName(t, b.c)) + '</div>');
     var body = lines.map(function(x){ return '<p class="pp">' + esc(x) + '</p>'; }).join("");
     h.push(b.inner && isChar(b.c) ? '<div class="pin">' + body + '</div>' : body);   /* 속말 — 화면처럼 왼쪽 세로줄 */
@@ -1754,7 +1845,7 @@ function fillTail(){
   var t = TOPICS[NOW && NOW.topic] || cur(), picks = [];
   if(t){
     for(var i = t.blocks.length - 1; i >= 0 && picks.length < 3; i--){
-      if(t.blocks[i].c === ASK || t.blocks[i].c === MEMO) continue;   /* 질문과 메모는 흘려보내지 않는다 */
+      if(t.blocks[i].c === ASK || t.blocks[i].c === MEMO || t.blocks[i].c === MADE) continue;   /* 질문과 메모는 흘려보내지 않는다 */
       var ss = sentences(t.blocks[i].t);
       for(var j = ss.length - 1; j >= 0 && picks.length < 3; j--) picks.unshift({ who:t.blocks[i].c, s: t.blocks[i].inner && isChar(t.blocks[i].c) ? "(" + ss[j] + ")" : ss[j] });
     }
@@ -1914,6 +2005,14 @@ $("tArch").onclick = function(){
 };
 $("tDel").onclick = function(){ var t = cur(); if(t) deleteTopic(t); };
 $("tNovel").onclick = novelize;
+$("npGo").onclick = overlayNovel;
+$("tFinal").onclick = function(){ var t = cur(); if(!t) return; if($("novelPaste").hidden || NP_FOR !== t.id) openNovelPaste(t); else { NP_FOR = null; $("novelPaste").hidden = true; } };
+$("npClose").onclick = function(){ NP_FOR = null; $("novelPaste").hidden = true; };
+$("tOrig").onclick = openOrig;
+$("origClose").onclick = function(){ $("origDlg").hidden = true; };
+$("origPrev").onclick = function(){ if(ORIG_I > 0){ ORIG_I--; renderOrig(); } };
+$("origBack").onclick = restoreOrig;
+$("origDlg").onclick = function(e){ if(e.target === $("origDlg")) $("origDlg").hidden = true; };
 $("sNovelReset").onclick = function(){ $("sNovelP").value = NOVEL_DEF; toast("기본 지시문을 넣었습니다 · 닫으면 저장됩니다"); };
 $("addChar").onkeydown = function(e){
   if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
@@ -1952,6 +2051,7 @@ document.addEventListener("keydown", function(e){
   if(e.key === "Escape"){
     if(!$("search").hidden){ closeSearch(); e.preventDefault(); }
     else if(!$("claudeDlg").hidden){ closeClaude(); e.preventDefault(); }
+    else if(!$("origDlg").hidden){ $("origDlg").hidden = true; e.preventDefault(); }
   }
 }, true);
 document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible"){ tick(); fireRestCut(); if(NOW && NOW.cutDue) waitCut(); pull(); } });
