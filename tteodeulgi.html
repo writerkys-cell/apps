@@ -332,6 +332,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <button class="tBtn" id="wCancel" hidden>그만두기</button>
     <select id="wHist" aria-label="이전 판"></select>
     <button class="tBtn" id="wPrint">시놉시스 인쇄</button>
+    <button class="tBtn" id="wReset" title="스크리브너 원고를 붙여 넣어 시놉시스를 처음부터 다시 세웁니다">시놉시스 리셋</button>
     <button class="tBtn" id="wClaude" style="margin-left:auto">클로드에게</button>
   </div>
   <div id="synRead"></div>
@@ -375,6 +376,16 @@ html{scroll-padding-top:var(--stickH,7rem)}
   </div>
   <div id="sheet"></div>
 </main>
+
+<div class="dlg" id="resetDlg" hidden>
+  <div class="dlgBox" style="width:min(44rem,94vw)">
+    <h3 id="rsTitle">시놉시스 리셋</h3>
+    <p class="note">스크리브너에서 지금까지의 원고를 복사해 붙여 넣으세요. 장 제목이 섞여 있어도 됩니다. 원고는 앱에 저장하지 않고 이 복사에만 씁니다. 리셋 지시문, 원고, 아직 보관하지 않은 독백 씬이 함께 가고, 이전 시놉시스는 가지 않습니다.</p>
+    <textarea id="rsText" spellcheck="false" placeholder="여기에 원고를 붙여 넣으세요" style="width:100%;height:min(22rem,46vh);font-family:var(--body);font-size:.9rem;line-height:1.7;padding:.6rem .7rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok);resize:vertical"></textarea>
+    <p id="rsInfo" class="note"></p>
+    <div class="row"><button class="tBtn main" id="rsGo">복사하고 클로드 열기</button><button class="tBtn" id="rsClose">닫기</button></div>
+  </div>
+</div>
 
 <div class="dlg" id="origDlg" hidden>
   <div class="dlgBox">
@@ -439,6 +450,11 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <div class="f"><label for="sModel">모델 문장 — 이렇게 쓰인 소설이면 좋겠다 싶은 문장을 몇 단락 붙여 넣으세요</label><textarea id="sModel" spellcheck="false" style="width:100%;height:12rem;font-size:.82rem;line-height:1.7;padding:.5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);resize:vertical"></textarea></div>
     <div class="f"><label for="sNovelP">소설화 지시문</label><textarea id="sNovelP" spellcheck="false" style="width:100%;height:14rem;font-size:.82rem;line-height:1.7;padding:.5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);resize:vertical"></textarea>
       <div class="row"><button class="tBtn" id="sNovelReset">기본 지시문으로</button></div></div>
+
+    <h3>시놉시스 리셋</h3>
+    <p class="note">작품 화면의 '시놉시스 리셋'에서 스크리브너 원고를 붙여 넣고 복사하면 아래 지시문, 원고, 아직 보관하지 않은 독백 씬이 클로드에게 갑니다. 이전 시놉시스는 넣지 않습니다.</p>
+    <div class="f"><label for="sResetP">리셋 지시문</label><textarea id="sResetP" spellcheck="false" style="width:100%;height:12rem;font-size:.82rem;line-height:1.7;padding:.5rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);resize:vertical"></textarea>
+      <div class="row"><button class="tBtn" id="sResetReset">기본 지시문으로</button></div></div>
 
     <h3>질문</h3>
     <p class="note">⌃/를 누르면 질문 칸이 생겨 직접 묻고, ⌃⇧/나 '질문 카드'를 누르면 아래 목록에서 하나가 무작위로 나옵니다. 같은 씬에서 이미 나온 질문은 다시 뽑지 않습니다. 질문은 바로 앞에 말하던 인물에게 던지는 것으로 보고, 다음 칸은 그 인물이 받습니다. 질문 칸에서는 엔터 한 번이면 답하는 칸으로 넘어갑니다.</p>
@@ -507,9 +523,9 @@ var MEMO = "_memo";     /* 메모 칸 — 쓰다가 떠오르는 작가 자신�
 var NOVEL = "_novel";   /* 소설화 칸 — 그때까지의 독백·지문을 덮어씌운 소설 문장 */
 var MADE = "_made";     /* 소설화하며 클로드가 지어낸 것 — 소설 문장 끝에 따로 */
 function isChar(c){ return c !== STAGE && c !== ASK && c !== MEMO && c !== NOVEL && c !== MADE; }
-var PRINT_KEYS = ["stageOn","zoom","deck","model","novelP","pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent","pAlign","pHead"];
+var PRINT_KEYS = ["stageOn","zoom","deck","model","novelP","resetP","pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent","pAlign","pHead"];
 var DEF = { focusMin:15, restMin:15, dayStart:4, focusCut:"몰입", restCut:"휴식", stopCut:"중단", autoStart:false,
-            stageOn:true, zoom:1, model:"", novelP:"", deck:"그때 무슨 소리가 들렸나요?\n그 방에서는 어떤 냄새가 났나요?\n그날 아침 무엇을 먹었나요?\n지금 주머니에 무엇이 들어 있나요?\n그때 입고 있던 옷을 말해 주세요.\n손에 무엇을 쥐고 있었나요?\n날씨는 어땠나요? 춥거나 덥지는 않았나요?\n그때 몸의 어디가 아팠나요?\n가장 오래 간직한 물건은 무엇인가요?\n잠들기 전에 늘 떠오르는 장면이 있나요?\n누구에게 가장 미안한가요?\n누구를 미워하나요? 왜요?\n아무에게도 말하지 않은 것이 있나요?\n그 사람을 처음 본 날을 기억하나요?\n그 사람이 당신을 부르던 이름은 무엇이었나요?\n어머니는 그때 무엇을 하고 있었나요?\n가장 무서웠던 순간은 언제였나요?\n그때 웃은 적이 있나요? 무엇 때문에요?\n그 일이 없었다면 지금 무엇을 하고 있을까요?\n그날 이후 달라진 버릇이 있나요?\n잘못 기억하고 있는 것 같은 일이 있나요?\n그때 몇 살이었나요?\n그곳까지 무엇을 타고 갔나요? 얼마나 걸렸나요?\n그 자리에는 또 누가 있었나요?\n그 사람은 마지막으로 무슨 말을 했나요?\n지금 가장 갖고 싶은 것은 무엇인가요?\n누구의 편지를 기다리나요?\n어릴 때 살던 집의 문을 열면 무엇이 보였나요?\n돈은 얼마나 가지고 있었나요?\n무엇을 버리고 왔나요?\n그 노래를 누가 불렀나요?\n가장 자주 하는 거짓말은 무엇인가요?\n그때 창밖에는 무엇이 보였나요?\n두 손은 무엇을 하고 있었나요?\n무엇을 끝내 묻지 못했나요?\n누가 당신을 지켜보고 있었나요?\n그 이야기를 처음 들은 것은 누구에게서였나요?\n그 일을 다시 하라면 하겠습니까?\n하루 중 가장 좋아하는 시간은 언제인가요?\n당신이 죽은 뒤 누가 당신을 기억할까요?", pSize:10, pLead:1.8, sLead:2.3, pTop:20, pBottom:22, pLeft:18, pRight:18, pIndent:1, pAlign:"char", pHead:true,
+            stageOn:true, zoom:1, model:"", novelP:"", resetP:"", deck:"그때 무슨 소리가 들렸나요?\n그 방에서는 어떤 냄새가 났나요?\n그날 아침 무엇을 먹었나요?\n지금 주머니에 무엇이 들어 있나요?\n그때 입고 있던 옷을 말해 주세요.\n손에 무엇을 쥐고 있었나요?\n날씨는 어땠나요? 춥거나 덥지는 않았나요?\n그때 몸의 어디가 아팠나요?\n가장 오래 간직한 물건은 무엇인가요?\n잠들기 전에 늘 떠오르는 장면이 있나요?\n누구에게 가장 미안한가요?\n누구를 미워하나요? 왜요?\n아무에게도 말하지 않은 것이 있나요?\n그 사람을 처음 본 날을 기억하나요?\n그 사람이 당신을 부르던 이름은 무엇이었나요?\n어머니는 그때 무엇을 하고 있었나요?\n가장 무서웠던 순간은 언제였나요?\n그때 웃은 적이 있나요? 무엇 때문에요?\n그 일이 없었다면 지금 무엇을 하고 있을까요?\n그날 이후 달라진 버릇이 있나요?\n잘못 기억하고 있는 것 같은 일이 있나요?\n그때 몇 살이었나요?\n그곳까지 무엇을 타고 갔나요? 얼마나 걸렸나요?\n그 자리에는 또 누가 있었나요?\n그 사람은 마지막으로 무슨 말을 했나요?\n지금 가장 갖고 싶은 것은 무엇인가요?\n누구의 편지를 기다리나요?\n어릴 때 살던 집의 문을 열면 무엇이 보였나요?\n돈은 얼마나 가지고 있었나요?\n무엇을 버리고 왔나요?\n그 노래를 누가 불렀나요?\n가장 자주 하는 거짓말은 무엇인가요?\n그때 창밖에는 무엇이 보였나요?\n두 손은 무엇을 하고 있었나요?\n무엇을 끝내 묻지 못했나요?\n누가 당신을 지켜보고 있었나요?\n그 이야기를 처음 들은 것은 누구에게서였나요?\n그 일을 다시 하라면 하겠습니까?\n하루 중 가장 좋아하는 시간은 언제인가요?\n당신이 죽은 뒤 누가 당신을 기억할까요?", pSize:10, pLead:1.8, sLead:2.3, pTop:20, pBottom:22, pLeft:18, pRight:18, pIndent:1, pAlign:"char", pHead:true,
             sbUrl:"https://pvunctdbsdcgvbqloslg.supabase.co", sbKey:"sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY" };
 var SQL = [
 "-- 떠들기 — 씬과 인물과 쓴 글, 설정(conf)",
@@ -577,6 +593,25 @@ var NOVEL_DEF = [
 "5. 장면을 잇는 데 꼭 필요한 것만 지어낸다. 새 사건이나 새 인물은 들이지 않는다.",
 "6. 소설과 메모 정리를 함께 코드 블록 하나 안에 쓴다. 블록 안에서는 마크다운 기호를 쓰지 않는다. 블록 밖에는 덧붙이지 않는다.",
 "7. 소설 문장이 끝나면 빈 줄 다음에 '=== 메모 ===' 한 줄을 두고, 그 아래에 떠들기의 [작가의 메모]를 겹치는 것은 합치고 뜻이 잘 보이게 정리해 줄머리 '- ' 항목으로 적는다. 메모가 없으면 이 줄과 함께 뺀다. 이 메모는 작가가 소설을 다듬는 동안 문서 끝에 함께 남는다."
+].join("\n");
+
+/* 시놉시스 리셋 — 스크리브너 원고만을 기준으로 시놉시스를 처음부터 */
+var RESET_DEF = [
+"너는 내가 쓰고 있는 소설 『{작품}』의 시놉시스를 처음부터 새로 쓰는 일을 맡는다. 아래에는 두 가지가 붙는다.",
+"- 원고: 내가 쓴 이 소설의 본문. 사실로 받아들인다. 지금까지의 시놉시스는 일부러 주지 않는다 — 초고 단계의 흔적을 끊고 원고만을 기준으로 다시 세우기 위해서다.",
+"- 독백 씬(있으면): 아직 소설로 옮기지 않은 재료. 인물들의 말은 대화가 아니라 각자의 독백이다. 원고 바깥의 열린 가능성으로 다룬다.",
+"",
+"원고를 꼼꼼히 읽고 시놉시스를 쓴다. 줄여서 요약하지 말고 작은 디테일(이름, 나이, 날짜, 장소, 물건, 값, 버릇, 냄새와 소리)까지 남긴다. 항목마다 출처(장이나 대목, 독백 씬이면 씬 이름과 말한 사람)를 단다.",
+"- 인물: 인물마다 이름, 나이, 생김새, 말버릇, 사는 곳, 하는 일, 다른 인물과의 관계, 지난 일, 감추는 것",
+"- 장소",
+"- 시대와 사회",
+"- 사건: 일어난 순서대로",
+"- 모순: 원고 안에서, 그리고 원고와 독백 씬 사이에서 같은 일을 다르게 쓴 곳. 어느 쪽으로도 정리하거나 맞추지 말고 양쪽을 출처와 함께 나란히 그대로 보여 준다.",
+"- 작가의 메모: 독백 씬의 [작가의 메모]에 적힌 내 생각. 세계의 사실이 아니므로 여기에만 모은다.",
+"- 빈칸: 이야기에 필요한데 원고에 아직 나오지 않은 것",
+"- 질문: 맨 끝에. 인물마다 원고와 관련해 그 인물에게 직접 묻는 질문을 '- 이름: 질문' 꼴로 두세 개씩. 빈칸과 모순을 메울 질문을 우선한다.",
+"",
+"시놉시스 전체를 코드 블록 하나 안에 쓴다. 블록 안에서는 마크다운 기호(#, **, 표)를 쓰지 않는다. 차례 제목은 [인물]처럼 대괄호로, 항목은 줄머리에 '-'로 쓴다. 블록 밖에는 덧붙이지 않는다."
 ].join("\n");
 
 var $ = function(id){ return document.getElementById(id); };
@@ -1014,8 +1049,9 @@ function renderWorkPage(){
   var hist = sy && sy.hist ? sy.hist : [];
   h.hidden = !hist.length;
   var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "이전 판 " + hist.length; h.appendChild(o0);
-  hist.forEach(function(x, i){ var o = document.createElement("option"); o.value = String(i); o.textContent = whenAt(x.at) + " · " + clen(x.text) + "자"; h.appendChild(o); });
+  hist.forEach(function(x, i){ var o = document.createElement("option"); o.value = String(i); o.textContent = whenAt(x.at) + " · " + clen(x.text) + "자" + (x.reset ? " · 리셋" : ""); h.appendChild(o); });
   h.value = "";
+  $("wReset").hidden = false;
   /* 떠들기 */
   $("wLiveN").textContent = live.length;
   var L = $("wList"); L.innerHTML = "";
@@ -1137,13 +1173,13 @@ function synSaveLines(lines){
   var now = Date.now();
   if(sy && now - (sy.at || 0) < SYN_MERGE_MS){ sy.text = text; sy.at = now; }
   else {
-    var hist = sy ? [{ text:sy.text, at:sy.at }].concat(sy.hist || []).slice(0, SYN_KEEP) : [];
-    SYNS.map[wid] = { text:text, at:now, hist:hist, name:workName(wid) };
+    var hist = sy ? [{ text:sy.text, at:sy.at, reset:!!sy.reset }].concat(sy.hist || []).slice(0, SYN_KEEP) : [];
+    SYNS.map[wid] = { text:text, at:now, hist:hist, name:workName(wid), resetAt:(sy && sy.resetAt) || 0 };
   }
   SYNS._at = now; SYNS._dirty = true; keep("syns", SYNS); schedulePush();
 }
 function renderWorkMeta(){
-  var sy = synOf(W_CUR); $("wMeta").textContent = sy && sy.text.trim() ? "시놉시스 " + clen(sy.text) + "자 · " + whenAt(sy.at) + " 저장" : "시놉시스 아직 없음";
+  var sy = synOf(W_CUR); $("wMeta").textContent = (sy && sy.text.trim() ? "시놉시스 " + clen(sy.text) + "자 · " + whenAt(sy.at) + " 저장" : "시놉시스 아직 없음") + (sy && sy.resetAt ? " · 마지막 리셋 " + md(sy.resetAt) : "") + (RS_PENDING[W_CUR] ? " · 리셋 시놉시스 기다리는 중" : "");
 }
 /* '인물 7' — 그 차례를 펼치고 7번을 입력칸으로 */
 function synJump(q){
@@ -1168,14 +1204,51 @@ function saveSyn(){
   var sy = synOf(wid);
   if(sy && text === sy.text){ SYN_EDIT = false; renderWorkPage(); return; }
   if(!text && !sy){ toast("붙여 넣은 시놉시스가 없습니다"); return; }
-  var hist = sy ? [{ text:sy.text, at:sy.at }].concat(sy.hist || []).slice(0, SYN_KEEP) : [];
+  var hist = sy ? [{ text:sy.text, at:sy.at, reset:!!sy.reset }].concat(sy.hist || []).slice(0, SYN_KEEP) : [];
   if(!text){ if(!confirm("시놉시스를 비웁니다. 지금 판은 이전 판으로 남습니다.")) return; }
-  SYNS.map[wid] = { text:text, at:Date.now(), hist:hist, name:workName(wid) };
+  var asReset = false;
+  if(RS_PENDING[wid]){
+    asReset = confirm("리셋 시놉시스로 저장할까요?\n\n그러면 지금까지 끝나서 보관된 씬은 이미 원고에 들어간 것으로 보고, 앞으로 '클로드에게'에 넣지 않습니다. (이 뒤에 끝나는 씬은 예전처럼 들어갑니다)\n\n취소하면 보통 저장이 되고 리셋 표시는 지웁니다.");
+    delete RS_PENDING[wid]; keep("rsPending", RS_PENDING);
+  }
+  SYNS.map[wid] = { text:text, at:Date.now(), hist:hist, name:workName(wid), resetAt:asReset ? Date.now() : (sy && sy.resetAt) || 0, reset:asReset };
   SYNS._at = Date.now(); SYNS._dirty = true; keep("syns", SYNS); schedulePush();
   SYN_EDIT = false; synLine = null; $("synEdit").value = text; renderWorkPage();
   toast("시놉시스를 저장했습니다");
   if(text) offerArchive(wid);
 }
+/* ---------- 시놉시스 리셋 — 원고만을 기준으로 처음부터 ---------- */
+var RS_PENDING = load("rsPending", {});   /* 작품 → 리셋 복사를 한 시각. 다음 시놉시스 저장 때 '리셋 시놉시스로 저장할까요?' */
+function openReset(){ if(!W_CUR) return; $("rsTitle").textContent = "시놉시스 리셋 · " + workName(W_CUR); $("rsText").value = ""; renderRsInfo(); $("resetDlg").hidden = false; setTimeout(function(){ $("rsText").focus(); }, 30); }
+function renderRsInfo(){
+  var wid = W_CUR, raw = workScenes(wid).filter(function(t){ return !isFinal(t); });
+  var n = clen($("rsText").value);
+  $("rsInfo").textContent = (n ? "원고 " + n.toLocaleString() + "자" : "원고 없음") + " · 함께 가는 독백 씬 " + raw.length + "개" + (n > 150000 ? " · 원고가 깁니다 — 클로드가 한 번에 받기 버거우면 몇 장씩 나눠 받은 뒤 합치세요" : "");
+}
+function resetText(wid, name, manuscript){
+  var out = [(CONF.resetP && CONF.resetP.trim() ? CONF.resetP : RESET_DEF).replace(/\{작품\}/g, name).trim(), "", "", "=== 원고 · " + name + " ===", "", manuscript.trim(), ""];
+  var raw = workScenes(wid).filter(function(t){ return !isFinal(t); });
+  if(raw.length){
+    out.push("", "=== 독백 씬 · " + name + " ===", "씬 " + raw.length + "개, 만든 순서대로 — 아직 소설로 옮기지 않은 재료", "");
+    raw.forEach(function(t, i){ out.push(sceneText(t).replace(/^## /, "## 씬 " + (i + 1) + ". "), ""); });
+  }
+  return out.join("\n").trim() + "\n";
+}
+function sendReset(){
+  var wid = W_CUR; if(!wid) return;
+  var ms = $("rsText").value.replace(/\r/g, "");
+  if(!ms.trim()){ toast("원고를 붙여 넣으세요"); return; }
+  plainCopy(resetText(wid, workName(wid), ms));
+  window.open(CLAUDE_URL, "_blank");
+  /* 지금 있는 씬 전부가 이번 리셋에 들어간 셈 — 끝난 씬은 원고에, 독백 씬은 복사에 */
+  var L = load("cLast", {}); L[wid] = { at:Date.now(), ids:workScenes(wid).map(function(t){ return t.id; }) }; keep("cLast", L);
+  RS_PENDING[wid] = Date.now(); keep("rsPending", RS_PENDING);
+  $("resetDlg").hidden = true; $("rsText").value = ""; renderWorkMeta();
+  toast("복사했습니다 · 받은 시놉시스를 '전체 고치기'에 붙여 넣어 저장하세요", 4200);
+}
+/* 끝낸 시각 — 마지막으로 덮어씌운 때 */
+function finalAt(t){ return t.origs && t.origs.length ? t.origs[t.origs.length - 1].at : 0; }
+
 /* 시놉시스 인쇄 — 읽기 모드와 같은 모양. 종이에서 고쳐 쓸 수 있게 줄 간격을 넓힌다 */
 function printSyn(){
   var wid = W_CUR, sy = wid && synOf(wid); if(!sy || !sy.text.trim()){ toast("시놉시스가 없습니다"); return; }
@@ -1560,7 +1633,10 @@ function setPrompt(wid, text){
 }
 function synOf(wid){ return SYNS.map[wid] || null; }
 /* 클로드에게 건넬 씬 — 보관하지 않은 씬 전부(끝남·독백) + 보관한 씬 가운데 끝난 씬. 보관한 독백 씬은 시놉시스에 녹아 있으므로 뺀다 */
-function claudeScenes(wid){ return workScenes(wid, true).filter(function(t){ return !t.archived || isFinal(t); }); }
+function claudeScenes(wid){
+  var sy = synOf(wid), r = sy && sy.resetAt || 0;
+  return workScenes(wid, true).filter(function(t){ return !t.archived || (isFinal(t) && finalAt(t) > r); });
+}
 function claudeText(wid, name){
   var sc = claudeScenes(wid), out = [], sy = synOf(wid);
   out.push(promptOf(wid).replace(/\{작품\}/g, name).trim(), "", "");
@@ -1591,10 +1667,13 @@ function renderCInfo(){
   if(!C_WORK) return;
   var wid = C_WORK.id, sc = claudeScenes(wid), sy = synOf(wid);
   var nFin = sc.filter(isFinal).length, nFinArch = sc.filter(function(t){ return t.archived; }).length;
-  var nSkip = workScenes(wid, true).length - sc.length, total = clen(claudeText(wid, C_WORK.name));
+  var all = workScenes(wid, true), sy2 = synOf(wid), r = sy2 && sy2.resetAt || 0;
+  var nSkipRaw = all.filter(function(t){ return t.archived && !isFinal(t); }).length, nSkipOld = all.filter(function(t){ return t.archived && isFinal(t) && finalAt(t) <= r; }).length;
+  var total = clen(claudeText(wid, C_WORK.name));
   $("cInfo").textContent = "끝난 씬 " + nFin + (nFinArch ? "(보관 " + nFinArch + " 포함)" : "") + " · 독백 씬 " + (sc.length - nFin) +
     (sy && sy.text.trim() ? " · 시놉시스 " + clen(sy.text) + "자" : " · 시놉시스 없음 — 첫 정리") +
-    (nSkip ? " · 보관한 독백 씬 " + nSkip + "개는 넣지 않음" : "") +
+    (nSkipRaw ? " · 보관한 독백 씬 " + nSkipRaw + "개는 넣지 않음" : "") +
+    (nSkipOld ? " · 리셋 전에 끝나 보관된 씬 " + nSkipOld + "개는 넣지 않음" : "") +
     " · 복사할 글 모두 " + total.toLocaleString() + "자" +
     (PROMPTS.map[wid] != null ? " · 고친 지시문" : "");
 }
@@ -1875,7 +1954,7 @@ function openSet(){
   $("sFocusCut").value = CONF.focusCut || ""; $("sRestCut").value = CONF.restCut || ""; $("sStopCut").value = CONF.stopCut || ""; $("sAuto").checked = !!CONF.autoStart;
   $("sUrl").value = CONF.sbUrl || ""; $("sKey").value = CONF.sbKey || ""; $("sql").value = SQL; $("setMsg").textContent = "";
   $("sStage").checked = !!CONF.stageOn; $("sDeck").value = CONF.deck || "";
-  $("sModel").value = CONF.model || ""; $("sNovelP").value = CONF.novelP || NOVEL_DEF;
+  $("sModel").value = CONF.model || ""; $("sNovelP").value = CONF.novelP || NOVEL_DEF; $("sResetP").value = CONF.resetP || RESET_DEF;
   ["pSize","pLead","sLead","pTop","pBottom","pLeft","pRight","pIndent"].forEach(function(k){ $(k).value = CONF[k]; });
   $("pAlign").value = CONF.pAlign === "word" ? "word" : "char"; $("pHead").checked = !!CONF.pHead;
   $("settings").hidden = false;
@@ -1889,6 +1968,7 @@ function saveSet(){
   CONF.stageOn = $("sStage").checked; CONF.deck = $("sDeck").value.replace(/\r/g, "");
   CONF.model = $("sModel").value.replace(/\r/g, "");
   var np = $("sNovelP").value.replace(/\r/g, ""); CONF.novelP = np.trim() === NOVEL_DEF.trim() || !np.trim() ? "" : np;
+  var rp = $("sResetP").value.replace(/\r/g, ""); CONF.resetP = rp.trim() === RESET_DEF.trim() || !rp.trim() ? "" : rp;
   function num(id, lo, hi){ var v = parseFloat($(id).value); return isNaN(v) ? DEF[id] : Math.min(hi, Math.max(lo, v)); }
   CONF.pSize = num("pSize", 6, 20); CONF.pLead = num("pLead", 1, 3); CONF.sLead = num("sLead", 1, 4); CONF.pIndent = num("pIndent", 0, 4);
   CONF.pTop = num("pTop", 0, 60); CONF.pBottom = num("pBottom", 0, 60); CONF.pLeft = num("pLeft", 0, 60); CONF.pRight = num("pRight", 0, 60);
@@ -1967,6 +2047,11 @@ $("wJump").onkeydown = function(e){ if(e.key === "Enter" && !e.isComposing && e.
 $("wCancel").onclick = function(){ if(synDirty() && !confirm("고친 것을 버리고 읽기로 돌아갈까요?")) return; SYN_EDIT = false; $("synEdit").value = ""; renderWorkPage(); };
 $("wSave").onclick = saveSyn;
 $("wPrint").onclick = printSyn;
+$("wReset").onclick = openReset;
+$("rsGo").onclick = sendReset;
+$("rsClose").onclick = function(){ $("resetDlg").hidden = true; };
+$("rsText").oninput = renderRsInfo;
+$("resetDlg").onclick = function(e){ if(e.target === $("resetDlg")) $("resetDlg").hidden = true; };
 $("wClaude").onclick = function(){ if(W_CUR) openClaude(W_CUR, workName(W_CUR)); };
 $("wArchToggle").onclick = function(){ showWArch = !showWArch; renderWorkPage(); };
 $("wHist").onchange = function(){
@@ -2014,6 +2099,7 @@ $("origPrev").onclick = function(){ if(ORIG_I > 0){ ORIG_I--; renderOrig(); } };
 $("origBack").onclick = restoreOrig;
 $("origDlg").onclick = function(e){ if(e.target === $("origDlg")) $("origDlg").hidden = true; };
 $("sNovelReset").onclick = function(){ $("sNovelP").value = NOVEL_DEF; toast("기본 지시문을 넣었습니다 · 닫으면 저장됩니다"); };
+$("sResetReset").onclick = function(){ $("sResetP").value = RESET_DEF; toast("기본 지시문을 넣었습니다 · 닫으면 저장됩니다"); };
 $("addChar").onkeydown = function(e){
   if(e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
@@ -2052,6 +2138,7 @@ document.addEventListener("keydown", function(e){
     if(!$("search").hidden){ closeSearch(); e.preventDefault(); }
     else if(!$("claudeDlg").hidden){ closeClaude(); e.preventDefault(); }
     else if(!$("origDlg").hidden){ $("origDlg").hidden = true; e.preventDefault(); }
+    else if(!$("resetDlg").hidden){ $("resetDlg").hidden = true; e.preventDefault(); }
   }
 }, true);
 document.addEventListener("visibilitychange", function(){ if(document.visibilityState === "visible"){ tick(); fireRestCut(); if(NOW && NOW.cutDue) waitCut(); pull(); } });
