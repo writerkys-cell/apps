@@ -191,8 +191,16 @@ html{scroll-padding-top:var(--stickH,7rem)}
 #npText{width:100%;height:12rem;font-family:var(--body);font-size:.92rem;line-height:1.75;padding:.5rem .6rem;border:1px solid var(--seon);border-radius:2px;background:#fff;color:var(--meok);resize:vertical}
 #npText:focus{outline:none;border-color:var(--inju)}
 #npNote{font-size:.7rem;color:var(--meok-3);margin:.35rem 0 0}
-#origDlg .dlgBox{width:min(42rem,94vw)}
-#origBody{max-height:60vh;overflow:auto;font-family:var(--body);font-size:.88rem;line-height:1.75;white-space:pre-wrap;border:1px solid var(--seon);border-radius:2px;padding:.6rem .8rem;background:var(--jongi);margin:0 0 .6rem}
+#origDlg .dlgBox,#draftDlg .dlgBox{width:min(42rem,94vw)}
+#editStat{font-size:.8rem;color:var(--meok-2);line-height:1.7;margin:0 0 .6rem}
+#editStat b{font-weight:600;color:var(--meok)}
+#editStat b.low{color:var(--inju)}
+.edLow{color:var(--inju)}
+#draftPaste{margin-top:1rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);padding:.8rem 1rem}
+#draftPaste label{display:block;font-size:.75rem;color:var(--meok-2);margin-bottom:.35rem}
+#dpText{width:100%;height:10rem;font-family:var(--body);font-size:.9rem;line-height:1.7;padding:.5rem .6rem;border:1px solid var(--seon);border-radius:2px;background:#fff;color:var(--meok);resize:vertical}
+#dpText:focus{outline:none;border-color:var(--inju)}
+#origBody,#draftBody{max-height:50vh;overflow:auto;font-family:var(--body);font-size:.88rem;line-height:1.75;white-space:pre-wrap;border:1px solid var(--seon);border-radius:2px;padding:.6rem .8rem;background:var(--jongi);margin:0 0 .6rem}
 .chip.mm.cur{border-color:var(--meok-2)}
 .chip.qa.cur{border-color:var(--inju)}
 .blk{position:relative}
@@ -360,6 +368,7 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <div id="tWorkRow"><label for="tWork">보태기 작품</label><select id="tWork"></select><span id="tWorkNote"></span></div>
     <span id="tZoom" style="margin-left:auto"><button id="zOut" title="원고 글자 작게 · ⌃−">가−</button><span id="zPct"></span><button id="zIn" title="원고 글자 크게 · ⌃=">가+</button></span>
     <button class="tBtn" id="tNovel" title="이 씬의 떠들기를 모델 문장의 문체로 소설화 — 복사하고 클로드를 엽니다">소설화</button>
+    <button class="tBtn" id="tDraft" title="클로드가 소설화해 준 초안을 붙여 둡니다 — 최종 문장을 넣을 때 얼마나 다듬었는지 재고, 다음 소설화의 짝에 함께 붙습니다">초안</button>
     <button class="tBtn" id="tFinal" title="스크리브너에서 다듬은 최종 문장을 붙여 넣어 이 씬을 덮어씌웁니다">최종 문장</button>
     <button class="tBtn" id="tOrig" hidden title="최종 문장으로 덮어씌운 원래 독백을 봅니다">원문</button>
     <button class="tBtn" id="tModel" hidden title="이 끝난 씬을 소설화의 본보기로 삼습니다 — 다음 소설화에 원문과 최종 문장이 짝으로 붙습니다">본보기</button>
@@ -370,6 +379,11 @@ html{scroll-padding-top:var(--stickH,7rem)}
   <div id="cast">
     <span id="chips" style="display:contents"></span>
     <input id="addChar" placeholder="+ 인물 추가" aria-label="인물 추가">
+  </div>
+  <div id="draftPaste" hidden>
+    <label for="dpText">클로드 초안 붙여 두기 — 소설화 결과를 스크리브너로 가져가는 김에 여기에도 한 번. 코드 블록 표시가 딸려 와도 됩니다</label>
+    <textarea id="dpText" spellcheck="false"></textarea>
+    <div class="row"><button class="tBtn main" id="dpGo">초안 저장</button><button class="tBtn" id="dpClose">닫기</button></div>
   </div>
   <div id="novelPaste" hidden>
     <label for="npText">최종 문장 붙여 넣기 — 스크리브너에서 다듬은 소설 문장과 그 아래 '=== 메모 ===' 부분까지</label>
@@ -387,6 +401,15 @@ html{scroll-padding-top:var(--stickH,7rem)}
     <textarea id="rsText" spellcheck="false" placeholder="여기에 원고를 붙여 넣으세요" style="width:100%;height:min(22rem,46vh);font-family:var(--body);font-size:.9rem;line-height:1.7;padding:.6rem .7rem;border:1px solid var(--seon);border-radius:2px;background:var(--jongi);color:var(--meok);resize:vertical"></textarea>
     <p id="rsInfo" class="note"></p>
     <div class="row"><button class="tBtn main" id="rsGo">복사하고 클로드 열기</button><button class="tBtn" id="rsClose">닫기</button></div>
+  </div>
+</div>
+
+<div class="dlg" id="draftDlg" hidden>
+  <div class="dlgBox">
+    <h3 id="draftTitle">초안</h3>
+    <p id="editStat"></p>
+    <div id="draftBody" class="origBodyLike"></div>
+    <div class="row"><button class="tBtn" id="draftReplace">초안 바꾸기</button><button class="tBtn" id="draftDel">초안 지우기</button><button class="tBtn" id="draftClose">닫기</button></div>
   </div>
 </div>
 
@@ -590,7 +613,7 @@ var NOVEL_DEF = [
 "",
 "원칙",
 "1. 문체는 '모델 문장'을 따른다. 문장의 길이와 리듬, 시제, 시점, 묘사의 밀도, 대화를 처리하는 방식을 본뜬다. 모델 문장의 내용이나 표현, 고유한 구절은 가져오지 않는다.",
-"1-1. '짝'이 붙어 있으면 그것이 더 정확한 본보기다. 짝은 이 작가가 같은 작품에서 독백을 소설로 옮긴 실제 예로, 무엇을 버리고 무엇을 살렸는지, 어떤 말을 서술로 바꾸고 어떤 말을 대사로 남겼는지, 지문이 어떻게 묘사가 되었는지를 보여 준다. '본보기'로 표시된 짝은 작가가 특히 잘되었다고 고른 것이니 그쪽을 더 따르고, '최근'은 지금 이어 가는 결을 보여 준다. 짝의 내용은 가져오지 말고 옮기는 방식만 따른다.",
+"1-1. '짝'이 붙어 있으면 그것이 더 정확한 본보기다. 짝은 이 작가가 같은 작품에서 독백을 소설로 옮긴 실제 예로, 무엇을 버리고 무엇을 살렸는지, 어떤 말을 서술로 바꾸고 어떤 말을 대사로 남겼는지, 지문이 어떻게 묘사가 되었는지를 보여 준다. '본보기'로 표시된 짝은 작가가 특히 잘되었다고 고른 것이니 그쪽을 더 따르고, '최근'은 지금 이어 가는 결을 보여 준다. 짝에 '초안'이 있으면 그것은 이전에 네가 쓴 것이고 '최종 문장'은 작가가 그것을 고친 것이다. 둘 사이의 차이가 작가가 원하는 방향이니, 초안 쪽의 버릇은 피하고 최종 쪽으로 쓴다. 초안을 따라 하지 않는다. 짝의 내용은 가져오지 말고 옮기는 방식만 따른다.",
 "2. 떠들기에 나온 사실(이름, 나이, 장소, 물건, 일어난 일)과 인물의 말투는 바꾸지 않는다. 인물의 독백에서 쓸 만한 말은 살리되, 소설의 문장으로 다듬는다.",
 "3. [작가의 질문]은 소설에 쓰지 않는다. 질문 다음의 독백(질문에 대한 답)만 살린다.",
 "4. [작가의 메모]는 작가의 의도로 참고만 하고 소설에 옮기지 않는다. 대신 아래 7처럼 따로 정리한다. 다만 '소설화:'로 시작하는 메모는 이 장면의 연출 지시(시점, 시제, 시작하는 자리, 대화의 유무 등)이니 그대로 따른다.",
@@ -886,7 +909,8 @@ function topicRow(t, arch){
   var d = document.createElement("div"); d.className = "topic";
   var names = t.chars.map(function(c){ return c.name; }).join(", ");
   var lk = LINKS.map[t.id];
-  var sub = [isFinal(t) ? (t.model ? "끝남 · 본보기" : "끝남") : "", names || "인물 없음", arch && lk && lk.work_title ? "보태기 · " + lk.work_title : "", clen(t.blocks.map(function(b){ return b.t; }).join("")) + "자", (topicMs(t) ? "몰입 " + span(topicMs(t)) : ""), md(t.updated)].filter(Boolean).join(" · ");
+  var st0 = statsOf(t);
+  var sub = [isFinal(t) ? (t.model ? "끝남 · 본보기" : "끝남") + (st0 ? " · 다듬음 " + st0.sentPct + "%" : "") : "", names || "인물 없음", arch && lk && lk.work_title ? "보태기 · " + lk.work_title : "", topicChars(t) + "자", (topicMs(t) ? "몰입 " + span(topicMs(t)) : ""), md(t.updated)].filter(Boolean).join(" · ");
   d.innerHTML = '<button class="open"><span class="ttl">' + esc(t.title) + '</span><span class="sub">' + esc(sub) + '</span></button><span class="acts"></span>';
   d.querySelector(".open").onclick = function(){ go(t.id); };
   var acts = d.querySelector(".acts");
@@ -922,7 +946,7 @@ function parseNovel(raw){
 }
 function isFinal(t){ return !!(t.origs && t.origs.length); }
 var NP_FOR = null;   /* 붙여 넣기 칸이 열린 씬 */
-function openNovelPaste(t){ NP_FOR = t.id; $("npText").value = ""; $("novelPaste").hidden = false; setTimeout(function(){ $("npText").focus(); $("novelPaste").scrollIntoView({ block:"center" }); }, 30); }
+function openNovelPaste(t){ NP_FOR = t.id; $("npText").value = ""; $("novelPaste").hidden = false; $("draftPaste").hidden = true; setTimeout(function(){ $("npText").focus(); $("novelPaste").scrollIntoView({ block:"center" }); }, 30); }
 function overlayNovel(){
   var t = cur(); if(!t) return;
   var r = parseNovel($("npText").value);
@@ -933,7 +957,9 @@ function overlayNovel(){
   var nb = [{ id:uid(), c:NOVEL, t:r.prose }].concat(memos);
   t.blocks = nb; t.novelAt = Date.now(); lastBlk = nb[0].id;
   NP_FOR = null; $("novelPaste").hidden = true;
-  touch(t); renderTopic(); toast("최종 문장으로 덮어씌웠습니다 · 이 씬은 끝남 · 원래 독백은 '원문'에", 3600);
+  touch(t); renderTopic();
+  var st = statsOf(t);
+  toast("최종 문장으로 덮어씌웠습니다 · 이 씬은 끝남" + (st ? " · 다듬음 — " + statLine(st) : " · 원래 독백은 '원문'에"), 4800);
 }
 /* 원문 — 덮어씌운 차례대로 남은 것들. 마지막 것부터 보고, 되돌리면 그 원문이 다시 씬이 된다 */
 var ORIG_I = null;
@@ -973,6 +999,63 @@ function novelize(){
 }
 
 /* 씬 지우기 — 두 번 눌러야(4초 안). 몰입 중인 씬은 안 됨. 몰입 시간은 보태기 쪽 기록에 남는다 */
+/* ---------- 초안과 다듬음 지표 ---------- */
+function cleanPaste(x){ x = String(x || "").replace(/\r/g, ""); var m = /```[^\n]*\n([\s\S]*?)\n?```/.exec(x); if(m) x = m[1]; return x.replace(/^\s*```[^\n]*\n?/, "").replace(/\n?```\s*$/, "").replace(/^[ \t]*=+[ \t]*메모[ \t]*=+[\s\S]*$/m, "").replace(/^\s+|\s+$/g, ""); }
+function finalText(t){ return t.blocks.filter(function(b){ return b.c === NOVEL; }).map(function(b){ return String(b.t || "").trim(); }).join("\n\n"); }
+function sentences(x){ var m = String(x || "").replace(/\s+/g, " ").match(/[^.!?。？！…」”"]+[.!?。？！…」”"]+|[^.!?。？！…」”"]+$/g) || []; return m.map(function(z){ return z.trim(); }).filter(Boolean); }
+/* 최장 공통 부분 수열의 길이 — 두 줄 DP */
+function lcsLen(a, b){
+  if(!a.length || !b.length) return 0;
+  var prev = new Uint32Array(b.length + 1), cur = new Uint32Array(b.length + 1), i, j;
+  for(i = 1; i <= a.length; i++){
+    for(j = 1; j <= b.length; j++) cur[j] = a[i-1] === b[j-1] ? prev[j-1] + 1 : (prev[j] > cur[j-1] ? prev[j] : cur[j-1]);
+    var tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[b.length];
+}
+/* 초안 대비 최종 문장이 얼마나 바뀌었나. 잴 수 있는 건 '얼마나 바꿨나'이지 '얼마나 좋아졌나'가 아니다 */
+function editStats(draft, fin){
+  var d = String(draft || "").trim(), f = String(fin || "").trim(); if(!d || !f) return null;
+  var sd = sentences(d), sf = sentences(f), same = lcsLen(sd, sf);
+  var remD = sd.length - same, remF = sf.length - same, changed = Math.min(remD, remF);
+  var da = Array.from(d.replace(/\s+/g, "")), fa = Array.from(f.replace(/\s+/g, ""));
+  var ch = (da.length > 12000 || fa.length > 12000) ? null : lcsLen(da, fa);   /* 너무 길면 글자 단위는 건너뛴다 */
+  return {
+    lenD:clen(d), lenF:clen(f), sentD:sd.length, sentF:sf.length,
+    same:same, changed:changed, added:remF - changed, removed:remD - changed,
+    sentPct:sf.length ? Math.round((1 - same / sf.length) * 100) : 0,
+    charPct:ch == null ? null : Math.round((1 - ch / Math.max(da.length, fa.length)) * 100),
+    avgD:sd.length ? Math.round(clen(d) / sd.length) : 0, avgF:sf.length ? Math.round(clen(f) / sf.length) : 0
+  };
+}
+function statsOf(t){ return t.draft && t.draft.text && isFinal(t) ? editStats(t.draft.text, finalText(t)) : null; }
+function pct(a, b){ if(!a) return ""; var p = Math.round((b - a) / a * 100); return (p >= 0 ? "+" : "") + p + "%"; }
+function statLine(st, long){
+  if(!st) return "";
+  var head = "문장 " + st.sentPct + "% 바뀜" + (st.charPct != null ? " · 글자 " + st.charPct + "%" : "") + " · 분량 " + pct(st.lenD, st.lenF);
+  if(!long) return head;
+  return head + " · 문장 " + st.sentD + "→" + st.sentF + "(그대로 " + st.same + ", 고침 " + st.changed + ", 새로 " + st.added + ", 지움 " + st.removed + ") · 평균 길이 " + st.avgD + "→" + st.avgF + "자";
+}
+var LOW_EDIT = 30;
+function openDraftPaste(){ var t = cur(); if(!t) return; $("dpText").value = t.draft ? t.draft.text : ""; $("draftPaste").hidden = false; $("novelPaste").hidden = true; setTimeout(function(){ $("dpText").focus(); $("draftPaste").scrollIntoView({ block:"center" }); }, 30); }
+function saveDraft(){
+  var t = cur(); if(!t) return;
+  var x = cleanPaste($("dpText").value);
+  if(!x){ toast("붙여 넣은 초안이 없습니다"); return; }
+  t.draft = { text:x, at:Date.now() }; $("draftPaste").hidden = true; touch(t); renderTopic();
+  var st = statsOf(t);
+  toast("초안을 두었습니다 · " + clen(x) + "자" + (st ? " · 다듬음 — " + statLine(st) : ""), 4200);
+}
+function openDraftDlg(){
+  var t = cur(); if(!t || !t.draft) return;
+  $("draftTitle").textContent = "초안 · " + t.title;
+  var st = statsOf(t);
+  $("editStat").innerHTML = st
+    ? "다듬음 — <b class=\"" + (st.sentPct < LOW_EDIT ? "low" : "") + "\">" + esc(statLine(st, true)) + "</b>" + (st.sentPct < LOW_EDIT ? "<br>가볍게 다듬어졌습니다. 이 씬을 본보기로 삼을지 한 번 더 생각해 보세요." : "")
+    : "아직 최종 문장이 없습니다. 최종 문장을 넣으면 초안과 비교한 지표가 여기에 나옵니다. (" + whenAt(t.draft.at) + " 저장 · " + clen(t.draft.text) + "자)";
+  $("draftBody").textContent = t.draft.text;
+  $("draftDlg").hidden = false;
+}
 function toggleModel(t){
   if(!isFinal(t)) return;
   if(t.model) delete t.model; else t.model = true;
@@ -1279,7 +1362,10 @@ function pairText(pr){
   var t = pr.t, o = t.origs[t.origs.length - 1];
   var orig = sceneText({ title:t.title, chars:t.chars, blocks:o.blocks }).replace(/^## [^\n]*\n+/, "");
   var fin = t.blocks.filter(function(b){ return b.c === NOVEL; }).map(function(b){ return b.t.trim(); }).join("\n\n");
-  return ["## 짝 · " + t.title + " (" + pr.why + ")", "", "[원문 — 독백]", orig, "", "[최종 문장 — 작가가 옮기고 다듬은 것]", fin].join("\n");
+  var parts = ["## 짝 · " + t.title + " (" + pr.why + ")", "", "[원문 — 독백]", orig, ""];
+  if(t.draft && t.draft.text) parts.push("[초안 — 이전에 네가 쓴 것. 따라 하지 말 것]", t.draft.text.trim(), "");
+  parts.push("[최종 문장 — 작가가 " + (t.draft ? "초안을 고쳐 " : "옮기고 다듬어 ") + "확정한 것]", fin);
+  return parts.join("\n");
 }
 
 /* 시놉시스 인쇄 — 읽기 모드와 같은 모양. 종이에서 고쳐 쓸 수 있게 줄 간격을 넓힌다 */
@@ -1305,6 +1391,8 @@ function renderTopic(){
   if(document.activeElement !== $("tTitle")) $("tTitle").value = t.title;
   var lk = LINKS.map[t.id]; $("tBack").hidden = !(lk && lk.work_id);
   $("tOrig").hidden = !(t.origs && t.origs.length);
+  $("tDraft").textContent = t.draft ? "초안 ✓" : "초안";
+  if(NP_FOR !== t.id) $("draftPaste").hidden = true;
   $("tModel").hidden = !isFinal(t); $("tModel").textContent = t.model ? "본보기 ✓" : "본보기"; $("tModel").classList.toggle("main", !!t.model);
   if(NP_FOR !== t.id){ $("novelPaste").hidden = true; }
   $("tDel").textContent = armedDel === t.id ? "한 번 더 누르면 지웁니다" : "지우기"; $("tDel").classList.toggle("armed", armedDel === t.id);
@@ -1324,7 +1412,8 @@ function zoomBy(d){
 function renderCount(){
   var t = cur(); if(!t) return;
   var c = topicChars(t);
-  $("tCount").textContent = c + "자 · " + (c/200).toFixed(1) + "매" + (topicMs(t) ? " · 몰입 " + span(topicMs(t)) : "");
+  var st = statsOf(t);
+  $("tCount").innerHTML = esc(c + "자 · " + (c/200).toFixed(1) + "매" + (topicMs(t) ? " · 몰입 " + span(topicMs(t)) : "")) + (st ? " · <span class=\"" + (st.sentPct < LOW_EDIT ? "edLow" : "") + "\" title=\"" + esc(statLine(st, true)) + "\">다듬음 " + st.sentPct + "%</span>" : "");
 }
 function curBlkIdx(){
   var t = cur(); if(!t) return -1;
@@ -2125,6 +2214,13 @@ $("tArch").onclick = function(){
 $("tDel").onclick = function(){ var t = cur(); if(t) deleteTopic(t); };
 $("tNovel").onclick = novelize;
 $("npGo").onclick = overlayNovel;
+$("tDraft").onclick = function(){ var t = cur(); if(!t) return; if(t.draft) openDraftDlg(); else openDraftPaste(); };
+$("dpGo").onclick = saveDraft;
+$("dpClose").onclick = function(){ $("draftPaste").hidden = true; };
+$("draftClose").onclick = function(){ $("draftDlg").hidden = true; };
+$("draftReplace").onclick = function(){ $("draftDlg").hidden = true; openDraftPaste(); };
+$("draftDel").onclick = function(){ var t = cur(); if(!t) return; if(!confirm("초안을 지울까요? 다듬음 지표도 함께 사라집니다.")) return; delete t.draft; $("draftDlg").hidden = true; touch(t); renderTopic(); toast("초안을 지웠습니다"); };
+$("draftDlg").onclick = function(e){ if(e.target === $("draftDlg")) $("draftDlg").hidden = true; };
 $("tFinal").onclick = function(){ var t = cur(); if(!t) return; if($("novelPaste").hidden || NP_FOR !== t.id) openNovelPaste(t); else { NP_FOR = null; $("novelPaste").hidden = true; } };
 $("npClose").onclick = function(){ NP_FOR = null; $("novelPaste").hidden = true; };
 $("tOrig").onclick = openOrig;
@@ -2173,6 +2269,7 @@ document.addEventListener("keydown", function(e){
     if(!$("search").hidden){ closeSearch(); e.preventDefault(); }
     else if(!$("claudeDlg").hidden){ closeClaude(); e.preventDefault(); }
     else if(!$("origDlg").hidden){ $("origDlg").hidden = true; e.preventDefault(); }
+    else if(!$("draftDlg").hidden){ $("draftDlg").hidden = true; e.preventDefault(); }
     else if(!$("resetDlg").hidden){ $("resetDlg").hidden = true; e.preventDefault(); }
   }
 }, true);
