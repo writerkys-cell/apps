@@ -325,13 +325,13 @@ function setDot(part,state,msg){
    weight : { id:'w'+날짜, type:'weight', date, kg }
    course : { id:'c…', type:'course', name, km }
    shoe   : { id:'s…', type:'shoe', name, startKm(이 앱 전에 신은 거리), limit, retired }
-   conf   : { id:'conf', type:'conf', goal(하루 평균 기준선, km) }
+   conf   : { id:'conf', type:'conf', goal(최근 30일 하루 평균 거리의 기준선, km), timeGoal(하루 운동 시간 목표, 분) } — 시작의 운동·거리 칸이 읽는다
    모두 deleted, updatedAt, device를 가진다. 지우면 deleted:true로 남긴다. */
 const RUN_SQL=`create table if not exists run_log (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
 alter table run_log enable row level security;
 drop policy if exists "run open" on run_log;
 create policy "run open" on run_log for all using (true) with check (true);`;
-const ST_KEY='dalligi.store', GOAL_DEF=4, SHOE_LIMIT=700;
+const ST_KEY='dalligi.store', GOAL_DEF=4, TIME_DEF=60, SHOE_LIMIT=700;
 let ST=Object.assign({rows:{}, dirty:{}, since:''}, lsGet(ST_KEY,{}));
 if(!ST.rows) ST.rows={}; if(!ST.dirty) ST.dirty={};
 let tableMissing=false, pushT=null, pushing=false;
@@ -343,6 +343,9 @@ function touch(r){
   clearTimeout(pushT); pushT=setTimeout(push,800);
 }
 function goal(){ const c=ST.rows.conf; return (c&&+c.goal>0)?+c.goal:GOAL_DEF; }
+function timeGoal(){ const c=ST.rows.conf; return (c&&+c.timeGoal>0)?+c.timeGoal:TIME_DEF; }
+/* conf 줄은 기준선과 시간 목표가 함께 쓴다 — 제 칸만 바꾼다 */
+function touchConf(p){ touch(Object.assign({}, ST.rows.conf||{}, p, {id:'conf', type:'conf', deleted:false})); }
 async function push(){
   if(!sbOn()||pushing) return;
   const ids=Object.keys(ST.dirty).filter(id=>ST.rows[id]); if(!ids.length) return;
@@ -517,7 +520,7 @@ function renderWrite(){
   const v=draft.v, opt=(list,sel,blank,lab)=>`<option value="">${blank}</option>`+list.map(x=>`<option value="${esc(x.id)}"${x.id===sel?' selected':''}>${esc(lab(x))}</option>`).join('');
   const shoeList=shoes().filter(s=>!s.retired||s.id===v.fShoe);
   let h=`<div class="today"><span class="d">${kLabel(k)}</span><span class="w">${WD[parseKey(k).getDay()]}요일</span>
-    <span class="s">${td?'오늘 '+[td.run?'달리기 '+fmtKm(td.run)+'km':'', td.walk?'걷기 '+fmtKm(td.walk)+'km':''].filter(Boolean).join(' · ')+'를 적었습니다':'오늘은 아직 적은 운동이 없습니다'}</span></div>`;
+    <span class="s">${td?'오늘 '+[td.run?'달리기 '+fmtKm(td.run)+'km':'', td.walk?'걷기 '+fmtKm(td.walk)+'km':''].filter(Boolean).join(' · ')+' · '+fmtDurK(td.runSec+td.walkSec)+' / 목표 '+fmtDurK(timeGoal()*60):'오늘은 아직 적은 운동이 없습니다 · 목표 '+fmtDurK(timeGoal()*60)}</span></div>`;
   if(edit) h+=`<p class="alert">${kLabel(ST.rows[draft.editId].day)}의 ${KIND[ST.rows[draft.editId].kind]} 기록을 고치는 중입니다. <button class="linkish" id="cancelEdit">그만 고치기</button></p>`;
   else h+=`<div class="import">
     <ol>
@@ -966,9 +969,10 @@ function renderSet(){
   <pre class="sql">${esc(RUN_SQL)}</pre><div class="btnrow"><button class="btn" id="sSql">SQL 복사</button></div>
   <p class="note">${acts().length}건의 운동, ${weights().length}번의 몸무게가 있고, ${Object.keys(ST.dirty).length?Object.keys(ST.dirty).length+'줄을 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
 
-  <h3>기준선</h3>
-  <p class="note">흐름 화면(그리고 나중에 시작의 운동 칸)에서 최근 30일 하루 평균을 견주는 선입니다. 달리기와 걷기를 합친 거리입니다.</p>
-  <div class="btnrow"><div class="field" style="width:9em"><label for="sGoal">하루 평균 (km)</label><input id="sGoal" inputmode="decimal" value="${goal()}"></div><button class="btn" id="sGoalSave" style="align-self:flex-end">저장</button></div>
+  <h3>목표와 기준선</h3>
+  <p class="note">하루 운동 시간은 시작의 운동 칸이 오늘 운동한 시간(러닝 시간)과 견줍니다. 거리 기준선은 이 앱의 흐름과 시작의 거리 칸이 최근 30일 하루 평균(달리기와 걷기를 합친 거리)과 견줍니다.</p>
+  <div class="btnrow"><div class="field" style="width:9em"><label for="sTime">하루 운동 시간 (분)</label><input id="sTime" inputmode="numeric" value="${timeGoal()}"></div><button class="btn" id="sTimeSave" style="align-self:flex-end">저장</button></div>
+  <div class="btnrow"><div class="field" style="width:9em"><label for="sGoal">하루 평균 거리 (km)</label><input id="sGoal" inputmode="decimal" value="${goal()}"></div><button class="btn" id="sGoalSave" style="align-self:flex-end">저장</button></div>
 
   <h3>코스</h3>
   <p class="note">코스를 고르면 거리가 비어 있을 때 채워지고, 같은 코스의 기록끼리 견줍니다.</p>
@@ -1007,7 +1011,8 @@ function renderSet(){
   $('sSave').onclick=async()=>{ cfg={url:$('sUrl').value.trim(), key:$('sKey').value.trim()}; lsSet(CFG_KEY,cfg); await probe(); };
   $('sSql').onclick=()=>copyText(RUN_SQL);
   $('sGoalSave').onclick=()=>{ const v=parseNum($('sGoal').value); if(!(v>0&&v<=100)){ toast('기준선을 km로 적으세요'); return; } const g=Math.round(v*10)/10;
-    touch(Object.assign({}, ST.rows.conf||{}, {id:'conf', type:'conf', goal:g, deleted:false})); toast('기준선을 하루 '+g+'km로 두었습니다'); };
+    touchConf({goal:g}); toast('기준선을 하루 '+g+'km로 두었습니다'); };
+  $('sTimeSave').onclick=()=>{ const v=Math.round(parseNum($('sTime').value)); if(!(v>0&&v<=600)){ toast('목표를 분으로 적으세요'); return; } touchConf({timeGoal:v}); toast('하루 운동 시간 목표를 '+fmtDurK(v*60)+'으로 두었습니다'); };
   $('cAdd').onclick=()=>{ const n=$('cName').value.trim(), k=parseNum($('cKm').value); if(!n){ toast('코스 이름을 적으세요'); return; }
     touch({id:newId('c'), type:'course', name:n, km:k>0?k:null, deleted:false}); toast('코스를 더했습니다'); renderSet(); };
   host.querySelectorAll('[data-cdel]').forEach(b=>b.onclick=()=>{ const c=ST.rows[b.dataset.cdel]; if(c&&confirm(c.name+' 코스를 지울까요? 이 코스로 적은 기록은 남고 코스 이름만 빠집니다.')){ touch(Object.assign({},c,{deleted:true})); renderSet(); } });
@@ -1098,6 +1103,8 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refresh(
 window.addEventListener('focus',()=>refresh());
 window.addEventListener('pageshow',e=>{ if(e.persisted) refresh(); });
 setInterval(()=>{ if(!document.hidden) refresh(); },120000);
+/* 시작이 같은 탭(sijak_run)에서 주소 끝만 바꿔 열면 그 화면으로 */
+window.addEventListener('hashchange',()=>{ const m=location.hash.match(/^#(\w+)/); if(m&&VIEWS.includes(m[1])&&m[1]!=='one'&&m[1]!==view) go(m[1]); });
 window.addEventListener('resize',()=>{ clearTimeout(window._rz); window._rz=setTimeout(()=>{ if(view==='flow'||view==='one'||view==='weight') render(); },200); });
 
 (function start(){
