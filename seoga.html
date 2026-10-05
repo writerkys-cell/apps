@@ -255,7 +255,7 @@ const CAT={
 let S=load();
 let orderSig=JSON.stringify(S.order);
 const RKEY='seoga.read.v1';
-let R=loadR(), finishFor=null, askFor=null, holdId=null;
+let R=loadR(), finishFor=null, askFor=null, holdId=null, reviewFor=null;
 let view=(R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
 let openShelves=new Set(), homeOpen=false, pageFor=null;
 let draft=blankDraft();
@@ -1273,6 +1273,13 @@ function vRead(){
       <div class="rowbtns"><button class="primary" onclick="keepReading('${a.id}')">계속 읽기</button>
         <button class="ghost" onclick="startHold('${a.id}')">보류</button></div></section><hr class="hr">`;
   } else askFor=null;
+  if(reviewFor&&book(reviewFor)&&!finishFor&&!askFor){
+    const r=book(reviewFor);
+    out+=`<section style="margin-bottom:30px"><p class="rd-m" style="margin:0">‘${esc(r.title)}’, ${r.page}쪽까지 읽었습니다.</p>
+      <p class="note" style="margin-top:14px">지금까지 읽은 부분을 클로드에게 깊이 리뷰받으면 다음 부분을 읽을 때 도움이 됩니다. 그 뒤 내용은 말하지 않도록 부탁합니다.</p>
+      <div class="rowbtns"><button class="primary" onclick="askClaude('${r.id}')">클로드에게</button>
+        <button class="linkish" onclick="reviewFor=null;render()">나중에</button></div></section><hr class="hr">`;
+  } else reviewFor=null;
   if(!b) return out+`<div class="empty" style="border:none;padding-top:0"><b>지금 읽는 책이 없습니다.</b><br>다음 읽을 책의 1위가 여기 놓입니다.
       <div class="rowbtns"><button class="primary" onclick="addForReading()">읽을 책 담기</button>
       <button class="ghost" onclick="go('list','best')">읽은 책 보기</button></div></div>`+statsHTML();
@@ -1302,6 +1309,7 @@ function vRead(){
     + plan
     + `<div class="rowbtns"><button class="primary" style="min-width:62%" onclick="startReading()">읽기 시작</button></div>
       <div class="rowbtns" style="margin-top:10px"><button class="linkish" onclick="go('list','next')">다른 책 고르기</button>
+      <button class="linkish" onclick="askClaude('${b.id}')">클로드에게</button>
       <button class="linkish" onclick="addForReading()">새 책 담아 읽기</button>
       <button class="linkish" onclick="startHold('${b.id}')">${borrowedNow(b)?'이 책 보류 · 반납':'이 책 보류'}</button></div>`
     + statsHTML();
@@ -1425,7 +1433,30 @@ function stamp(){
   R.active=null; save(); saveR();
   if(rec.finished) finishFor=b.id;
   else if(b&&!b.judgedAt){ const h=holdLine(b); if(h&&to>=h) askFor=b.id; }
+  if(b&&!rec.finished) reviewFor=b.id;
   toast(fmtMin(minutes)+' · '+to+'쪽까지'); render(true);
+}
+/* 클로드에게: 지금까지 읽은 부분을 리뷰해 달라는 프롬프트를 만들어 클립보드에 복사하고 claude.ai를 연다. 앱 안에서 API를 부르지 않는다. */
+function claudePrompt(b){
+  const pg=b.page||0, info=[b.author, b.publisher, b.total?'총 '+b.total+'쪽':''].filter(Boolean).join(', ');
+  const lines=memLines(b.id).slice(-3), marks=markItems(b.id).filter(x=>x.kind==='mark');
+  const recent=[...marks].sort((a,z)=>(z.at||'').localeCompare(a.at||'')).slice(0,10).sort((a,z)=>(a.page||0)-(z.page||0));
+  let t=`『${b.title}』${info?'('+info+')':''}`;
+  if(!pg) return t+`를 이제 읽기 시작합니다.\n\n줄거리를 말하지 말고, 읽기 전에 알아두면 좋을 것만 알려 주세요. 작가와 쓰인 때의 배경, 책의 형식과 구조, 읽을 때 마음에 둘 점을 간단히 짚어 주세요.`;
+  t+=`를 읽고 있습니다. 지금 ${pg}쪽까지 읽었습니다.\n`;
+  if(lines.length) t+=`\n[읽으며 남긴 한 줄]\n`+lines.map(x=>`- ${rangeText(x)}: ${x.memory}`).join('\n')+'\n';
+  if(recent.length) t+=`\n[밑줄 친 문장${marks.length>recent.length?' · 최근 '+recent.length+'개':''}]\n`+recent.map(x=>`- ${x.page?x.page+'쪽: ':''}${x.text}`).join('\n')+'\n';
+  t+=`\n${pg}쪽까지 읽은 부분만 가지고 깊이 리뷰해 주세요. 그 뒤 내용은 절대 말하지 마세요. 지금까지의 배경, 구조, 인물이나 개념 사이의 관계, 제가 놓쳤을 수 있는 점을 짚어 주세요.${recent.length?' 밑줄 친 문장이 왜 중요한지도 풀어 주세요.':''} 마지막에 다음 부분을 읽을 때 눈여겨볼 것을 두세 가지 알려 주세요.`;
+  return t;
+}
+function askClaude(id){
+  const b=book(id); if(!b) return;
+  const t=claudePrompt(b); reviewFor=null;
+  try{ navigator.clipboard.writeText(t).catch(()=>{}); }catch(e){}
+  const url='https://claude.ai/new?q='+encodeURIComponent(t);
+  toast('프롬프트를 복사했습니다 · 클로드를 엽니다');
+  const w=window.open(url,'_blank'); if(!w) location.href=url;
+  render();
 }
 let scanOpen=false;
 function markPage(a){ return a.markPage||a.fromPage||''; }
