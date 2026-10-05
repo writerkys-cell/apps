@@ -2546,6 +2546,18 @@ function putLink(m){
   m.scrivLink = link; save(); renderHead(); renderWrite(); renderList();
   if(link) toast("링크를 넣었습니다");
 }
+/* 인쇄 제목 밑 줄 — "2026년 9월 3일 ~ 10월 6일(34일) · 12.3매".
+   같은 날이면 "2026년 10월 6일(1일)", 해가 다르면 끝 날짜에도 연도 */
+function prMetaText(start, end, chars){
+  var a = new Date(start || end), b = new Date(end), d = spanDays(a.getTime(), b.getTime());
+  var span = dayKey(a.getTime()) === dayKey(b.getTime()) ? fullDate(b)
+           : fullDate(a) + " ~ " + (a.getFullYear() === b.getFullYear() ? (b.getMonth()+1) + "월 " + b.getDate() + "일" : fullDate(b));
+  return span + "(" + d + "일) · " + mae(chars) + "매";
+}
+/* 원고들이 처음 생긴 날 */
+function firstAt(ms, fallback){ return ms.reduce(function(a, m){ return Math.min(a, m.createdAt || a); }, fallback || Date.now()); }
+/* 인쇄의 끝 날짜 — 완성한 작품은 작품 완성 날, 아니면 오늘 */
+function prEnd(w){ return workDone(w) ? w.finishedAt : Date.now(); }
 /* 작품 전체를 이어서 인쇄 — 원고 사이는 한 줄 띄움 */
 /* 인쇄 범위 — 없어진 부·장이면 전체로 */
 function prScopeOf(w){
@@ -2560,11 +2572,12 @@ function printChaptered(w, scope){
   var sh = $("#sheet"), first = true, printed = 0;
   sh.innerHTML = "";
   function block(cls){ var d = document.createElement("div"); d.className = cls + (first ? " first" : ""); first = false; sh.appendChild(d); return d; }
-  function meta(el, chars, tg){
+  function meta(el, chars, start){
     var mt = document.createElement("p"); mt.className = "m";
-    mt.textContent = fullDate(Date.now()) + " · " + mae(chars) + "매" + (tg ? " · " + Math.round(chars / tg * 100) + "%" : "");
+    mt.textContent = prMetaText(start, prEnd(w), chars);
     el.appendChild(mt);
   }
+  function chStart(c){ return firstAt(chPieces(w, c).concat(chMerged(w, c) ? [chMerged(w, c)] : []), c.createdAt); }
   function body(el, us){
     var all = [];
     us.forEach(function(m){ var ls = lines(m); if(!ls.length) return; if(all.length) all.push(""); all = all.concat(ls); });
@@ -2575,14 +2588,14 @@ function printChaptered(w, scope){
   function chapter(c, withMeta){
     if(!hasText(c)) return;
     var d = block("chap"), h = document.createElement("h2"); h.className = "ct"; h.textContent = chLabel(w, c); d.appendChild(h);
-    if(withMeta) meta(d, chChars(w, c), 0);
+    if(withMeta) meta(d, chChars(w, c), chStart(c));
     if(body(d, chUnits(w, c))) printed++;
   }
   function partPage(p, withMeta){
     var cs = partChapters(w, p).filter(hasText);
     if(!cs.length) return;
     var d = block("partp"), h = document.createElement("h2"); h.className = "pt"; h.textContent = partLabel(w, p); d.appendChild(h);
-    if(withMeta) meta(d, cs.reduce(function(a, c){ return a + chChars(w, c); }, 0), 0);
+    if(withMeta) meta(d, cs.reduce(function(a, c){ return a + chChars(w, c); }, 0), cs.reduce(function(a, c){ return Math.min(a, chStart(c)); }, Infinity));
     cs.forEach(function(c){ chapter(c, false); });
   }
   if(scope.indexOf("c:") === 0){
@@ -2591,7 +2604,7 @@ function printChaptered(w, scope){
     partPage(partById(w, scope.slice(2)), true);
   }else{
     var tp = block("titlep"), t = document.createElement("h1"); t.className = "t"; t.textContent = w.title; tp.appendChild(t);
-    meta(tp, workChars(w), w.targetMae ? w.targetMae * 200 : 0);
+    meta(tp, workChars(w), firstAt(cntPieces(w), w.createdAt));
     var seen = {};
     chaptersOf(w).forEach(function(c){
       var p = chPart(w, c);
@@ -2620,8 +2633,7 @@ function printWork(w){
   sh.innerHTML = "";
   var t = document.createElement("h1"); t.className = "t"; t.textContent = w.title;
   var mt = document.createElement("p"); mt.className = "m";
-  var n = workChars(w), tg = w.targetMae ? w.targetMae * 200 : 0;
-  mt.textContent = fullDate(Date.now()) + " · " + mae(n) + "매" + (tg ? " · " + Math.round(n / tg * 100) + "%" : "");
+  mt.textContent = prMetaText(firstAt(cntPieces(w), w.createdAt), prEnd(w), workChars(w));
   sh.appendChild(t); sh.appendChild(mt);
   all.forEach(function(line){
     var p = document.createElement("p"); p.className = "b"; p.textContent = line || "\u00a0";
@@ -2779,9 +2791,7 @@ function printMs(m){
   sh.innerHTML = "";
   var t = document.createElement("h1"); t.className = "t"; t.textContent = m.title;
   var mt = document.createElement("p"); mt.className = "m";
-  var n = len(m.text);
-  mt.textContent = fullDate(Date.now()) + " · " + mae(n) + "매"
-                 + (goalOf(m) ? " · " + Math.round(n / goalOf(m) * 100) + "%" : "");
+  mt.textContent = prMetaText(m.createdAt, Date.now(), len(m.text));
   sh.appendChild(t); sh.appendChild(mt);
   list.forEach(function(line){
     var p = document.createElement("p"); p.className = "b"; p.textContent = line || "\u00a0";
