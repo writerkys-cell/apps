@@ -995,7 +995,13 @@ function renderSet(){
   </div>
   <div class="btnrow"><button class="btn" id="mSave">저장</button></div>
 
-  <h3>내보내기</h3>
+  <h3>전체 백업</h3>
+  <p class="note">운동·몸무게·코스·신발·기준선을 한 파일로 내보내고, 그 파일로 되살립니다. 불러올 때는 기록마다 이 기기의 것과 견주어 나중에 고친 쪽을 남깁니다. 지운 기록은 되살아나지 않습니다. ‘나에 대해’는 넣지 않습니다.</p>
+  <div class="btnrow"><button class="btn" id="bkOut">백업 파일 내보내기</button><button class="btn" id="bkIn">백업 파일 불러오기</button><input type="file" id="bkFile" accept=".json,application/json" hidden></div>
+  <p class="note" id="bkMsg"></p>
+
+  <h3>표로 내보내기</h3>
+  <p class="note">엑셀이나 넘버스에서 읽는 용도입니다. 되살리기에는 전체 백업을 쓰세요.</p>
   <div class="btnrow"><button class="btn" id="exCsv">운동 기록 CSV</button></div>`;
   host.innerHTML=h;
   $('sSave').onclick=async()=>{ cfg={url:$('sUrl').value.trim(), key:$('sKey').value.trim()}; lsSet(CFG_KEY,cfg); await probe(); };
@@ -1011,6 +1017,42 @@ function renderSet(){
   $('mSave').onclick=()=>{ const y=$('mBirth').value.trim(); if(y&&!/^\d{4}$/.test(y)){ toast('태어난 해를 네 자리로 적으세요'); return; }
     lsSet(ME_KEY,{birth:y, height:$('mHeight').value.trim(), place:$('mPlace').value.trim(), why:$('mWhy').value.trim(), aim:$('mAim').value.trim(), body:$('mBody').value.trim()}); toast('이 기기에 저장했습니다'); };
   $('exCsv').onclick=exportCsv;
+  $('bkOut').onclick=exportBackup;
+  $('bkIn').onclick=()=>$('bkFile').click();
+  $('bkFile').onchange=ev=>{ const f=ev.target.files[0]; ev.target.value=''; if(f) importBackup(f); };
+}
+/* ═════════ 전체 백업 ═════════
+   { app:'dalligi', v:1, exportedAt, rows:{ id: data } } — 지운 줄(deleted:true)도 담는다. 다른 기기에서 되살아나지 않게 */
+const BK_TYPES=['act','weight','course','shoe','conf'];
+function downloadBlob(blob,name){ const el=document.createElement('a'); el.href=URL.createObjectURL(blob); el.download=name; document.body.appendChild(el); el.click(); el.remove(); setTimeout(()=>URL.revokeObjectURL(el.href),4000); }
+function exportBackup(){
+  const rows={}; Object.values(ST.rows).forEach(r=>{ if(r&&r.id&&BK_TYPES.includes(r.type)) rows[r.id]=r; });
+  downloadBlob(new Blob([JSON.stringify({app:'dalligi', v:1, exportedAt:new Date().toISOString(), rows},null,1)],{type:'application/json'}), '달리기_백업_'+dayKey()+'.json');
+  toast('운동 '+live('act').length+'건, 몸무게 '+live('weight').length+'번을 내보냈습니다');
+}
+async function importBackup(file){
+  const msg=$('bkMsg'); let d;
+  try{ d=JSON.parse(await file.text()); }catch(e){ msg.innerHTML='<span class="err">JSON 파일이 아닙니다.</span>'; return; }
+  if(!d||d.app!=='dalligi'||!d.rows||typeof d.rows!=='object'){ msg.innerHTML='<span class="err">달리기의 백업 파일이 아닙니다.</span>'; return; }
+  /* 먼저 Supabase에서 받아 이 기기를 최신으로 — 그래야 옛 백업이 다른 기기에서 새로 고친 것을 덮지 않는다 */
+  if(sbOn()){ msg.textContent='먼저 Supabase에서 최신 기록을 받는 중…'; await pull();
+    if(dotState.sync&&dotState.sync.state==='err'&&!confirm('Supabase에서 최신 기록을 받지 못했습니다. 다른 기기에서 고친 것이 이 백업으로 덮일 수 있습니다. 그래도 불러올까요?')){ msg.textContent=''; return; } }
+  const take=[], cnt={new:0, newer:0, kept:0, gone:0}, kinds={act:0,weight:0,course:0,shoe:0,conf:0};
+  Object.values(d.rows).forEach(r=>{
+    if(!r||typeof r!=='object'||!r.id||!BK_TYPES.includes(r.type)) return;
+    const loc=ST.rows[r.id];
+    if(!loc){ take.push(r); cnt.new++; if(!r.deleted) kinds[r.type]++; else cnt.gone++; }
+    else if((r.updatedAt||'')>(loc.updatedAt||'')){ take.push(r); cnt.newer++; if(!r.deleted) kinds[r.type]++; else cnt.gone++; }
+    else cnt.kept++;
+  });
+  const when=d.exportedAt?new Date(d.exportedAt).toLocaleString('ko-KR'):'날짜 모름';
+  if(!take.length){ msg.textContent=when+'의 백업입니다. 이 기기에 이미 같거나 더 새로운 것만 있어서 받을 것이 없습니다.'; return; }
+  const parts=[kinds.act?'운동 '+kinds.act+'건':'', kinds.weight?'몸무게 '+kinds.weight+'번':'', kinds.course?'코스 '+kinds.course+'개':'', kinds.shoe?'신발 '+kinds.shoe+'켤레':'', kinds.conf?'기준선':'' , cnt.gone?'지운 표시 '+cnt.gone+'건':''].filter(Boolean).join(', ');
+  if(!confirm(when+'의 백업입니다.\n이 기기에 없거나 백업 쪽이 더 나중에 고친 것 '+take.length+'줄('+parts+')을 받습니다. 이 기기 쪽이 더 새로운 '+cnt.kept+'줄은 그대로 둡니다.\n불러올까요?')){ msg.textContent=''; return; }
+  take.forEach(r=>{ ST.rows[r.id]=r; ST.dirty[r.id]=1; });   /* updatedAt은 백업의 것을 그대로 — 나중에 고친 쪽이 이기는 규칙을 지킨다 */
+  persist(); clearTimeout(pushT); pushT=setTimeout(push,300);
+  msg.textContent=take.length+'줄을 받았습니다('+parts+'). '+(sbOn()?'Supabase에 올립니다.':'');
+  toast('백업을 불러왔습니다');
 }
 async function probe(){
   const p=$('probe'); p.textContent='확인하는 중…';
