@@ -50,6 +50,8 @@ h2.sec{font-size:15px;font-weight:400;color:var(--ink-soft);letter-spacing:.14em
 .meta{font-size:13px;color:var(--ink-soft);margin-top:2px}
 .place{font-size:12.5px;letter-spacing:.04em;white-space:nowrap;border:1px solid var(--line);padding:2px 8px;border-radius:var(--radius);color:var(--ink-soft);background:var(--paper-2)}
 .place.none{border-style:dashed;background:none;color:var(--void)}
+button.place{font-family:inherit;cursor:pointer;line-height:inherit}
+button.place:active{border-color:var(--seal)}
 .badge{font-size:11.5px;padding:1px 5px;border-radius:var(--radius);margin-left:7px;white-space:nowrap;vertical-align:2px;border:1px solid}
 .b-gift{border-color:var(--moss);color:var(--moss)}
 .b-read{border-color:var(--deep);color:var(--deep)}
@@ -98,7 +100,11 @@ input:focus,textarea:focus{outline:none;border-bottom-color:var(--seal)}
 .choice.on[data-c=gift]{background:var(--moss)}
 .choice.on[data-c=undecided],.choice.on[data-c=none],.choice.on[data-c=remove],.choice.on[data-c=gone],.choice.on[data-c=hold]{background:var(--void)}
 .choice.on[data-c=wait],.choice.on[data-c=bin]{background:var(--seal)}
-.choice.on[data-c=keep]{background:var(--deep)}
+.choice.on[data-c=keep],.choice.on[data-c=borrow]{background:var(--deep)}
+.choice.on[data-c=record]{background:var(--void)}
+.b-lib{border-color:var(--deep);color:var(--deep)}
+.pagemark.late{color:var(--seal)}
+.subhead{margin:22px 0 8px}
 .toggle{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);padding:9px 15px;border-radius:var(--radius);font-size:15px;color:var(--ink-soft);background:none}
 .toggle.on{border-color:var(--moss);color:var(--moss)}
 .toggle .box{width:13px;height:13px;border:1px solid currentColor;display:inline-block;border-radius:1px}
@@ -253,7 +259,7 @@ let R=loadR(), finishFor=null, askFor=null, holdId=null;
 let view=(R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
 let openShelves=new Set(), homeOpen=false, pageFor=null;
 let draft=blankDraft();
-function blankDraft(loc){ return {title:'',author:'',publisher:'',total:'',category:null,gift:false,received:today(),location:loc||'',step:1}; }
+function blankDraft(loc){ return {title:'',author:'',publisher:'',total:'',category:null,gift:false,received:today(),borrowed:false,library:'',due:'',location:loc||'',step:1}; }
 
 /* ── 저장 ── */
 function load(){
@@ -281,6 +287,10 @@ function normBook(b){
     if(typeof b.heldPage!=='number') b.heldPage=0;
     if(!b.heldReason) b.heldReason='';
     if(!b.judgedAt) b.judgedAt='';
+    if(typeof b.borrowed!=='boolean') b.borrowed=false;
+    if(!b.library) b.library='';
+    if(!b.due) b.due='';
+    if(!b.returnedAt) b.returnedAt='';
     if(!b.updated) b.updated=b.added||new Date().toISOString();
     if(typeof b.page!=='number') b.page=0;
     if(!b.pageAt) b.pageAt='';
@@ -311,7 +321,24 @@ function heldBooks(){ return S.books.filter(b=>b.held).sort((a,b)=>(b.heldAt||''
 function holdLine(b){ if(!b.total) return 0; return b.total>=300?100:Math.ceil(b.total/3); }
 function gifts(){ return live().filter(b=>b.gift).sort((a,b)=>(b.received||'').localeCompare(a.received||'')||(b.added||'').localeCompare(a.added||'')); }
 function undecided(){ return live().filter(b=>!b.category).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
-function homeless(){ return live().filter(b=>!b.location).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
+/* 빌린 책: 도서관에서 빌려 와 집에 둔 책. 가진 책이 아니므로 폐기 판단에 끼지 않는다. 반납하면 자리를 비우고 기록으로 남는다. */
+function borrowedNow(b){ return !!b.borrowed&&!b.returnedAt; }
+function plusDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function libText(b){ if(!b.borrowed) return '';
+  if(b.returnedAt) return '빌려 읽음'+(b.library?' · '+b.library:'');
+  return (b.library||'빌린 책')+(b.due?' · '+mdLabel(b.due)+'까지':''); }
+function isLate(b){ return borrowedNow(b)&&!!b.due&&b.due<today(); }
+function borrowingBooks(){ return live().filter(borrowedNow).sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')||a.title.localeCompare(b.title,'ko')); }
+function returnedBooks(){ return S.books.filter(b=>b.borrowed&&b.returnedAt&&!b.discarded).sort((a,b)=>(b.returnedAt||'').localeCompare(a.returnedAt||'')||(b.updated||'').localeCompare(a.updated||'')); }
+function borrowBooks(){ return borrowingBooks().concat(returnedBooks()); }
+/* 한 줄·밑줄·스캔이 남은 책. 렌더할 때마다 한 번 만든다. */
+let TRACE=null;
+function traces(){ if(TRACE) return TRACE; const m=new Map();
+  R.reads.forEach(x=>{ if(x.gone) return; const k=x.kind==='read'&&x.memory?'l':(x.kind==='mark'||x.kind==='scan')?'m':''; if(!k) return;
+    const o=m.get(x.bookId)||m.set(x.bookId,{l:0,m:0}).get(x.bookId); o[k]++; }); return TRACE=m; }
+function hasTrace(b){ return traces().has(b.id); }
+function traceText(b){ const t=traces().get(b.id); if(!t) return ''; return [t.l?'한 줄 '+t.l:'',t.m?'밑줄 '+t.m:''].filter(Boolean).join(' · '); }
+function homeless(){ return live().filter(b=>!b.location&&!(b.borrowed&&b.returnedAt)).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 function rankOf(b){ return b.category&&!b.discarded&&!b.held? S.order[b.category].indexOf(b.id)+1 : 0; }
 /* 폐기 판단: 순위 밖으로 밀려난 책은 판단을 기다린다. 폐기하면 폐기 서가로, 보관하면 제자리에 라벨만 붙는다. */
 function nextMax(){ return R.settings.nextMax||100; }
@@ -323,8 +350,11 @@ function outOfRank(b){
   const r=rankOf(b); return r>0 && r>(b.category==='best'?BEST_MAX:nextMax());
 }
 function inGrace(b){ const g=graceDays(); if(!g||!b.added) return false; return daysBetween(b.added.slice(0,10),today())<g; }
-function isWaiting(b){ return outOfRank(b)&&!b.keep&&!!b.location&&!inGrace(b); }
-function isRemovable(b){ return outOfRank(b)&&!b.location&&!inGrace(b); }
+function isWaiting(b){ return outOfRank(b)&&!b.borrowed&&!b.keep&&!!b.location&&!inGrace(b); }
+/* 기록: 순위 밖으로 밀려난, 가지고 있지 않은 책 가운데 한 줄·밑줄을 남겼거나 빌려 읽은 책. 지우지 않고 남긴다. */
+function isRecord(b){ return outOfRank(b)&&!b.location&&!borrowedNow(b)&&(b.borrowed||hasTrace(b)); }
+function isRemovable(b){ return outOfRank(b)&&!b.location&&!b.borrowed&&!hasTrace(b)&&!inGrace(b); }
+function recordBooks(){ return live().filter(isRecord).sort((a,b)=>(a.category==='best'?0:1)-(b.category==='best'?0:1)||rankOf(a)-rankOf(b)); }
 const locKey=l=>(l||'').replace(/\d+/g,n=>n.padStart(4,'0'));
 let skipQ=(()=>{ try{ return JSON.parse(localStorage.getItem('seoga.skip'))||{}; }catch(e){ return {}; } })();
 function waiting(){ return live().filter(isWaiting).sort((a,b)=>(skipQ[a.id]||'').localeCompare(skipQ[b.id]||'')||locKey(a.location).localeCompare(locKey(b.location),'ko')||rankOf(b)-rankOf(a)); }
@@ -350,18 +380,20 @@ function badges(b,rank){
   let s='';
   if(rank===1&&b.category==='next'&&!b.discarded) s+='<span class="badge b-read">지금 읽는 책</span>';
   if(b.gift) s+='<span class="badge b-gift">증정본</span>';
+  if(b.borrowed) s+=`<span class="badge b-lib">${b.returnedAt?'빌려 읽음':'빌린 책'}</span>`;
   if(b.discarded) s+='<span class="badge b-gone">폐기함</span>';
   else if(b.held) s+='<span class="badge b-gone">보류</span>';
   else if(inBin(b)) s+='<span class="badge b-cand">폐기 서가</span>';
   else if(b.keep&&outOfRank(b)) s+='<span class="badge b-keep">보관</span>';
   else if(isWaiting(b)) s+='<span class="badge b-cand">판단 대기</span>';
+  else if(isRecord(b)) s+='<span class="badge b-gone">기록</span>';
   else if(isRemovable(b)) s+='<span class="badge b-gone">지울 책</span>';
   return s;
 }
 /* 검색: 제목·지은이·펴낸곳·자리에 더해 한 줄과 밑줄·스캔 설명도 본다. 읽기 기록은 검색 한 번에 한 번만 훑는다. */
 let NIDX=null;
 function noteIndex(){ const m=new Map(); R.reads.forEach(x=>{ if(x.gone) return; const t=x.kind==='read'?x.memory:(x.kind==='mark'||x.kind==='scan')?x.text:''; if(!t) return; (m.get(x.bookId)||m.set(x.bookId,[]).get(x.bookId)).push(t); }); return m; }
-function matches(b,k){ if(!k) return true; if([b.title,b.author,b.publisher,b.location].some(v=>(v||'').toLowerCase().includes(k))) return true;
+function matches(b,k){ if(!k) return true; if([b.title,b.author,b.publisher,b.location,b.library].some(v=>(v||'').toLowerCase().includes(k))) return true;
   if(!NIDX) NIDX=noteIndex(); return (NIDX.get(b.id)||[]).some(t=>t.toLowerCase().includes(k)); }
 function noteHit(b,k){ if(!k||!NIDX) return ''; const t=(NIDX.get(b.id)||[]).find(t=>t.toLowerCase().includes(k)); if(!t) return '';
   const i=t.toLowerCase().indexOf(k), a=Math.max(0,i-18), z=Math.min(t.length,i+k.length+40); return (a?'…':'')+t.slice(a,z)+(z<t.length?'…':''); }
@@ -398,10 +430,11 @@ function nextQueued(){
 /* ── 그리기 ── */
 function render(reset){
   const y=window.scrollY;
+  TRACE=null;
   if(!cmp) sweepKeep();
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===view));
   const n=live().length;
-  document.getElementById('brandCount').textContent = S.books.length? n+'권 · 꽂힌 책 '+(n-homeless().length)+'권'+(discardedBooks().length?' · 폐기 '+discardedBooks().length+'권':'') : '';
+  document.getElementById('brandCount').textContent = S.books.length? n+'권 · 꽂힌 책 '+live().filter(b=>b.location&&!b.borrowed).length+'권'+(discardedBooks().length?' · 폐기 '+discardedBooks().length+'권':'') : '';
   document.getElementById('view').innerHTML = cmp? '' : ({read:vRead,home:vHome,add:vAdd,list:vList,shelf:vShelf,data:vData}[view])();
   document.querySelectorAll('.veil').forEach(v=>v.remove());
   if(cmp) document.body.insertAdjacentHTML('beforeend',compareHTML());
@@ -463,7 +496,7 @@ function todayBest(b){
       <div class="now-book" onclick="findBook('${x.id}')">
         <div class="now-t">${esc(x.title)}${badges(x,d)}</div>
         <div class="now-a">${[x.author,x.publisher].filter(Boolean).map(esc).join(' · ')}</div>
-        <div class="now-p"><span class="${x.location?'place':'place none'}">${x.location?esc(x.location):'자리 없음'}</span></div>
+        <div class="now-p"><span class="${x.location?'place':'place none'}">${x.location?esc(x.location):(x.borrowed&&x.returnedAt?esc(libText(x)):'자리 없음')}</span>${x.location&&x.borrowed?`<span class="pagemark">${esc(libText(x))}</span>`:''}</div>
       </div>
       <div class="rowbtns"><button class="ghost" onclick="go('list','best')">베스트 모두 보기 · ${b.length}권</button></div>
     </section>`;
@@ -522,6 +555,13 @@ function vAdd(){
       <button class="toggle ${d.gift?'on':''}" onclick="toggleGift()"><span class="box"></span>증정본으로 받은 책</button>
       ${d.gift?`<div class="field" style="margin-top:12px;max-width:220px"><label>받은 날짜</label><input type="date" id="f-recv" value="${esc(d.received)}"></div>`:''}
     </div>
+    <div style="margin-top:12px">
+      <button class="toggle ${d.borrowed?'on':''}" onclick="toggleBorrow()"><span class="box"></span>도서관에서 빌린 책</button>
+      ${d.borrowed?`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px">
+        <div class="field" style="flex:1;min-width:160px;margin:0"><label>도서관</label><input type="text" id="f-lib" value="${esc(d.library)}" placeholder="예: 마두도서관"><div class="sugg" id="f-lib-sugg"></div></div>
+        <div class="field" style="width:170px;margin:0"><label>반납일</label><input type="date" id="f-due" value="${esc(d.due)}"></div></div>
+        <div class="hint">빌린 책은 폐기를 묻지 않습니다. 다 읽고 반납하면 기록으로 남습니다.</div>`:''}
+    </div>
     ${d.step===2?`<div class="rowbtns"><button class="primary" ${d.category===null?'disabled':''} onclick="draft.step=3;render()">다음 · 자리</button></div>`:''}`;
   if(d.step===2) return `<div style="max-width:560px">${summary()}${step2}</div>`;
   const rec=recentLocations();
@@ -530,17 +570,22 @@ function vAdd(){
       <input type="text" id="f-loc" value="${esc(d.location)}" placeholder="예: 거실 3단 왼쪽">
       <div class="sugg" id="f-loc-sugg"></div>
       ${rec.length?`<div class="recent">${rec.map(l=>`<button onclick="setLoc(this.textContent)">${esc(l)}</button>`).join('')}</div>`:''}
-      <div class="hint">비워두면 <b>가지고 있지 않은 책</b>으로 기록됩니다.</div></div>
+      <div class="hint">${d.borrowed?'빌린 책을 집에서 두는 곳입니다. 비워도 됩니다.':'비워두면 <b>가지고 있지 않은 책</b>으로 기록됩니다.'}</div></div>
+    ${d.borrowed&&d.category==='next'&&!d.readNow?`<div class="hint">반납일이 있으니 곧바로 읽을지, 다른 책과 견주어 차례를 정할지 고릅니다.</div>
     <div class="rowbtns">
+      <button class="primary" onclick="addSave(false,true)">담고 바로 읽기</button>
+      <button class="ghost" onclick="addSave()">담고 견주기</button>
+      <button class="ghost" onclick="addSave(true)">견주고 이어서 한 권 더</button>
+      <button class="linkish" onclick="draft.step=2;render()">뒤로</button></div>`:`<div class="rowbtns">
       <button class="primary" onclick="addSave()">담기</button>
       <button class="ghost" onclick="addSave(true)">담고 이어서 한 권 더</button>
-      <button class="linkish" onclick="draft.step=2;render()">뒤로</button></div>`;
+      <button class="linkish" onclick="draft.step=2;render()">뒤로</button></div>`}`;
   return `<div style="max-width:560px">${summary()}${step2}${step3}</div>`;
 }
 function summary(){
   const d=draft;
   return `<div style="border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px">
-    <div class="title">${esc(d.title)||'(제목 없음)'}${d.gift?'<span class="badge b-gift">증정본</span>':''}</div>
+    <div class="title">${esc(d.title)||'(제목 없음)'}${d.gift?'<span class="badge b-gift">증정본</span>':''}${d.borrowed?'<span class="badge b-lib">빌린 책</span>':''}</div>
     <div class="meta">${[d.author,d.publisher,parseInt(d.total,10)>0?parseInt(d.total,10)+'쪽':''].filter(Boolean).map(esc).join(' · ')||'&nbsp;'}</div>
     <button class="linkish" onclick="draft.step=1;render()">고치기</button></div>`;
 }
@@ -575,6 +620,8 @@ function bindAdd(){
       else if(id==='f-pub') document.getElementById('f-total').focus(); else addStep1(); });
   });
   const r=document.getElementById('f-recv'); if(r) r.addEventListener('input',()=>draft.received=r.value);
+  const fl=document.getElementById('f-lib'); if(fl) fl.addEventListener('input',()=>draft.library=fl.value);
+  const fd=document.getElementById('f-due'); if(fd) fd.addEventListener('input',()=>draft.due=fd.value);
   const l=document.getElementById('f-loc');
   if(l){ l.addEventListener('input',()=>draft.location=l.value);
     l.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&!ev.isComposing){ev.preventDefault();addSave(true);} });
@@ -583,44 +630,50 @@ function bindAdd(){
   attachSuggest('f-author',()=>fieldValues('author'),v=>draft.author=v);
   attachSuggest('f-pub',()=>fieldValues('publisher'),v=>draft.publisher=v);
   attachSuggest('f-loc',()=>locations().map(l=>l[0]),v=>draft.location=v);
+  attachSuggest('f-lib',()=>fieldValues('library'),v=>draft.library=v);
 }
 function bindEdit(){
   attachSuggest('e-author',()=>fieldValues('author'),()=>{});
   attachSuggest('e-pub',()=>fieldValues('publisher'),()=>{});
   attachSuggest('e-loc',()=>locations().map(l=>l[0]),()=>{});
+  attachSuggest('e-lib',()=>fieldValues('library'),()=>{});
 }
 function addStep1(){ if(!draft.title.trim()) return; draft.step=2; render(); }
 function pickCat(c){ draft.category=c; if(draft.step===2) draft.step=3; render(); }
-function toggleGift(){ draft.gift=!draft.gift; if(draft.gift&&!draft.received) draft.received=today(); render(); }
+function toggleGift(){ draft.gift=!draft.gift; if(draft.gift){ draft.borrowed=false; if(!draft.received) draft.received=today(); } render(); }
+function toggleBorrow(){ draft.borrowed=!draft.borrowed; if(draft.borrowed){ draft.gift=false; if(!draft.due) draft.due=plusDays(14); } render(); }
 function setLoc(l){ draft.location=l; const e=document.getElementById('f-loc'); if(e) e.value=l; }
-function addSave(again){
+function addSave(again,readIt){
   const d=draft;
   if(!d.title.trim()||d.category===null){ toast('제목과 분류가 필요합니다'); return; }
   const now=new Date().toISOString();
   const b={id:uid(),title:d.title.trim(),author:d.author.trim(),publisher:d.publisher.trim(),
     category:d.category,gift:d.gift,received:d.gift?(d.received||today()):'',location:d.location.trim(),
+    borrowed:!!d.borrowed,library:d.borrowed?d.library.trim():'',due:d.borrowed?(d.due||''):'',returnedAt:'',
     discarded:false,toDiscard:false,discardedAt:'',page:0,pageAt:'',total:Math.max(0,parseInt(d.total,10)||0),added:now,updated:now,note:''};
   S.books.push(b);
   if(b.location) S.lastLocation=b.location;
   const cat=b.category, loc=b.location;
   if(cat) S.order[cat].push(b.id);
   save();
-  if(d.readNow&&cat==='next'){
+  if((d.readNow||readIt)&&cat==='next'){
     S.order.next=[b.id,...S.order.next.filter(x=>x!==b.id)]; save();
     draft=blankDraft(loc); view='read'; toast('지금 읽는 책으로 담았습니다'); render(true); return;
   }
   draft=blankDraft(again?loc:'');
   if(cat){ const list=S.order[cat].filter(x=>x!==b.id);
     if(list.length){ S.order[cat]=list; startCompare(b.id); return; } }
-  toast('담았습니다'+(loc?' · '+loc:' · 자리 없음'));
+  toast('담았습니다'+(loc?' · '+loc:(b.borrowed?'':' · 자리 없음'))+(b.borrowed?' · '+libText(b):''));
   if(!again) view='home';
   render();
 }
 
 /* 목록 */
-const TABS=[['best','베스트'],['next','다음 읽을 책'],['gift','증정본'],['undecided','미정'],['none','자리 없음'],['wait','판단 대기'],['keep','보관본'],['bin','폐기 서가'],['remove','지울 책'],['hold','보류'],['gone','폐기함']];
+const TABS=[['best','베스트'],['next','다음 읽을 책'],['gift','증정본'],['borrow','빌린 책'],['undecided','미정'],['none','자리 없음'],['wait','판단 대기'],['keep','보관본'],['bin','폐기 서가'],['remove','지울 책'],['hold','보류'],['record','기록'],['gone','폐기함']];
 function tabList(c){
   if(c==='gift') return gifts();
+  if(c==='borrow') return borrowBooks();
+  if(c==='record') return recordBooks();
   if(c==='undecided') return undecided();
   if(c==='none') return homeless();
   if(c==='wait') return waiting();
@@ -648,7 +701,11 @@ function listBody(){
   const ranked=!searching&&(listTab==='best'||listTab==='next');
   const total=list.length, part=list.slice(0,shown);
   if(!total) return `<div class="empty">${searching?'‘'+esc(q)+'’와 맞는 책이 없습니다.':'아직 없습니다.'}</div>`;
+  if(!searching&&listTab==='borrow'){ const a=borrowingBooks(), z=returnedBooks();
+    return (a.length?`<h2 class="sec subhead" style="margin-top:0">빌려 있는 책 ${a.length}권</h2><div class="rows">${a.map(b=>rowHTML(b,null,true)).join('')}</div>`:'')
+      + (z.length?`<h2 class="sec subhead">반납한 책 ${z.length}권</h2><div class="rows">${z.map(b=>rowHTML(b,null,true)).join('')}</div>`:''); }
   return (searching?`<p class="note" style="margin:0 0 10px">모든 책에서 ${total}권을 찾았습니다.</p>`:'')
+    + (!searching&&listTab==='record'?`<p class="note" style="margin:0 0 12px">순위 밖으로 밀려난, 가지고 있지 않은 책 가운데 한 줄·밑줄을 남겼거나 빌려 읽은 책입니다. 지우지 않고 남깁니다.</p>`:'')
     + `<div class="rows">${part.map((b,i)=>rowHTML(b,ranked?i+1:null,!ranked)).join('')}</div>`
     + (total>part.length?`<div class="rowbtns"><button class="ghost" onclick="shown+=PAGE;refreshList()">${
         Math.min(PAGE,total-part.length)}권 더 보기 · 남은 ${total-part.length}권</button></div>`:'')
@@ -656,7 +713,7 @@ function listBody(){
     + (!searching&&listTab==='remove'&&total?`<div class="rowbtns"><button class="ghost warn" style="color:var(--seal);border-color:rgba(155,59,50,.35)" onclick="removeAll()">지울 책 ${total}권 모두 목록에서 지우기</button></div>`:'')
     + (ranked&&total>1?`<div class="rowbtns"><button class="ghost" onclick="reorderAll('${listTab}')">순서 처음부터 다시 정하기</button></div>`:'');
 }
-function refreshList(){ const el=document.getElementById('listbody'); if(el) el.innerHTML=listBody(); }
+function refreshList(){ TRACE=null; const el=document.getElementById('listbody'); if(el) el.innerHTML=listBody(); }
 function rowHTML(b,rank,showState){
   const open=openId===b.id, cls=(rank&&rank<=3?' b'+rank:'')+((b.discarded||b.held)?' gone':'');
   const hit=q.trim()?noteHit(b,q.trim().toLowerCase()):'';
@@ -665,12 +722,14 @@ function rowHTML(b,rank,showState){
   if(showState) meta.push(stateLabel(b));
   if(b.gift&&b.received) meta.push(esc(b.received)+' 받음');
   if(inBin(b)) meta.push(daysBetween(b.binAt,today())+'일째'+(b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''));
+  if(b.borrowed) meta.push(`<span${isLate(b)?' style="color:var(--seal)"':''}>${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}${isLate(b)?' · 반납일 지남':''}</span>`);
+  if(isRecord(b)&&traceText(b)) meta.push(traceText(b));
   if(b.held&&b.heldReason) meta.push(esc(b.heldReason));
   return `<div class="row${cls}" data-id="${b.id}" onclick="toggle('${b.id}')">
     <div class="rank">${rank?rank:`<span class="tagdot ${dot}" style="margin:0"></span>`}</div>
     <div><div class="title">${esc(b.title)}${badges(b,rank)}</div>
       <div class="meta">${meta.filter(Boolean).join('&nbsp;&nbsp;·&nbsp;&nbsp;')}${hit?`<span class="hit">“${esc(hit)}”</span>`:''}</div></div>
-    <div class="${b.location?'place':'place none'}">${b.location?esc(b.location):(b.discarded?'폐기':b.held?'보류':'자리 없음')}</div>
+    <div class="${b.location?'place':'place none'}">${b.location?esc(b.location):(b.discarded?'폐기':b.held?'보류':b.borrowed&&b.returnedAt?'반납':b.borrowed?'빌린 책':isRecord(b)?'기록':'자리 없음')}</div>
   </div>${open?detailHTML(b):''}`;
 }
 /* 한 줄: 읽기 기록마다 남긴 한 줄을 책별로 모은다 */
@@ -751,7 +810,8 @@ function detailHTML(b){
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}</div>`;
   if(b.held) return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.heldReason?'<br>'+esc(b.heldReason):''}${b.note?'<br>'+esc(b.note):''}</div>
-    <div class="acts"><button onclick="unHold('${b.id}')">되살리기</button>
+    ${b.borrowed?`<div class="meta">${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}</div>`:''}
+    <div class="acts"><button onclick="unHold('${b.id}')">${b.borrowed?'다시 빌림':'되살리기'}</button>
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}</div>`;
   if(inBin(b)) return `<div class="detail">
@@ -760,7 +820,7 @@ function detailHTML(b){
       <button onclick="unBin('${b.id}')">되살리기</button>
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}</div>${linesBlock(b)}${marksBlock(b)}</div>`;
   return `<div class="detail">
-    <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):'가지고 있지 않음'}${b.page?' · '+b.page+'쪽까지':''}${b.note?'<br>'+esc(b.note):''}</div>
+    <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):(b.borrowed?'집에 둔 자리 없음':'가지고 있지 않음')}${b.page?' · '+b.page+'쪽까지':''}${b.borrowed?'<br>'+esc(libText(b))+(b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':'')+(isLate(b)?' · 반납일 지남':''):''}${isRecord(b)&&traceText(b)?'<br>기록 · '+traceText(b):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
       ${b.category?`<button onclick="reRank('${b.id}')">견주기</button>`:''}
       ${b.category==='next'&&rankOf(b)>1?`<button onclick="readNow('${b.id}')">지금 읽기</button>`:''}
@@ -768,12 +828,13 @@ function detailHTML(b){
       ${b.category!=='best'?`<button onclick="moveTo('${b.id}','best')">읽은 책으로</button>`:''}
       ${b.category!=='next'?`<button onclick="moveTo('${b.id}','next')">읽을 책으로</button>`:''}
       ${b.category?`<button onclick="moveTo('${b.id}','')">분류 미루기</button>`:''}
-      <button class="gift" onclick="toggleGiftOn('${b.id}')">${b.gift?'증정본 표시 떼기':'증정본으로 표시'}</button>
+      ${borrowedNow(b)&&b.category==='best'?`<button onclick="returnBook('${b.id}')">반납했다</button>`:''}
+      ${b.borrowed?`<button onclick="unBorrow('${b.id}')">빌린 책 표시 떼기</button>`:`<button class="gift" onclick="toggleGiftOn('${b.id}')">${b.gift?'증정본 표시 떼기':'증정본으로 표시'}</button>`}
       ${isWaiting(b)?`<button onclick="keepBook('${b.id}')">보관</button>`:''}
       ${b.keep&&outOfRank(b)?`<button onclick="unKeep('${b.id}')">보관 라벨 떼기</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>
-      ${b.location?`<button class="warn" onclick="toBin('${b.id}')">폐기</button>`:''}
-      <button class="warn" onclick="startHold('${b.id}')">보류</button>
+      ${b.location&&!b.borrowed?`<button class="warn" onclick="toBin('${b.id}')">폐기</button>`:''}
+      <button class="warn" onclick="startHold('${b.id}')">${borrowedNow(b)?'보류 · 반납':'보류'}</button>
       ${linesBtn(b)}${marksBtn(b)}
       <button class="warn" onclick="del('${b.id}')">${isRemovable(b)?'목록에서 지우기':'지우기'}</button>
     </div>${linesBlock(b)}${marksBlock(b)}</div>`;
@@ -811,7 +872,7 @@ function outAll(){ const list=dueBooks(); if(!list.length) return;
   list.forEach(doDiscard); save(); openId=null; toast(list.length+'권을 내놓았습니다'); render(); }
 function removeAll(){ const list=removables(); if(!list.length) return;
   if(!confirm('자리 없이 순위 밖으로 밀려난 '+list.length+'권을 목록에서 아주 지웁니다. 되돌릴 수 없습니다.')) return;
-  const now=new Date().toISOString(); list.forEach(b=>{ S.tomb[b.id]=now; removeFromOrder(b.id); });
+  const now=new Date().toISOString(); dropTraces(list.map(b=>b.id)); list.forEach(b=>{ S.tomb[b.id]=now; removeFromOrder(b.id); });
   const ids=new Set(list.map(b=>b.id)); S.books=S.books.filter(b=>!ids.has(b.id)); save(); openId=null; toast(list.length+'권을 지웠습니다'); render(); }
 function unBin(id){
   const b=book(id); b.location=b.prevLocation||''; b.prevLocation=''; b.binAt=''; touch(b); save(); openId=null;
@@ -826,7 +887,7 @@ function holdHTML(){
   return `<div class="veil"><div class="sheet" style="max-width:520px">
     <h2 class="sec">보류</h2>
     <p class="ask" style="margin:0 0 6px">${esc(b.title)}</p>
-    <p class="note" style="margin:0 0 18px">${pg?pg+'쪽에서 놓습니다. ':''}책은 서가에서 치우고, 쪽과 이유만 기록으로 남습니다. 한 줄과 밑줄은 그대로 남습니다.</p>
+    <p class="note" style="margin:0 0 18px">${pg?pg+'쪽에서 놓습니다. ':''}${borrowedNow(b)?`책은 ${esc(b.library||'도서관')}에 반납하고`:'책은 서가에서 치우고'}, 쪽과 이유만 기록으로 남습니다. 한 줄과 밑줄은 그대로 남습니다.</p>
     <div class="field"><label>왜 놓는지 · 비워도 됩니다</label><textarea id="h-reason" rows="2" placeholder="지금은 아닌 책, 문장이 안 맞음, 자료로는 충분히 봄…"></textarea></div>
     <div class="rowbtns"><button class="primary" onclick="doHold()">보류하기</button>
       <button class="linkish" onclick="holdId=null;render()">그만두기</button></div></div></div>`;
@@ -837,17 +898,39 @@ function doHold(){
   if(R.active&&R.active.bookId===b.id&&!R.active.closing){ toast('읽는 중인 책은 읽기를 끝낸 뒤에 보류할 수 있습니다'); return; }
   b.held=true; b.heldAt=today(); b.heldPage=b.page||0; b.heldReason=reason; b.judgedAt=b.judgedAt||today();
   b.prevLocation=b.binAt?(b.prevLocation||''):(b.location||''); b.location=''; b.binAt=''; b.keep=false;
+  const lent=borrowedNow(b); if(lent) b.returnedAt=today();
   touch(b); removeFromOrder(b.id); delete skipQ[b.id]; saveSkip(); save();
   holdId=null; openId=null; if(askFor===b.id) askFor=null; if(finishFor===b.id) finishFor=null;
-  toast('보류'+(b.prevLocation?' · '+b.prevLocation+'에서 꺼내세요':'')); render();
+  toast('보류'+(lent?' · '+(b.library||'도서관')+'에 반납하세요':(b.prevLocation?' · '+b.prevLocation+'에서 꺼내세요':''))); render();
+}
+function editLoc(id){
+  const b=book(id); if(!b) return;
+  const v=prompt(b.location?'이 책의 자리 · 비우면 자리 없는 책이 됩니다':'이 책을 꽂을 자리',b.location||''); if(v===null) return;
+  const nl=v.trim(); if(nl===(b.location||'')) return;
+  b.location=nl; if(nl) S.lastLocation=nl; touch(b); save();
+  toast(nl?'자리 · '+nl:'자리를 비웠습니다'); render();
 }
 function unHold(id){
   const b=book(id); if(!b||!b.held) return;
-  const v=prompt('다시 꽂을 자리 · 비우면 자리 없는 책으로 둡니다',b.prevLocation||''); if(v===null) return;
+  const v=prompt(b.borrowed?'다시 빌린 책을 집에 둘 자리 · 비워도 됩니다':'다시 꽂을 자리 · 비우면 자리 없는 책으로 둡니다',b.prevLocation||''); if(v===null) return;
+  if(b.borrowed){ const d=prompt('반납일 · 예 '+plusDays(14),plusDays(14)); if(d===null) return;
+    b.due=/^\d{4}-\d{2}-\d{2}$/.test(d.trim())?d.trim():''; b.returnedAt=''; }
   b.held=false; b.heldAt=''; b.heldPage=0; b.heldReason=''; b.location=v.trim(); b.prevLocation=''; b.category='next'; touch(b); save();
   openId=null; S.order.next.push(id); save();
   if(startCompare(id)){ S.order.next=S.order.next.filter(x=>x!==id); return; }
   toast('되살렸습니다 · 다음 읽을 책'); render();
+}
+function returnBook(id){
+  const b=book(id); if(!b||!borrowedNow(b)) return;
+  b.returnedAt=today(); b.location=''; touch(b); save(); openId=null;
+  toast('반납 · '+(b.library||'도서관')+' · 기록으로 남습니다'); render();
+}
+function unBorrow(id){
+  const b=book(id); if(!b) return;
+  if(!confirm('‘'+b.title+'’의 빌린 책 표시를 뗍니다. 산 책이면 이어서 꽂을 자리를 적습니다.')) return;
+  b.borrowed=false; b.library=''; b.due=''; b.returnedAt='';
+  if(!b.held&&!b.discarded){ const v=prompt('이 책을 꽂을 자리 · 비우면 자리 없는 책',b.location||''); if(v!==null){ b.location=v.trim(); if(b.location) S.lastLocation=b.location; } }
+  touch(b); save(); toast('빌린 책 표시를 뗐습니다'); render();
 }
 function keepReading(id){ const b=book(id); if(b){ b.judgedAt=today(); touch(b); save(); } askFor=null; render(); }
 function restore(id){
@@ -857,9 +940,19 @@ function restore(id){
   else { toast('되살렸습니다 · 미정에 있습니다'); listTab='undecided'; render(); }
 }
 function del(id){
-  const b=book(id); if(!confirm('‘'+b.title+'’의 기록을 아주 지웁니다. 되돌릴 수 없습니다.')) return;
-  S.tomb[id]=new Date().toISOString();
+  const b=book(id), t=traces().get(id);
+  const more=t?' 한 줄 '+t.l+'개와 밑줄·스캔 '+t.m+'개도 함께 사라집니다. 읽은 시간과 쪽수는 통계에 남습니다.':'';
+  if(!confirm('‘'+b.title+'’의 기록을 아주 지웁니다.'+more+' 되돌릴 수 없습니다.')) return;
+  S.tomb[id]=new Date().toISOString(); dropTraces([id]);
   S.books=S.books.filter(x=>x.id!==id); removeFromOrder(id); openId=null; save(); toast('지웠습니다'); render();
+}
+/* 책을 아주 지울 때 그 책의 한 줄과 밑줄·스캔도 지운다. 시간과 쪽 기록은 남긴다. */
+function dropTraces(ids){
+  const set=new Set(ids), now=new Date().toISOString(); let n=0;
+  R.reads.forEach(x=>{ if(!set.has(x.bookId)) return;
+    if(x.kind==='read'&&x.memory){ x.memory=''; x.updated=now; n++; }
+    else if((x.kind==='mark'||x.kind==='scan')&&!x.gone){ x.gone=true; x.updated=now; n++; } });
+  if(n){ TRACE=null; saveR(); }
 }
 function reorderAll(cat){
   const ids=[...S.order[cat]];
@@ -887,7 +980,9 @@ function shelfBody(){
   const none=homeless().filter(b=>matches(b,k));
   const gone=searching?discardedBooks().filter(b=>matches(b,k)):[];
   const held=searching?heldBooks().filter(b=>matches(b,k)):[];
-  let found=none.length+gone.length+held.length; groups.forEach(g=>found+=g.items.length);
+  const rec=searching?recordBooks().filter(b=>matches(b,k)):[];
+  const ret=searching?live().filter(b=>b.borrowed&&b.returnedAt&&!isRecord(b)&&matches(b,k)):[];
+  let found=none.length+gone.length+held.length+rec.length+ret.length; groups.forEach(g=>found+=g.items.length);
   if(searching&&!found) return `<div class="empty">‘${esc(sq)}’와 맞는 책이 어느 자리에도 없습니다.</div>`;
   const li=b=>`<li onclick="findBook('${b.id}')"><span class="tagdot ${b.category?CAT[b.category].dot:'d-none'}"></span>${esc(b.title)}${badges(b)}<span class="m"> ${esc(b.author||'')}</span></li>`;
   const bar=items=>{
@@ -910,11 +1005,13 @@ function shelfBody(){
     out+=block(g.name,esc(g.name),g.items, searching?`${g.items.length}권 찾음 · 모두 ${g.count}권`:`${g.count}권`,
       live().filter(b=>b.location===g.name)); });
   if(none.length) out+=block('__none__','자리 없음',none, searching?`${none.length}권 찾음`:`${homeless().length}권`,none);
+  if(ret.length) out+=block('__ret__','빌려 읽음',ret,`${ret.length}권 찾음`,ret);
   if(held.length) out+=block('__hold__','보류',held,`${held.length}권 찾음`,held);
+  if(rec.length) out+=block('__rec__','기록',rec,`${rec.length}권 찾음`,rec);
   if(gone.length) out+=block('__gone__','폐기함',gone,`${gone.length}권 찾음`,gone);
   return (searching?`<p class="note" style="margin:0 0 10px">${found}권을 찾았습니다.</p>`:'')+out;
 }
-function refreshShelf(){ const el=document.getElementById('shelfbody'); if(el) el.innerHTML=shelfBody(); }
+function refreshShelf(){ TRACE=null; const el=document.getElementById('shelfbody'); if(el) el.innerHTML=shelfBody(); }
 function toggleShelf(k){ openShelves.has(k)?openShelves.delete(k):openShelves.add(k); refreshShelf(); }
 function allShelves(on){ openShelves=new Set(on?locations().map(l=>l[0]).concat('__none__'):[]); refreshShelf(); }
 function findBook(id){
@@ -934,12 +1031,14 @@ function vData(){
       <div><span>베스트</span><b>${b.length}</b></div>
       <div><span>다음 읽을 책</span><b>${ordered('next').length}</b></div>
       <div><span>증정본</span><b>${gifts().length}</b></div>
+      <div><span>빌려 있는 책</span><b>${borrowingBooks().length}</b></div>
       <div><span>미정</span><b>${undecided().length}</b></div>
       <div><span>서가</span><b>${locations().length}</b></div>
       <div><span>판단 대기</span><b>${waiting().length}</b></div>
       <div><span>보관본</span><b>${keptBooks().length}</b></div>
       <div><span>폐기 서가</span><b>${binBooks().length}</b></div>
       <div><span>보류</span><b>${heldBooks().length}</b></div>
+      <div><span>기록</span><b>${recordBooks().length}</b></div>
       <div><span>폐기함</span><b>${discardedBooks().length}</b></div>
     </div>
   <p class="note" style="margin-top:18px">베스트는 ${BEST_MAX}권, 다음 읽을 책은 ${nextMax()}권까지 순위를 지킵니다. 그 밖으로 밀려난 책은 한눈에서 한 권씩 폐기와 보관을 묻습니다.</p>
@@ -948,7 +1047,7 @@ function vData(){
     <div class="field" style="width:170px"><label>다음 읽을 책 순위(권)</label><input type="number" inputmode="numeric" id="s-nmax" value="${nextMax()}"></div>
     <div class="field" style="width:170px"><label>막 담은 책 유예(일)</label><input type="number" inputmode="numeric" id="s-grace" value="${graceDays()}"></div>
     <div class="field" style="width:170px"><label>폐기 서가 이름</label><input type="text" id="s-bin" value="${esc(binName())}"></div></div>
-  <p class="hint" style="margin-top:0">순위 밖으로 밀려나도 담은 지 유예 기간이 지나지 않은 책은 묻지 않습니다. 자리가 없는 책은 폐기 대신 ‘지울 책’으로 모입니다. 폐기 서가로 옮긴 지 7일이 지나면 내놓으라고 알려줍니다.</p>
+  <p class="hint" style="margin-top:0">순위 밖으로 밀려나도 담은 지 유예 기간이 지나지 않은 책은 묻지 않습니다. 자리가 없는 책은 폐기 대신 ‘지울 책’으로 모이고, 그 가운데 한 줄·밑줄을 남겼거나 빌려 읽은 책은 ‘기록’에 남습니다. 빌린 책은 폐기를 묻지 않습니다. 폐기 서가로 옮긴 지 7일이 지나면 내놓으라고 알려줍니다.</p>
   <div class="rowbtns"><button class="ghost" onclick="saveDiscardSet()">폐기 설정 저장</button></div>
   <hr class="hr">
   <h2 class="sec">파일로 옮기기</h2>
@@ -985,8 +1084,10 @@ function expText(){
   const t=['[베스트]',...ordered('best').map((b,i)=>(i+1)+'. '+line(b)),'',
            '[다음 읽을 책]',...ordered('next').map((b,i)=>(i+1)+'. '+line(b)),'',
            '[증정본 · 받은 날짜순]',...gifts().map(b=>(b.received||'')+' '+line(b)),'',
+           '[빌린 책]',...borrowBooks().map(b=>(b.returnedAt?b.returnedAt+' 반납 ':(b.due?b.due+'까지 ':''))+b.title+(b.author?' / '+b.author:'')+(b.library?' — '+b.library:'')),'',
            '[미정]',...undecided().map(line),'',
            '[보류]',...heldBooks().map(b=>(b.heldAt||'')+' '+b.title+(b.author?' / '+b.author:'')+(b.heldPage?' — '+b.heldPage+'쪽에서':'')+(b.heldReason?' · '+b.heldReason:'')),'',
+           '[기록]',...recordBooks().map(b=>b.title+(b.author?' / '+b.author:'')+(b.borrowed?' — 빌려 읽음':'')),'',
            '[폐기함]',...discardedBooks().map(b=>(b.discardedAt||'')+' '+b.title+(b.author?' / '+b.author:''))].join('\n');
   navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
 }
@@ -1039,9 +1140,13 @@ function editHTML(){
     <div class="field"><label>지은이</label><input type="text" id="e-author" value="${esc(b.author)}"><div class="sugg" id="e-author-sugg"></div></div>
     <div class="field"><label>펴낸곳</label><input type="text" id="e-pub" value="${esc(b.publisher)}"><div class="sugg" id="e-pub-sugg"></div></div>
     ${b.discarded?'<p class="note">폐기한 책이라 자리를 두지 않습니다. 되살리면 자리를 다시 적을 수 있습니다.</p>':b.held?'<p class="note">보류한 책이라 자리를 두지 않습니다. 되살리면 자리를 다시 적을 수 있습니다.</p>':
-      `<div class="field"><label>서가 위치 · 비우면 가지고 있지 않은 책</label>
+      `<div class="field"><label>${b.borrowed?'집에 둔 자리':'서가 위치 · 비우면 가지고 있지 않은 책'}</label>
         <input type="text" id="e-loc" value="${esc(b.location)}"><div class="sugg" id="e-loc-sugg"></div></div>`}
     ${b.gift?`<div class="field" style="max-width:220px"><label>받은 날짜</label><input type="date" id="e-recv" value="${esc(b.received||today())}"></div>`:''}
+    ${b.borrowed?`<div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:150px"><label>도서관</label><input type="text" id="e-lib" value="${esc(b.library)}"><div class="sugg" id="e-lib-sugg"></div></div>
+      <div class="field" style="width:160px"><label>반납일</label><input type="date" id="e-due" value="${esc(b.due)}"></div>
+      ${b.returnedAt?`<div class="field" style="width:160px"><label>반납한 날</label><input type="date" id="e-ret" value="${esc(b.returnedAt)}"></div>`:''}</div>`:''}
     <div class="field" style="max-width:200px"><label>총 쪽수</label><input type="number" inputmode="numeric" id="e-total" value="${b.total||''}"></div>
     <div class="field"><label>메모</label><input type="text" id="e-note" value="${esc(b.note||'')}" placeholder="누구에게 받았는지, 빌려준 사람 등"></div>
     <div class="rowbtns"><button class="primary" onclick="saveEdit()">고친 대로 저장</button>
@@ -1056,6 +1161,9 @@ function saveEdit(){
   b.note=g('e-note').value.trim();
   if(g('e-total')){ const v=parseInt(g('e-total').value,10); b.total=v>0?v:0; }
   if(g('e-recv')) b.received=g('e-recv').value;
+  if(g('e-lib')) b.library=g('e-lib').value.trim();
+  if(g('e-due')) b.due=g('e-due').value;
+  if(g('e-ret')&&g('e-ret').value) b.returnedAt=g('e-ret').value;
   if(b.location) S.lastLocation=b.location;
   touch(b); editId=null; save(); toast('고쳤습니다'); render();
 }
@@ -1154,7 +1262,7 @@ function vRead(){
     out+=`<section style="margin-bottom:30px"><p class="rd-m" style="margin:0">‘${esc(f.title)}’, 끝까지 읽었습니다.</p>
       ${memLines(f.id).length?`<h2 class="sec" style="margin-top:22px">이 책에 남긴 한 줄 ${memLines(f.id).length}개</h2>${linesList(f)}`:''}
       ${markItems(f.id).length?`<h2 class="sec" style="margin-top:22px">이 책에 친 밑줄 ${markItems(f.id).length}개</h2>${marksList(f)}`:''}
-      <p class="note" style="margin-top:18px">서가에서 읽은 책으로 옮기면 베스트 가운데 자리를 견주어 정합니다.</p>
+      <p class="note" style="margin-top:18px">서가에서 읽은 책으로 옮기면 베스트 가운데 자리를 견주어 정합니다.${borrowedNow(f)?` 도서관에 갖다주면 목록의 ‘빌린 책’에서 ‘반납했다’를 누르세요.`:''}</p>
       <div class="rowbtns"><button class="primary" onclick="finishMove()">읽은 책으로 옮기기</button>
         <button class="linkish" onclick="finishFor=null;render()">나중에</button></div></section><hr class="hr">`;
   }
@@ -1189,19 +1297,20 @@ function vRead(){
     <p class="hint" style="margin-top:2px">${left?`${todayMin?`오늘 읽을 시간 ${fmtMin(tg)} 가운데 남은 시간입니다. `:''}시작하면 ${R.settings.min}분 타이머를 겁니다.`:`오늘 읽을 시간 ${fmtMin(tg)}을 채웠습니다. 더 읽어도 좋습니다.`}</p>`;
   return out+q+`<section><h2 class="sec"><span class="tagdot d-next"></span>지금 읽는 책</h2>
       <div class="now-t">${esc(b.title)}</div>
-      <div class="now-a">${[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')}</div>${prog}</section>`
+      <div class="now-a">${[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')}</div>
+      <div class="now-p"><button class="${b.location?'place':'place none'}" onclick="editLoc('${b.id}')" aria-label="자리 고치기">${b.location?esc(b.location):'자리 없음 · 눌러 적기'}</button>${b.borrowed?`<span class="pagemark${isLate(b)?' late':''}">${esc(libText(b))}${isLate(b)?' · 반납일 지남':''}</span>`:''}</div>${prog}</section>`
     + plan
     + `<div class="rowbtns"><button class="primary" style="min-width:62%" onclick="startReading()">읽기 시작</button></div>
       <div class="rowbtns" style="margin-top:10px"><button class="linkish" onclick="go('list','next')">다른 책 고르기</button>
       <button class="linkish" onclick="addForReading()">새 책 담아 읽기</button>
-      <button class="linkish" onclick="startHold('${b.id}')">이 책 보류</button></div>`
+      <button class="linkish" onclick="startHold('${b.id}')">${borrowedNow(b)?'이 책 보류 · 반납':'이 책 보류'}</button></div>`
     + statsHTML();
 }
 function vReading(){
   const a=R.active, b=book(a.bookId);
   return `<div style="text-align:center;padding-top:8px">
       <div class="now-t" style="font-size:21px">${esc(b?b.title:(a.title||''))}</div>
-      <div class="now-a">${a.fromPage?a.fromPage+'쪽부터':'처음부터'}${elsewhere(a)?' · '+esc(a.device)+'에서 시작':''}</div></div>
+      <div class="now-a">${a.fromPage?a.fromPage+'쪽부터':'처음부터'}${b&&b.location?' · '+esc(b.location):''}${elsewhere(a)?' · '+esc(a.device)+'에서 시작':''}</div></div>
     ${Date.now()-a.startedAt>6*3600000?`<p class="hint" style="text-align:center;color:var(--seal);margin:18px 0 0">끝내지 않은 읽기가 있습니다. 읽기 끝을 누르면 실제로 읽은 시간을 고칠 수 있습니다.</p>`:''}
     <div class="clock" id="clock">${fmtClock(Date.now()-a.startedAt)}</div>
     <div class="clock-sub" id="clocksub"></div>
@@ -1226,6 +1335,7 @@ function vClosing(){
   if(guess&&b&&b.total) guess=Math.min(b.total,guess);
   return `<div style="max-width:560px">
     <p class="hint" style="margin:0 0 20px">${esc(b?b.title:'')} · ${fmtMin(Math.max(1,el))} 읽었습니다${elsewhere(a)?' · '+esc(a.device)+'에서 시작':''}</p>
+    ${b&&b.location?`<p class="hint" style="margin:-12px 0 20px">덮고 나면 ${esc(b.location)}에 다시 꽂으세요.</p>`:''}
     <div class="field" style="max-width:220px"><label>몇 쪽까지 읽었습니까</label>
       <input type="number" inputmode="numeric" id="r-page" value="${guess}" placeholder="${a.fromPage?a.fromPage+'쪽에서 시작':'쪽'}"></div>
     ${el>Math.max(180,R.settings.target*1.5)?`<div class="field" style="max-width:220px"><label>실제로 읽은 시간(분)</label>
