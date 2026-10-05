@@ -305,6 +305,8 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <div class="strip inc" id="stripA" role="button" tabindex="0" title="원고 보기"></div>
     <a class="strip" id="stripR" target="sijak_read" rel="opener"></a>
     <div class="strip inc" id="stripP" role="button" tabindex="0" title="쪽수 보기"></div>
+    <a class="strip" id="stripE" target="sijak_run" rel="opener"></a>
+    <div class="strip inc" id="stripD" role="button" tabindex="0" title="거리 보기"></div>
     <div class="strip" id="stripT"></div>
     <div class="strip inc" id="stripI" role="button" tabindex="0" title="수입 보기와 적기"></div>
     <p class="foot" id="foot"></p>
@@ -349,6 +351,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
   <section data-v="inc" class="inc" id="incHost"></section>
   <section data-v="adv" class="inc" id="advHost"></section>
   <section data-v="pg" class="inc" id="pgHost"></section>
+  <section data-v="dist" class="inc" id="distHost"></section>
 
   <!-- 설정 -->
   <section data-v="set" class="set" id="setHost"></section>
@@ -370,7 +373,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
 <script>
 "use strict";
 /* ═════════ 시작 ═════════
-   글쓰기(보태기)·독서(서가)·할 일(미래)의 오늘 상태를 읽기만 하고,
+   글쓰기(보태기)·독서(서가)·할 일(미래)·운동(달리기)의 오늘 상태를 읽기만 하고,
    모닝페이지(아침 쓰기와 저녁의 하루 정리)·달력 일정·수입(월별 합계)만 스스로 적는다.
    하루는 새벽 4시에 바뀐다. */
 
@@ -405,7 +408,7 @@ function myDevice(){
 
 /* ─────────── 설정 ─────────── */
 const CFG_KEY='sijak.cfg';
-const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html' };
+const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html' };
 let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
 let autoNote = '';
@@ -534,9 +537,9 @@ async function refreshToday(force){
   if(!force && Date.now()-lastLoad<4000) { renderToday(); return; }
   loading=true; setDot('today','busy','불러오는 중');
   const k=dayKey();
-  await Promise.all([loadWrite(k),loadRead(k),loadReads(false),loadTodo(k),pullCal(),pullInc()]);
+  await Promise.all([loadWrite(k),loadRead(k),loadReads(false),loadTodo(k),loadRun(false),pullCal(),pullInc()]);
   lastLoad=Date.now(); loading=false;
-  const errs=[Werr,Rerr,Terr].filter(x=>x&&x!=='setup');
+  const errs=[Werr,Rerr,Terr,RNerr==='table'?'':RNerr].filter(x=>x&&x!=='setup');
   setDot('today', errs.length?'err':'ok', errs.length?errs[0]:'');
   renderToday();
 }
@@ -608,6 +611,7 @@ function renderToday(){
   }
 
   renderPgStrip();
+  renderRunStrips();
 
   /* 할 일 */
   const st=$('stripT'), href=esc(linkFor('todo'));
@@ -1220,6 +1224,9 @@ function renderSet(){
   <div class="field"><label>기준선 (쪽)</label><input id="pGoal" inputmode="numeric" value="${readGoal()}"></div>
   <div class="btnrow"><button class="btn" id="savePGoal">기준선 저장</button></div>
 
+  <h3>운동과 거리</h3>
+  <p class="note">운동 칸은 오늘 운동한 시간(나이키 앱의 러닝 시간)을 하루 목표와, 거리 칸은 최근 30일 하루 평균 거리(달리기와 걷기를 합쳐)를 기준선과 견줍니다. 둘 다 달리기 앱의 설정에서 바꿉니다. 시작은 읽기만 합니다.${RN?' 지금은 하루 '+fmtMin(RN.goalMin)+', 하루 평균 '+kmG(RN.goalKm)+'km입니다.':''}</p>
+
   <h3>수입</h3>
   <p class="note">오늘 화면에 최근 12개월의 한 달 평균을 보이고, 이 기준선과 견줍니다. 만 원 단위로 적으세요.</p>
   <div class="field"><label>기준선 (만 원)</label><input id="incGoal" inputmode="decimal" value="${Math.round(incGoal()/10000)}"></div>
@@ -1239,6 +1246,7 @@ function renderSet(){
   <div class="field"><label>타자기</label><input id="lkY" value="${esc(L.typewriter||DEF_LINKS.typewriter)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>독서</label><input id="lkR" value="${esc(L.read)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>할 일</label><input id="lkT" value="${esc(L.todo)}" autocapitalize="off" spellcheck="false"></div>
+  <div class="field"><label>운동</label><input id="lkE" value="${esc(L.run||DEF_LINKS.run)}" autocapitalize="off" spellcheck="false"></div>
   <div class="btnrow"><button class="btn" id="saveLinks">저장</button><button class="btn" id="resetLinks">처음 값으로</button></div>
 
   <h3>모닝페이지</h3>
@@ -1264,7 +1272,7 @@ function renderSet(){
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
-  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo}; saveCfg(); toast('저장했습니다'); };
+  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run}; saveCfg(); toast('저장했습니다'); };
   $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
   $('sound').onclick=()=>{ MP.soundOn=MP.soundOn===false; mpPersist(); renderSet(); };
   $('reImport').onclick=()=>{ const old=lsGet('morningpages_v1',null); if(!old){ toast('이 기기에는 예전 모닝페이지 기록이 없습니다'); return; } const n=mergeOld(old); toast(n?n+'일치를 더하거나 합쳤습니다':'새로 가져올 것이 없습니다'); renderSet(); };
@@ -1276,7 +1284,7 @@ async function probe(){
   const out=[]; const p=$('probe'); p.textContent='확인하는 중…';
   if(btOn()){ try{ await rest(cfg.bt,'botaegi_sessions?select=id&limit=1'); out.push('✓ 보태기 기록을 읽을 수 있습니다'); }catch(e){ out.push('✕ 보태기: '+e.message); } } else out.push('· 보태기 프로젝트가 비어 있습니다');
   if(mrOn()){
-    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표']]){
+    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표'],['run_log','달리기 표']]){
       try{ await rest(cfg.mr,t+'?select=id&limit=1'); out.push('✓ '+n+'을(를) 읽을 수 있습니다'); }
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
@@ -1589,6 +1597,109 @@ function renderPg(){
 }
 async function openPg(){ renderPg(); await loadReads(true); if(view==='pg') renderPg(); }
 
+/* ═════════ 운동·거리 — 달리기(dalligi.html)의 run_log를 읽기만 한다 ═════════
+   act 줄: { kind:'run'|'walk', day(4시 기준), km, sec(러닝 시간), deleted }. conf 줄: { goal(거리 기준선 km), timeGoal(하루 운동 시간 목표, 분) }.
+   운동 칸 = 오늘 운동한 시간(러닝 시간의 합). 거리 칸 = 최근 30일 하루 평균 거리(달리기+걷기, 쉰 날 포함). 목표와 기준선은 달리기 앱에서 바꾼다 */
+const RUN_DEF_TIME=60, RUN_DEF_KM=4, C_WALK='#8597a4';
+let RN=null, RNerr='', RNat=0;
+const kmG=v=>String(Math.round(v*10)/10);
+async function loadRun(force){
+  if(!mrOn()){ RN=null; RNerr='setup'; return; }
+  if(!force && RN && Date.now()-RNat<20000) return;
+  try{
+    const all=[];
+    for(let off=0; off<50000; off+=1000){
+      const rows=await rest(cfg.mr,'run_log?select=id,data&order=id&limit=1000&offset='+off);
+      all.push(...(rows||[])); if(!rows||rows.length<1000) break;
+    }
+    const km={}, run={}, sec={}, rsec={}; let conf={}, first=null;
+    all.forEach(r=>{ const d=r.data; if(!d||d.deleted) return;
+      if(d.type==='conf') conf=d;
+      else if(d.type==='act' && /^\d{4}-\d{2}-\d{2}$/.test(d.day||'') && +d.km>0){
+        km[d.day]=(km[d.day]||0)+(+d.km); sec[d.day]=(sec[d.day]||0)+(+d.sec||0);
+        if(d.kind!=='walk'){ run[d.day]=(run[d.day]||0)+(+d.km); rsec[d.day]=(rsec[d.day]||0)+(+d.sec||0); }
+        if(!first||d.day<first) first=d.day; } });
+    RN={km, run, sec, rsec, first, goalKm:+conf.goal>0?+conf.goal:RUN_DEF_KM, goalMin:+conf.timeGoal>0?+conf.timeGoal:RUN_DEF_TIME}; RNat=Date.now(); RNerr='';
+  }catch(er){ RNerr=missingTable(er)?'table':(er.message||'불러오지 못했습니다'); }
+}
+function runErrMsg(){ return RNerr==='table'?'Supabase에 달리기 표가 아직 없습니다 · 달리기 앱의 설정에서 SQL을 실행하세요':esc(RNerr); }
+function distAvg(end){ const a=avgN(RN.km,RN.first,end), r=avgN(RN.run,RN.first,end), t=avgN(RN.sec,RN.first,end); return {v:a.v, run:r.v, walk:Math.max(0,a.v-r.v), min:t.v/60, days:a.days, n:a.n, from:a.from, to:a.to}; }
+function distCompare(v,g){ const d=v-g; return Math.abs(d)<0.005?'기준선 '+kmG(g)+'km와 같습니다':'기준선 '+kmG(g)+'km보다 '+Math.abs(d).toFixed(2)+'km '+(d>0?'많습니다':'적습니다'); }
+function renderRunStrips(){
+  const se=$('stripE'), sd=$('stripD'); if(!se||!sd) return;
+  se.href=linkFor('run');
+  const eHead=`<div class="strip-head"><span class="strip-name">운동</span></div>`, dHead=num=>`<div class="strip-head"><span class="strip-name">거리</span>${num||''}</div>`;
+  if(RNerr==='setup'){ se.removeAttribute('href'); se.innerHTML=eHead+`<div class="strip-sub">${setupMsg()}</div>`; sd.innerHTML=dHead()+`<div class="strip-sub">${setupMsg()}</div>`; se.classList.remove('met'); sd.classList.remove('met'); return; }
+  if(!RN){ const m=`<div class="strip-sub">${RNerr?'<span class="err">'+runErrMsg()+'</span>':'불러오는 중'}</div>`; se.innerHTML=eHead+m; sd.innerHTML=dHead()+m; se.classList.remove('met'); sd.classList.remove('met'); return; }
+  /* 운동 — 오늘의 시간 */
+  const k=dayKey(), min=(RN.sec[k]||0)/60, rmin=(RN.rsec[k]||0)/60, wmin=Math.max(0,min-rmin), kmT=RN.km[k]||0, gm=RN.goalMin, met=min>=gm;
+  let sub = min>0 ? [rmin>=0.5?'달리기 '+fmtMin(rmin):'', wmin>=0.5?'걷기 '+fmtMin(wmin):''].filter(Boolean).join(' · ')+' · '+kmT.toFixed(2)+'km' : '오늘은 아직 적은 운동이 없습니다';
+  if(RNerr) sub+=` <span class="err">· ${runErrMsg()}</span>`;
+  se.innerHTML=stripHTML('운동', min, 0, gm, sub, met); se.classList.toggle('met',met);
+  /* 거리 — 최근 30일 하루 평균 */
+  if(!RN.first){ sd.innerHTML=dHead()+`<div class="strip-sub">아직 적은 운동이 없습니다</div>`; sd.classList.remove('met'); return; }
+  const a=distAvg(), g=RN.goalKm, dm=a.v>=g;
+  sd.innerHTML=dHead(`<span class="strip-num">${a.v.toFixed(2)}km <span class="of">/ ${kmG(g)}km</span></span>`)
+    +`<div class="gauge"><i class="done" style="width:${Math.max(0,Math.min(100,a.v/g*100))}%"></i></div>`
+    +`<div class="strip-sub">최근 ${a.n}일 하루 평균 · 달리기 ${a.run.toFixed(1)}km · 걷기 ${a.walk.toFixed(1)}km · 운동한 날 ${a.days}일</div>`
+    +(dm?'<span class="stamp">채움</span>':'');
+  sd.classList.toggle('met',dm);
+}
+/* 쌓은 막대 — items: [{a(달리기), b(걷기), lab, tip, hi, top}] */
+function stackSVG(items,o){
+  const narrow=window.innerWidth<520, W_=narrow?360:640, H=narrow?150:160, L=4, R=4, T=16, B=26, w=W_-L-R, h=H-T-B, bw=w/items.length, gp=o.gap||0.18;
+  const top=Math.max(o.min||1, ...items.map(x=>x.a+x.b))*1.15;
+  let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="${esc(o.label)}"><line x1="${L}" x2="${L+w}" y1="${T+h}" y2="${T+h}" stroke="#d6ccb6"/>`;
+  items.forEach((it,i)=>{ const x=L+i*bw, bx=x+bw*gp, bwd=bw*(1-2*gp), ha=it.a/top*h, hb=it.b/top*h;
+    if(it.a>0) s+=`<rect x="${bx}" y="${T+h-ha}" width="${bwd}" height="${Math.max(1.5,ha)}" fill="${it.hi?'#9b3b32':'#23201c'}"/>`;
+    if(it.b>0) s+=`<rect x="${bx}" y="${T+h-ha-hb}" width="${bwd}" height="${Math.max(1.5,hb)}" fill="${C_WALK}"/>`;
+    s+=`<rect x="${x}" y="${T}" width="${bw}" height="${h}" fill="transparent"><title>${esc(it.tip)}</title></rect>`;
+    if(it.lab) s+=`<text x="${x+bw/2}" y="${H-8}" font-size="11.5" fill="#736a59" text-anchor="middle">${esc(it.lab)}</text>`;
+    if(it.top) s+=`<text x="${x+bw/2}" y="${T+h-ha-hb-4}" font-size="11" fill="#736a59" text-anchor="middle">${esc(it.top)}</text>`; });
+  return s+'</svg>';
+}
+function renderDist(){
+  const host=$('distHost'), open=`<p class="note" style="margin-top:28px"><a class="linkish" href="${esc(linkFor('run').replace(/#.*$/,'')+'#flow')}" target="sijak_run" rel="opener">달리기 열기</a> — 페이스·케이던스·같은 힘 비교·코스·신발은 달리기 앱의 흐름에 있습니다.</p>`;
+  if(RNerr==='setup'){ host.innerHTML=`<p class="empty">${setupMsg()}</p>`; return; }
+  if(!RN){ host.innerHTML=`<p class="empty">${RNerr?'<span class="err">'+runErrMsg()+'</span>':'불러오는 중'}</p>`; return; }
+  if(!RN.first){ host.innerHTML=`<p class="empty">아직 적은 운동이 없습니다.</p>`+open; return; }
+  const {km,run,sec,first}=RN, g=RN.goalKm, a=distAvg(), k0=dayKey(), cur=k0.slice(0,7);
+  let mK=0, mR=0, mS=0, mD=0; for(let k=cur+'-01'; k<=k0; k=addDays(k,1)){ mK+=km[k]||0; mR+=run[k]||0; mS+=sec[k]||0; if(km[k]>0) mD++; }
+  let h=`<div class="inc-top${a.v>=g?' met':''}">
+    <div class="lbl">최근 ${a.n}일 하루 평균</div>
+    <div class="big">${a.v.toFixed(2)}km<small>운동한 날 ${a.days}일</small></div>
+    <div class="sub">${kLabel(a.from)}–${kLabel(a.to)} · ${distCompare(a.v,g)}</div>
+    <div class="sub">달리기 ${a.run.toFixed(2)}km · 걷기 ${a.walk.toFixed(2)}km · 하루 평균 ${fmtMin(a.min)}</div>
+    <div class="now">${+cur.slice(5)}월에는 지금까지 ${mK.toFixed(1)}km(달리기 ${mR.toFixed(1)}km) · ${fmtMin(mS/60)} · 운동한 날 ${mD}일</div>
+  </div>
+  <p class="note">달리기 앱의 기록으로 셉니다. 달리기와 걷기를 합친 거리이고, 쉰 날도 나눕니다. 하루는 새벽 4시에 바뀝니다.</p>`;
+  /* 최근 30일 날마다 */
+  const items=[]; for(let i=29;i>=0;i--){ const k=addDays(k0,-i), dt=parseKey(k), r=run[k]||0, t=km[k]||0, before=k<first;
+    items.push({a:r, b:Math.max(0,t-r), hi:k===k0, lab:(i===29||dt.getDate()===1)?(dt.getMonth()+1)+'/'+dt.getDate():(i%(window.innerWidth<520?7:5)===0&&i>2?String(dt.getDate()):''),
+      tip:kLabel(k)+' · '+(t>0?(r>0?'달리기 '+r.toFixed(2)+'km ':'')+(t-r>0.005?'걷기 '+(t-r).toFixed(2)+'km ':'')+fmtMin((sec[k]||0)/60):before?'기록 전':'쉼')}); }
+  h+=`<h3>최근 30일 날마다</h3><div class="incchart">${stackSVG(items,{label:'최근 30일 날마다 거리'})}</div>
+    <p class="note"><span style="display:inline-block;width:10px;height:10px;background:#23201c;vertical-align:-1px"></span> 달리기 &nbsp;<span style="display:inline-block;width:10px;height:10px;background:${C_WALK};vertical-align:-1px"></span> 걷기</p>`;
+  h+=`<h3>평균의 흐름</h3><div class="incchart">${flowSVG(km,first,g,{div:1, unit:'km', fmt:v=>v.toFixed(1), fmtG:kmG})}</div>`;
+  /* 주마다 — 월요일 시작, 최근 12주. 달리기가 앞선 4주 평균보다 10% 넘게 늘면 알린다 */
+  const wk=d=>addDays(d,-((parseKey(d).getDay()+6)%7)), w0=wk(k0), weeks=[];
+  for(let i=11;i>=0;i--){ const ws=addDays(w0,-7*i); let r=0,t=0; for(let j=0;j<7;j++){ const k=addDays(ws,j); r+=run[k]||0; t+=km[k]||0; } weeks.push({ws, we:addDays(ws,6), run:r, walk:Math.max(0,t-r), part:addDays(ws,6)>=k0}); }
+  const shown=weeks.filter(x=>x.we>=wk(first));
+  h+=`<h3>주마다</h3><div class="incchart">${stackSVG(shown.map((x,i)=>{ const d=parseKey(x.ws); return {a:x.run, b:x.walk, top:x.run>0?x.run.toFixed(1):'',
+    lab:(i===0||d.getDate()<=7)?(d.getMonth()+1)+'/'+d.getDate():(shown.length<=8||i%2===0?String(d.getDate()):''),
+    tip:kLabel(x.ws)+'–'+kLabel(x.we)+(x.part?' (진행 중)':'')+' · 달리기 '+x.run.toFixed(2)+'km'+(x.walk?' · 걷기 '+x.walk.toFixed(2)+'km':'')}; }),{label:'주마다 거리', gap:0.14, min:5})}</div>
+    <p class="note">월요일에 시작하는 주. 막대 위 숫자는 달리기 거리입니다.</p>`;
+  const warn=[]; [11,10].forEach(i=>{ const cw=weeks[i], prev=weeks.slice(i-4,i).filter(x=>x.we>=first); if(prev.length<2) return;
+    const av=prev.reduce((t,x)=>t+x.run,0)/prev.length; if(av>0&&cw.run/av-1>0.1) warn.push(`${cw.part?'이번 주는 지금까지':'지난주'} 달리기 ${cw.run.toFixed(1)}km로, 앞선 4주 평균 ${av.toFixed(1)}km보다 ${Math.round((cw.run/av-1)*100)}% 많습니다.`); });
+  if(warn.length) h+=`<p class="note" style="color:var(--seal)">${warn.join(' ')} 거리를 빨리 늘릴 때 다치기 쉽습니다.</p>`;
+  /* 달마다 */
+  const ms=monthsOf(km,first,run);
+  h+=monthTable(ms,'<th>달</th><th>달리기</th><th>걷기</th><th>운동한 날</th><th>하루 평균</th>',
+    r=>`<tr${r.part?' class="part"':''}><td>${monthLabel(r.m)}${r.part?' (진행 중)':''}</td><td>${r.ex.toFixed(1)}km</td><td>${Math.max(0,r.sum-r.ex).toFixed(1)}km</td><td>${r.days}일</td><td class="${!r.part&&r.sum/r.n>=g?'hi':''}">${(r.sum/Math.max(1,r.n)).toFixed(2)}km</td></tr>`);
+  h+=monthNote(first);
+  host.innerHTML=h+open;
+}
+async function openDist(){ renderDist(); await loadRun(true); if(view==='dist') renderDist(); }
+
 /* 수입 화면 */
 function incChart(st,g){
   /* 12개월이 다 찬 평균만 그린다(그 전의 짧은 평균은 흐름을 흐린다). 모자라면 있는 대로 */
@@ -1740,12 +1851,15 @@ function go(v){
   if(v==='inc'){ renderInc(); pullInc().then(c=>{ if(c&&view==='inc'&&!$('incHost').contains(document.activeElement)) renderInc(); }); }
   if(v==='adv') openAdv();
   if(v==='pg') openPg();
+  if(v==='dist') openDist();
   if(v==='set') renderSet();
   window.scrollTo(0,0);
 }
 window.go=go;
 $('stripP').onclick=e=>{ if(!e.target.closest('button,a')) go('pg'); };
 $('stripP').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('pg'); } };
+$('stripD').onclick=e=>{ if(!e.target.closest('button,a')) go('dist'); };
+$('stripD').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('dist'); } };
 $('stripA').onclick=e=>{ if(!e.target.closest('button,a')) go('adv'); };
 $('stripA').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('adv'); } };
 $('stripI').onclick=e=>{ if(!e.target.closest('button')) go('inc'); };
@@ -1778,6 +1892,7 @@ async function onBack(){
   if(view==='inc'){ const c=await pullInc(); if(c&&!$('incHost').contains(document.activeElement)) renderInc(); }
   if(view==='adv') openAdv();
   if(view==='pg') openPg();
+  if(view==='dist') openDist();
   if(view==='cal'){ const c=await pullCal(); if(!T&&mrOn()) await loadTodo(dayKey()); if(calEdit==null) renderCal(); }
 }
 document.addEventListener('visibilitychange',onBack);
