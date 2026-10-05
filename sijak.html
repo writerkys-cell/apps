@@ -156,6 +156,7 @@ select#dateJump{font-size:12.5px;color:var(--ink-soft);background:transparent;bo
 .ag li:last-child{border-bottom:none}
 .ag.daily li{grid-template-columns:1.3em 6em 1fr}
 .ag .when{font-size:13.5px;color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ag .when.due{color:var(--seal);letter-spacing:.06em}
 .ag .what{font-size:16px;line-height:1.5}
 .ag .pl{font-size:13.5px;color:var(--ink-soft)}
 .ag .tag{font-size:12px;color:var(--seal);letter-spacing:.06em;margin-right:6px}
@@ -197,6 +198,7 @@ select#dateJump{font-size:12.5px;color:var(--ink-soft);background:transparent;bo
 .dd{margin-top:26px}
 .dd-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:6px}
 .dd-head h3{margin:0;font-size:18px;letter-spacing:.04em}
+.dd-btns{display:flex;gap:8px;flex-wrap:wrap}
 .dd .empty{padding:10px 2px}
 .dd .ag li{grid-template-columns:1.3em minmax(4em,auto) 1fr}
 .calmsg{font-size:13.5px;color:var(--seal);margin:12px 0 0}
@@ -408,7 +410,7 @@ function myDevice(){
 
 /* ─────────── 설정 ─────────── */
 const CFG_KEY='sijak.cfg';
-const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html' };
+const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'' };
 let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
 let autoNote = '';
@@ -544,6 +546,22 @@ async function refreshToday(force){
   renderToday();
 }
 
+// 일기 쓰기: 고른 날짜를 클립보드에 넣고 스크리브너 주소를 연다.
+// 사파리는 클릭한 그 순간에만 클립보드 쓰기를 허락하므로 복사를 먼저 시작하고 곧바로 연다.
+function diaryText(k){ const d=parseKey(k); return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`; }
+function copyPlain(text){
+  const old=()=>{ try{ const t=document.createElement('textarea'); t.value=text; t.setAttribute('readonly',''); t.style.cssText='position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(t); t.select(); t.setSelectionRange(0,text.length); const ok=document.execCommand('copy'); t.remove(); return ok; }catch(e){ return false; } };
+  if(navigator.clipboard&&navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(()=>true,()=>old());
+  return Promise.resolve(old());
+}
+function openDiary(k){
+  const text=diaryText(k), url=(cfg.links.diary||'').trim();
+  const done=copyPlain(text);
+  if(!url){ done.then(ok=>toast(ok?`‘${text}’를 복사했습니다. 설정에 스크리브너 주소를 적어 주세요`:'복사하지 못했습니다. 설정에 스크리브너 주소를 적어 주세요')); return; }
+  if(/^https?:/i.test(url)) window.open(url,'sijak_diary'); else location.href=url;
+  done.then(ok=>toast(ok?`‘${text}’를 복사했습니다`:'날짜를 복사하지 못했습니다'));
+}
 function linkFor(which){
   if(which==='write') return isTouch?cfg.links.writePhone:cfg.links.write;
   return cfg.links[which]||DEF_LINKS[which];
@@ -1083,10 +1101,10 @@ function renderCal(){
   const sd=parseKey(calSel);
   const dayItems=itemsOn(calSel,true);
   const rows=dayItems.map(o=>{
-    if(o.due) return `<li class="go"><a class="row" href="${esc(linkFor('todo'))}" target="sijak_todo" rel="opener"><span></span><span class="when">종일</span><span class="what"><span class="tag">마감</span>${esc(o.title)}</span></a></li>`;
+    if(o.due) return `<li class="go"><a class="row" href="${esc(linkFor('todo'))}" target="sijak_todo" rel="opener"><span></span><span class="when due">마감</span><span class="what">${esc(o.title)}</span></a></li>`;
     const e=o.ev, daily=e.repeat==='daily', rp=repeatText(e);
     const box=daily?`<button class="ck${isDone(e,calSel)?' on':''}" data-ck="${esc(e.id)}"${calSel>today?' disabled':''} aria-label="${esc(e.title)} 마침"></button>`:'<span></span>';
-    return `<li class="go" data-edit="${esc(e.id)}">${box}<span class="when">${esc(e.time||'종일')}</span><span class="what">${rp?`<span class="tag rp">${rp}</span>`:''}${esc(e.title)}${e.place?`<span class="pl"> · ${esc(e.place)}</span>`:''}${e.memo?`<span class="memo">${esc(e.memo)}</span>`:''}</span></li>`;
+    return `<li class="go" data-edit="${esc(e.id)}">${box}<span class="when">${esc(e.time||'메모')}</span><span class="what">${rp?`<span class="tag rp">${rp}</span>`:''}${esc(e.title)}${e.place?`<span class="pl"> · ${esc(e.place)}</span>`:''}${e.memo?`<span class="memo">${esc(e.memo)}</span>`:''}</span></li>`;
   }).join('');
   host.innerHTML=`
   <div class="calhead">
@@ -1098,7 +1116,7 @@ function renderCal(){
   ${calTableMissing&&mrOn()?`<p class="calmsg">Supabase에 일정 표가 없어 일정이 이 기기에만 저장됩니다. <button class="linkish" onclick="go('set')">설정</button>에서 일정 표 SQL을 한 번 실행하세요.</p>`:''}
   ${!mrOn()?`<p class="calmsg">미래 프로젝트를 잇지 않아 일정이 이 기기에만 저장됩니다. <button class="linkish" onclick="go('set')">설정</button></p>`:''}
   <div class="dd">
-    <div class="dd-head"><h3>${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일${calSel===today?' · 오늘':''}</h3><button class="btn" id="calNew">이 날에 일정 적기</button></div>
+    <div class="dd-head"><h3>${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일${calSel===today?' · 오늘':''}</h3><span class="dd-btns"><button class="btn" id="calDiary">일기 쓰기</button><button class="btn" id="calNew">이 날에 일정 적기</button></span></div>
     ${rows?`<ul class="ag dd-list">${rows}</ul>`:'<p class="empty">이 날에 적힌 일정이 없습니다.</p>'}
     <div id="calForm"></div>
   </div>`;
@@ -1106,6 +1124,7 @@ function renderCal(){
   $('calNext').onclick=()=>{ calMonth=new Date(y,m+1,1); calEdit=null; renderCal(); };
   $('calToday').onclick=()=>{ calSel=today; calMonth=null; calEdit=null; renderCal(); };
   $('calNew').onclick=()=>{ calEdit='new'; renderCal(); };
+  $('calDiary').onclick=()=>openDiary(calSel);
   host.querySelector('.grid').onclick=ev=>{ const c=ev.target.closest('.cell'); if(!c) return; calSel=c.dataset.k; calEdit=null;
     const d=parseKey(calSel); if(d.getMonth()!==m||d.getFullYear()!==y) calMonth=null; renderCal(); };
   host.querySelector('.grid').onkeydown=ev=>{ if((ev.key==='Enter'||ev.key===' ')&&ev.target.classList.contains('cell')){ ev.preventDefault(); ev.target.click(); } };
@@ -1125,7 +1144,7 @@ function renderForm(){
     <div class="field"><label for="fT">제목</label><input id="fT" value="${esc(e.title)}"></div>
     <div class="frow">
       <div class="field"><label for="fD">날짜</label><input id="fD" type="date" value="${esc(e.date)}"></div>
-      <div class="field"><label for="fH">시간 (비우면 종일)</label><input id="fH" type="time" value="${esc(e.time||'')}"></div>
+      <div class="field"><label for="fH">시간 (비우면 메모)</label><input id="fH" type="time" value="${esc(e.time||'')}"></div>
     </div>
     <div class="field"><label for="fP">장소</label><input id="fP" value="${esc(e.place||'')}"></div>
     <div class="field"><label for="fM">메모</label><textarea id="fM">${esc(e.memo||'')}</textarea></div>
@@ -1247,6 +1266,8 @@ function renderSet(){
   <div class="field"><label>독서</label><input id="lkR" value="${esc(L.read)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>할 일</label><input id="lkT" value="${esc(L.todo)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>운동</label><input id="lkE" value="${esc(L.run||DEF_LINKS.run)}" autocapitalize="off" spellcheck="false"></div>
+  <div class="field"><label>일기 (스크리브너)</label><input id="lkJ" value="${esc(L.diary||'')}" placeholder="x-scrivener-item://…" autocapitalize="off" spellcheck="false"></div>
+  <p class="note">달력의 ‘일기 쓰기’가 여는 주소입니다. 스크리브너에서 일기 문서를 오른쪽 클릭해 ‘Copy Document Link’로 얻은 주소를 붙여 넣으세요. 누르면 고른 날짜와 요일이 클립보드에 복사됩니다. 이 주소는 맥에서만 열리고, 아이폰·아이패드에서는 날짜만 복사됩니다. ‘처음 값으로’를 눌러도 지워지지 않습니다.</p>
   <div class="btnrow"><button class="btn" id="saveLinks">저장</button><button class="btn" id="resetLinks">처음 값으로</button></div>
 
   <h3>모닝페이지</h3>
@@ -1272,8 +1293,8 @@ function renderSet(){
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
-  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run}; saveCfg(); toast('저장했습니다'); };
-  $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
+  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run, diary:$('lkJ').value.trim()}; saveCfg(); toast('저장했습니다'); };
+  $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS,{diary:cfg.links.diary||''}); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
   $('sound').onclick=()=>{ MP.soundOn=MP.soundOn===false; mpPersist(); renderSet(); };
   $('reImport').onclick=()=>{ const old=lsGet('morningpages_v1',null); if(!old){ toast('이 기기에는 예전 모닝페이지 기록이 없습니다'); return; } const n=mergeOld(old); toast(n?n+'일치를 더하거나 합쳤습니다':'새로 가져올 것이 없습니다'); renderSet(); };
   $('expMp').onclick=()=>{ const b=new Blob([JSON.stringify({entries:MP.entries},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='모닝페이지_'+dayKey()+'.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
