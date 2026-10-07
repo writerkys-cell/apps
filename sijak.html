@@ -262,6 +262,38 @@ div.strip.inc:hover{background:rgba(155,59,50,.035)}
   .inc-top .big{font-size:32px}
 }
 
+/* ── 메모 ── */
+.mprev{list-style:none;margin:12px 0 0;padding:0}
+.mprev li{display:grid;grid-template-columns:5.6em 1fr;gap:10px;align-items:baseline;padding:6px 2px;border-bottom:1px dotted var(--line)}
+.mprev li:last-child{border-bottom:none}
+.mprev .k{font-size:12.5px;color:var(--ink-soft);white-space:nowrap;font-variant-numeric:tabular-nums}
+.mprev .t{font-size:16px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mpad{border-top:1px solid var(--ink);padding-top:2px}
+#mIn{display:block;width:100%;min-height:96px;resize:vertical;border:none;outline:none;padding:0 2px;margin:0;font-size:17px;line-height:32px;background-color:transparent;
+  background-image:linear-gradient(transparent 31px,var(--line) 31px);background-size:100% 32px;background-attachment:local}
+#mIn::placeholder{color:#b4ad9c}
+.mpad-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px}
+.mpad-foot .hint{font-size:12.5px;color:var(--faint)}
+.mpad-foot .btn:disabled{opacity:.35;cursor:default}
+.mcount{display:flex;justify-content:space-between;gap:12px;margin:30px 0 0;font-size:14px;color:var(--ink-soft)}
+.mcount button{border-bottom:1px solid var(--line);color:var(--ink-soft)}
+h3.mh{font-size:14px;font-weight:400;color:var(--ink-soft);letter-spacing:.08em;margin:22px 0 2px}
+.mnotes{list-style:none;margin:0;padding:0}
+.mnote{border-top:1px solid var(--line);padding:11px 2px}
+.mnote .txt{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.7;cursor:pointer}
+.mnote.done .txt{color:var(--ink-soft)}
+.mnote .meta{font-size:12.5px;color:var(--faint);margin-top:2px;display:flex;gap:10px;flex-wrap:wrap}
+.mnote .meta .to{color:var(--ink-soft)}
+.mnote .acts{display:none;justify-content:space-between;gap:10px 18px;flex-wrap:wrap;margin-top:8px;font-size:14px}
+.mnote.sel .acts{display:flex}
+.mnote .acts span{display:flex;gap:16px;flex-wrap:wrap}
+.mnote .acts button{color:var(--ink-soft);border-bottom:1px solid var(--line)}
+.mnote .acts .go button{color:var(--ink);border-bottom-color:var(--ink-soft)}
+.mnote .acts button.del{color:var(--seal);border-bottom-color:var(--seal-faint)}
+.mnote .acts button.del.sure{background:var(--seal);color:#fff;padding:0 6px;border:none}
+.mnote textarea.medit{display:block;width:100%;min-height:5em;resize:vertical;background:#f8f5ec;border:1px solid var(--line);border-radius:2px;padding:8px 10px;font-size:16px;line-height:1.7}
+.evform .from{font-size:12.5px;color:var(--seal);margin:0 0 6px}
+
 /* ── 설정 ── */
 .set h3{font-size:16px;font-weight:700;margin:30px 0 8px;letter-spacing:.06em}
 .set h3:first-child{margin-top:0}
@@ -292,6 +324,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
   <nav id="nav">
     <button data-go="today">오늘</button>
     <button data-go="cal">달력</button>
+    <button data-go="memo">메모</button>
     <button data-go="morning">모닝페이지</button>
     <button data-go="close">하루 정리</button>
     <button data-go="set">설정</button>
@@ -310,12 +343,16 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <a class="strip" id="stripE" target="sijak_run" rel="opener"></a>
     <div class="strip inc" id="stripD" role="button" tabindex="0" title="거리 보기"></div>
     <div class="strip" id="stripT"></div>
+    <div class="strip inc" id="stripN" role="button" tabindex="0" title="메모 보기"></div>
     <div class="strip inc" id="stripI" role="button" tabindex="0" title="수입 보기와 적기"></div>
     <p class="foot" id="foot"></p>
   </section>
 
   <!-- 달력 -->
   <section data-v="cal" id="calHost"></section>
+
+  <!-- 메모 -->
+  <section data-v="memo" id="memoHost"></section>
 
   <!-- 모닝페이지 -->
   <section data-v="morning">
@@ -410,7 +447,7 @@ function myDevice(){
 
 /* ─────────── 설정 ─────────── */
 const CFG_KEY='sijak.cfg';
-const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'' };
+const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'', jeok:'./jeokbarim.html' };
 let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
 let autoNote = '';
@@ -539,7 +576,7 @@ async function refreshToday(force){
   if(!force && Date.now()-lastLoad<4000) { renderToday(); return; }
   loading=true; setDot('today','busy','불러오는 중');
   const k=dayKey();
-  await Promise.all([loadWrite(k),loadRead(k),loadReads(false),loadTodo(k),loadRun(false),pullCal(),pullInc()]);
+  await Promise.all([loadWrite(k),loadRead(k),loadReads(false),loadTodo(k),loadRun(false),pullCal(),pullInc(),pullMemo()]);
   lastLoad=Date.now(); loading=false;
   const errs=[Werr,Rerr,Terr,RNerr==='table'?'':RNerr].filter(x=>x&&x!=='setup');
   setDot('today', errs.length?'err':'ok', errs.length?errs[0]:'');
@@ -652,6 +689,9 @@ function renderToday(){
     if(Terr) h+=`<p class="err">${esc(Terr)}</p>`;
   }
   st.innerHTML=h;
+
+  /* 메모 */
+  renderMemoStrip();
 
   /* 수입 */
   renderIncStrip();
@@ -1075,6 +1115,7 @@ $('agenda').addEventListener('click',ev=>{
 
 /* 달력 화면 */
 let calMonth=null, calSel=null, calEdit=null;
+let calDraft=null;   /* 메모에서 ‘일정으로’ 옮길 때 새 일정 칸에 미리 넣는 것: {title, memo, memoId} */
 function calOpen(k,id){ calSel=k||dayKey(); calMonth=null; calEdit=id||null; go('cal'); }
 window.calOpen=calOpen;
 function itemsOn(k,withDaily){
@@ -1123,7 +1164,7 @@ function renderCal(){
   $('calPrev').onclick=()=>{ calMonth=new Date(y,m-1,1); calEdit=null; renderCal(); };
   $('calNext').onclick=()=>{ calMonth=new Date(y,m+1,1); calEdit=null; renderCal(); };
   $('calToday').onclick=()=>{ calSel=today; calMonth=null; calEdit=null; renderCal(); };
-  $('calNew').onclick=()=>{ calEdit='new'; renderCal(); };
+  $('calNew').onclick=()=>{ calEdit='new'; calDraft=null; renderCal(); };
   $('calDiary').onclick=()=>openDiary(calSel);
   host.querySelector('.grid').onclick=ev=>{ const c=ev.target.closest('.cell'); if(!c) return; calSel=c.dataset.k; calEdit=null;
     const d=parseKey(calSel); if(d.getMonth()!==m||d.getFullYear()!==y) calMonth=null; renderCal(); };
@@ -1137,10 +1178,12 @@ function renderCal(){
   if(calEdit) renderForm();
 }
 function renderForm(){
-  const isNew=calEdit==='new', e=isNew?{title:'',date:calSel,time:'',place:'',memo:'',repeat:'none',until:''}:CAL.events[calEdit];
+  const isNew=calEdit==='new', e=isNew?Object.assign({title:'',date:calSel,time:'',place:'',memo:'',repeat:'none',until:''},calDraft?{title:calDraft.title,memo:calDraft.memo}:{}):CAL.events[calEdit];
   if(!e){ calEdit=null; return; }
+  if(!isNew) calDraft=null;
   const box=$('calForm'), rep=e.repeat||'none';
   box.innerHTML=`<div class="evform">
+    ${isNew&&calDraft?'<p class="from">메모에서 옮겨 적습니다. 저장하면 메모는 ‘일정으로 옮김’으로 접힙니다.</p>':''}
     <div class="field"><label for="fT">제목</label><input id="fT" value="${esc(e.title)}"></div>
     <div class="frow">
       <div class="field"><label for="fD">날짜</label><input id="fD" type="date" value="${esc(e.date)}"></div>
@@ -1167,8 +1210,8 @@ function renderForm(){
   };
   fillRepeat();
   $('fD').onchange=fillRepeat; $('fR').onchange=fillRepeat;
-  if(isNew) setTimeout(()=>$('fT').focus(),30);
-  $('fCancel').onclick=()=>{ calEdit=null; renderCal(); };
+  if(isNew) setTimeout(()=>{ $('fT').focus(); if(calDraft) box.scrollIntoView({block:'center'}); },30);
+  $('fCancel').onclick=()=>{ calEdit=null; calDraft=null; renderCal(); };
   $('fSave').onclick=()=>{
     const title=$('fT').value.trim(), date=$('fD').value;
     if(!title){ $('fT').focus(); toast('제목을 적어 주세요'); return; }
@@ -1178,8 +1221,10 @@ function renderForm(){
     const ev=isNew?{id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), done:{}}:CAL.events[calEdit];
     Object.assign(ev,{title, date, time:$('fH').value||'', place:$('fP').value.trim(), memo:$('fM').value.trim(), repeat, until});
     touchEv(ev);
+    const fromMemo=isNew&&calDraft?calDraft.memoId:''; calDraft=null;
+    if(fromMemo) memoMoved(fromMemo,'cal');
     calSel=isNew?date:calSel; if(isNew){ const d=parseKey(date); calMonth=new Date(d.getFullYear(),d.getMonth(),1); }
-    calEdit=null; renderCal(); toast(isNew?'일정을 적었습니다':'일정을 고쳤습니다');
+    calEdit=null; renderCal(); toast(fromMemo?'일정을 적고 메모를 접었습니다':isNew?'일정을 적었습니다':'일정을 고쳤습니다');
   };
   if($('fStop')) $('fStop').onclick=()=>{
     if(!confirm('‘'+e.title+'’을 '+relDay(calSel)+'부터 그만둘까요? 지난 날의 기록은 남습니다.')) return;
@@ -1195,6 +1240,207 @@ document.addEventListener('keydown',ev=>{
   if(ev.key==='ArrowLeft') $('calPrev')&&$('calPrev').click();
   if(ev.key==='ArrowRight') $('calNext')&&$('calNext').click();
 });
+
+/* ═════════ 메모 — 적바림(아이폰)과 단축어가 올린 메모를 맥에서 처리한다 ═════════
+   메모 하나 = memo_notes 한 줄(미래 프로젝트, 시작의 표). data: { id, text, createdAt, updatedAt, device,
+   state:'open'|'done', doneAt?, to?:'cal'|'todo'|'write', deleted? }
+   적바림(jeokbarim.html)과 아이폰 단축어도 같은 표에 쓴다. 단축어가 올린 줄은 시각이 '+09:00' 꼴이라 받을 때 Z 꼴로 고른다.
+   날짜 묶음은 새벽 4시 기준, 적은 시각은 그대로.
+   ‘할 일로’는 미래의 기록을 고치지 않는다: 클립보드에 넣고 미래를 열고, 메모에 표시만 남긴다. */
+const MEMO_KEY='sijak.memo';
+let MEMO=Object.assign({notes:{}, dirty:{}, since:''}, lsGet(MEMO_KEY,{}));
+if(!MEMO.notes) MEMO.notes={}; if(!MEMO.dirty) MEMO.dirty={};
+let memoTableMissing=false, memoPushT=null, memoPushing=false, memoErr='';
+let memoSel='', memoEditId='', memoSure='', memoShowDone=false;
+function memoPersist(){ lsSet(MEMO_KEY,MEMO); }
+function liveMemos(){ return Object.values(MEMO.notes).filter(n=>n&&n.id&&!n.deleted&&String(n.text||'').trim()); }
+function openMemos(){ return liveMemos().filter(n=>n.state!=='done').sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')); }
+function touchMemo(n){
+  n.updatedAt=new Date().toISOString(); if(!n.device) n.device=myDevice();
+  MEMO.notes[n.id]=n; MEMO.dirty[n.id]=1; memoPersist();
+  clearTimeout(memoPushT); memoPushT=setTimeout(pushMemo,700);
+}
+async function pushMemo(){
+  if(!mrOn()||memoPushing) return;
+  const ids=Object.keys(MEMO.dirty); if(!ids.length) return;
+  memoPushing=true; setDot('memo','busy','메모 올리는 중');
+  try{
+    for(let i=0;i<ids.length;i+=100){
+      const part=ids.slice(i,i+100), sent={};
+      part.forEach(id=>sent[id]=MEMO.notes[id].updatedAt);
+      await upsert(cfg.mr,'memo_notes',part.map(id=>({id, data:MEMO.notes[id], updated_at:MEMO.notes[id].updatedAt||new Date().toISOString()})));
+      part.forEach(id=>{ if(MEMO.notes[id]&&MEMO.notes[id].updatedAt===sent[id]) delete MEMO.dirty[id]; });
+      memoPersist();
+    }
+    memoTableMissing=false; memoErr=''; setDot('memo','ok','');
+  }catch(er){
+    memoTableMissing=missingTable(er); memoErr=er.message||'';
+    setDot('memo','err', memoTableMissing?'Supabase에 메모 표가 없습니다 · 설정에서 SQL을 실행하세요':'메모를 올리지 못했습니다 · '+memoErr);
+  }
+  memoPushing=false;
+  if(Object.keys(MEMO.dirty).length && !memoTableMissing){ clearTimeout(memoPushT); memoPushT=setTimeout(pushMemo,15000); }
+}
+/* 더 나중에 고친 쪽이 이긴다. 이 기기에서 아직 못 올린 메모는 덮지 않는다. */
+async function pullMemo(){
+  if(!mrOn()) return false;
+  try{
+    let q='memo_notes?select=id,data,updated_at&order=updated_at.asc';
+    if(MEMO.since) q+='&updated_at=gte.'+enc(new Date(Date.parse(MEMO.since)-10*60000).toISOString());
+    const iso=v=>{ const t=Date.parse(v); return isNaN(t)?'':new Date(t).toISOString(); };
+    let off=0, max=MEMO.since||'', changed=false;
+    for(;;){
+      const rows=await rest(cfg.mr,q+'&limit=500&offset='+off);
+      (rows||[]).forEach(r=>{
+        if(r.updated_at>max) max=r.updated_at;
+        const rem=r.data; if(!rem||!rem.id||MEMO.dirty[r.id]) return;
+        rem.updatedAt=iso(rem.updatedAt)||iso(r.updated_at);
+        rem.createdAt=iso(rem.createdAt)||rem.updatedAt;
+        const loc=MEMO.notes[r.id];
+        if(!loc||(rem.updatedAt||'')>(loc.updatedAt||'')){ MEMO.notes[r.id]=rem; changed=true; }
+      });
+      if(!rows||rows.length<500) break; off+=500;
+    }
+    MEMO.since=max; memoPersist(); memoTableMissing=false; memoErr='';
+    if(Object.keys(MEMO.dirty).length) pushMemo(); else setDot('memo','ok','');
+    return changed;
+  }catch(er){
+    memoTableMissing=missingTable(er); memoErr=er.message||'';
+    if(memoTableMissing && !liveMemos().length) setDot('memo','','');
+    else setDot('memo','err', memoTableMissing?'Supabase에 메모 표가 없습니다 · 설정에서 SQL을 실행하세요':'메모를 받지 못했습니다');
+    return false;
+  }
+}
+const MEMO_SQL=`create table if not exists memo_notes (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
+alter table memo_notes enable row level security;
+drop policy if exists "memo open" on memo_notes;
+create policy "memo open" on memo_notes for all using (true) with check (true);`;
+
+function memoTime(iso){ const d=new Date(iso); if(isNaN(d)) return ''; const h=d.getHours(); return (h<12?'오전 ':'오후 ')+((h%12)||12)+':'+pad(d.getMinutes()); }
+function memoDay(n){ return dayKey(Date.parse(n.createdAt)||Date.now()); }
+function memoDayLabel(k){
+  const n=daysBetween(k,dayKey());
+  if(n===0) return '오늘'; if(n===1) return '어제';
+  const d=parseKey(k), y=parseKey(dayKey()).getFullYear();
+  return (d.getFullYear()!==y?d.getFullYear()+'년 ':'')+(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+WD[d.getDay()]+')';
+}
+function memoFirstLine(t){ return String(t||'').trim().split(/\n/)[0].trim(); }
+const MEMO_TO={cal:'일정으로 옮김',todo:'할 일로 옮김',write:'글로 옮김'};
+function memoMoved(id,to){ const n=MEMO.notes[id]; if(!n) return; n.to=to; n.state='done'; n.doneAt=new Date().toISOString(); touchMemo(n); }
+
+/* 오늘 화면의 메모 칸 */
+function renderMemoStrip(){
+  const s=$('stripN'); if(!s) return;
+  const open=openMemos();
+  let h=`<div class="strip-head"><span class="strip-name">메모</span><span class="strip-num">${open.length?'열린 메모 '+open.length+'개':''}</span></div>`;
+  if(!mrOn()&&!open.length) h+=`<div class="strip-sub">${setupMsg()}</div>`;
+  else if(!open.length) h+=`<div class="strip-sub">${memoTableMissing?'설정에서 메모 표 SQL을 실행하세요':'열린 메모가 없습니다'}</div>`;
+  else{
+    h+='<ul class="mprev">'+open.slice(0,2).map(n=>{ const k=memoDay(n);
+      return `<li><span class="k">${k===dayKey()?memoTime(n.createdAt):memoDayLabel(k)}</span><span class="t">${esc(memoFirstLine(n.text))}</span></li>`; }).join('')+'</ul>';
+    if(open.length>2) h+=`<p class="more">그 밖에 ${open.length-2}개가 더 있습니다.</p>`;
+  }
+  s.innerHTML=h;
+}
+
+/* 메모 화면 */
+function renderMemo(){
+  const host=$('memoHost');
+  if(!$('mIn')){
+    host.innerHTML=`<div class="mpad">
+      <textarea id="mIn" rows="3" placeholder="떠오른 것을 적습니다"></textarea>
+      <div class="mpad-foot"><span class="hint">${isTouch?'':'⌘ + Enter로도 적습니다'}</span><button class="btn solid" id="mAdd" disabled>적기</button></div>
+    </div>
+    <div id="mWarn"></div>
+    <div class="mcount"><span id="mCnt"></span><button id="mShowDone"></button></div>
+    <div id="mList"></div>
+    <div id="mDoneWrap" hidden><h3 class="mh">처리한 것 · 최근 50개</h3><ul class="mnotes" id="mDone"></ul></div>
+    <p class="foot">아이폰에서는 적바림이나 단축어로 적습니다. 적은 것은 이 화면에서 일정·할 일·글로 옮기거나 처리함으로 접습니다. <a class="linkish" id="mJeok" target="sijak_memo" rel="opener">적바림 열기</a></p>`;
+    const inp=$('mIn');
+    inp.value=lsGet('sijak.memoDraft','')||''; $('mAdd').disabled=!inp.value.trim();
+    inp.addEventListener('input',()=>{ $('mAdd').disabled=!inp.value.trim(); lsSet('sijak.memoDraft',inp.value); });
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){ e.preventDefault(); memoAdd(); } });
+    $('mAdd').onclick=memoAdd;
+    $('mShowDone').onclick=()=>{ memoShowDone=!memoShowDone; renderMemoList(); };
+    $('mList').onclick=$('mDone').onclick=memoClick;
+  }
+  $('mJeok').href=linkFor('jeok');
+  renderMemoList();
+}
+function memoItemHTML(n){
+  const done=n.state==='done', ed=memoEditId===n.id, sel=memoSel===n.id||ed;
+  const meta='<span>'+memoTime(n.createdAt)+'</span>'+(n.device?'<span>'+esc(n.device)+'</span>':'')+(n.to&&MEMO_TO[n.to]?'<span class="to">'+MEMO_TO[n.to]+'</span>':'');
+  const body= ed ? `<textarea class="medit">${esc(n.text)}</textarea>` : `<div class="txt" data-msel>${esc(n.text)}</div>`;
+  const del=`<button data-mact="del" class="del${memoSure===n.id?' sure':''}">${memoSure===n.id?'한 번 더 누르면 지웁니다':'지우기'}</button>`;
+  const acts= ed ? '<button data-mact="save">고치기 끝</button><button data-mact="cancel">그만두기</button>'
+    : done ? '<button data-mact="open">되살리기</button><button data-mact="copy">복사</button>'+del
+    : '<span class="go"><button data-mact="cal">일정으로</button><button data-mact="todo">할 일로</button><button data-mact="write">글로</button></span>'
+      +'<span><button data-mact="done">처리함</button><button data-mact="edit">고치기</button><button data-mact="copy">복사</button>'+del+'</span>';
+  return `<li class="mnote${done?' done':''}${sel?' sel':''}" data-mid="${esc(n.id)}">${body}<div class="meta">${meta}</div><div class="acts">${acts}</div></li>`;
+}
+function renderMemoList(){
+  if(!$('mList')) return;
+  const open=openMemos();
+  $('mCnt').textContent=open.length?'열린 메모 '+open.length+'개':'열린 메모가 없습니다';
+  let html='', cur='';
+  open.forEach(n=>{ const k=memoDay(n);
+    if(k!==cur){ if(cur) html+='</ul>'; html+=`<h3 class="mh">${memoDayLabel(k)}</h3><ul class="mnotes">`; cur=k; }
+    html+=memoItemHTML(n); });
+  if(cur) html+='</ul>';
+  $('mList').innerHTML=html||'<p class="empty" style="margin-top:14px">아이폰에서 적은 메모가 여기에 날짜별로 쌓입니다.</p>';
+  const done=liveMemos().filter(n=>n.state==='done').sort((a,b)=>(b.doneAt||b.updatedAt||'').localeCompare(a.doneAt||a.updatedAt||'')).slice(0,50);
+  $('mDone').innerHTML=done.map(memoItemHTML).join('')||'<li class="empty">아직 처리한 메모가 없습니다.</li>';
+  $('mDoneWrap').hidden=!memoShowDone;
+  $('mShowDone').textContent=memoShowDone?'처리한 것 접기':'처리한 것 보기';
+  const nd=Object.keys(MEMO.dirty).length;
+  $('mWarn').innerHTML= !mrOn()?`<p class="calmsg">${setupMsg()}</p>`
+    : memoTableMissing?'<p class="calmsg">Supabase에 메모 표가 없습니다. <button class="linkish" onclick="go(\'set\')">설정</button>의 메모 표 SQL을 한 번 실행하세요. 그 전에 적은 것은 이 기기에 두었다가 올립니다.</p>'
+    : (nd&&memoErr)?`<p class="calmsg">아직 올리지 못한 메모 ${nd}개가 이 기기에 있습니다. 연결되면 올립니다.</p>`:'';
+  const ta=document.querySelector('#memoHost textarea.medit');
+  if(ta&&document.activeElement!==ta){ ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); }
+}
+function memoAdd(){
+  const inp=$('mIn'), text=inp.value.replace(/\s+$/,'');
+  if(!text.trim()) return;
+  touchMemo({id:'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,7), text, createdAt:new Date().toISOString(), state:'open', device:myDevice()});
+  inp.value=''; lsSet('sijak.memoDraft',''); $('mAdd').disabled=true;
+  renderMemoList(); renderMemoStrip(); toast('적었습니다'); inp.focus();
+}
+function memoClick(e){
+  const li=e.target.closest('.mnote'); if(!li) return;
+  const n=MEMO.notes[li.dataset.mid]; if(!n) return;
+  if(e.target.closest('[data-msel]')){ memoSel=memoSel===n.id?'':n.id; memoSure=''; renderMemoList(); return; }
+  const b=e.target.closest('[data-mact]'); if(!b) return;
+  const a=b.dataset.mact;
+  if(a!=='del') memoSure='';
+  if(a==='done'){ n.state='done'; n.doneAt=new Date().toISOString(); touchMemo(n); memoSel=''; toast('처리함으로 접었습니다'); }
+  else if(a==='open'){ n.state='open'; delete n.doneAt; delete n.to; touchMemo(n); memoSel=''; toast('되살렸습니다'); }
+  else if(a==='edit'){ memoEditId=n.id; }
+  else if(a==='cancel'){ memoEditId=''; }
+  else if(a==='save'){
+    const ta=li.querySelector('textarea'), v=ta?ta.value.replace(/\s+$/,''):'';
+    if(v.trim()&&v!==n.text){ n.text=v; touchMemo(n); toast('고쳤습니다'); }
+    memoEditId='';
+  }
+  else if(a==='copy'){ copyPlain(n.text).then(ok=>toast(ok?'복사했습니다':'복사하지 못했습니다')); return; }
+  else if(a==='del'){
+    if(memoSure!==n.id) memoSure=n.id;
+    else{ n.deleted=true; touchMemo(n); memoSure=''; memoSel=''; toast('지웠습니다'); }
+  }
+  else if(a==='cal'){
+    /* 달력의 새 일정 칸을 열고 메모를 넣어 둔다. 저장하면 메모를 접는다(renderForm). */
+    const first=memoFirstLine(n.text), rest=String(n.text).trim();
+    calDraft={title:first.slice(0,80), memo: rest!==first.slice(0,80)?rest:'', memoId:n.id};
+    memoSel=''; calSel=dayKey(); calMonth=null; calEdit='new'; go('cal'); return;
+  }
+  else if(a==='todo'||a==='write'){
+    /* 사파리는 클릭한 그 순간에만 클립보드를 허락하므로 복사를 먼저 시작하고 곧바로 연다 */
+    const done=copyPlain(n.text);
+    window.open(linkFor(a), a==='todo'?'sijak_todo':'sijak_write');
+    memoMoved(n.id,a); memoSel='';
+    done.then(ok=>toast(ok?(a==='todo'?'복사했습니다 · 미래에 붙여 넣으세요':'복사했습니다 · 글에 붙여 넣으세요'):'복사하지 못했습니다 · 메모를 열어 직접 옮기세요'));
+  }
+  renderMemoList(); renderMemoStrip();
+}
 
 /* ═════════ 설정 ═════════ */
 const MP_SQL=`create table if not exists mp_entries (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
@@ -1214,7 +1460,7 @@ function renderSet(){
   <div class="field"><label>키</label><input id="btKey" type="password" value="${esc(cfg.bt.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
 
   <h3>미래 프로젝트</h3>
-  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지·달력 일정·수입을 이곳의 mp_entries·cal_events·income_log 표에 적습니다.</p>
+  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지·달력 일정·수입·메모를 이곳의 mp_entries·cal_events·income_log·memo_notes 표에 적습니다.</p>
   <div class="field"><label>프로젝트 주소</label><input id="mrUrl" value="${esc(cfg.mr.url)}" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   <div class="field"><label>키</label><input id="mrKey" type="password" value="${esc(cfg.mr.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   ${autoNote?`<p class="note">${esc(autoNote)}</p>`:''}
@@ -1232,6 +1478,12 @@ function renderSet(){
   <pre class="sql">${esc(CAL_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copyCalSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">일정 ${liveEvents().length}개가 있고, ${Object.keys(CAL.dirty).length?Object.keys(CAL.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
+
+  <h3>메모 표</h3>
+  <p class="note">아이폰의 적바림과 단축어가 적고, 메모 탭에서 처리하는 메모를 담습니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <pre class="sql">${esc(MEMO_SQL)}</pre>
+  <div class="btnrow"><button class="btn" id="copyMemoSql">SQL 복사</button></div>
+  <p class="note" style="margin-top:10px">열린 메모 ${openMemos().length}개, 모두 ${liveMemos().length}개가 있고, ${Object.keys(MEMO.dirty).length?Object.keys(MEMO.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
 
   <h3>원고</h3>
   <p class="note">오늘 화면에 보태기의 나아감(완성 전 원고에서 늘어난 글자)으로 최근 30일 하루 평균을 보이고, 이 기준선과 견줍니다. 쉰 날도 나누므로 보태기의 하루 목표보다 낮게 잡아도 됩니다. 매 단위로 적으세요(0.5매까지).</p>
@@ -1266,6 +1518,7 @@ function renderSet(){
   <div class="field"><label>독서</label><input id="lkR" value="${esc(L.read)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>할 일</label><input id="lkT" value="${esc(L.todo)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>운동</label><input id="lkE" value="${esc(L.run||DEF_LINKS.run)}" autocapitalize="off" spellcheck="false"></div>
+  <div class="field"><label>메모 (적바림)</label><input id="lkM" value="${esc(L.jeok||DEF_LINKS.jeok)}" autocapitalize="off" spellcheck="false"></div>
   <div class="field"><label>일기 (스크리브너)</label><input id="lkJ" value="${esc(L.diary||'')}" placeholder="x-scrivener-item://…" autocapitalize="off" spellcheck="false"></div>
   <p class="note">달력의 ‘일기 쓰기’가 여는 주소입니다. 스크리브너에서 일기 문서를 오른쪽 클릭해 ‘Copy Document Link’로 얻은 주소를 붙여 넣으세요. 누르면 고른 날짜와 요일이 클립보드에 복사됩니다. 이 주소는 맥에서만 열리고, 아이폰·아이패드에서는 날짜만 복사됩니다. ‘처음 값으로’를 눌러도 지워지지 않습니다.</p>
   <div class="btnrow"><button class="btn" id="saveLinks">저장</button><button class="btn" id="resetLinks">처음 값으로</button></div>
@@ -1292,8 +1545,9 @@ function renderSet(){
   $('savePGoal').onclick=()=>{ const v=parseInt(String($('pGoal').value).replace(/[^\d]/g,''),10); if(!(v>0&&v<=2000)){ toast('기준선을 쪽 단위 숫자로 적으세요'); return; } touchIncConf({readGoal:v}); toast('쪽수 기준선을 '+v+'쪽으로 두었습니다'); renderSet(); renderPgStrip(); };
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
+  $('copyMemoSql').onclick=()=>navigator.clipboard.writeText(MEMO_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
-  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run, diary:$('lkJ').value.trim()}; saveCfg(); toast('저장했습니다'); };
+  $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run, jeok:$('lkM').value.trim()||DEF_LINKS.jeok, diary:$('lkJ').value.trim()}; saveCfg(); toast('저장했습니다'); };
   $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS,{diary:cfg.links.diary||''}); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
   $('sound').onclick=()=>{ MP.soundOn=MP.soundOn===false; mpPersist(); renderSet(); };
   $('reImport').onclick=()=>{ const old=lsGet('morningpages_v1',null); if(!old){ toast('이 기기에는 예전 모닝페이지 기록이 없습니다'); return; } const n=mergeOld(old); toast(n?n+'일치를 더하거나 합쳤습니다':'새로 가져올 것이 없습니다'); renderSet(); };
@@ -1305,13 +1559,13 @@ async function probe(){
   const out=[]; const p=$('probe'); p.textContent='확인하는 중…';
   if(btOn()){ try{ await rest(cfg.bt,'botaegi_sessions?select=id&limit=1'); out.push('✓ 보태기 기록을 읽을 수 있습니다'); }catch(e){ out.push('✕ 보태기: '+e.message); } } else out.push('· 보태기 프로젝트가 비어 있습니다');
   if(mrOn()){
-    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표'],['run_log','달리기 표']]){
+    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['run_log','달리기 표']]){
       try{ await rest(cfg.mr,t+'?select=id&limit=1'); out.push('✓ '+n+'을(를) 읽을 수 있습니다'); }
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
   } else out.push('· 미래 프로젝트가 비어 있습니다');
   p.textContent=out.join('\n');
-  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); refreshToday(true);
+  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); refreshToday(true);
 }
 
 /* ═════════ 수입 — 달마다의 합계로 최근 12개월 한 달 평균을 본다 ═════════
@@ -1869,6 +2123,8 @@ function go(v){
   if(v==='cal'){ renderCal();
     Promise.all([pullCal(), (!T&&mrOn())?loadTodo(dayKey()):null]).then(([c])=>{ if(view==='cal'&&calEdit==null) renderCal(); });
   }
+  if(v==='memo'){ renderMemo(); if(!isTouch) setTimeout(()=>$('mIn')&&$('mIn').focus(),30);
+    pullMemo().then(c=>{ if(c&&view==='memo'&&!memoEditId) renderMemoList(); }); }
   if(v==='inc'){ renderInc(); pullInc().then(c=>{ if(c&&view==='inc'&&!$('incHost').contains(document.activeElement)) renderInc(); }); }
   if(v==='adv') openAdv();
   if(v==='pg') openPg();
@@ -1883,9 +2139,11 @@ $('stripD').onclick=e=>{ if(!e.target.closest('button,a')) go('dist'); };
 $('stripD').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('dist'); } };
 $('stripA').onclick=e=>{ if(!e.target.closest('button,a')) go('adv'); };
 $('stripA').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('adv'); } };
+$('stripN').onclick=e=>{ if(!e.target.closest('button,a')) go('memo'); };
+$('stripN').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('memo'); } };
 $('stripI').onclick=e=>{ if(!e.target.closest('button')) go('inc'); };
 $('stripI').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('inc'); } };
-document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{ if(b.dataset.go==='cal'){ calSel=dayKey(); calMonth=null; calEdit=null; } go(b.dataset.go); });
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{ if(b.dataset.go==='cal'){ calSel=dayKey(); calMonth=null; calEdit=null; calDraft=null; } go(b.dataset.go); });
 
 /* 그날 처음 열면(새벽 4시가 지나 처음) 모닝페이지부터 */
 function firstOpenCheck(){
@@ -1914,6 +2172,7 @@ async function onBack(){
   if(view==='adv') openAdv();
   if(view==='pg') openPg();
   if(view==='dist') openDist();
+  if(view==='memo'){ await pullMemo(); if(Object.keys(MEMO.dirty).length) pushMemo(); if(!memoEditId) renderMemoList(); }
   if(view==='cal'){ const c=await pullCal(); if(!T&&mrOn()) await loadTodo(dayKey()); if(calEdit==null) renderCal(); }
 }
 document.addEventListener('visibilitychange',onBack);
@@ -1935,6 +2194,7 @@ setInterval(()=>{
   if(Object.keys(MP.dirty).length) queuePush();
   if(Object.keys(CAL.dirty).length) pushCal();
   if(Object.keys(INC.dirty).length) pushInc();
+  if(Object.keys(MEMO.dirty).length) pushMemo();
   if(view==='morning' && document.activeElement!==editor) mpLoadEditor();
   if(!mpTableMissing) setDot('mp', mrOn()?'ok':'', '');
   refreshToday(true);
