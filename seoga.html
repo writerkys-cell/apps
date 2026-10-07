@@ -86,6 +86,12 @@ button.place:active{border-color:var(--seal)}
 .datehead .day{font-size:19px;letter-spacing:.02em}
 .datehead .nth{font-size:13px;color:var(--ink-soft)}
 .draw{margin:-6px 0 30px}
+/* 읽기 전용 화면(#solo): 탭 줄 없이 읽기 화면 하나 */
+body.solo nav, body.solo #brandCount{display:none}
+body.solo .top{padding-bottom:14px}
+.solo-draw{margin-top:34px}
+.solo-draw .draw{margin:0}
+.solo-sb{margin-bottom:30px}
 .draw .dq{font-size:22px;line-height:1.8;letter-spacing:.01em;word-break:keep-all;overflow-wrap:anywhere;margin:4px 0 10px;max-width:34em}
 .draw .dm{font-size:13px;color:var(--ink-soft)}
 .draw .ghost{padding:7px 14px;font-size:14px;margin-top:14px}
@@ -262,7 +268,9 @@ let S=load();
 let orderSig=JSON.stringify(S.order);
 const RKEY='seoga.read.v1';
 let R=loadR(), finishFor=null, askFor=null, holdId=null, reviewFor=null;
-let view=(R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
+/* 주소 끝 #read: 읽기 탭으로 연다(시작의 독서 칸). #solo: 탭 줄 없이 읽기 화면 하나만(홈 화면 '읽기' 아이콘). */
+let SOLO=location.hash==='#solo';
+let view=(SOLO||location.hash==='#read'||R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
 let openShelves=new Set(), homeOpen=false, pageFor=null;
 let draft=blankDraft();
 function blankDraft(loc){ return {title:'',author:'',publisher:'',total:'',category:null,gift:false,received:today(),borrowed:false,library:'',due:'',location:loc||'',step:1}; }
@@ -310,9 +318,12 @@ function save(){
   queueSync();
 }
 function touch(b){ b.updated=new Date().toISOString(); }
-function today(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function dayOfYear(){ const d=new Date(), s=new Date(d.getFullYear(),0,0); return Math.min(365,Math.floor((d-s)/86400000)); }
-function fullDayLabel(){ const d=new Date(), w=['일','월','화','수','목','금','토'][d.getDay()];
+/* 하루는 새벽 4시에 바뀐다(시작·미래·보태기와 같게). 4는 상수로 빼지 말 것: today()가 파일 앞부분에서 먼저 불린다. */
+function dayDate(t){ const d=new Date(t==null?Date.now():t); d.setHours(d.getHours()-4); return d; }
+function dayOf(t){ const d=dayDate(t); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function today(){ return dayOf(Date.now()); }
+function dayOfYear(){ const d=dayDate(), s=new Date(d.getFullYear(),0,0); return Math.min(365,Math.floor((d-s)/86400000)); }
+function fullDayLabel(){ const d=dayDate(), w=['일','월','화','수','목','금','토'][d.getDay()];
   return d.getFullYear()+'년 '+(d.getMonth()+1)+'월 '+d.getDate()+'일 '+w+'요일'; }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function esc(s){ return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -329,7 +340,7 @@ function gifts(){ return live().filter(b=>b.gift).sort((a,b)=>(b.received||'').l
 function undecided(){ return live().filter(b=>!b.category).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 /* 빌린 책: 도서관에서 빌려 와 집에 둔 책. 가진 책이 아니므로 폐기 판단에 끼지 않는다. 반납하면 자리를 비우고 기록으로 남는다. */
 function borrowedNow(b){ return !!b.borrowed&&!b.returnedAt; }
-function plusDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function plusDays(n){ const d=dayDate(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function libText(b){ if(!b.borrowed) return '';
   if(b.returnedAt) return '빌려 읽음'+(b.library?' · '+b.library:'');
   return (b.library||'빌린 책')+(b.due?' · '+mdLabel(b.due)+'까지':''); }
@@ -435,6 +446,8 @@ function nextQueued(){
 
 /* ── 그리기 ── */
 function render(reset){
+  if(SOLO&&view!=='read') leaveSolo();
+  document.body.classList.toggle('solo',SOLO);
   const y=window.scrollY;
   TRACE=null;
   if(!cmp) sweepKeep();
@@ -1239,7 +1252,7 @@ function dayMinutes(){ const m=new Map(); sessions().forEach(s=>m.set(s.date,(m.
    평균이 목표의 90~110%면 그대로 두고, 그 밖이면 차이의 25%만큼 옮긴다. 한 번에 ±15%까지, 5분 단위, 최소 시간 아래로는 내려가지 않는다. */
 function daysBetween(a,b){ return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000); }
 function avgWindow(){
-  const first=R.settings.startDate||'', m=dayMinutes(), d=new Date(); d.setDate(d.getDate()-1);
+  const first=R.settings.startDate||'', m=dayMinutes(), d=dayDate(); d.setDate(d.getDate()-1);
   if(!first||!sessions().length&&dstr(d)<first) return null;
   let n=0, sum=0;
   for(let i=0;i<14;i++){ const k=dstr(d); if(k<first) break; sum+=m.get(k)||0; n++; d.setDate(d.getDate()-1); }
@@ -1265,7 +1278,7 @@ function dayTargets(){ const m=new Map(); sessions().forEach(s=>{ if(s.target) m
 function runShortcut(name,text){
   let url='shortcuts://'+(R.settings.back?'x-callback-url/':'')+'run-shortcut?name='+encodeURIComponent(name)
     +'&input=text&text='+encodeURIComponent(text);
-  if(R.settings.back) url+='&x-success='+encodeURIComponent(location.href.split('#')[0]);
+  if(R.settings.back) url+='&x-success='+encodeURIComponent(location.href.split('#')[0]+(SOLO?'#solo':''));
   location.href=url;
 }
 function speed(id){
@@ -1279,7 +1292,7 @@ function lastMemory(id){ const s=sessionsAll().filter(x=>x.bookId===id&&x.memory
 function vRead(){
   if(R.active) return R.active.closing? vClosing() : vReading();
   const n=ordered('next'), b=n[0];
-  let out='';
+  let out=soloSbHTML();
   if(finishFor&&book(finishFor)){
     const f=book(finishFor);
     out+=`<section style="margin-bottom:30px"><p class="rd-m" style="margin:0">‘${esc(f.title)}’, 끝까지 읽었습니다.</p>
@@ -1305,7 +1318,7 @@ function vRead(){
   } else reviewFor=null;
   if(!b) return out+`<div class="empty" style="border:none;padding-top:0"><b>지금 읽는 책이 없습니다.</b><br>다음 읽을 책의 1위가 여기 놓입니다.
       <div class="rowbtns"><button class="primary" onclick="addForReading()">읽을 책 담기</button>
-      <button class="ghost" onclick="go('list','best')">읽은 책 보기</button></div></div>`+statsHTML();
+      <button class="ghost" onclick="go('list','best')">읽은 책 보기</button></div></div>`+tailHTML();
   const mem=lastMemory(b.id), mine=sessions().filter(x=>x.bookId===b.id);
   const tg=R.settings.target, todayMin=dayMinutes().get(today())||0, left=Math.max(0,tg-todayMin);
   const sp=speed(b.id), page=b.page||0;
@@ -1335,7 +1348,17 @@ function vRead(){
       <button class="linkish" onclick="askClaude('${b.id}')">클로드에게</button>
       <button class="linkish" onclick="addForReading()">새 책 담아 읽기</button>
       <button class="linkish" onclick="startHold('${b.id}')">${borrowedNow(b)?'이 책 보류 · 반납':'이 책 보류'}</button></div>`
-    + statsHTML();
+    + tailHTML();
+}
+/* 읽기 첫 화면의 아래쪽: 서가에서는 달력과 통계, 읽기 전용 화면에서는 밑줄 뽑기 */
+function tailHTML(){ if(!SOLO) return statsHTML(); const d=drawHTML(); return d?`<div class="solo-draw">${d}</div>`:''; }
+/* 읽기 전용 화면을 처음 연 기기에 연결 정보가 없으면 여기서 넣는다(설정 탭이 없으므로) */
+function soloSbHTML(){
+  if(!SOLO||sbCfg.url) return '';
+  return `<section class="solo-sb"><p class="note" style="margin-top:0">이 화면은 아직 서가 기록과 이어지지 않았습니다. 서가 설정에 넣은 Supabase 주소와 anon 키를 넣으면 책과 기록을 받아옵니다.</p>
+    <div class="field"><label>프로젝트 주소</label><input type="text" id="s-url" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label>anon 키</label><input type="password" id="s-key" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="rowbtns"><button class="primary" onclick="sbSave()">연결하기</button></div></section><hr class="hr">`;
 }
 function vReading(){
   const a=R.active, b=book(a.bookId);
@@ -1381,9 +1404,9 @@ function statsHTML(){
   const m=dayMinutes(), dt=dayTargets(), t=today(), ym=t.slice(0,7), y=t.slice(0,4), tg=R.settings.target;
   const sum=f=>s.filter(f).reduce((a,x)=>{ a.mi+=x.minutes; a.p+=Math.max(0,x.toPage-x.fromPage); return a; },{mi:0,p:0});
   const mo=sum(x=>x.date.startsWith(ym)), yr=sum(x=>x.date.startsWith(y));
-  let streak=0; const d=new Date(); if(!m.get(t)) d.setDate(d.getDate()-1);
+  let streak=0; const d=dayDate(); if(!m.get(t)) d.setDate(d.getDate()-1);
   while(m.get(dstr(d))){ streak++; d.setDate(d.getDate()-1); }
-  const now=new Date(), first=new Date(now.getFullYear(),now.getMonth(),1).getDay(), last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const now=dayDate(), first=new Date(now.getFullYear(),now.getMonth(),1).getDay(), last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
   let cal=['일','월','화','수','목','금','토'].map(w=>`<div class="h">${w}</div>`).join('')+'<div></div>'.repeat(first);
   for(let i=1;i<=last;i++){ const k=ym+'-'+String(i).padStart(2,'0'), v=m.get(k)||0;
     cal+=`<div class="d${v>=(dt.get(k)||tg)?' full':v?' part':''}${k===t?' today':''}"${v?` title="${fmtMin(v)}"`:''}>${i}</div>`; }
@@ -1449,7 +1472,7 @@ function stamp(){
   let minutes=Math.max(1,Math.round((a.endedAt-a.startedAt)/60000));
   if(g('r-min')){ const v=parseInt(g('r-min').value,10); if(v>0) minutes=v; }
   const now=new Date().toISOString(), st=new Date(a.startedAt);
-  const rec={id:uid(),kind:'read',bookId:a.bookId,title:b?b.title:(a.title||''),date:dstr(st),start:st.toISOString(),minutes,target:R.settings.target,
+  const rec={id:uid(),kind:'read',bookId:a.bookId,title:b?b.title:(a.title||''),date:dayOf(a.startedAt),start:st.toISOString(),minutes,target:R.settings.target,
     fromPage:a.fromPage||0,toPage:to,memory:mem,scans:a.scans||0,finished:!!(b&&b.total&&to>=b.total),updated:now};
   R.reads.push(rec);
   if(b){ b.page=to; b.pageAt=today(); touch(b); }
@@ -1746,6 +1769,9 @@ function sbOff(){
 }
 
 /* 이동·입력 */
+/* 읽기 전용 화면에서 다른 탭이 필요한 동작(다른 책 고르기, 견주기 끝 등)을 하면 같은 자리에서 원래 서가로 넘어간다. */
+function leaveSolo(){ SOLO=false; document.body.classList.remove('solo');
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} }
 function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE;
   if(v==='add'&&!draft.title) draft=blankDraft(draft.location); render(true); }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
