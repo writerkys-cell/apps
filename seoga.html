@@ -85,6 +85,11 @@ button.place:active{border-color:var(--seal)}
 .datehead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:24px}
 .datehead .day{font-size:19px;letter-spacing:.02em}
 .datehead .nth{font-size:13px;color:var(--ink-soft)}
+.draw{margin:-6px 0 30px}
+.draw .dq{font-size:22px;line-height:1.8;letter-spacing:.01em;word-break:keep-all;overflow-wrap:anywhere;margin:4px 0 10px;max-width:34em}
+.draw .dm{font-size:13px;color:var(--ink-soft)}
+.draw .ghost{padding:7px 14px;font-size:14px;margin-top:14px}
+.draw .dq+.dm+button{margin-top:16px}
 
 .field{margin-bottom:14px}
 .field label{display:block;font-size:13px;color:var(--ink-soft);letter-spacing:.08em;margin-bottom:5px}
@@ -211,6 +216,7 @@ pre.sql{font-size:12px;line-height:1.5;background:var(--paper-2);padding:12px 14
 .count.err{color:var(--seal)}
 
 @media (max-width:600px){
+  .draw .dq{font-size:19px;line-height:1.75}
   nav button{padding:8px 8px 10px;font-size:14.5px;letter-spacing:.02em}
   .clock{font-size:60px}
   .brand h1{font-size:22px}
@@ -452,6 +458,23 @@ function render(reset){
 }
 
 /* 한눈에 */
+/* 밑줄 뽑기: 한눈에 탭 날짜 아래. 저장하지 않는다(뽑힌 것은 메모리에만). */
+let drawId=null;
+function drawPool(){ return R.reads.filter(x=>x.kind==='mark'&&!x.gone&&(x.text||'').trim()); }
+function drawHTML(){
+  const pool=drawPool(); if(!pool.length){ drawId=null; return ''; }
+  const x=drawId&&pool.find(m=>m.id===drawId);
+  if(!x){ drawId=null; return `<section class="draw"><button class="ghost" onclick="drawMark()">밑줄 뽑기</button></section>`; }
+  const b=book(x.bookId);
+  const meta=[b?b.title:x.title,b&&b.author,x.page?x.page+'쪽':''].filter(Boolean).map(esc).join(' · ');
+  return `<section class="draw"><p class="dq">${esc(x.text.trim()).replace(/\n/g,'<br>')}</p><div class="dm">${meta}</div><button class="ghost" onclick="drawMark()">다시 뽑기</button></section>`;
+}
+function drawMark(){
+  const pool=drawPool(); if(!pool.length) return;
+  const rest=pool.length>1?pool.filter(m=>m.id!==drawId):pool;
+  drawId=rest[Math.floor(Math.random()*rest.length)].id;
+  render();
+}
 function vHome(){
   if(!S.books.length) return `<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>
     <div class="empty" style="border:none;padding-top:10px">
@@ -464,7 +487,7 @@ function vHome(){
       ${more?`<div class="rowbtns"><button class="ghost" onclick="go('list','${more}')">모두 보기</button></div>`:''}
     </section>`;
   const head=`<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>`;
-  return head + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
+  return head + drawHTML() + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
     + sec(`최근에 받은 증정본${g.length>5?` · ${g.length}권 중 5권`:''}`,'d-gift',g.slice(0,5),false,g.length>5?'gift':'')
     + (u.length?sec(`분류하지 않은 책 ${u.length}권`,'d-none',u.slice(0,5),false,'undecided'):'');
 }
