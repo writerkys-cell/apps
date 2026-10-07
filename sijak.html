@@ -73,6 +73,22 @@ a.strip:hover{background:rgba(155,59,50,.035)}
 .wbox .wlinks a{color:var(--ink-soft);border-bottom:1px solid var(--line);text-decoration:none}
 .wbox .wlinks a:hover{color:var(--seal);border-bottom-color:var(--seal)}
 .strip-sub .live{color:var(--seal)}
+/* 시간 칸 안에 접어 둔 평균 칸(2026년 10월 7일) — 글쓰기▸원고, 독서▸쪽수, 운동▸거리.
+   칸 전체가 앱을 여는 링크라 삼각형은 링크 바깥의 형제로 두고 이름 앞에 겹쳐 놓는다. */
+.pair{position:relative}
+.pair .main .strip-head{padding-left:24px}
+.strip-lead{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:.55em;min-width:0}
+.strip-lead .avg{font-size:14.5px;color:var(--ink-soft);font-variant-numeric:tabular-nums;white-space:nowrap}
+.strip-lead .avg:empty{display:none}
+.strip-lead .avg.met{color:var(--seal)}
+.pair.open .strip-lead .avg{display:none}
+.tri{position:absolute;left:-10px;top:15px;width:44px;height:44px;z-index:2;display:flex;align-items:center;justify-content:center;
+  color:var(--ink-soft);font-size:14px;line-height:1;background:none;border:0;padding:0;cursor:pointer}
+.tri::before{content:'▸';display:inline-block;transition:transform .15s}
+.pair.open .tri::before{transform:rotate(90deg)}
+.tri:hover,.tri:focus-visible{color:var(--seal)}
+.pair:not(.open) .strip.sub{display:none}
+.strip.sub{border-top:1px dashed var(--line);padding-left:26px}
 .stamp{position:absolute;right:-6px;top:10px;width:46px;height:46px;border:2px solid var(--seal);border-radius:50%;
   color:var(--seal);font-size:13px;display:flex;align-items:center;justify-content:center;letter-spacing:.05em;
   transform:rotate(-12deg);opacity:.82;pointer-events:none;background:rgba(242,237,225,.7)}
@@ -339,12 +355,15 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
     <div class="agenda" id="agenda"></div>
     <div class="strip inc" id="stripN" role="button" tabindex="0" title="메모 보기"></div>
     <div class="strip" id="stripT"></div>
-    <div class="wbox"><a class="strip" id="stripW" target="sijak_write" rel="opener"></a><span class="wlinks"><a id="tteoLink" target="sijak_tteo" rel="opener">떠들기</a><a id="typeLink" target="sijak_typewriter" rel="opener">타자기</a></span></div>
-    <div class="strip inc" id="stripA" role="button" tabindex="0" title="원고 보기"></div>
-    <a class="strip" id="stripR" target="sijak_read" rel="opener"></a>
-    <div class="strip inc" id="stripP" role="button" tabindex="0" title="쪽수 보기"></div>
-    <a class="strip" id="stripE" target="sijak_run" rel="opener"></a>
-    <div class="strip inc" id="stripD" role="button" tabindex="0" title="거리 보기"></div>
+    <div class="pair" id="pairW"><button class="tri" data-pair="W" aria-controls="stripA" aria-expanded="false" aria-label="원고 펼치기"></button>
+      <div class="wbox"><a class="strip main" id="stripW" target="sijak_write" rel="opener"></a><span class="wlinks"><a id="tteoLink" target="sijak_tteo" rel="opener">떠들기</a><a id="typeLink" target="sijak_typewriter" rel="opener">타자기</a></span></div>
+      <div class="strip inc sub" id="stripA" role="button" tabindex="0" title="원고 보기"></div></div>
+    <div class="pair" id="pairR"><button class="tri" data-pair="R" aria-controls="stripP" aria-expanded="false" aria-label="쪽수 펼치기"></button>
+      <a class="strip main" id="stripR" target="sijak_read" rel="opener"></a>
+      <div class="strip inc sub" id="stripP" role="button" tabindex="0" title="쪽수 보기"></div></div>
+    <div class="pair" id="pairE"><button class="tri" data-pair="E" aria-controls="stripD" aria-expanded="false" aria-label="거리 펼치기"></button>
+      <a class="strip main" id="stripE" target="sijak_run" rel="opener"></a>
+      <div class="strip inc sub" id="stripD" role="button" tabindex="0" title="거리 보기"></div></div>
     <div class="strip inc" id="stripI" role="button" tabindex="0" title="수입 보기와 적기"></div>
     <p class="foot" id="foot"></p>
   </section>
@@ -604,10 +623,11 @@ function linkFor(which){
   if(which==='write') return isTouch?cfg.links.writePhone:cfg.links.write;
   return cfg.links[which]||DEF_LINKS[which];
 }
-function stripHTML(name, doneMin, runMin, goal, sub, met){
+function stripHTML(name, doneMin, runMin, goal, sub, met, avgId){
   const pct=v=>Math.max(0,Math.min(100,goal?v/goal*100:0));
   const d=pct(doneMin), r=Math.max(0,Math.min(100-d,pct(runMin)));
-  return `<div class="strip-head"><span class="strip-name">${name}</span>
+  const lead = avgId ? `<span class="strip-lead"><span class="strip-name">${name}</span><span class="avg" id="${avgId}"></span></span>` : `<span class="strip-name">${name}</span>`;
+  return `<div class="strip-head">${lead}
     <span class="strip-num">${fmtMin(doneMin+runMin)} <span class="of">/ ${fmtMin(goal)}</span></span></div>
     <div class="gauge"><i class="done" style="width:${d}%"></i><i class="run" style="left:${d}%;width:${r}%"></i></div>
     <div class="strip-sub">${sub}</div>${met?'<span class="stamp">채움</span>':''}`;
@@ -634,7 +654,7 @@ function renderToday(){
     if(W.tteo>=1) sub+=' · 떠들기 '+fmtMin(W.tteo);   /* 합계 안의 떠들기 몫 */
     if(!W.goalKnown) sub+=' <span class="of">(목표는 보태기에서 올라오면 바뀝니다)</span>';
     if(Werr) sub+=` <span class="err">· ${esc(Werr)}</span>`;
-    sw.innerHTML=stripHTML('글쓰기', W.min, run?run.min:0, goal, sub, met);
+    sw.innerHTML=stripHTML('글쓰기', W.min, run?run.min:0, goal, sub, met, 'avgW');
     sw.classList.toggle('met',met);
   }
 
@@ -662,12 +682,13 @@ function renderToday(){
     let sub = run ? `<span class="live">${esc(run.label)}${run.min>=1?' · '+fmtMin(run.min)+'째':''}</span>${run.title?' · 『'+esc(run.title)+'』':''}`
       : (R.titles.length? R.titles.map(t=>'『'+esc(t)+'』').join(' ')+'을 읽었습니다' : '아직 읽지 않았습니다');
     if(Rerr) sub+=` <span class="err">· ${esc(Rerr)}</span>`;
-    sr.innerHTML=stripHTML('독서', R.min, run?run.min:0, R.goal, sub, met);
+    sr.innerHTML=stripHTML('독서', R.min, run?run.min:0, R.goal, sub, met, 'avgR');
     sr.classList.toggle('met',met);
   }
 
   renderPgStrip();
   renderRunStrips();
+  renderPairAvgs();
 
   /* 할 일 */
   const st=$('stripT'), href=esc(linkFor('todo'));
@@ -1845,7 +1866,22 @@ function pgStripHTML(){
     +`<div class="strip-sub">최근 ${a.n}일 하루 평균 · 읽은 날 ${a.days}일 · 하루 ${fmtMin(a.min)}${RDerr?' <span class="err">· '+esc(RDerr)+'</span>':''}</div>`
     +(met?'<span class="stamp">채움</span>':'')};
 }
-function renderPgStrip(){ const el=$('stripP'); if(!el) return; const s=pgStripHTML(); el.innerHTML=s.h; el.classList.toggle('met',s.met); }
+function renderPgStrip(){ const el=$('stripP'); if(!el) return; const s=pgStripHTML(); el.innerHTML=s.h; el.classList.toggle('met',s.met); renderPairAvgs(); }
+/* 접힌 짝의 이름 뒤 작은 평균 — 평균 칸과 같은 계산. 기준선을 넘으면 인주색 */
+function renderPairAvgs(){
+  const put=(id,txt,met)=>{ const e=$(id); if(!e) return; e.textContent=txt?'· '+txt:''; e.classList.toggle('met',!!met); };
+  try{ if(W&&W.adv){ const a=advAvg(W.adv,W.first); put('avgW',a.mae.toFixed(1)+'매',a.mae>=writeGoal()); } else put('avgW',''); }catch(e){ put('avgW',''); }
+  try{ if(RD){ const a=pgAvg(); put('avgR',Math.round(a.pg)+'쪽',a.pg>=readGoal()); } else put('avgR',''); }catch(e){ put('avgR',''); }
+  try{ if(RN&&RN.first){ const a=distAvg(); put('avgE',a.v.toFixed(1)+'km',a.v>=RN.goalKm); } else put('avgE',''); }catch(e){ put('avgE',''); }
+}
+/* 펼침 상태는 기기마다 기억한다. 처음엔 셋 다 접힘 */
+const PAIRS=Object.assign({W:false,R:false,E:false}, lsGet('sijak.pairs',{}));
+function applyPairs(){
+  const nm={W:'원고',R:'쪽수',E:'거리'};
+  Object.keys(nm).forEach(k=>{ const p=$('pair'+k); if(!p) return; const o=!!PAIRS[k];
+    p.classList.toggle('open',o); const b=p.querySelector('.tri');
+    b.setAttribute('aria-expanded',o?'true':'false'); b.setAttribute('aria-label',nm[k]+(o?' 접기':' 펼치기')); });
+}
 function renderPg(){
   const host=$('pgHost'), open=`<p class="note" style="margin-top:28px"><a class="linkish" href="${esc(linkFor('read'))}" target="sijak_read" rel="opener">서가 열기</a></p>`;
   if(RDerr==='setup'){ host.innerHTML=`<p class="empty">${setupMsg()}</p>`; return; }
@@ -1914,7 +1950,7 @@ function renderRunStrips(){
   const k=dayKey(), min=(RN.sec[k]||0)/60, rmin=(RN.rsec[k]||0)/60, wmin=Math.max(0,min-rmin), kmT=RN.km[k]||0, gm=RN.goalMin, met=min>=gm;
   let sub = min>0 ? [rmin>=0.5?'달리기 '+fmtMin(rmin):'', wmin>=0.5?'걷기 '+fmtMin(wmin):''].filter(Boolean).join(' · ')+' · '+kmT.toFixed(2)+'km' : '오늘은 아직 적은 운동이 없습니다';
   if(RNerr) sub+=` <span class="err">· ${runErrMsg()}</span>`;
-  se.innerHTML=stripHTML('운동', min, 0, gm, sub, met); se.classList.toggle('met',met);
+  se.innerHTML=stripHTML('운동', min, 0, gm, sub, met, 'avgE'); se.classList.toggle('met',met);
   /* 거리 — 최근 30일 하루 평균 */
   if(!RN.first){ sd.innerHTML=dHead()+`<div class="strip-sub">아직 적은 운동이 없습니다</div>`; sd.classList.remove('met'); return; }
   const a=distAvg(), g=RN.goalKm, dm=a.v>=g;
@@ -1923,6 +1959,7 @@ function renderRunStrips(){
     +`<div class="strip-sub">최근 ${a.n}일 하루 평균 · 달리기 ${a.run.toFixed(1)}km · 걷기 ${a.walk.toFixed(1)}km · 운동한 날 ${a.days}일</div>`
     +(dm?'<span class="stamp">채움</span>':'');
   sd.classList.toggle('met',dm);
+  renderPairAvgs();
 }
 /* 쌓은 막대 — items: [{a(달리기), b(걷기), lab, tip, hi, top}] */
 function stackSVG(items,o){
@@ -2137,6 +2174,9 @@ function go(v){
   window.scrollTo(0,0);
 }
 window.go=go;
+document.querySelectorAll('.tri').forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation();
+  const k=b.dataset.pair; PAIRS[k]=!PAIRS[k]; lsSet('sijak.pairs',PAIRS); applyPairs(); });
+applyPairs();
 $('stripP').onclick=e=>{ if(!e.target.closest('button,a')) go('pg'); };
 $('stripP').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('pg'); } };
 $('stripD').onclick=e=>{ if(!e.target.closest('button,a')) go('dist'); };
