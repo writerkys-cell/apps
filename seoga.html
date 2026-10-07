@@ -499,7 +499,7 @@ function drawMark(){
   render();
 }
 /* 밑줄 적기: 밑줄 뽑기 아래. 여기 적는 밑줄은 모두 『밑줄들』에 들어간다. 쪽은 없다. */
-let jarOpen=false;
+let jarLast=null; /* 방금 적은 밑줄. 다른 화면으로 가면 지운다. */
 function jarBook(){ return S.books.find(b=>b.id===JAR); }
 function ensureJar(){
   let b=jarBook(); if(b) return b;
@@ -511,16 +511,21 @@ function jarHTML(){
   const j=jarBook(), n=j?markItems(JAR).length:0;
   return `<section class="jar"><label for="jar-text">밑줄 적기</label>
     <textarea id="jar-text" rows="2" placeholder="문장 · 저자나 책 제목을 함께 적어도 됩니다" onkeydown="jarKey(event)"></textarea>
-    <div class="markfoot">${n?`<button class="linkish" onclick="jarOpen=!jarOpen;render()">${jarOpen?'접기':'적은 밑줄 '+n+'개 보기'}</button>`:'<span></span>'}
+    <div class="markfoot">${n?`<button class="linkish" onclick="copyMarks(JAR)">밑줄들 복사 · ${n}개</button>`:'<span></span>'}
       <button class="ghost" style="padding:7px 16px" onclick="addJar()">적기</button></div>
-    ${jarOpen&&n?marksList(j):''}</section>`;
+    ${jarLastHTML()}</section>`;
+}
+function jarLastHTML(){
+  const x=jarLast&&R.reads.find(r=>r.id===jarLast&&!r.gone); if(!x) return '';
+  return `<ul class="lines"><li><div class="lr">방금 적은 밑줄</div><div class="lt">${esc(x.text).replace(/\n/g,'<br>')}</div>
+    <div class="la"><button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}')">지우기</button></div></li></ul>`;
 }
 function jarKey(e){ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)&&!e.isComposing){ e.preventDefault(); addJar(); } }
 function addJar(){
   const i=document.getElementById('jar-text'); if(!i) return; const t=i.value.trim();
   if(!t){ toast('밑줄 문장을 적어주세요'); i.focus(); return; }
   ensureJar(); const now=new Date().toISOString();
-  R.reads.push({id:uid(),kind:'mark',bookId:JAR,title:'밑줄들',page:0,text:t,date:today(),at:now,updated:now});
+  const id=uid(); R.reads.push({id,kind:'mark',bookId:JAR,title:'밑줄들',page:0,text:t,date:today(),at:now,updated:now}); jarLast=id;
   saveR(); toast('밑줄들에 적었습니다'); render();
 }
 function vHome(){
@@ -756,7 +761,7 @@ function tabList(c){
   return ordered(c);
 }
 function vList(){
-  return `<div class="search"><input type="text" id="q" value="${esc(q)}" placeholder="모든 책에서 찾기 · 한 줄·밑줄도 함께">
+  return `<div class="search"><input type="text" id="q" value="${esc(q)}" placeholder="모든 책에서 찾기 · 한 줄·밑줄·밑줄들도 함께">
       <button class="linkish" id="qclear" onclick="q='';shown=PAGE;render()" ${q?'':'hidden'}>지우기</button></div>
     <div class="choices" style="margin-bottom:16px">
       ${TABS.map(([c,n])=>`<button class="choice ${listTab===c?'on':''}" data-c="${c}" onclick="go('list','${c}')">${n} ${tabList(c).length}</button>`).join('')}
@@ -771,7 +776,9 @@ function listBody(){
   if(searching) list=list.sort((a,b)=>((a.discarded||a.held)?1:0)-((b.discarded||b.held)?1:0)||a.title.localeCompare(b.title,'ko'));
   const ranked=!searching&&(listTab==='best'||listTab==='next');
   const total=list.length, part=list.slice(0,shown);
-  if(!total) return `<div class="empty">${searching?'‘'+esc(q)+'’와 맞는 책이 없습니다.':'아직 없습니다.'}</div>`;
+  const jh=searching?jarHits(k):[];
+  if(!total&&!jh.length) return `<div class="empty">${searching?'‘'+esc(q)+'’와 맞는 책이 없습니다.':'아직 없습니다.'}</div>`;
+  if(!total) return jarHitsHTML(jh);
   if(!searching&&listTab==='borrow'){ const a=borrowingBooks(), z=returnedBooks();
     return (a.length?`<h2 class="sec subhead" style="margin-top:0">빌려 있는 책 ${a.length}권</h2><div class="rows">${a.map(b=>rowHTML(b,null,true)).join('')}</div>`:'')
       + (z.length?`<h2 class="sec subhead">반납한 책 ${z.length}권</h2><div class="rows">${z.map(b=>rowHTML(b,null,true)).join('')}</div>`:''); }
@@ -782,7 +789,18 @@ function listBody(){
         Math.min(PAGE,total-part.length)}권 더 보기 · 남은 ${total-part.length}권</button></div>`:'')
     + (!searching&&listTab==='bin'&&dueBooks().length?`<div class="rowbtns"><button class="ghost" onclick="outAll()">폐기 서가에 7일 넘게 있는 ${dueBooks().length}권 모두 내놓았다</button></div>`:'')
     + (!searching&&listTab==='remove'&&total?`<div class="rowbtns"><button class="ghost warn" style="color:var(--seal);border-color:rgba(155,59,50,.35)" onclick="removeAll()">지울 책 ${total}권 모두 목록에서 지우기</button></div>`:'')
-    + (ranked&&total>1?`<div class="rowbtns"><button class="ghost" onclick="reorderAll('${listTab}')">순서 처음부터 다시 정하기</button></div>`:'');
+    + (ranked&&total>1?`<div class="rowbtns"><button class="ghost" onclick="reorderAll('${listTab}')">순서 처음부터 다시 정하기</button></div>`:'')
+    + (jh.length?`<div style="margin-top:34px">${jarHitsHTML(jh)}</div>`:'');
+}
+/* 목록 검색: 『밑줄들』은 책으로 나오지 않고, 맞는 밑줄 문장이 따로 나온다. */
+let jarShown=20;
+function jarHits(k){ return markItems(JAR).filter(x=>(x.text||'').toLowerCase().includes(k)).reverse(); }
+function jarHitsHTML(h){
+  if(!h.length) return ''; const part=h.slice(0,jarShown);
+  return `<h2 class="sec subhead" style="margin-top:0">밑줄들에서 찾은 문장 ${h.length}개</h2>
+    <ul class="lines" style="margin-bottom:26px">${part.map(x=>`<li><div class="lr">${mdLabel(x.date)}</div><div class="lt">${esc(x.text).replace(/\n/g,'<br>')}</div>
+      <div class="la"><button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}')">지우기</button></div></li>`).join('')}</ul>
+    ${h.length>part.length?`<div class="rowbtns" style="margin:-14px 0 26px"><button class="ghost" onclick="jarShown+=20;refreshList()">밑줄 더 보기 · 남은 ${h.length-part.length}개</button></div>`:''}`;
 }
 function refreshList(){ TRACE=null; const el=document.getElementById('listbody'); if(el) el.innerHTML=listBody(); }
 function rowHTML(b,rank,showState){
@@ -874,6 +892,8 @@ function dropMark(rid,fromDraw){
 function copyMarks(id){
   const b=book(id), ms=markItems(id); if(!ms.length) return;
   const title=b?b.title:(ms[0].title||'');
+  if(b&&b.jar){ navigator.clipboard.writeText(['#밑줄들','',...ms.map(x=>x.text+'\n('+x.date+')\n')].join('\n').trim())
+    .then(()=>toast(ms.length+'개를 복사했습니다'),()=>toast('복사할 수 없습니다')); return; }
   const t=['#'+title.replace(/[^\p{L}\p{N}_-]/gu,''), title+(b&&b.author?' / '+b.author:''), '',
     ...ms.map(x=>(x.page?x.page+'쪽':'쪽 없음')+(x.kind==='scan'?' · 스캔':'')+'\n'+(x.text||'설명 없음')+'\n')].join('\n').trim();
   navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
@@ -1812,7 +1832,7 @@ function sbOff(){
 /* 읽기 전용 화면에서 다른 탭이 필요한 동작(다른 책 고르기, 견주기 끝 등)을 하면 같은 자리에서 원래 서가로 넘어간다. */
 function leaveSolo(){ SOLO=false; document.body.classList.remove('solo');
   try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} }
-function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE;
+function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null;
   if(v==='add'&&!draft.title) draft=blankDraft(draft.location); render(true); }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
 function onSearch(t){
@@ -1824,6 +1844,7 @@ document.addEventListener('compositionend',e=>{ composing=false; if(e.target.id=
 document.addEventListener('input',e=>{
   const id=e.target.id; if(id!=='q'&&id!=='sq') return;
   if(composing||e.isComposing){ if(id==='q') q=e.target.value; else sq=e.target.value; return; }
+  if(id==='q') jarShown=20;
   onSearch(e.target);
 });
 document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; if(editId){ editId=null; render(); } else if(holdId){ holdId=null; render(); } });
