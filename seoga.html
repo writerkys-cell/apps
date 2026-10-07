@@ -90,8 +90,14 @@ button.place:active{border-color:var(--seal)}
 body.solo nav, body.solo #brandCount{display:none}
 body.solo .top{padding-bottom:14px}
 .solo-draw{margin-top:34px}
-.solo-draw .draw{margin:0}
+.solo-draw .draw{margin:0 0 30px}
 .solo-sb{margin-bottom:30px}
+.draw .drawbtns{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:16px}
+.draw .drawbtns .ghost{margin-top:0}
+.jar{margin:0 0 30px}
+.jar>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
+.jar textarea{resize:none;line-height:1.55}
+.jar .lines{margin-top:14px}
 .draw .dq{font-size:22px;line-height:1.8;letter-spacing:.01em;word-break:keep-all;overflow-wrap:anywhere;margin:4px 0 10px;max-width:34em}
 .draw .dm{font-size:13px;color:var(--ink-soft)}
 .draw .ghost{padding:7px 14px;font-size:14px;margin-top:14px}
@@ -332,7 +338,9 @@ function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.
 
 /* ── 갈래 ── */
 function ordered(cat){ return S.order[cat].map(book).filter(Boolean); }
-function live(){ return S.books.filter(b=>!b.discarded&&!b.held); }
+/* 『밑줄들』(jar): 서가에 없는 책의 밑줄을 담는 그릇. 앱이 만들고 모든 목록·집계에서 뺀다. */
+const JAR='underlines';
+function live(){ return S.books.filter(b=>!b.jar&&!b.discarded&&!b.held); }
 /* 보류: 읽다가 놓은 책의 기록. 실제 책은 서가에서 치우고, 쪽과 이유만 남긴다. */
 function heldBooks(){ return S.books.filter(b=>b.held).sort((a,b)=>(b.heldAt||'').localeCompare(a.heldAt||'')||(b.updated||'').localeCompare(a.updated||'')); }
 function holdLine(b){ if(!b.total) return 0; return b.total>=300?100:Math.ceil(b.total/3); }
@@ -479,14 +487,41 @@ function drawHTML(){
   const x=drawId&&pool.find(m=>m.id===drawId);
   if(!x){ drawId=null; return `<section class="draw"><button class="ghost" onclick="drawMark()">밑줄 뽑기</button></section>`; }
   const b=book(x.bookId);
-  const meta=[b?b.title:x.title,b&&b.author,x.page?x.page+'쪽':''].filter(Boolean).map(esc).join(' · ');
-  return `<section class="draw"><p class="dq">${esc(x.text.trim()).replace(/\n/g,'<br>')}</p><div class="dm">${meta}</div><button class="ghost" onclick="drawMark()">다시 뽑기</button></section>`;
+  const meta=b&&b.jar? mdLabel(x.date) : [b?b.title:x.title,b&&b.author,x.page?x.page+'쪽':''].filter(Boolean).map(esc).join(' · ');
+  return `<section class="draw"><p class="dq">${esc(x.text.trim()).replace(/\n/g,'<br>')}</p><div class="dm">${meta}</div>
+    <div class="drawbtns"><button class="ghost" onclick="drawMark()">다시 뽑기</button>
+    <button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}',true)">지우기</button></div></section>`;
 }
 function drawMark(){
   const pool=drawPool(); if(!pool.length) return;
   const rest=pool.length>1?pool.filter(m=>m.id!==drawId):pool;
   drawId=rest[Math.floor(Math.random()*rest.length)].id;
   render();
+}
+/* 밑줄 적기: 밑줄 뽑기 아래. 여기 적는 밑줄은 모두 『밑줄들』에 들어간다. 쪽은 없다. */
+let jarOpen=false;
+function jarBook(){ return S.books.find(b=>b.id===JAR); }
+function ensureJar(){
+  let b=jarBook(); if(b) return b;
+  const now=new Date().toISOString();
+  b=normBook({id:JAR,title:'밑줄들',author:'',jar:true,category:'',location:'',added:now,updated:now});
+  S.books.push(b); save(); return b;
+}
+function jarHTML(){
+  const j=jarBook(), n=j?markItems(JAR).length:0;
+  return `<section class="jar"><label for="jar-text">밑줄 적기</label>
+    <textarea id="jar-text" rows="2" placeholder="문장 · 저자나 책 제목을 함께 적어도 됩니다" onkeydown="jarKey(event)"></textarea>
+    <div class="markfoot">${n?`<button class="linkish" onclick="jarOpen=!jarOpen;render()">${jarOpen?'접기':'적은 밑줄 '+n+'개 보기'}</button>`:'<span></span>'}
+      <button class="ghost" style="padding:7px 16px" onclick="addJar()">적기</button></div>
+    ${jarOpen&&n?marksList(j):''}</section>`;
+}
+function jarKey(e){ if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)&&!e.isComposing){ e.preventDefault(); addJar(); } }
+function addJar(){
+  const i=document.getElementById('jar-text'); if(!i) return; const t=i.value.trim();
+  if(!t){ toast('밑줄 문장을 적어주세요'); i.focus(); return; }
+  ensureJar(); const now=new Date().toISOString();
+  R.reads.push({id:uid(),kind:'mark',bookId:JAR,title:'밑줄들',page:0,text:t,date:today(),at:now,updated:now});
+  saveR(); toast('밑줄들에 적었습니다'); render();
 }
 function vHome(){
   if(!S.books.length) return `<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>
@@ -500,7 +535,7 @@ function vHome(){
       ${more?`<div class="rowbtns"><button class="ghost" onclick="go('list','${more}')">모두 보기</button></div>`:''}
     </section>`;
   const head=`<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>`;
-  return head + drawHTML() + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
+  return head + drawHTML() + jarHTML() + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
     + sec(`최근에 받은 증정본${g.length>5?` · ${g.length}권 중 5권`:''}`,'d-gift',g.slice(0,5),false,g.length>5?'gift':'')
     + (u.length?sec(`분류하지 않은 책 ${u.length}권`,'d-none',u.slice(0,5),false,'undecided'):'');
 }
@@ -732,7 +767,7 @@ function listBody(){
   const k=q.trim().toLowerCase();
   const searching=!!k;
   NIDX=null;
-  let list = searching? S.books.filter(b=>matches(b,k)) : tabList(listTab);
+  let list = searching? S.books.filter(b=>!b.jar&&matches(b,k)) : tabList(listTab);
   if(searching) list=list.sort((a,b)=>((a.discarded||a.held)?1:0)-((b.discarded||b.held)?1:0)||a.title.localeCompare(b.title,'ko'));
   const ranked=!searching&&(listTab==='best'||listTab==='next');
   const total=list.length, part=list.slice(0,shown);
@@ -822,14 +857,19 @@ function editMark(rid){
   const x=R.reads.find(r=>r.id===rid); if(!x) return;
   const v=prompt((x.kind==='scan'?'스캔 설명 고치기':'밑줄 고치기')+(x.page?' · '+x.page+'쪽':''),x.text||''); if(v===null) return;
   const t=v.trim(); if(!t&&x.kind==='mark'){ dropMark(rid); return; }
-  const pv=prompt('쪽 번호',x.page?String(x.page):'');
-  if(pv!==null){ const n=parseInt(pv,10); x.page=n>0?n:0; }
+  if(x.bookId!==JAR){ const pv=prompt('쪽 번호',x.page?String(x.page):'');
+    if(pv!==null){ const n=parseInt(pv,10); x.page=n>0?n:0; } }
   x.text=t; x.updated=new Date().toISOString(); saveR(); toast('고쳤습니다'); view==='list'?refreshList():render();
 }
-function dropMark(rid){
-  const x=R.reads.find(r=>r.id===rid); if(!x) return;
-  if(!confirm(x.kind==='scan'?'이 스캔 기록을 지웁니다. 애플 메모에 저장된 스캔은 그대로 남습니다.':'이 밑줄을 지웁니다.')) return;
-  x.gone=true; x.updated=new Date().toISOString(); saveR(); toast('지웠습니다'); view==='list'?refreshList():render();
+/* fromDraw: 밑줄 뽑기에서 지울 때. 다른 책의 밑줄이면 그 책의 기록에서도 지워진다고 알리고, 지운 뒤 다음 밑줄을 뽑는다. */
+function dropMark(rid,fromDraw){
+  const x=R.reads.find(r=>r.id===rid); if(!x) return; const b=book(x.bookId);
+  const msg=x.kind==='scan'?'이 스캔 기록을 지웁니다. 애플 메모에 저장된 스캔은 그대로 남습니다.'
+    :'이 밑줄을 지웁니다.'+(fromDraw&&b&&!b.jar?' ‘'+b.title+'’에 친 밑줄 기록에서도 지워집니다.':'');
+  if(!confirm(msg)) return;
+  x.gone=true; x.updated=new Date().toISOString(); saveR(); toast('지웠습니다');
+  if(fromDraw){ drawId=null; if(drawPool().length){ drawMark(); return; } }
+  view==='list'?refreshList():render();
 }
 function copyMarks(id){
   const b=book(id), ms=markItems(id); if(!ms.length) return;
@@ -1351,7 +1391,7 @@ function vRead(){
     + tailHTML();
 }
 /* 읽기 첫 화면의 아래쪽: 서가에서는 달력과 통계, 읽기 전용 화면에서는 밑줄 뽑기 */
-function tailHTML(){ if(!SOLO) return statsHTML(); const d=drawHTML(); return d?`<div class="solo-draw">${d}</div>`:''; }
+function tailHTML(){ if(!SOLO) return statsHTML(); return `<div class="solo-draw">${drawHTML()}${jarHTML()}</div>`; }
 /* 읽기 전용 화면을 처음 연 기기에 연결 정보가 없으면 여기서 넣는다(설정 탭이 없으므로) */
 function soloSbHTML(){
   if(!SOLO||sbCfg.url) return '';
