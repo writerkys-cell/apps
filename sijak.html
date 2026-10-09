@@ -510,6 +510,9 @@ function lsGet(k,fb){ try{ const v=localStorage.getItem(k); return v==null?fb:JS
 function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
 
 const isTouch = /iPhone|iPad|Android/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints>1);
+/* 아이폰에서는 모닝페이지·하루 정리를 쓰지 않는다(2026년 10월 9일): 탭을 숨기고, 아침에 모닝페이지부터 뜨는 규칙과 오늘 화면의 모닝페이지 줄도 뺀다 */
+const isPhone = /iPhone|iPod/.test(navigator.userAgent);
+if(isPhone){ document.querySelectorAll('#nav button[data-go="morning"],#nav button[data-go="close"]').forEach(b=>b.hidden=true); const m=document.getElementById('dayMp'); if(m) m.style.display='none'; }
 function myDevice(){
   const s=lsGet('sijak.device',''); if(s) return s;
   const u=navigator.userAgent;
@@ -1614,8 +1617,9 @@ function memoClick(e){
 
 /* ═════════ 레퍼런스 — 잠시 다녀올 곳의 링크(2026년 10월 9일) ═════════
    인터넷·AI·메일·카카오톡·직접 만든 앱·스크리브너 작품을 카테고리 아래 모아 두고, 누르면 열고, 마치면 닫고 돌아온다.
-   목록은 이 기기에만 둔다(localStorage `sijak.ref`): { cats:[{ id, name, open, items:[{ id, name, url, prompt }] }] }.
-   맥과 아이폰은 필요한 목록이 달라 동기화하지 않고, 설정에서 JSON으로 내보내고 가져온다.
+   목록은 localStorage `sijak.ref`: { cats:[{ id, name, open, items:[{ id, name, url, prompt }] }], updatedAt, device, dirty, synced }.
+   2026년 10월 9일부터 맥과 아이폰이 한 목록을 쓴다: 목록 전체가 미래 프로젝트 ref_links 표의 한 줄(id 'list')이고, 나중에 고친 쪽이 이긴다.
+   펼침 상태(open)만 이 기기에 둔다. 아이폰에서 안 열리는 주소(스크리브너)는 그냥 보인다. 설정의 내보내기·가져오기는 백업용으로 남긴다.
    주소 모양으로 여는 방법을 가른다: http(s)·상대 주소는 이름 붙은 새 탭, 그 밖의 스킴(x-scrivener-item://, shortcuts:// …)은 location.href,
    주소가 아닌 말은 단축어 이름으로 보고 shortcuts://run-shortcut?name=… 으로 연다. 프롬프트가 있으면 누르는 순간 클립보드에 넣고 연다(일기 쓰기와 같은 순서).
    시간 관리(타이머)는 시작이 아니라 단축어 쪽에서 한다. */
@@ -1626,6 +1630,65 @@ let REF=lsGet(REF_KEY,null);
 if(!REF||!Array.isArray(REF.cats)){ REF={cats:REF_SEED.map((n,i)=>({id:rid('c'), name:n, open:i<2, items:[]}))}; lsSet(REF_KEY,REF); }
 REF.cats.forEach(c=>{ if(!Array.isArray(c.items)) c.items=[]; });
 function refPersist(){ lsSet(REF_KEY,REF); }
+let refPushT=null, refPushing=false, refTableMissing=false;
+/* 목록을 고쳤을 때: 시각을 찍고 곧 올린다. 펼치고 접는 것은 refPersist만 */
+function refTouch(){ REF.updatedAt=new Date().toISOString(); REF.device=myDevice(); REF.dirty=true; refPersist(); clearTimeout(refPushT); refPushT=setTimeout(pushRef,700); }
+function refData(){ return {cats:REF.cats.map(c=>({id:c.id, name:c.name, items:c.items.map(i=>({id:i.id, name:i.name, url:i.url, prompt:i.prompt||''}))})), updatedAt:REF.updatedAt, device:REF.device||myDevice()}; }
+function refAdopt(cats){ /* 받은 목록으로 바꾸되 펼침 상태는 id, 없으면 이름으로 이어 받는다 */
+  const byId={}, byName={}; REF.cats.forEach(c=>{ byId[c.id]=!!c.open; byName[c.name]=!!c.open; });
+  REF.cats=cats.map(c=>({id:c.id||rid('c'), name:String(c.name||''), open:byId[c.id]!==undefined?byId[c.id]:(byName[c.name]||false), items:(Array.isArray(c.items)?c.items:[]).map(i=>({id:i.id||rid('r'), name:String(i.name||i.url||''), url:String(i.url||''), prompt:String(i.prompt||'')}))}));
+}
+async function pushRef(){
+  if(!mrOn()||refPushing||!REF.dirty) return;
+  if(!REF.synced){ /* 아직 한 번도 만나지 않은 목록을 그냥 올리면 다른 기기 것을 덮는다: 먼저 받아서 합친다 */
+    refPushing=true; const merged=await pullRef(); refPushing=false;
+    if(merged||!REF.dirty) return; /* 합쳤으면 refTouch가 곧 다시 올린다 */
+  }
+  refPushing=true; setDot('ref','busy','레퍼런스 올리는 중');
+  try{
+    const sent=REF.updatedAt;
+    await upsert(cfg.mr,'ref_links',[{id:'list', data:refData(), updated_at:sent}]);
+    if(REF.updatedAt===sent) REF.dirty=false;
+    REF.synced=true; refPersist(); refTableMissing=false; setDot('ref','ok','');
+  }catch(er){
+    refTableMissing=missingTable(er);
+    setDot('ref','err', refTableMissing?'Supabase에 레퍼런스 표가 없습니다 · 설정에서 SQL을 실행하세요':'레퍼런스를 올리지 못했습니다 · '+er.message);
+  }
+  refPushing=false;
+  if(REF.dirty&&!refTableMissing){ clearTimeout(refPushT); refPushT=setTimeout(pushRef,15000); }
+}
+/* 나중에 고친 쪽이 이긴다. 아직 못 올린 내 것은 덮지 않는다.
+   이 기기가 처음 만나는 목록이면(synced 전) 받은 목록에 내 것을 합쳐 올린다 — 같은 이름의 카테고리는 하나로, 같은 주소의 링크는 건너뛴다. */
+async function pullRef(){
+  if(!mrOn()) return false;
+  try{
+    const rows=await rest(cfg.mr,'ref_links?select=id,data,updated_at&id=eq.list');
+    refTableMissing=false;
+    const r=rows&&rows[0], rem=r&&r.data;
+    if(!rem||!Array.isArray(rem.cats)){ /* 표는 있는데 아직 아무 기기도 올리지 않았다: 내 것이 곧 목록이다 */
+      if(!REF.synced){ REF.synced=true; REF.updatedAt=REF.updatedAt||new Date().toISOString(); REF.dirty=true; refPersist(); pushRef(); }
+      return false;
+    }
+    if(!REF.synced){
+      const mine=REF.cats; refAdopt(rem.cats);
+      refImport({cats:mine}); REF.synced=true; refTouch();
+      return true;
+    }
+    if(REF.dirty) return false;
+    const t=rem.updatedAt||r.updated_at||'';
+    if(t>(REF.updatedAt||'')){ refAdopt(rem.cats); REF.updatedAt=t; REF.device=rem.device||''; refPersist(); setDot('ref','ok',''); return true; }
+    setDot('ref','ok',''); return false;
+  }catch(er){
+    refTableMissing=missingTable(er);
+    setDot('ref','err', refTableMissing?'Supabase에 레퍼런스 표가 없습니다 · 설정에서 SQL을 실행하세요':'레퍼런스를 받지 못했습니다');
+    return false;
+  }
+}
+function refPullRender(){ return pullRef().then(ch=>{ if(ch&&view==='ref'&&!refForm) renderRef(); if(ch&&view==='set') renderSet(); }); }
+const REF_SQL=`create table if not exists ref_links (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
+alter table ref_links enable row level security;
+drop policy if exists "ref open" on ref_links;
+create policy "ref open" on ref_links for all using (true) with check (true);`;
 let refEdit=false, refForm=null;   /* refForm: {cat} 링크 더하기 · {cat,item} 링크 고치기 · {cat,renameCat:true} 이름 바꾸기 · {newCat:true} 카테고리 더하기 */
 function refCat(id){ return REF.cats.find(c=>c.id===id); }
 function refItem(cid,id){ const c=refCat(cid); return c&&c.items.find(i=>i.id===id); }
@@ -1689,13 +1752,13 @@ function refSave(){
   if(f.newCat||f.renameCat){
     const n=$('rfN').value.trim(); if(!n){ toast('이름을 적어 주세요'); $('rfN').focus(); return; }
     if(f.newCat) REF.cats.push({id:rid('c'), name:n, open:true, items:[]}); else refCat(f.cat).name=n;
-    refPersist(); refForm=null; renderRef(); toast(f.newCat?'카테고리를 더했습니다':'이름을 바꿨습니다'); return;
+    refTouch(); refForm=null; renderRef(); toast(f.newCat?'카테고리를 더했습니다':'이름을 바꿨습니다'); return;
   }
   const name=$('rfName').value.trim(), url=$('rfUrl').value.trim(), prompt=$('rfPr').value.replace(/\s+$/,'');
   if(!url){ toast('주소나 단축어 이름을 적어 주세요'); $('rfUrl').focus(); return; }
   const c=refCat(f.cat); if(!c){ refForm=null; renderRef(); return; }
   if(f.item) Object.assign(f.item,{name:name||url, url, prompt}); else c.items.push({id:rid('r'), name:name||url, url, prompt});
-  refPersist(); const was=!!f.item; refForm=null; renderRef(); toast(was?'고쳤습니다':'더했습니다');
+  refTouch(); const was=!!f.item; refForm=null; renderRef(); toast(was?'고쳤습니다':'더했습니다');
 }
 function refMove(arr,i,d){ const j=i+d; if(i<0||j<0||j>=arr.length) return false; const [x]=arr.splice(i,1); arr.splice(j,0,x); return true; }
 $('refHost').addEventListener('click',e=>{
@@ -1716,13 +1779,13 @@ $('refHost').addEventListener('click',e=>{
   if(ib){ const c=refCat(ib.dataset.cat); if(!c) return; const i=c.items.findIndex(x=>x.id===ib.dataset.item); if(i<0) return;
     if(a==='del'){ if(!confirm('‘'+(c.items[i].name||c.items[i].url)+'’을 지울까요?')) return; c.items.splice(i,1); toast('지웠습니다'); }
     else if(!refMove(c.items,i,a==='up'?-1:1)) return;
-    refPersist(); refForm=null; renderRef(); return; }
+    refTouch(); refForm=null; renderRef(); return; }
   if(cb){ const ci=REF.cats.findIndex(x=>x.id===cb.dataset.catact); if(ci<0) return; const c=REF.cats[ci];
     if(a==='add'){ refForm={cat:c.id}; c.open=true; }
     else if(a==='ren'){ refForm={cat:c.id, renameCat:true}; }
     else if(a==='del'){ if(!confirm('‘'+c.name+'’'+(c.items.length?'과 그 안의 링크 '+c.items.length+'개를':'를')+' 지울까요?')) return; REF.cats.splice(ci,1); refForm=null; toast('지웠습니다'); }
     else if(!refMove(REF.cats,ci,a==='up'?-1:1)) return;
-    refPersist(); renderRef(); }
+    refTouch(); renderRef(); }
 });
 $('refHost').addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.matches('.rform input')){ e.preventDefault(); refSave(); } if(e.key==='Escape'&&refForm){ refForm=null; renderRef(); } });
 /* 내보내기·가져오기(설정). 가져올 때는 같은 이름의 카테고리에 합치고, 같은 주소의 링크는 건너뛴다 */
@@ -1756,7 +1819,7 @@ function renderSet(){
   <div class="field"><label>키</label><input id="btKey" type="password" value="${esc(cfg.bt.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
 
   <h3>미래 프로젝트</h3>
-  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지·달력 일정·수입·메모를 이곳의 mp_entries·cal_events·income_log·memo_notes 표에 적습니다.</p>
+  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지·달력 일정·수입·메모·레퍼런스를 이곳의 mp_entries·cal_events·income_log·memo_notes·ref_links 표에 적습니다.</p>
   <div class="field"><label>프로젝트 주소</label><input id="mrUrl" value="${esc(cfg.mr.url)}" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   <div class="field"><label>키</label><input id="mrKey" type="password" value="${esc(cfg.mr.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   ${autoNote?`<p class="note">${esc(autoNote)}</p>`:''}
@@ -1780,6 +1843,11 @@ function renderSet(){
   <pre class="sql">${esc(MEMO_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copyMemoSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">열린 메모 ${openMemos().length}개, 모두 ${liveMemos().length}개가 있고, ${Object.keys(MEMO.dirty).length?Object.keys(MEMO.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
+
+  <h3>레퍼런스 표</h3>
+  <p class="note">레퍼런스 탭의 링크 목록을 맥과 아이폰이 함께 씁니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <pre class="sql">${esc(REF_SQL)}</pre>
+  <div class="btnrow"><button class="btn" id="copyRefSql">SQL 복사</button></div>
 
   <h3>원고</h3>
   <p class="note">오늘 화면에 보태기의 나아감(완성 전 원고에서 늘어난 글자)으로 최근 30일 하루 평균을 보이고, 이 기준선과 견줍니다. 쉰 날도 나누므로 보태기의 하루 목표보다 낮게 잡아도 됩니다. 매 단위로 적으세요(0.5매까지).</p>
@@ -1822,7 +1890,7 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="saveLinks">저장</button><button class="btn" id="resetLinks">처음 값으로</button></div>
 
   <h3>레퍼런스</h3>
-  <p class="note">레퍼런스 탭의 링크 목록은 기기마다 따로 둡니다. 이 기기에는 카테고리 ${REF.cats.length}개, 링크 ${REF.cats.reduce((t,c)=>t+c.items.length,0)}개가 있습니다. 다른 기기로 옮기려면 여기서 내보낸 파일을 그 기기의 설정에서 가져옵니다. 가져올 때 같은 이름의 카테고리는 합치고, 같은 주소의 링크는 건너뜁니다.</p>
+  <p class="note">링크 목록은 미래 프로젝트의 ref_links 표로 맥과 아이폰이 함께 씁니다. 한쪽에서 고치면 다른 쪽이 돌아올 때 받고, 나중에 고친 쪽이 남습니다. 어느 카테고리를 펼쳐 뒀는지만 기기마다 따로 둡니다. 아이폰에서 열리지 않는 주소(스크리브너)도 그대로 보입니다. 카테고리 ${REF.cats.length}개, 링크 ${REF.cats.reduce((t,c)=>t+c.items.length,0)}개가 있고, ${REF.dirty?'아직 올리지 못했습니다':REF.synced?'올라가 있습니다':'아직 한 번도 올리지 않았습니다'}. 아래 내보내기·가져오기는 백업용입니다. 가져올 때 같은 이름의 카테고리는 합치고, 같은 주소의 링크는 건너뜁니다.</p>
   <div class="btnrow"><button class="btn" id="expRef">목록 내보내기</button><button class="btn" id="impRef">파일에서 가져오기</button><input type="file" id="impRefFile" accept=".json" hidden></div>
 
   <h3>모닝페이지</h3>
@@ -1851,11 +1919,12 @@ function renderSet(){
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
   $('copyMemoSql').onclick=()=>navigator.clipboard.writeText(MEMO_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
+  $('copyRefSql').onclick=()=>navigator.clipboard.writeText(REF_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run, jeok:$('lkM').value.trim()||DEF_LINKS.jeok, research:$('lkQ').value.trim()||DEF_LINKS.research, diary:$('lkJ').value.trim()}; saveCfg(); toast('저장했습니다'); };
   $('expRef').onclick=refExport;
   $('impRef').onclick=()=>$('impRefFile').click();
-  $('impRefFile').onchange=ev=>{ const f=ev.target.files[0]; ev.target.value=''; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const n=refImport(JSON.parse(r.result)); toast(n.nc||n.ni?`카테고리 ${n.nc}개, 링크 ${n.ni}개를 더했습니다`:'새로 가져올 것이 없습니다'); renderSet(); }catch(e){ toast('레퍼런스 파일이 아닙니다'); } }; r.readAsText(f); };
+  $('impRefFile').onchange=ev=>{ const f=ev.target.files[0]; ev.target.value=''; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const n=refImport(JSON.parse(r.result)); if(n.nc||n.ni) refTouch(); toast(n.nc||n.ni?`카테고리 ${n.nc}개, 링크 ${n.ni}개를 더했습니다`:'새로 가져올 것이 없습니다'); renderSet(); }catch(e){ toast('레퍼런스 파일이 아닙니다'); } }; r.readAsText(f); };
   $('resetLinks').onclick=()=>{ cfg.links=Object.assign({},DEF_LINKS,{diary:cfg.links.diary||''}); saveCfg(); renderSet(); toast('처음 값으로 돌렸습니다'); };
   $('sound').onclick=()=>{ MP.soundOn=MP.soundOn===false; mpPersist(); renderSet(); };
   $('lockBtn').onclick=()=>{ MP.lockOn=MP.lockOn===false; mpPersist(); renderSet(); };
@@ -1869,13 +1938,13 @@ async function probe(){
   const out=[]; const p=$('probe'); p.textContent='확인하는 중…';
   if(btOn()){ try{ await rest(cfg.bt,'botaegi_sessions?select=id&limit=1'); out.push('✓ 보태기 기록을 읽을 수 있습니다'); }catch(e){ out.push('✕ 보태기: '+e.message); } } else out.push('· 보태기 프로젝트가 비어 있습니다');
   if(mrOn()){
-    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['run_log','달리기 표']]){
+    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','모닝페이지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['ref_links','레퍼런스 표'],['run_log','달리기 표']]){
       try{ await rest(cfg.mr,t+'?select=id&limit=1'); out.push('✓ '+n+'을(를) 읽을 수 있습니다'); }
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
   } else out.push('· 미래 프로젝트가 비어 있습니다');
   p.textContent=out.join('\n');
-  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); refreshToday(true);
+  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); await pullRef(); pushRef(); refreshToday(true);
 }
 
 /* ═════════ 수입 — 달마다의 합계로 최근 12개월 한 달 평균을 본다 ═════════
@@ -2456,7 +2525,7 @@ function go(v){
   if(v==='pg') openPg();
   if(v==='dist') openDist();
   if(v==='set') renderSet();
-  if(v==='ref'){ refForm=null; renderRef(); }
+  if(v==='ref'){ refForm=null; renderRef(); refPullRender(); }
   window.scrollTo(0,0);
 }
 window.go=go;
@@ -2477,6 +2546,7 @@ document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{ if(b.dataset
 
 /* 그날 처음 열면(새벽 4시가 지나 처음) 모닝페이지부터 */
 function firstOpenCheck(){
+  if(isPhone) return false;
   const k=dayKey();
   if(lsGet('sijak.lastDay','')!==k){
     lsSet('sijak.lastDay',k);
@@ -2493,6 +2563,7 @@ async function onBack(){
   if(Date.now()-backT<1500) return; backT=Date.now();
   const changed=await pullMP(false)||[];
   if(Object.keys(MP.dirty).length) queuePush();
+  refPullRender();
   if(firstOpenCheck()) { refreshToday(true); return; }
   if(view==='today') refreshToday(true);
   else { lastLoad=0; }
@@ -2525,6 +2596,7 @@ setInterval(()=>{
   if(Object.keys(CAL.dirty).length) pushCal();
   if(Object.keys(INC.dirty).length) pushInc();
   if(Object.keys(MEMO.dirty).length) pushMemo();
+  if(REF.dirty) pushRef(); else refPullRender();
   if(view==='morning' && document.activeElement!==editor) mpLoadEditor();
   if(!mpTableMissing) setDot('mp', mrOn()?'ok':'', '');
   refreshToday(true);
