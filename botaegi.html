@@ -116,6 +116,11 @@ header{
 .prev .para:hover{background:transparent !important}
 .prev .unum{position:absolute;right:calc(100% + .7rem);top:0;white-space:nowrap;text-indent:0;text-align:right;font-family:var(--ui);font-size:.66rem;line-height:calc(var(--pfz) * var(--plh));color:var(--meok-3);user-select:none;-webkit-user-select:none}
 .prev .unum.h{color:#b9a98a}
+/* 여백의 숫자 — 링크가 있으면 누르면 스크리브너에서 연다. 보이는 크기는 그대로, 누르는 자리만 둘레로 넓힌다 */
+.prev a.unum{text-decoration:none;cursor:pointer}
+.prev a.unum::after{content:"";position:absolute;top:0;bottom:0;left:-16px;right:-8px}
+.prev a.unum:hover,.prev a.unum:focus-visible,.prev a.unum.h:hover,.prev a.unum.h:focus-visible{color:var(--inju)}
+.prev span.unum{cursor:default}
 /* 교열 — 두 번 누른 원고 하나만 그 자리에서 고친다 */
 .prev .gy{margin:.2em 0 .4em;position:relative}
 .prev .gy::before{content:"";position:absolute;left:-12px;top:.3em;bottom:.3em;width:2px;background:var(--inju)}
@@ -1499,8 +1504,7 @@ function renderPrev(keepScroll){
     if(!list.length){
       var e0 = document.createElement("p"); e0.className = "gap"; e0.textContent = "\u200b"; list = [];
       e0.dataset.mid = m.id; e0.dataset.li = "0";
-      var n0 = document.createElement("span"); n0.className = "unum" + (m.finishedAt ? " h" : ""); n0.textContent = lab + (m.finishedAt ? "·완성" : "");
-      e0.style.position = "relative"; e0.appendChild(n0); elPrev.appendChild(e0);
+      e0.style.position = "relative"; e0.appendChild(unumEl(m, lab)); elPrev.appendChild(e0);
     }
     list.forEach(function(line, i){
       var p = document.createElement("p");
@@ -1515,16 +1519,30 @@ function renderPrev(keepScroll){
         });
       }else p.textContent = line || "\u200b";
       if(i === 0){
-        var num = document.createElement("span");
-        num.className = "unum" + (m.finishedAt ? " h" : "");
-        num.textContent = lab + (m.finishedAt ? "·완성" : "");
-        num.title = m.title + (m.finishedAt ? " · " + dayText(m.finishedAt) + " 완성" : "");
-        p.insertBefore(num, p.firstChild);
+        p.insertBefore(unumEl(m, lab), p.firstChild);
       }
       elPrev.appendChild(p);
     });
   });
   if(keepScroll) elPrev.scrollTop = st;
+}
+/* 여백의 숫자 — 스크리브너 링크가 있으면 누르면 그 문서를 열고, 그 원고를 지금 원고로 고른다(원고 탭의 '쓰기'와 같다) */
+function unumEl(m, lab){
+  var base = m.title + (m.finishedAt ? " · " + dayText(m.finishedAt) + " 완성" : "");
+  var el = document.createElement(m.scrivLink ? "a" : "span");
+  el.className = "unum" + (m.finishedAt ? " h" : "");
+  el.textContent = lab + (m.finishedAt ? "·완성" : "");
+  if(m.scrivLink){
+    el.href = m.scrivLink; el.dataset.go = m.id;
+    el.title = base + " · 스크리브너에서 열기";
+    el.onclick = function(){ unumPick(m.id); };
+  }else el.title = base + " · 링크가 없습니다 · 원고 탭의 '링크 넣기'로 이어 주세요";
+  return el;
+}
+function unumPick(id){
+  if(S.current === id) return;
+  S.current = id; S.sel = null; save();
+  setTimeout(function(){ renderHead(); renderWrite(true); renderList(); }, 0);
 }
 function renderStrip(){
   var w = workOf(cur()), us = w ? unitsOf(w) : [cur()];
@@ -2467,12 +2485,16 @@ function gyFinish(quiet){
 }
 elPrev.addEventListener("dblclick", function(e){
   if(gy && gy.box && gy.box.contains(e.target)) return;
+  if(e.target.closest && e.target.closest(".unum")) return;   /* 여백의 숫자는 교열 칸을 열지 않는다 */
   var at = gyWhere(e);
   if(at) gyOpen(at);
 });
 /* 칸 밖을 누르면 교열 마침 */
 document.addEventListener("mousedown", function(e){
   if(!gy || !gy.box || gy.box.contains(e.target)) return;
+  /* 교열 칸이 열린 채 여백의 숫자를 누르면 — 마치며 화면을 다시 그려 숫자가 사라지므로, 마친 뒤 여기서 연다 */
+  var go = e.target.closest ? e.target.closest("a.unum[data-go]") : null;
+  if(go){ e.preventDefault(); var href = go.getAttribute("href"), id = go.dataset.go; gyFinish(); unumPick(id); try{ window.location.href = href; }catch(x){} return; }
   gyFinish();
 }, true);
 window.addEventListener("beforeunload", function(){ if(gy) gyFinish(true); });
