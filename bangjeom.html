@@ -124,7 +124,25 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .now a.txt{color:var(--ink);text-decoration:none;-webkit-tap-highlight-color:transparent}
 .now a.txt::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.35em;vertical-align:.25em}
 .now a.txt:active{color:var(--seal)}
+.memo{margin:1rem auto 0;max-width:32ch;text-align:left}
+.memo p{font-size:.9rem;color:var(--ink-soft);line-height:1.7;white-space:pre-wrap;margin:0;cursor:pointer}
+/* 메모는 어디서든 두 줄까지만 보이고, 누르면 펼쳐진다 */
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.clamp.open{-webkit-line-clamp:none}
+.memo .add{font-size:.82rem;color:var(--ink-faint);border-bottom:1px dotted var(--rule);padding-bottom:1px;display:block;margin:0 auto;width:max-content}
+.memo textarea,.editor textarea{
+  width:100%;display:block;min-height:4.2rem;resize:none;overflow:hidden;padding:.6rem .7rem;
+  background:#fbf8f1;border:1px solid var(--rule);border-radius:2px;line-height:1.6;
+}
+.memo textarea::placeholder,.editor textarea::placeholder{color:var(--ink-faint)}
+.editor textarea{margin-bottom:.5rem}
+.memo .row{display:flex;gap:.6rem;margin-top:.5rem}
+.memo .row button{flex:1;padding:.55rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.9rem}
+.memo .row .go{background:var(--ink);color:var(--paper)}
 .list .lnk{color:var(--seal);font-size:.8rem;text-decoration:none;margin-left:.35rem;vertical-align:.1em}
+ol.list li .body .note{font-size:.82rem;color:var(--ink-soft);line-height:1.55;white-space:pre-wrap;margin-top:.15rem;cursor:pointer}
+ol.list li.done .body .note{text-decoration:none;color:var(--ink-faint)}
+ol.did li small.n{font-size:.8rem;color:var(--ink-faint);white-space:pre-wrap;line-height:1.5;margin-top:.05rem;cursor:pointer}
 
 /* ── 다시 적기 ── */
 .reentry{margin-top:1.6rem;border-top:1px solid var(--rule);padding-top:1.3rem}
@@ -479,7 +497,7 @@ function finish(taskId, reentryText){
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
   if(reentryText && reentryText.trim()){
     const r = splitLink(reentryText);
-    S.tasks.push({id:uid(), text:r.text, url:r.url || t.url || '', done:false, doneAt:null, createdAt:now(), lost:0});
+    S.tasks.push({id:uid(), text:r.text, url:r.url || t.url || '', note:t.note || '', done:false, doneAt:null, createdAt:now(), lost:0});
   }
   if(wasRoot){ S.laps.push(now()); S.laps = S.laps.slice(-300); lapFlash = true; }
   commit();
@@ -518,7 +536,7 @@ function addTask(text){
   const wasReady = !candidate();           // 실행 중이었다면 화면을 흔들지 않는다
   const r = splitLink(text);
   if(!r.text) return;
-  const t = {id:uid(), text:r.text, url:r.url, done:false, doneAt:null, createdAt:now(), lost:0};
+  const t = {id:uid(), text:r.text, url:r.url, note:'', done:false, doneAt:null, createdAt:now(), lost:0};
   S.tasks.push(t);
   if(wasReady && S.chain.length) S.cursor = t.id;
   commit();
@@ -538,7 +556,7 @@ function knot(){
   Object.keys(bucket).forEach(d => {
     const items = bucket[d]
       .sort((a,b) => (a.doneAt||'').localeCompare(b.doneAt||''))
-      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0}));
+      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||''}));
     const laps = S.laps.filter(x => localDate(new Date(x)) === d).length;
     const prev = S.log.find(e => e.date === d);
     if(prev){
@@ -604,6 +622,13 @@ const REASONS = [
 ];
 let reentryOpen = null, reentryTag = -1;
 let editOpen = null, editTag = -1;        // 목록에서 고쳐 적는 중인 항목
+let memoOpen = null;                      // 실행 화면에서 메모를 적는 중인 항목
+let memoFull = null;                      // 실행 화면에서 메모를 펼쳐 둔 항목
+// 두 줄로 접힌 글이 실제로 잘려 있는가
+const clipped = el => el.scrollHeight > el.clientHeight + 1;
+const noteOpen = new Set();               // 목록에서 메모를 펼쳐 둔 항목
+// 메모 칸은 내용에 맞춰 늘어난다
+const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
 const TIRED = 3;                          // 이만큼 지면 눈에 띄게 한다
 
 function render(){
@@ -669,11 +694,20 @@ function renderStage(){
   const title = a.url
     ? `<a class="txt" href="${esc(a.url)}"${/^https?:/i.test(a.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(a.text)}</a>`
     : `<span class="txt">${esc(a.text)}</span>`;
+  const memo = memoOpen === a.id
+    ? `<div class="memo">
+        <textarea id="memoTxt" placeholder="이 일에 대한 짧은 생각">${esc(a.note || '')}</textarea>
+        <div class="row"><button id="memoCancel">그만두기</button><button class="go" id="memoGo">저장</button></div>
+       </div>`
+    : a.note
+      ? `<div class="memo"><p id="memoEdit" class="clamp ${memoFull === a.id ? 'open' : ''}">${esc(a.note)}</p></div>`
+      : `<div class="memo"><button class="add" id="memoEdit">메모</button></div>`;
   box.innerHTML = lap + `
     <div class="chainbar" style="text-align:center">${trail}</div>
     <div class="now">
       <span class="lab">지금 할 일</span>
       <div>${title}</div>
+      ${memo}
     </div>
     <div class="acts">
       <button class="done" id="actDone">끝냈다</button>
@@ -681,6 +715,22 @@ function renderStage(){
       <button class="drop" id="actDrop">이제 필요 없다</button>
     </div>
     <div id="reBox"></div>`;
+
+  const me = $('#memoEdit');
+  if(me) me.onclick = () => {
+    // 접혀서 잘린 메모는 먼저 펼치고, 다 보이는 메모는 바로 고친다
+    if(me.classList.contains('clamp') && !me.classList.contains('open') && clipped(me)){
+      memoFull = a.id; renderStage(); return;
+    }
+    memoOpen = a.id; renderStage();
+  };
+  const mt = $('#memoTxt');
+  if(mt){
+    grow(mt); mt.addEventListener('input', () => grow(mt));
+    mt.focus(); mt.setSelectionRange(mt.value.length, mt.value.length);
+    $('#memoGo').onclick = () => { a.note = mt.value.trim(); memoOpen = null; memoFull = null; commit(); };
+    $('#memoCancel').onclick = () => { memoOpen = null; renderStage(); };
+  }
 
   $('#actDone').onclick = () => { reentryOpen = null; lapFlash = false; finish(a.id, null); };
   $('#actDrop').onclick = () => { reentryOpen = null; lapFlash = false; drop(a.id); };
@@ -736,7 +786,8 @@ function renderList(){
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">${tired ? '고쳐 적기' : '고치기'}</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${tired?'tired':''}">
       <span class="gutter">${dot}</span>
-      <span class="body">${esc(t.text)}${linkTag(t.url)}</span>
+      <span class="body">${esc(t.text)}${linkTag(t.url)}${t.note
+        ? `<span class="note clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${esc(t.note)}</span>` : ''}</span>
       ${lost}${ed}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>` + (editOpen === t.id ? editorHtml(t, tired) : '');
@@ -754,6 +805,7 @@ function editorHtml(t, tired){
   return `<li class="editor" id="edBox">${guide}
       <input id="edTxt" value="${esc(val)}" placeholder="할 일">
       <input id="edUrl" value="${esc(t.url || '')}" placeholder="링크 (비우면 없음)" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <textarea id="edNote" placeholder="메모">${esc(t.note || '')}</textarea>
       <div class="row">
         <button id="edCancel">그만두기</button>
         <button class="go" id="edGo">저장</button>
@@ -769,7 +821,7 @@ function wireEditor(){
     if(!r.text) return;
     const url = r.url || $('#edUrl').value.trim();
     if(r.text !== t.text) t.lost = 0;   // 새로 적은 항목은 다시 센다
-    t.text = r.text; t.url = url;
+    t.text = r.text; t.url = url; t.note = $('#edNote').value.trim();
     editOpen = null; editTag = -1;
     commit();
   };
@@ -779,6 +831,7 @@ function wireEditor(){
     if(e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
     e.preventDefault(); save();
   }));
+  const en = $('#edNote'); grow(en); en.addEventListener('input', () => grow(en));
   $('#edTxt').focus();
 }
 
@@ -793,7 +846,7 @@ function renderKnot(){
 
   let h = `<div class="day today"><h3>오늘 한 일 <span>${mine.length}</span></h3>`;
   h += mine.length
-    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${esc(t.text)}</span></li>`).join('')}</ol>`
+    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${esc(t.text)}${t.note?`<small class="n clamp" data-ntoggle>${esc(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
     : `<p class="none">아직 없습니다.</p>`;
   if(lapsToday) h += `<div class="laps">${'<i></i>'.repeat(Math.min(lapsToday,12))}<span>뿌리까지 ${lapsToday}바퀴</span></div>`;
   if(doneAll.length) h += `<button class="knotbtn" id="btnKnot">하루를 매듭짓다</button>
@@ -803,7 +856,7 @@ function renderKnot(){
   h += S.log.slice(0,20).map(e => `
     <div class="day">
       <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span>${e.laps?`<em>${e.laps}바퀴</em>`:''}</h3>
-      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${esc(i.text)}</span></li>`).join('')}</ol>
+      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${esc(i.text)}${i.note?`<small class="n clamp" data-ntoggle>${esc(i.note)}</small>`:''}</span></li>`).join('')}</ol>
     </div>`).join('');
 
   if(!mine.length && !doneAll.length && !S.log.length)
@@ -831,6 +884,14 @@ function renderKnot(){
 document.addEventListener('click', e => {
   const m = e.target.closest('[data-end]');
   if(m){ moveEnd(m.dataset.end); return; }
+  const ng = e.target.closest('[data-ntoggle]');
+  if(ng){ ng.classList.toggle('open'); return; }
+  const nt = e.target.closest('[data-note]');
+  if(nt){
+    const id = nt.dataset.note;
+    noteOpen.has(id) ? noteOpen.delete(id) : noteOpen.add(id);
+    renderList(); return;
+  }
   const ed = e.target.closest('[data-edit]');
   if(ed){
     editOpen = editOpen === ed.dataset.edit ? null : ed.dataset.edit;
