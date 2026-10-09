@@ -524,9 +524,11 @@ function myDevice(){
 
 /* ─────────── 설정 ─────────── */
 const CFG_KEY='sijak.cfg';
-const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./mirae.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'', jeok:'./jeokbarim.html', research:'https://claude.ai/new' };
-let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
+const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./bangjeom.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'', jeok:'./jeokbarim.html', research:'https://claude.ai/new' };
+let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, bj:{url:'',key:'',list:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
+cfg.bj = Object.assign({url:'',key:'',list:''}, cfg.bj||{});
+if(cfg.links.todo==='./mirae.html'){ cfg.links.todo=DEF_LINKS.todo; lsSet(CFG_KEY,cfg); } /* 2026년 10월 10일: 할 일 앱이 미래에서 방점으로 */
 let autoNote = '';
 /* 같은 주소 아래의 다른 앱이 이 기기에 남긴 연결 정보를 빌려 온다(비어 있을 때만) */
 (function borrow(){
@@ -542,9 +544,17 @@ let autoNote = '';
     const b=lsGet('botaegi-v1',null);
     if(b&&b.sbUrl&&b.sbKey){ cfg.bt={url:b.sbUrl,key:b.sbKey}; got.push('보태기'); }
   }
+  if(!cfg.bj.url||!cfg.bj.key){ /* 방점이 이 기기에 남긴 연결. 미래 프로젝트와 같은 곳이면 굳이 따로 두지 않는다 */
+    const j=lsGet('bangjeom.cfg',null);
+    if(j&&j.url&&j.key){ if(j.url!==cfg.mr.url){ cfg.bj={url:j.url,key:j.key,list:j.list||''}; got.push('방점'); } else if(j.list&&!cfg.bj.list){ cfg.bj.list=j.list; lsSet(CFG_KEY,cfg); } }
+  }
   if(got.length){ lsSet(CFG_KEY,cfg); autoNote='이 기기의 '+got.join('와 ')+' 설정에서 연결 정보를 찾아 넣었습니다.'; }
 })();
 function saveCfg(){ lsSet(CFG_KEY,cfg); }
+/* 방점: 따로 적은 연결이 있으면 그것, 없으면 미래 프로젝트. 목록 이름은 방점 설정의 ‘목록 이름’(기본 bangjeom) */
+function bjProj(){ return (cfg.bj&&cfg.bj.url&&cfg.bj.key)?cfg.bj:cfg.mr; }
+function bjOn(){ const p=bjProj(); return !!(p&&p.url&&p.key); }
+function bjList(){ return (cfg.bj&&cfg.bj.list||'').trim()||'bangjeom'; }
 const btOn=()=>!!(cfg.bt.url&&cfg.bt.key), mrOn=()=>!!(cfg.mr.url&&cfg.mr.key);
 
 /* ─────────── Supabase REST ─────────── */
@@ -626,25 +636,44 @@ function readRunning(){
   return {min:0, label:(a.device?a.device+'에서 ':'')+'어제부터 읽는 중', title:a.title};
 }
 
+/* 할 일 = 방점(2026년 10월 10일, 전에는 미래). 방점은 목록 전체를 bangjeom 표의 한 줄(id = 목록 이름)에 둔다:
+   data { tasks:[{id,text,done,doneAt,lost}], chain:[id…](점 찍힌 순서), cursor:id, fixed:[{text,done}], fixedDate, log:[{date,items}] }.
+   방점의 알고리즘을 그대로 따라 ‘지금 할 일’을 구한다: 사슬이 비면 첫 미실행 항목이 뿌리, 커서 다음부터 안 끝났고 점 안 찍힌 첫 항목이 후보.
+   후보가 없으면 사슬의 마지막이 지금 할 일이고, 있으면 아직 훑는 중이다. 시작은 읽기만 한다.
+   마감은 방점에 없어 아직 미래의 items에서 읽는다(달력에만 씀). 미래를 놓기로 하면 loadDeadlines를 지우면 된다. */
 async function loadTodo(k){
-  if(!mrOn()){ T=null; Terr='setup'; return; }
+  if(!bjOn()){ T=null; Terr='setup'; return; }
+  const [bj,dl]=await Promise.all([loadBangjeom(), loadDeadlines()]);
+  if(bj){ bj.deadlines=dl; T=bj; }
+}
+async function loadBangjeom(){
   try{
-    const [rows,stt]=await Promise.all([
-      rest(cfg.mr,'items?select=data&data->>status=eq.open'),
-      rest(cfg.mr,'app_state?select=data&id=eq.1')
-    ]);
-    const items=(rows||[]).map(r=>r.data).filter(x=>x&&x.id&&!x.probe);
-    const as=(stt&&stt[0]&&stt[0].data)||{};
-    const cur=as.currentId?items.find(i=>i.id===as.currentId):null;
-    const dailies=items.filter(i=>i.kind==='daily' && i!==cur && !(i.dailyDone||[]).includes(k));
-    const dues=items.filter(i=>i.kind!=='daily'&&i.kind!=='future'&&i!==cur&&i.deadline&&daysBetween(k,i.deadline)<=7)
-      .sort((a,b)=>a.deadline.localeCompare(b.deadline));
-    const shown=new Set([cur,...dailies,...dues].filter(Boolean).map(i=>i.id));
-    const rest_=items.filter(i=>i.kind!=='future'&&!shown.has(i.id)&&!(i.kind==='daily'&&(i.dailyDone||[]).includes(k))).length;
-    const deadlines=items.filter(i=>i.kind!=='daily'&&i.kind!=='future'&&i.deadline).map(i=>({id:i.id,title:i.title,deadline:i.deadline}));
-    T={cur, curAt:as.startedAt, curDev:as.device, dailies, dues, rest:rest_, deadlines};
+    const rows=await rest(bjProj(),'bangjeom?select=data,device,updated_at&id=eq.'+enc(bjList()));
+    const S=(rows&&rows[0]&&rows[0].data)||null;
+    if(!S||!Array.isArray(S.tasks)){ Terr='방점에 아직 목록이 없습니다.'; return {empty:true, cur:null, bench:null, cand:null, chain:[], fixed:[], doneToday:0, rest:0}; }
+    const tasks=S.tasks.filter(t=>t&&t.id), byId=id=>tasks.find(t=>t.id===id), idx=id=>tasks.findIndex(t=>t.id===id);
+    let chain=(S.chain||[]).filter(id=>{ const t=byId(id); return t&&!t.done; }), cursor=S.cursor;
+    if(!chain.length){ const root=tasks.find(t=>!t.done); if(root){ chain=[root.id]; cursor=root.id; } }
+    let cand=null; const start=cursor?idx(cursor)+1:0;
+    for(let i=Math.max(start,0);i<tasks.length;i++){ const t=tasks[i]; if(!t.done&&!chain.includes(t.id)){ cand=t; break; } }
+    const bench=chain.length?byId(chain[chain.length-1]):null;
+    const cur=(!cand&&bench)?bench:null;
+    const today=keyOf(new Date()); /* 방점은 자정 기준 */
+    const fixed=(S.fixed||[]).filter(f=>f&&f.text&&!(S.fixedDate===today&&f.done)).map(f=>f.text);
+    const open=tasks.filter(t=>!t.done).length;
+    const sameDay=iso=>iso&&keyOf(new Date(iso))===today;
+    const logToday=(S.log||[]).find(e=>e.date===today);
+    const doneToday=tasks.filter(t=>t.done&&sameDay(t.doneAt)).length+(logToday?(logToday.items||[]).length:0);
     Terr='';
-  }catch(er){ Terr=missingTable(er)?'Supabase에 미래 표가 없습니다.':(er.message||'불러오지 못했습니다'); }
+    return {cur, bench, cand, chain:chain.map(id=>byId(id).text), fixed, doneToday, rest:Math.max(0,open-(bench?1:0)), device:rows[0].device||'', at:rows[0].updated_at||''};
+  }catch(er){ Terr=missingTable(er)?'Supabase에 방점 표가 없습니다.':(er.message||'방점을 불러오지 못했습니다'); return null; }
+}
+async function loadDeadlines(){
+  if(!mrOn()) return [];
+  try{
+    const rows=await rest(cfg.mr,'items?select=data&data->>status=eq.open');
+    return (rows||[]).map(r=>r.data).filter(i=>i&&i.id&&!i.probe&&i.kind!=='daily'&&i.kind!=='future'&&i.deadline).map(i=>({id:i.id,title:i.title,deadline:i.deadline}));
+  }catch(er){ return []; }
 }
 
 let loading=false, lastLoad=0;
@@ -750,21 +779,22 @@ function renderToday(){
   /* 할 일 */
   const st=$('stripT'), href=esc(linkFor('todo'));
   const a=(inner,cls)=>`<li${cls?' class="'+cls+'"':''}><a href="${href}" target="sijak_todo" rel="opener">${inner}</a></li>`;
-  let h=`<div class="strip-head"><span class="strip-name">할 일</span><span class="strip-num"><a class="of" href="${href}" target="sijak_todo" rel="opener">미래 열기</a></span></div>`;
+  let h=`<div class="strip-head"><span class="strip-name">할 일</span><span class="strip-num"><a class="of" href="${href}" target="sijak_todo" rel="opener">방점 열기</a></span></div>`;
   if(Terr==='setup') h+=`<div class="strip-sub">${setupMsg()}</div>`;
   else if(!T) h+=`<div class="strip-sub">${Terr?'<span class="err">'+esc(Terr)+'</span>':'불러오는 중'}</div>`;
   else{
     const li=[];
-    if(T.cur){
-      const since=T.curAt?Math.max(0,(Date.now()-Date.parse(T.curAt))/60000):0;
-      li.push(a(`<span class="k">지금</span><span class="t">${esc(T.cur.title)}</span><span class="m">${T.curDev&&T.curDev!==myDevice()?esc(T.curDev)+' · ':''}${since>=1?fmtMin(since)+'째':''}</span>`,'now'));
-    }
-    T.dailies.forEach(i=>li.push(a(`<span class="k">매일</span><span class="t">${esc(i.title)}</span><span class="m"></span>`)));
-    T.dues.forEach(i=>{ const n=daysBetween(dayKey(),i.deadline);
+    if(T.cur) li.push(a(`<span class="k">지금</span><span class="t">${esc(T.cur.text)}</span><span class="m">${T.device&&T.device!==myDevice()?esc(T.device):''}</span>`,'now'));
+    else if(T.cand) li.push(a(`<span class="k">기준</span><span class="t">${esc(T.bench.text)}</span><span class="m">훑는 중 · 다음은 ${esc(T.cand.text.length>12?T.cand.text.slice(0,12)+'…':T.cand.text)}</span>`));
+    T.fixed.forEach(t=>li.push(a(`<span class="k">매일</span><span class="t">${esc(t)}</span><span class="m"></span>`)));
+    const dues=((T.deadlines)||[]).filter(i=>daysBetween(dayKey(),i.deadline)<=7).sort((x,y)=>x.deadline.localeCompare(y.deadline));
+    dues.forEach(i=>{ const n=daysBetween(dayKey(),i.deadline);
       li.push(a(`<span class="k">마감</span><span class="t">${esc(i.title)}</span><span class="m due">${n<0?(-n)+'일 지남':n===0?'오늘까지':n+'일 남음'}</span>`)); });
     if(li.length) h+=`<ul class="todo">${li.join('')}</ul>`;
-    else h+=`<div class="strip-sub">오늘 매일 하는 일을 모두 마쳤고, 이레 안에 닥친 마감도 없습니다.</div>`;
-    if(T.rest) h+=`<p class="more">그 밖에 리스트에 ${T.rest}가지가 있습니다.</p>`;
+    else h+=`<div class="strip-sub">${T.empty||!T.rest?'방점의 목록이 비어 있습니다.':'오늘 매일 하는 일을 모두 마쳤습니다.'}</div>`;
+    if(T.chain&&T.chain.length>1) h+=`<p class="more">점 찍힌 순서 · ${T.chain.map((t,i)=>i===T.chain.length-1?'<b>'+esc(t)+'</b>':esc(t)).join(' › ')}</p>`;
+    const tail=[]; if(T.rest) tail.push('그 밖에 '+T.rest+'가지'); if(T.doneToday) tail.push('오늘 '+T.doneToday+'개 끝냄');
+    if(tail.length) h+=`<p class="more">${tail.join(' · ')}</p>`;
     if(Terr) h+=`<p class="err">${esc(Terr)}</p>`;
   }
   st.innerHTML=h;
@@ -1609,7 +1639,7 @@ function memoClick(e){
     const done=copyPlain(n.text);
     openRefUrl(linkFor(a), a==='todo'?'sijak_todo':a==='write'?'sijak_write':'sijak_research');
     memoMoved(n.id,a); memoSel='';
-    const where=a==='todo'?'미래에':a==='write'?'글에':'질문으로';
+    const where=a==='todo'?'방점에':a==='write'?'글에':'질문으로';
     done.then(ok=>toast(ok?'복사했습니다 · '+where+' 붙여 넣으세요':'복사하지 못했습니다 · 메모를 열어 직접 옮기세요'));
   }
   renderMemoList(); renderMemoStrip();
@@ -1819,10 +1849,15 @@ function renderSet(){
   <div class="field"><label>키</label><input id="btKey" type="password" value="${esc(cfg.bt.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
 
   <h3>미래 프로젝트</h3>
-  <p class="note">서가의 독서 기록과 미래의 할 일을 읽어 오고, 모닝페이지·달력 일정·수입·메모·레퍼런스를 이곳의 mp_entries·cal_events·income_log·memo_notes·ref_links 표에 적습니다.</p>
+  <p class="note">서가의 독서 기록과 미래의 마감(달력에 보임)을 읽어 오고, 모닝페이지·달력 일정·수입·메모·레퍼런스를 이곳의 mp_entries·cal_events·income_log·memo_notes·ref_links 표에 적습니다.</p>
   <div class="field"><label>프로젝트 주소</label><input id="mrUrl" value="${esc(cfg.mr.url)}" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   <div class="field"><label>키</label><input id="mrKey" type="password" value="${esc(cfg.mr.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   ${autoNote?`<p class="note">${esc(autoNote)}</p>`:''}
+  <h3>방점</h3>
+  <p class="note">할 일 칸은 방점의 목록(bangjeom 표)을 읽습니다. 방점이 미래 프로젝트와 같은 Supabase를 쓰면 아래를 비워 두세요. 다른 프로젝트면 그 주소와 키를 적습니다. 이 기기에서 방점을 연 적이 있으면 그 설정을 빌려 옵니다.</p>
+  <div class="field"><label>프로젝트 주소 (비우면 미래 프로젝트)</label><input id="bjUrl" value="${esc(cfg.bj.url)}" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+  <div class="field"><label>키</label><input id="bjKey" type="password" value="${esc(cfg.bj.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+  <div class="field"><label>목록 이름 (비우면 bangjeom)</label><input id="bjList" value="${esc(cfg.bj.list)}" placeholder="bangjeom" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   <p class="note">주소와 키는 이 기기에만 남고 파일에는 들어가지 않습니다.</p>
   <div class="btnrow"><button class="btn solid" id="saveConn">저장하고 확인</button></div>
   <div class="probe" id="probe"></div>
@@ -1909,6 +1944,7 @@ function renderSet(){
   $('saveConn').onclick=async()=>{
     cfg.bt={url:$('btUrl').value.trim(),key:$('btKey').value.trim()};
     cfg.mr={url:$('mrUrl').value.trim(),key:$('mrKey').value.trim()};
+    cfg.bj={url:$('bjUrl').value.trim(),key:$('bjKey').value.trim(),list:$('bjList').value.trim()};
     saveCfg(); await probe();
   };
   $('copySql').onclick=()=>navigator.clipboard.writeText(MP_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
@@ -1943,6 +1979,8 @@ async function probe(){
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
   } else out.push('· 미래 프로젝트가 비어 있습니다');
+  if(bjOn()){ try{ const r=await rest(bjProj(),'bangjeom?select=id&id=eq.'+enc(bjList())); out.push(r&&r.length?'✓ 방점 목록 ‘'+bjList()+'’을 읽을 수 있습니다':'✕ 방점: 표는 있는데 ‘'+bjList()+'’ 목록이 없습니다 · 방점 설정의 목록 이름을 확인하세요'); }
+    catch(e){ out.push('✕ 방점: '+(missingTable(e)?'표가 없습니다':e.message)); } } else out.push('· 방점을 읽을 연결이 없습니다');
   p.textContent=out.join('\n');
   lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); await pullRef(); pushRef(); refreshToday(true);
 }
