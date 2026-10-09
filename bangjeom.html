@@ -114,7 +114,7 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .now{text-align:center;padding:.4rem 0 0}
 .now .lab{font-size:.8rem;color:var(--ink-soft);letter-spacing:.16em}
 .now .txt{
-  font-size:1.6rem;line-height:1.45;margin:.55rem auto 0;max-width:22ch;
+  font-size:1.6rem;line-height:1.45;margin:.55rem auto 0;max-width:100%;
   border-bottom:2px solid var(--seal);display:inline-block;padding-bottom:.3rem;
 }
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:1.3rem}
@@ -124,8 +124,14 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .now a.txt{color:var(--ink);text-decoration:none;-webkit-tap-highlight-color:transparent}
 .now a.txt::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.35em;vertical-align:.25em}
 .now a.txt:active{color:var(--seal)}
-.memo{margin:1rem auto 0;max-width:32ch;text-align:left}
-.memo p{font-size:.9rem;color:var(--ink-soft);line-height:1.7;white-space:pre-wrap;margin:0;cursor:pointer}
+.memo{margin:1rem auto 0;text-align:left}
+.memo p{font-size:.9rem;color:var(--ink-soft);line-height:1.7;margin:0;cursor:pointer}
+/* 메모 서식: '-'로 시작한 줄은 가운뎃점 항목, 나머지는 고딕 설명. 블록 전체는 한 글자 안으로 */
+.nt{padding-left:1em}
+.nt .li,.nt .ex{display:block}
+.nt .li{padding-left:1.1em;text-indent:-1.1em}
+.nt .li::before{content:'·';display:inline-block;width:1.1em;text-indent:0;color:var(--seal-soft)}
+.nt .ex{font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;font-size:.95em}
 /* 메모는 어디서든 두 줄까지만 보이고, 누르면 펼쳐진다 */
 .clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .clamp.open{-webkit-line-clamp:none}
@@ -140,9 +146,9 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .memo .row button{flex:1;padding:.55rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.9rem}
 .memo .row .go{background:var(--ink);color:var(--paper)}
 .list .lnk{color:var(--seal);font-size:.8rem;text-decoration:none;margin-left:.35rem;vertical-align:.1em}
-ol.list li .body .note{font-size:.82rem;color:var(--ink-soft);line-height:1.55;white-space:pre-wrap;margin-top:.15rem;cursor:pointer}
+ol.list li .body .note{font-size:.82rem;color:var(--ink-soft);line-height:1.55;margin-top:.15rem;cursor:pointer}
 ol.list li.done .body .note{text-decoration:none;color:var(--ink-faint)}
-ol.did li small.n{font-size:.8rem;color:var(--ink-faint);white-space:pre-wrap;line-height:1.5;margin-top:.05rem;cursor:pointer}
+ol.did li small.n{font-size:.8rem;color:var(--ink-faint);line-height:1.5;margin-top:.05rem;cursor:pointer}
 
 /* ── 다시 적기 ── */
 .reentry{margin-top:1.6rem;border-top:1px solid var(--rule);padding-top:1.3rem}
@@ -455,6 +461,12 @@ function splitLink(text){
   const clean = text.replace(m[0], m[1] ? ' ' : '').replace(/\s+/g,' ').trim();
   return {text:clean, url:m[2]};
 }
+// 메모 표시: 저장은 글자 그대로, 보여줄 때만 '-' 줄을 점 항목으로 바꾼다
+const fmtNote = note => (note || '').split('\n').map(l => {
+  const m = l.match(/^\s*-\s*(.*)$/);
+  if(m) return `<span class="li">${esc(m[1])}</span>`;
+  return l.trim() ? `<span class="ex">${esc(l.trim())}</span>` : '';
+}).join('');
 const linkTag = url => url ? `<a class="lnk" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ''} aria-label="열기">↗</a>` : '';
 
 // 사슬이 비어 있으면 첫 미실행 항목을 뿌리로 삼는다
@@ -700,7 +712,7 @@ function renderStage(){
         <div class="row"><button id="memoCancel">그만두기</button><button class="go" id="memoGo">저장</button></div>
        </div>`
     : a.note
-      ? `<div class="memo"><p id="memoEdit" class="clamp ${memoFull === a.id ? 'open' : ''}">${esc(a.note)}</p></div>`
+      ? `<div class="memo"><p id="memoEdit" class="nt clamp ${memoFull === a.id ? 'open' : ''}">${fmtNote(a.note)}</p></div>`
       : `<div class="memo"><button class="add" id="memoEdit">메모</button></div>`;
   box.innerHTML = lap + `
     <div class="chainbar" style="text-align:center">${trail}</div>
@@ -787,7 +799,7 @@ function renderList(){
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${tired?'tired':''}">
       <span class="gutter">${dot}</span>
       <span class="body">${esc(t.text)}${linkTag(t.url)}${t.note
-        ? `<span class="note clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${esc(t.note)}</span>` : ''}</span>
+        ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${fmtNote(t.note)}</span>` : ''}</span>
       ${lost}${ed}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>` + (editOpen === t.id ? editorHtml(t, tired) : '');
@@ -846,7 +858,7 @@ function renderKnot(){
 
   let h = `<div class="day today"><h3>오늘 한 일 <span>${mine.length}</span></h3>`;
   h += mine.length
-    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${esc(t.text)}${t.note?`<small class="n clamp" data-ntoggle>${esc(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
+    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${esc(t.text)}${t.note?`<small class="n nt clamp" data-ntoggle>${fmtNote(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
     : `<p class="none">아직 없습니다.</p>`;
   if(lapsToday) h += `<div class="laps">${'<i></i>'.repeat(Math.min(lapsToday,12))}<span>뿌리까지 ${lapsToday}바퀴</span></div>`;
   if(doneAll.length) h += `<button class="knotbtn" id="btnKnot">하루를 매듭짓다</button>
@@ -856,7 +868,7 @@ function renderKnot(){
   h += S.log.slice(0,20).map(e => `
     <div class="day">
       <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span>${e.laps?`<em>${e.laps}바퀴</em>`:''}</h3>
-      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${esc(i.text)}${i.note?`<small class="n clamp" data-ntoggle>${esc(i.note)}</small>`:''}</span></li>`).join('')}</ol>
+      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${esc(i.text)}${i.note?`<small class="n nt clamp" data-ntoggle>${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
     </div>`).join('');
 
   if(!mine.length && !doneAll.length && !S.log.length)
