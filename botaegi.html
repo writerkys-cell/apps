@@ -104,6 +104,9 @@ header{
 #ggo:hover{color:var(--inju);border-bottom-color:var(--inju)}
 #ggo.on{color:var(--inju);border-bottom-color:var(--inju)}
 #ggo.wait{opacity:.45}
+#revh{background:none;border:0;padding:0;font-size:.8rem;color:var(--meok-2);border-bottom:1px solid var(--seon);white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums}
+#revh:hover{color:var(--inju);border-bottom-color:var(--inju)}
+#revh[hidden]{display:none}
 #write.on{grid-template-columns:1fr !important;grid-template-rows:1fr !important}
 .pane.left{border-right:0 !important;border-bottom:0 !important}
 /* 머리줄이 좁은 창에서 두 줄로 넘어가도 원고 영역이 남은 높이를 모두 쓰도록 */
@@ -378,6 +381,7 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
   font-family:var(--body);font-size:.62rem;line-height:1;
   color:var(--inju);border:1px solid var(--inju);padding:1px 2px;background:var(--jongi);
 }
+.cell .five.gae{right:auto;left:4px}
 .cell .fin{position:absolute;top:3px;right:4px;font-size:.6rem;color:var(--inju)}
 .cell.t2 .fin,.cell.t3 .fin,.cell.t4 .fin{color:#fff}
 .legend{display:flex;flex-wrap:wrap;gap:1rem;margin-top:1rem;font-size:.72rem;color:var(--meok-3)}
@@ -620,6 +624,7 @@ h2:first-child{margin-top:0}
     <span id="gstat"></span>
     <button type="button" id="ggo">교열 시작</button>
   </span>
+  <button type="button" id="revh" hidden title="쪽수 적기"></button>
   <label id="rwrap" title="오른쪽 창 — 켜면 앱 안에서 쓰고 몰입1, 끄면 스크리브너에서 쓰고 몰입2"><input type="checkbox" id="rightOn" aria-label="오른쪽 창"><svg viewBox="0 0 22 14" width="22" height="14" aria-hidden="true"><path class="rp" d="M11 0.75 H19.75 a1.5 1.5 0 0 1 1.5 1.5 V11.75 a1.5 1.5 0 0 1 -1.5 1.5 H11 Z"/><rect class="fr" x="0.75" y="0.75" width="20.5" height="12.5" rx="1.5"/><line class="mid" x1="11" y1="0.75" x2="11" y2="13.25"/></svg></label>
   <select id="fsel" aria-label="몰입 시간" title="몰입 시간">
     <option value="5">5분</option><option value="10">10분</option><option value="15">15분</option>
@@ -732,6 +737,8 @@ h2:first-child{margin-top:0}
         <button id="csvMs">원고별 기록 CSV</button>
         <button id="csvSess">몰입 기록 CSV</button>
         <button id="csvEdit">원고 변경 기록 CSV</button>
+        <button id="csvRev">개정 회차 CSV</button>
+        <button id="csvPg">쪽수 기록 CSV</button>
       </div>
       <p class="note" id="anaSince"></p>
     </div></div>
@@ -758,6 +765,8 @@ h2:first-child{margin-top:0}
 
       <h2>분량</h2>
       <div class="row"><label for="daily">하루에 늘릴 분량</label><input type="number" id="daily" min="0" max="100000" step="1"><span class="unit">자</span></div>
+      <div class="row"><label for="dailyPg">하루에 고칠 쪽수</label><input type="number" id="dailyPg" min="0" max="1000" step="1"><span class="unit">쪽</span></div>
+      <p class="note">개정 회차의 쪽수로 세는 하루 최저선입니다. 그날 고친 쪽수가 닿으면 改 도장이 찍히고, 달력의 '채운 날'과 이어진 날에는 五든 改든 하나만 찍혀도 듭니다. 0이면 쪽수로는 찍지 않습니다.</p>
       <div class="row">
         <label for="pmode">한 편 분량을 정하는 방식</label>
         <select id="pmode"><option value="step">2,667자씩 올리고 내리기</option><option value="mae">매수로 직접 적기</option></select>
@@ -908,7 +917,7 @@ function newWork(title, kind, targetMae){
            actMae:null, acts:[],              /* 장편·중편 — 장의 참고 매수(actMae). acts는 예전 막 기록(쓰지 않음) */
            chapters:[],                       /* 장편·중편 — 장 {id, name, order, createdAt, doneAt, chars, msId} */
            draftAt:null, draftChars:null,     /* 초고 완성 — 날짜와 그때 분량(단편·산문은 이때 원고를 합친다) */
-           pagesTotal:null, pageLog:[], newKind:"산문" };   /* 개정 — 전체 쪽수, 적어 온 쪽수 {t, p}, 새 글의 종류 */
+           revs:[], newKind:"산문" };   /* 개정 회차 {no, total, from, log:[{t, p}], startedAt, doneAt, chars0} — 어떤 작품에든 쌓인다. newKind는 개정 작품의 새 글 종류 */
 }
 /* ---------- 장 — 장편·중편. 이름과 순서를 가진 그릇. 장 완성 때 그 장의 원고들을 원고 하나로 합친다 ---------- */
 /* 장(과 부)을 쓰는 작품 — 장편·중편·개정. 장 완성은 셋 다, 초고 완성·장 가늠은 장편·중편만(isNovel) */
@@ -917,6 +926,37 @@ function isNovel(w){ return !!w && (w.kind === "장편" || w.kind === "중편");
 /* 단편·산문 — 초고 완성 때 원고들을 하나로 합친다 */
 function mergesDraft(w){ return !!w && (w.kind === "단편" || w.kind === "산문"); }
 function isRevision(w){ return !!w && w.kind === "개정"; }
+/* ---------- 개정 회차 — 프린트 한 번이 한 회차. 전체 쪽수·시작 쪽(이미 고쳐 둔 쪽수)·쪽수 기록·시작한 때·마친 때·시작할 때 분량.
+   회차는 어떤 작품에든 붙는다(완성한 작품의 개정, 책을 타이핑으로 들여오는 '개정' 작품의 1차). 지금 회차는 마치지 않은 마지막 회차 ---------- */
+function revsOf(w){ return (w && w.revs) || []; }
+function lastRev(w){ var rs = revsOf(w); return rs.length ? rs[rs.length - 1] : null; }
+function curRev(w){ var r = lastRev(w); return r && !r.doneAt ? r : null; }
+function revOpen(w){ return !!curRev(w); }
+/* 손댈 수 있는 작품 — 끝나지 않았거나, 끝났어도 개정 회차가 열려 있는 것 */
+function workActive(w){ return !!w && (!workDone(w) || revOpen(w)); }
+function revLog(r){ return (r.log || []).slice().sort(function(a, b){ return (a.t || 0) - (b.t || 0); }); }
+function revPages(r){ var l = revLog(r); return l.length ? l[l.length - 1].p : (r.from || 0); }
+function revSpan(r){ return r.total ? Math.max(0, r.total - (r.from || 0)) : 0; }
+function revPct(r){ var s = revSpan(r); return s ? Math.round((revPages(r) - (r.from || 0)) / s * 100) : null; }
+function revLabel(r){ return "개정 " + r.no + "차"; }
+/* 회차의 쪽수 줄 — "개정 2차 · 143 / 312쪽 (46%)" */
+function revPagesText(r){ var pn = revPages(r), pc = revPct(r); return revLabel(r) + " · " + pn + (r.total ? " / " + r.total + "쪽" + (pc != null ? " (" + pc + "%)" : "") : "쪽") + (r.from ? " · " + r.from + "쪽부터" : ""); }
+/* 그 시각에 열려 있던 회차 */
+function revAt(w, t){ return revsOf(w).filter(function(r){ return t >= (r.startedAt || 0) && t <= (r.doneAt || 8.64e15); })[0] || null; }
+/* 지금 쪽수 — 지금 회차, 없으면 마지막 회차 */
+function pagesNow(w){ var r = curRev(w) || lastRev(w); return r ? revPages(r) : 0; }
+/* 회차에서 그날 고친 쪽수 — 그날 마지막 쪽에서 그 전날까지의 마지막 쪽을 뺀 것 */
+function revDayPages(r, k){
+  var before = r.from || 0, upto = null;
+  revLog(r).forEach(function(x){ var kk = dayKey(x.t); if(kk < k) before = x.p; else if(kk === k) upto = x.p; });
+  return upto == null ? 0 : Math.max(0, upto - before);
+}
+/* 그날 고친 쪽수 — 모든 작품의 모든 회차 */
+function pagesOn(k){ var n = 0; S.works.forEach(function(w){ revsOf(w).forEach(function(r){ n += revDayPages(r, k); }); }); return n; }
+/* 기간의 고친 쪽수 */
+function pagesIn(rg){ var n = 0; for(var k = rg[0]; k <= rg[1]; k = addDays(k, 1)) n += pagesOn(k); return n; }
+/* 하루 분량을 채운 날 — 글자(五)든 쪽수(改)든 */
+function hitDay(k){ return !!(S.hit[k] || (S.hitRev && S.hitRev[k])); }
 function byOrder(a, b){ return (a.order||0) - (b.order||0); }
 function chaptersOf(w){ return ((w && w.chapters) || []).slice().sort(byOrder); }
 function chById(w, id){ return ((w && w.chapters) || []).filter(function(c){ return c.id === id; })[0]; }
@@ -984,8 +1024,6 @@ function draftMerged(w){ return S.mss.filter(function(m){ return m.workId === w.
 function piecesOf(w){ return S.mss.filter(function(m){ return m.workId === w.id && !m.merged; }).sort(byOrder); }
 /* 작품의 모든 원고 — 시간을 셀 때 */
 function allOf(w){ return S.mss.filter(function(m){ return m.workId === w.id; }); }
-/* ---------- 개정의 쪽수 ---------- */
-function pagesNow(w){ var l = (w && w.pageLog) || []; return l.length ? l[l.length-1].p : 0; }
 /* 이 작품을 몇 조각으로 보나 — 목표 매수를 2,667자로 나눈 올림값. 이미 만든 원고보다 적어지지 않는다 */
 function plannedUnits(w){
   if(!w) return 0;
@@ -1056,7 +1094,9 @@ function fresh(){
     net:{},      /* 날마다 원고 전체가 늘고 준 글자 수 */
     adv:{},      /* 날마다의 나아감 — 완성 전 원고에서 늘어난 글자 수 */
     advSince:null,   /* 나아감을 따로 세기 시작한 날(그 전의 날은 원고 전체로만) */
-    hit:{},      /* 하루 분량을 채운 날 */
+    hit:{},      /* 하루 분량을 채운 날 — 글자(五) */
+    hitRev:{},   /* 하루 쪽수를 채운 날 — 개정(改) */
+    dailyPg:0,   /* 하루에 고칠 쪽수(0이면 쪽수로는 도장을 찍지 않는다) */
     fold:{ w:{}, p:{}, c:{}, seen:null },
     prScope:{},   /* 작품마다 인쇄 범위 — "all", "p:<부 id>", "c:<장 id>" */   /* 원고 탭에서 접고 편 것 — 작품(w)·장(c)마다 true면 접힘. 적지 않은 것은 처음 모양을 따른다 */
     phase:"idle",
@@ -1094,7 +1134,15 @@ function load(){
     if(!Array.isArray(w.parts)) w.parts = [];
     if(w.draftAt === undefined) w.draftAt = null;
     if(w.draftChars === undefined) w.draftChars = null;
-    if(!Array.isArray(w.pageLog)) w.pageLog = [];
+    if(!Array.isArray(w.revs)) w.revs = [];
+    /* 예전의 전체 쪽수·쪽수 기록은 1차 회차가 된다. 완성한 작품이면 그 회차도 마친 것으로 */
+    if(w.pagesTotal || (Array.isArray(w.pageLog) && w.pageLog.length)){
+      var lg = (w.pageLog || []).filter(function(x){ return x && x.p >= 0; }).sort(function(a, b){ return (a.t || 0) - (b.t || 0); });
+      w.revs.push({ no:1, total:w.pagesTotal || null, from:0, log:lg, startedAt: lg.length && lg[0].t ? lg[0].t : (w.createdAt || Date.now()),
+                    doneAt: w.finishedAt || null, chars0:null });
+    }
+    delete w.pagesTotal; delete w.pageLog;
+    w.revs.forEach(function(r, i){ if(!r.no) r.no = i + 1; if(!Array.isArray(r.log)) r.log = []; if(r.from == null) r.from = 0; if(!r.startedAt) r.startedAt = w.createdAt || Date.now(); });
     if(!w.newKind) w.newKind = "산문";
   });
   /* 장편·중편 — 예전의 막을 장으로 옮긴다(막마다 'n장'). 장이 없는 원고는 열린 마지막 장으로 */
@@ -1352,16 +1400,20 @@ function renderHead(){
   /* 보기 — 작품을 고른다 */
   var cw = workOf(cur());
   S.works.forEach(function(w){
-    if(workDone(w)) return;
+    if(!workActive(w)) return;
     if(!unitsOf(w).length) return;
     var o = document.createElement("option");
-    o.value = w.id; o.textContent = w.title + (w.kind ? " · " + w.kind : "");
+    o.value = w.id; o.textContent = w.title + (w.kind ? " · " + w.kind : "") + (workDone(w) && curRev(w) ? " · " + revLabel(curRev(w)) : "");
     if(cw && w.id === cw.id) o.selected = true;
     elMsSel.appendChild(o);
   });
   var mk = document.createElement("option");
   mk.value = "__new__"; mk.textContent = "새 원고…";
   elMsSel.appendChild(mk);
+  /* 개정 회차 — 머리줄에 쪽수. 누르면 쪽수 적기 */
+  var rh = $("#revh"), rvw = cw ? curRev(cw) : null;
+  rh.hidden = !rvw;
+  if(rvw){ rh.textContent = revLabel(rvw) + " · " + revPages(rvw) + (rvw.total ? " / " + rvw.total : "") + "쪽"; rh.title = revPagesText(rvw) + " · 쪽수 적기"; rh.onclick = function(){ putPages(cw); }; }
 
   renderTsel(); renderDue();
   /* 작품 전체의 분량 */
@@ -1989,7 +2041,7 @@ function finished(m){ return !!(m && m.finishedAt); }
 function workDone(w){ return !!(w && w.finishedAt); }
 /* 쓸 수 있는 원고 — 조각이 완성되지 않았고, 그 작품도 끝나지 않은 것 */
 /* 쓸 수 있는 원고 — 작품이 끝나지 않았으면 원고를 완성한 뒤에도 계속 다듬는다 */
-function openUnit(m){ return !!m && !m.folded && !workDone(workOf(m)); }
+function openUnit(m){ return !!m && !m.folded && workActive(workOf(m)); }
 /* 지금 분량 — 본문을 비운 원고는 비우기 직전의 글자 수 */
 function nowChars(m){ return m.folded ? m.folded.chars : m.cleared ? m.cleared.chars : len(m.text); }
 function unitChars(m){ return nowChars(m); }
@@ -2168,7 +2220,7 @@ function lostNote(m){
 }
 function sameAt(a, b){ return !!a && !!b && Date.parse(a) === Date.parse(b); }
 function cloudPush(m){
-  if(workDone(workOf(m))){ m.dirty = false; return Promise.resolve(true); }   /* 끝난 작품은 아이폰에서 내린다 */
+  if(!workActive(workOf(m))){ m.dirty = false; return Promise.resolve(true); }   /* 끝난 작품은 아이폰에서 내린다(개정 회차가 열려 있으면 둔다) */
   if(m.folded){ m.dirty = false; return Promise.resolve(true); }   /* 합쳐서 접어 둔 조각은 올리지 않는다 */
   m.dirty = true;
   if(!cloudOn()) return Promise.resolve(false);
@@ -2218,10 +2270,13 @@ function newCols(m){
 /* 작품 목록 — 곁이 작품을 고르고 막과 쪽수를 보도록 */
 var worksSent = "";
 function worksObj(){
-  return S.works.filter(function(w){ return !workDone(w); }).map(function(w){
+  return S.works.filter(workActive).map(function(w){
+    var rv = curRev(w);
     return { id:w.id, title:w.title, kind:w.kind || "", target_mae:w.targetMae || null, due:w.due || "",
              act_mae:w.actMae || null, acts:[], open_act: hasChapters(w) ? 1 : null,
-             pages_total:w.pagesTotal || null, pages_now: isRevision(w) ? pagesNow(w) : null, new_kind: isRevision(w) ? w.newKind : null,
+             /* 개정 회차 — 지금 회차의 번호·전체 쪽수·시작 쪽·지금 쪽. 회차가 없으면 모두 null */
+             rev_no: rv ? rv.no : null, pages_total: rv ? (rv.total || null) : null, pages_from: rv ? (rv.from || 0) : null,
+             pages_now: rv ? revPages(rv) : null, new_kind: isRevision(w) ? w.newKind : null, done: workDone(w),
              /* 장 — 책의 순서대로. ms는 지금 보이는 원고들(합친 장은 장 원고 하나), mid는 합친 장 원고 */
              chapters: hasChapters(w) ? chaptersOf(w).map(function(c, i){
                var mg = chMerged(w, c);
@@ -2344,13 +2399,15 @@ function applyReqs(){
     return rows.reduce(function(chain, row){
       return chain.then(function(){
         var d = row.data || {}, w = workById(d.work_id), step = Promise.resolve();
-        if(w && !workDone(w)){
+        if(w && workActive(w)){
           if(d.type === "act"){
             /* 막은 장으로 바뀌었다 — 장 완성은 보태기에서만 */
             msgs.push("막 완성은 받지 않습니다(장 완성은 보태기에서)"); changed = true;
-          }else if(d.type === "pages" && d.p >= 0 && !w.pageLog.some(function(x){ return x.t === d.at; })){
-            w.pageLog.push({ t:d.at || Date.now(), p:d.p });
-            msgs.push("쪽수 " + d.p + "쪽"); changed = true;
+          }else if(d.type === "pages" && d.p >= 0 && curRev(w) && !curRev(w).log.some(function(x){ return x.t === d.at; })){
+            var rv0 = curRev(w), at0 = d.at || Date.now();
+            rv0.log.push({ t:at0, p:d.p });
+            msgs.push(revLabel(rv0) + " " + d.p + "쪽"); changed = true;
+            checkPages(dayKey(at0));
           }else if(d.type === "new" && !msById(d.ms_id)){
             step = sb(TABLE + "?select=*&id=eq." + encodeURIComponent(d.ms_id)).then(function(r){ return r.ok ? r.json() : []; })
               .then(function(rs){
@@ -2438,7 +2495,7 @@ function gyWhere(e){
 }
 function gyOpen(at){
   var m = msById(at.id);
-  if(!m || m.folded || workDone(workOf(m))) return;
+  if(!m || m.folded || !workActive(workOf(m))) return;
   if(gy){ if(gy.id === m.id) return; if(!gyFinish()) return; }
   if(remoteBusy() && S.remoteNow && S.remoteNow.ms_id === m.id &&
      !confirm("곁(스크리브너)에서 이 원고로 쓰는 중입니다.\n스크리브너에서 쓰고 아직 보내지 않은 글이 있으면, 여기서 고친 글을 붙일 때 그 글이 지워집니다.\n곁에서 먼저 보냈다면 확인을 누르세요.")) return;
@@ -2481,6 +2538,7 @@ function gyFinish(quiet){
   gyClose();
   renderList();
   if(!quiet) toast("교열했습니다 · 곁에서 이 원고를 고르면 복사해 붙이도록 알립니다");
+  askPagesIfNew(workOf(m));
   return true;
 }
 elPrev.addEventListener("dblclick", function(e){
@@ -2707,7 +2765,7 @@ function recordPage(w){
 
   /* 완성하기 전에만 — 조심스러운 가늠 */
   if(isNovel(w)){ h.push('<h3>장</h3>'); chLines(w).forEach(function(t){ h.push('<p>' + t.replace(/<\/?em>/g, "") + '</p>'); }); }
-  if(isRevision(w)){ h.push('<h3>개정과 새 글</h3>'); revLines(w).forEach(function(t){ h.push('<p>' + t.replace(/<\/?em>/g, "") + '</p>'); }); }
+  if(isRevision(w) || revsOf(w).length){ h.push('<h3>' + (isRevision(w) ? '개정과 새 글' : '개정') + '</h3>'); revLines(w).forEach(function(t){ h.push('<p>' + t.replace(/<\/?em>/g, "") + '</p>'); }); }
   if(!done && tg && r.nFin >= 1 && !isRevision(w) && !isNovel(w)){
     var leftMae = Math.max(0, tg - maeOf(r.cNow));
     if(leftMae > 0){
@@ -2767,15 +2825,21 @@ function patternBlock(){
   function row(k){ return byK[k] = byK[k] || { t:0, c:0, d:0 }; }
   S.log.sess.forEach(function(x){
     if(!inRange(dayKey(x.start), rg)) return;
-    var k0 = x.type === "gyo" ? "교열" : bookWork(x.ms) ? "개정" : effKind(msById(x.ms));   /* 개정 원고도 "개정" */
+    var sm = msById(x.ms), sw = workOf(sm), gw0 = gyoWork(x.ms);
+    /* 개정 원고·책 고치기, 그리고 개정 회차 중인 작품의 교열과 완성한 작품의 몰입은 모두 "개정" */
+    var k0 = x.type === "gyo" ? (gw0 && revAt(gw0, x.start) ? "개정" : "교열")
+           : bookWork(x.ms) ? "개정"
+           : (sw && workDone(sw) && revAt(sw, x.start)) ? "개정" : effKind(sm);
     row(k0 || "미분류").t += Math.max(0, x.end - x.start);
   });
   S.log.edits.forEach(function(x){
     if(!inRange(dayKey(x.t), rg)) return;
-    var em = msById(x.ms);
-    if(em && isRevMs(em)) return;   /* 개정 원고의 글자는 세지 않는다 */
+    var em = msById(x.ms), ew = workOf(em);
+    if(em && (isRevMs(em) || (ew && workDone(ew) && revAt(ew, x.t)))) return;   /* 개정 원고와 회차 중의 고침은 글자를 세지 않는다 */
     row(effKind(em) || "미분류").c += (x.a - x.b);
   });
+  var pgAll = pagesIn(rg);
+  if(pgAll && !byK["개정"]) row("개정");
   /* 떠들기 — 이어 둔 작품의 장르로. 표에는 '떠들기까지' 칸으로만 나란히 둔다 */
   var dAll = 0;
   if(TTEO) TTEO.sess.forEach(function(x){
@@ -2792,11 +2856,18 @@ function patternBlock(){
       '<td>' + (t && c > 0 ? m1(mm / hrs2) : '—') + '</td><td>' + (t && c > 0 ? Math.round(t / 60000 / mm) + '분' : '—') + '</td>' +
       (hasD ? '<td>' + (d && c > 0 ? Math.round((t + d) / 60000 / mm) + '분' : '—') + '</td>' : '') + '</tr>';
   }
+  /* 개정 줄 — 매수 대신 쪽수. 시간당 쪽수, 1쪽에 드는 시간 */
+  function trPg(name, t, p, d){
+    var hrs3 = t / 3600000;
+    return '<tr><td>' + name + '</td><td>' + (t ? spanText(t) : '—') + '</td><td>' + (p ? p + '쪽' : '—') + '</td>' +
+      '<td>' + (t && p ? m1(p / hrs3) + '쪽' : '—') + '</td><td>' + (t && p ? '1쪽에 ' + Math.round(t / 60000 / p) + '분' : '—') + '</td>' +
+      (hasD ? '<td>' + (d && p ? '1쪽에 ' + Math.round((t + d) / 60000 / p) + '분' : '—') + '</td>' : '') + '</tr>';
+  }
   var own = ["장편","중편","단편","산문","미분류"], other = ["청탁","개정","교열"], rows = [];
   own.forEach(function(k){ if(byK[k]) rows.push(tr(k, byK[k].t, byK[k].c, '', byK[k].d)); });
   rows.push(tr('모두', tAll, cAll, 'all', dAll));
   var oth = other.filter(function(k){ return byK[k]; });
-  if(oth.length){ rows.push('<tr class="sep"><td colspan="' + (hasD ? 6 : 5) + '">' + oth.join("·") + '</td></tr>'); oth.forEach(function(k){ rows.push(tr(k, byK[k].t, byK[k].c, '', byK[k].d)); }); }
+  if(oth.length){ rows.push('<tr class="sep"><td colspan="' + (hasD ? 6 : 5) + '">' + oth.join("·") + '</td></tr>'); oth.forEach(function(k){ rows.push(k === "개정" ? trPg(k, byK[k].t, pgAll, byK[k].d) : tr(k, byK[k].t, byK[k].c, '', byK[k].d)); }); }
   var h = [];
   h.push('<h3>요즘의 글쓰기 · 최근 30일</h3>');
   h.push('<table><tr><th>장르</th><th>시간</th><th>매수</th><th>1시간당</th><th>1매에</th>' + (hasD ? '<th>떠들기까지</th>' : '') + '</tr>' + rows.join('') + '</table>');
@@ -2930,7 +3001,8 @@ function newMsFlow(after){
       w.due = v.due || ""; w.doneDue = v.doneDue || "";
       if(isNovel(w)){ w.actMae = maeNum(v.actMae); var c1 = newChapter(v.chName.trim()); c1.order = 1; w.chapters.push(c1); }
       if(v.kind === "개정"){
-        var pg = parseInt(v.pages, 10); w.pagesTotal = pg > 0 ? pg : null; w.newKind = v.newKind || "산문";
+        var pg = parseInt(v.pages, 10); w.newKind = v.newKind || "산문";
+        if(pg > 0) w.revs.push({ no:1, total:pg, from:0, log:[{ t:w.createdAt, p:0 }], startedAt:w.createdAt, doneAt:null, chars0:0 });
         if(v.revCh.trim()){ var c2 = newChapter(v.revCh.trim()); c2.order = 1; w.chapters.push(c2); }
       }
       S.works.push(w);
@@ -2960,7 +3032,7 @@ function editWork(w){
     { id:"cheong", label:"청탁 매수", type:"number", value:w.kind === "청탁" ? (w.targetMae || "") : "", placeholder:"예: 16", when:["kind","청탁"] },
     { id:"units", label:"원고 개수", type:"number", value:plannedUnits(w) || "", when:["kind","청탁",1], placeholder:"비우면 매수로 계산" },
     { id:"actMae", label:"장 하나(참고, 매)", type:"number", value:w.actMae || "", when:["kind",["장편","중편"]], placeholder:"비우면 완성한 장들의 평균" },
-    { id:"pages", label:"전체 쪽수", type:"number", value:w.pagesTotal || "", when:["kind","개정"], placeholder:"책이나 프린트한 원고" },
+    { id:"pages", label:(curRev(w) ? revLabel(curRev(w)) + " " : "") + "전체 쪽수", type:"number", value:curRev(w) ? (curRev(w).total || "") : "", when:["kind","개정"], placeholder:curRev(w) ? "" : "책이나 프린트한 원고 · 적으면 1차 시작" },
     { id:"newKind", label:"새 글의 종류", type:"select", options:NEW_KINDS, value:w.newKind || "산문", when:["kind","개정"] },
     { id:"due", label:"마감일(넘기는 날)", type:"date", value:w.due || "" },
     { id:"doneDue", label:"완료일(출판사)", type:"date", value:w.doneDue || "" }
@@ -2975,7 +3047,11 @@ function editWork(w){
     w.title = v.title.trim(); w.kind = v.kind; w.targetMae = v.kind === "청탁" ? maeNum(v.cheong) : v.kind === "개정" ? maeNum(v.newMae) : maeNum(v.target);
     w.due = v.due || ""; w.doneDue = v.doneDue || "";
     w.actMae = (v.kind === "장편" || v.kind === "중편") ? maeNum(v.actMae) : w.actMae;
-    if(v.kind === "개정"){ var pg = parseInt(v.pages, 10); w.pagesTotal = pg > 0 ? pg : null; w.newKind = v.newKind || "산문"; }
+    if(v.kind === "개정"){
+      var pg = parseInt(v.pages, 10); w.newKind = v.newKind || "산문";
+      if(curRev(w)){ if(pg > 0) curRev(w).total = pg; }
+      else if(pg > 0 && !lastRev(w)){ var t0 = Date.now(); w.revs.push({ no:1, total:pg, from:0, log:[{ t:t0, p:0 }], startedAt:t0, doneAt:null, chars0:workChars(w) }); }
+    }
     /* 장편·중편이 되면 장이 없는 원고는 '1장'으로. 장편·중편이 아니게 되면 장을 거둔다 */
     if(hasChapters(w)){
       var ps0 = unitsOf(w).filter(function(m){ return !m.chId || !chById(w, m.chId); });
@@ -3057,6 +3133,7 @@ function finishWork(w){
   var n = parseInt(String(v).replace(/[^0-9]/g, ""), 10);
   if(!(n > 0)){ toast("글자 수를 숫자로 적어주세요"); return; }
   w.finishedAt = Date.now(); w.finalChars = n; w.sumChars = sum;
+  if(curRev(w)) curRev(w).doneAt = w.finishedAt;   /* 열린 개정 회차도 함께 마친다 */
   all.forEach(function(m){ cloudDrop(m.id); });
   save(); shareWorks(); renderHead(); renderWrite(); renderList();
   toast("작품을 완성했습니다 · " + fmt(n) + "자 · " + mae(n) + "매");
@@ -3419,16 +3496,74 @@ function unfinishDraft(w){
   if(mg){ mg.finishedAt = null; mg.finalChars = null; mg.dirty = true; cloudPush(mg); }
   save(); shareWorks(); renderHead(); renderList();
 }
-/* 개정 — 책을 몇 쪽까지 고쳤나 */
-function putPages(w){
-  var v = prompt("'" + w.title + "'을 몇 쪽까지 고쳤나요?" + (w.pagesTotal ? " (전체 " + w.pagesTotal + "쪽)" : ""), String(pagesNow(w) || ""));
+/* ---------- 개정 회차 — 쪽수 적기, 회차 시작·마침 ---------- */
+/* 하루 쪽수 도장 — 그날 고친 쪽수가 설정의 하루 쪽수에 닿으면 改 */
+function checkPages(k){
+  if(!(S.dailyPg > 0) || !S.hitRev) return;
+  if(S.hitRev[k]) return;
+  var n = pagesOn(k);
+  if(n >= S.dailyPg){
+    S.hitRev[k] = true;
+    stamp("改", "오늘 " + n + "쪽을 고쳤습니다", "하루 쪽수를 채웠습니다. 더 고쳐도 됩니다.");
+  }
+}
+/* 쪽수 적기 — 지금 회차에. soft면 비우거나 취소해도 조용히 넘어간다(교열을 마칠 때 묻는 것) */
+function putPages(w, soft){
+  var r = curRev(w);
+  if(!r){ startRev(w); return; }
+  var v = prompt("'" + w.title + "' " + revLabel(r) + " · 몇 쪽까지 고쳤나요?" + (r.total ? " (전체 " + r.total + "쪽)" : "") + (soft ? "\n비우면 넘어갑니다" : ""), String(revPages(r) || ""));
   if(v === null) return;
-  var p = parseInt(String(v).replace(/[^0-9]/g, ""), 10);
+  var s = String(v).replace(/[^0-9]/g, "");
+  if(soft && !s) return;
+  var p = parseInt(s, 10);
   if(!(p >= 0)){ toast("쪽수를 숫자로 적어주세요"); return; }
-  if(w.pagesTotal && p > w.pagesTotal){ toast("전체 쪽수(" + w.pagesTotal + ")보다 큽니다"); return; }
-  w.pageLog.push({ t:Date.now(), p:p });
-  save(); shareWorks(); renderList();
-  toast(p + "쪽까지 적었습니다");
+  if(r.total && p > r.total){ toast("전체 쪽수(" + r.total + ")보다 큽니다"); return; }
+  if(p < (r.from || 0)){ toast("시작 쪽(" + r.from + ")보다 작습니다"); return; }
+  var now = Date.now();
+  r.log.push({ t:now, p:p });
+  save(); shareWorks(); renderList(); renderHead();
+  toast(revLabel(r) + " · " + p + "쪽까지 적었습니다");
+  checkPages(dayKey(now));
+  if(r.total && p >= r.total) setTimeout(function(){ finishRev(w); }, 300);
+}
+/* 그날 처음 적을 때만 묻는다 — 교열을 마칠 때, 교열 시간을 마칠 때 */
+function askPagesIfNew(w){
+  var r = curRev(w); if(!r) return;
+  var k = dayKey(Date.now());
+  if(revLog(r).some(function(x){ return dayKey(x.t) === k && !(x.t === r.startedAt); })) return;
+  setTimeout(function(){ putPages(w, true); }, 200);
+}
+/* 회차 시작 — 프린트한 전체 쪽수와 이미 고쳐 둔 쪽수를 묻는다. 완성한 작품이면 원고를 곁에 다시 올린다 */
+function startRev(w){
+  if(curRev(w)){ toast(revLabel(curRev(w)) + "가 열려 있습니다"); return; }
+  var no = (lastRev(w) ? lastRev(w).no : 0) + 1;
+  dialog("개정 " + no + "차 시작 · " + w.title, [
+    { id:"total", label:"전체 쪽수", type:"number", value:"", placeholder:"프린트한 원고나 책의 쪽수" },
+    { id:"from", label:"이미 고친 쪽수", type:"number", value:"", placeholder:"처음부터면 비웁니다" }
+  ], function(v){
+    var total = parseInt(v.total, 10), from = parseInt(v.from, 10);
+    if(!(total > 0)){ toast("전체 쪽수를 적어주세요"); return false; }
+    if(!(from >= 0)) from = 0;
+    if(from >= total){ toast("이미 고친 쪽수가 전체 쪽수보다 작아야 합니다"); return false; }
+    var now = Date.now();
+    w.revs.push({ no:no, total:total, from:from, log:[{ t:now, p:from }], startedAt:now, doneAt:null, chars0:workChars(w) });
+    if(workDone(w)) allOf(w).forEach(function(m){ if(!m.folded) m.dirty = true; });   /* 곁 목록에 다시 */
+    save(); shareWorks(); flush(); renderHead(); renderList();
+    toast("'" + w.title + "' 개정 " + no + "차를 시작합니다 · " + (from ? from + "쪽부터 " : "") + total + "쪽");
+  });
+}
+/* 회차 마침 — 마친 때를 적고 다음 회차를 물어본다. 다음 회차가 없으면 완성한 작품은 곁에서 내린다 */
+function finishRev(w){
+  var r = curRev(w); if(!r) return;
+  var pn = revPages(r);
+  if(!confirm("'" + w.title + "' " + revLabel(r) + "를 마칩니다." + (r.total && pn < r.total ? "\n아직 " + pn + " / " + r.total + "쪽입니다." : "") + "\n기록은 그대로 남고, 이어서 다음 회차를 열 수 있습니다.")) return;
+  r.doneAt = Date.now(); r.chars1 = workChars(w);
+  if(workDone(w)) allOf(w).forEach(function(m){ cloudDrop(m.id); });
+  save(); shareWorks(); renderHead(); renderList();
+  toast(revLabel(r) + "를 마쳤습니다 · " + spanDays(r.startedAt, r.doneAt) + "일");
+  setTimeout(function(){
+    if(confirm("프린트해서 개정 " + (r.no + 1) + "차에 들어갈까요?\n새 프린트의 쪽수를 묻습니다.")) startRev(w);
+  }, 300);
 }
 
 /* 원고 탭의 접기 — 처음 모양: 쓰는 중인 작품은 펼침, 완성한 작품은 접힘, 완성한 장은 접힘. 그 뒤로는 접고 편 대로 */
@@ -3645,13 +3780,16 @@ function renderList(){
     if(dn) mt.push(dayText(w.finishedAt) + " 작품 완성");
     var meta = document.createElement("div"); meta.className = "wk-meta"; meta.textContent = mt.join(" · ");
     sec.appendChild(meta);
-    /* 개정 — 책 고치기의 쪽수 */
-    if(isRevision(w) && (w.pagesTotal || w.pageLog.length)){
+    /* 개정 회차 — 지금 회차의 쪽수, 없으면 마지막 회차를 마친 것 */
+    var rvC = curRev(w), rvL = lastRev(w);
+    if(rvC || rvL){
       var bk = document.createElement("div"); bk.className = "book";
-      var pn = pagesNow(w), last0 = w.pageLog[w.pageLog.length-1];
-      var rt = revTime(w);
-      bk.textContent = "개정 · " + pn + (w.pagesTotal ? " / " + w.pagesTotal + "쪽 (" + Math.round(pn / w.pagesTotal * 100) + "%)" : "쪽")
-        + (last0 ? " · " + dayText(last0.t) + " 적음" : "") + (rt ? " · 시간 " + spanText(rt) : "");
+      if(rvC){
+        var lg0 = revLog(rvC).filter(function(x){ return x.t !== rvC.startedAt; }), last0 = lg0[lg0.length - 1], rt = revTime(w, rvC);
+        bk.textContent = revPagesText(rvC) + (last0 ? " · " + dayText(last0.t) + " 적음" : " · " + dayText(rvC.startedAt) + " 시작") + (rt ? " · 시간 " + spanText(rt) : "");
+      }else{
+        bk.textContent = revLabel(rvL) + " 마침 · " + revPages(rvL) + (rvL.total ? " / " + rvL.total + "쪽" : "쪽") + " · " + dayText(rvL.startedAt) + " ~ " + dayText(rvL.doneAt) + (revsOf(w).length > 1 ? " · 모두 " + revsOf(w).length + "차" : "");
+      }
       sec.appendChild(bk);
     }
     /* 접힌 작품 — 머리와 한 줄만 */
@@ -3665,7 +3803,8 @@ function renderList(){
         var m = nextUnit(w); clockIn(); S.current = m.id; S.sel = null;
         save(); renderHead(); renderWrite(); showView("write");
       });
-      if(isRevision(w)) act("쪽수 적기", function(){ putPages(w); });
+      if(curRev(w)){ act("쪽수 적기", function(){ putPages(w); }); act(revLabel(curRev(w)) + " 마침", function(){ finishRev(w); }); }
+      else if(isRevision(w)) act(lastRev(w) ? "개정 " + (lastRev(w).no + 1) + "차 시작" : "쪽수 적기", function(){ startRev(w); });
       if(isNovel(w) || mergesDraft(w)){
         if(w.draftAt) act("초고 완성 취소", function(){ unfinishDraft(w); });
         else act("초고 완성", function(){ finishDraft(w); });
@@ -3673,6 +3812,9 @@ function renderList(){
       act("작품 완성", function(){ finishWork(w); });
       act("작품 지우기", function(){ deleteWork(w); });
     }else{
+      /* 완성한 작품의 개정 — 프린트해서 고치는 회차 */
+      if(curRev(w)){ act("쪽수 적기", function(){ putPages(w); }); act(revLabel(curRev(w)) + " 마침", function(){ finishRev(w); }); }
+      else act(lastRev(w) ? "개정 " + (lastRev(w).no + 1) + "차 시작" : "개정 시작", function(){ startRev(w); });
       if(us.some(function(m){ return m.text.trim(); })) act("본문 비우기", function(){ clearWorkText(w); });
       act("완성 취소", function(){
         var cl = us.some(function(m){ return m.cleared; });
@@ -3742,20 +3884,22 @@ function renderCal(){
 
   var upto = (y === today.getFullYear() && mo === today.getMonth()) ? today.getDate()
            : (new Date(y, mo, 1) > today ? 0 : last);
-  var sum = 0, hits = 0, streak = 0, best = 0, chars = 0;
+  var sum = 0, hits = 0, streak = 0, best = 0, chars = 0, pages = 0;
   for(var d=1; d<=upto; d++){
     var k0 = keyOf(y,mo,d);
     sum += S.days[k0] || 0;
     chars += advOf(k0);
-    if(S.hit[k0]){ hits++; streak++; if(streak>best) best = streak; }
+    pages += pagesOn(k0);
+    if(hitDay(k0)){ hits++; streak++; if(streak>best) best = streak; }
     else streak = 0;
   }
   var bits = [];
   if(upto){
     bits.push("하루 평균 몰입 " + spanText(sum/upto));
-    if(S.daily) bits.push(fmt(S.daily) + "자 채운 날 " + hits + "/" + upto + "일");
+    if(S.daily || S.dailyPg) bits.push((S.daily ? fmt(S.daily) + "자" : "") + (S.daily && S.dailyPg ? "·" : "") + (S.dailyPg ? S.dailyPg + "쪽" : "") + " 채운 날 " + hits + "/" + upto + "일");
     if(best > 1) bits.push("가장 길게 이어진 " + best + "일");
     bits.push("이달 나아감 " + mae(chars) + "매");
+    if(pages) bits.push("이달 고친 " + pages + "쪽");
   }
   $("#calSum").textContent = bits.join(" · ");
 
@@ -3766,16 +3910,18 @@ function renderCal(){
   }
   for(var d2=1; d2<=last; d2++){
     var k = keyOf(y, mo, d2);
-    var ms = S.days[k] || 0, nt = S.net[k] || 0, av = S.adv[k] || 0;
+    var ms = S.days[k] || 0, nt = S.net[k] || 0, av = S.adv[k] || 0, pg = pagesOn(k);
     var c = document.createElement("div");
     c.className = "cell t" + tierOf(ms) + (k===tk ? " today" : "");
     c.title = (mo+1) + "월 " + d2 + "일 · " + (ms ? "몰입 " + spanText(ms) : "쉼")
             + (k >= S.advSince ? (av ? " · 나아감 " + signed(av) + "자" : "") + (nt && nt !== av ? " · 원고 전체 " + signed(nt) + "자" : "")
-                                : (nt ? " · 원고 전체 " + signed(nt) + "자" : ""));
+                                : (nt ? " · 원고 전체 " + signed(nt) + "자" : ""))
+            + (pg ? " · 고친 " + pg + "쪽" : "");
     var n = document.createElement("span"); n.className = "n"; n.textContent = d2;
     c.appendChild(n);
     if(fins[k]){ var f = document.createElement("span"); f.className = "fin"; f.textContent = "편"; c.appendChild(f); }
     if(S.hit[k]){ var fv = document.createElement("span"); fv.className = "five"; fv.textContent = "五"; c.appendChild(fv); }
+    if(S.hitRev && S.hitRev[k]){ var gv = document.createElement("span"); gv.className = "five gae"; gv.textContent = "改"; c.appendChild(gv); }
     g.appendChild(c);
   }
   $("#calLeg").innerHTML =
@@ -3784,7 +3930,7 @@ function renderCal(){
     + '<span><i style="background:#d79c95;border-color:#cf8c84"></i>2~3시간</span>'
     + '<span><i style="background:#a8322d;border-color:#a8322d"></i>3~4시간</span>'
     + '<span><i style="background:#46525c;border-color:#46525c"></i>4시간 넘음</span>'
-    + '<span>五 하루 분량을 채운 날 · 편 한 편이 찬 날</span>';
+    + '<span>五 하루 분량을 채운 날 · 改 하루 쪽수를 채운 날 · 편 한 편이 찬 날</span>';
   renderWeeks();
 }
 function renderWeeks(){
@@ -3888,7 +4034,7 @@ function renderAnaSum(rg){
   for(var k = rg[0]; k <= rg[1]; k = addDays(k, 1)){
     nDays++;
     focus += S.days[k] || 0; net += S.net[k] || 0; adv += advOf(k);
-    if(S.hit[k]) hits++;
+    if(hitDay(k)) hits++;
     if((S.days[k] || 0) > 0 || (S.net[k] || 0) !== 0) wrote++;
   }
   html += '<p class="sub-h">' + rg[0].replace(/-/g, ".") + " – " + rg[1].replace(/-/g, ".") + " · " + nDays + "일</p>";
@@ -3899,7 +4045,9 @@ function renderAnaSum(rg){
   var wt = writeMsIn(rg);
   if(wt) html += kv("쓰기 한 시간당 나아감", fmt(Math.round(adv / hrs(wt))) + "자", "완성 전 원고의 시간 " + spanText(wt));
   html += kv("원고 전체의 증감", signed(net) + "자", m1(maeOf(net)) + "매");
-  if(S.daily) html += kv(fmt(S.daily) + "자를 채운 날", hits + "일", Math.round(hits / Math.max(1, nDays) * 100) + "%");
+  var pgs = pagesIn(rg);
+  if(pgs) html += kv("고친 쪽수", pgs + "쪽", "개정 회차 · 하루 평균 " + m1(pgs / Math.max(1, nDays)) + "쪽");
+  if(S.daily || S.dailyPg) html += kv("하루 분량(" + (S.daily ? fmt(S.daily) + "자" : "") + (S.daily && S.dailyPg ? " 또는 " : "") + (S.dailyPg ? S.dailyPg + "쪽" : "") + ")을 채운 날", hits + "일", Math.round(hits / Math.max(1, nDays) * 100) + "%");
 
   /* 몰입 한 번 한 번 */
   var ss = S.log.sess.filter(function(x){ return inRange(dayKey(x.start), rg); });
@@ -4127,44 +4275,76 @@ function mergedLine(m){
           fmt(st.cThen) + " → " + fmt(st.cNow) + "자 (" + signed(st.cNow - st.cThen) + ")",
           "합치기까지 " + spanText(st.tPieces.all) + " · 그 뒤 " + spanText(st.tAfter.all)];
 }
-/* ---------- 개정 — 쪽수와 새 글, 두 줄 가늠 ---------- */
-function revTime(w){
+/* ---------- 개정 회차 — 회차마다 쪽수·시간·가늠. 개정 작품은 새 글 가늠 한 줄 더 ---------- */
+/* 개정 작품에 쌓인 개정 시간 모두 — 책 고치기와 개정 원고(기록 전 시간까지) */
+function revAllTime(w){
   return (w.bookMs || 0) + allOf(w).filter(isRevMs).reduce(function(a, m){ return a + unitTime(m).all; }, 0);
 }
-function revGuess(w){
-  var g = {}, now = Date.now(), log = w.pageLog.filter(function(x){ return x.t > 0; });
-  var pNow = pagesNow(w);
-  /* 쪽수 — 최근 14일(없으면 처음부터) 적어 온 쪽수로 하루 몇 쪽 */
-  if(w.pagesTotal && log.length >= 2){
-    var from = now - 14 * 86400000, base = log.filter(function(x){ return x.t <= from; }).pop() || log[0], last = log[log.length-1];
+/* 기간 안에 이 작품에 쓴 시간 — 개정 작품은 개정 원고·책 고치기·교열, 그 밖의 작품은 원고·교열 모두(완성한 작품의 회차에서는 다 개정이다) */
+function revTimeIn(w, a, b){
+  var ids = {};
+  allOf(w).forEach(function(m){ if(!isRevision(w) || isRevMs(m)) ids[m.id] = 1; });
+  ids["gyo:" + w.id] = 1; ids["book:" + w.id] = 1;
+  return S.log.sess.reduce(function(s, x){ return ids[x.ms] ? s + clipMs(x.start, x.end, a, b) : s; }, 0);
+}
+/* 회차에 든 시간 — 개정 작품의 하나뿐인 1차는 작품에 쌓인 개정 시간 그대로(기록 전 시간까지) */
+function revTime(w, r){
+  if(!r) r = curRev(w) || lastRev(w);
+  if(!r) return 0;
+  if(isRevision(w) && r.no === 1 && revsOf(w).length === 1) return revAllTime(w);
+  return revTimeIn(w, r.startedAt || 0, r.doneAt || Date.now());
+}
+/* 회차의 가늠 — 하루 몇 쪽(이 회차의 최근 14일, 기록이 둘 미만이면 앞 회차의 속도), 남은 날, 1쪽에 드는 시간 */
+function revGuess(w, r){
+  var g = {}, now = Date.now();
+  if(!r) return g;
+  var log = revLog(r), pNow = revPages(r), from = r.from || 0;
+  if(log.length >= 2){
+    var since = now - 14 * 86400000, base = log.filter(function(x){ return x.t <= since; }).pop() || log[0], last = log[log.length - 1];
     var days = Math.max(1, (last.t - base.t) / 86400000), per = (last.p - base.p) / days;
-    if(per > 0){ g.pagePerDay = per; g.pageDays = Math.ceil((w.pagesTotal - pNow) / per); }
+    if(per > 0) g.pagePerDay = per;
   }
-  var rt = revTime(w);
-  if(rt && log.length){ var moved = pNow - log[0].p; if(moved > 0) g.minPerPage = rt / 60000 / moved; }
-  /* 새 글 — 참고 분량이 있으면 최근 14일의 하루 매수로 */
-  if(w.targetMae){
-    var cNow = workChars(w), left = w.targetMae - maeOf(cNow), ids = {};
-    cntPieces(w).forEach(function(m){ ids[m.id] = 1; });
-    var since = now - 14 * 86400000, net = S.log.edits.filter(function(x){ return ids[x.ms] && x.t >= since; }).reduce(function(a, x){ return a + (x.a - x.b); }, 0);
-    g.newLeft = Math.max(0, left);
-    if(left > 0 && net > 0){ g.newPerDay = maeOf(net) / 14; g.newDays = Math.ceil(left / g.newPerDay); }
+  if(!g.pagePerDay){
+    var prev = revsOf(w).filter(function(x){ return x.doneAt && x.no < r.no; }).pop();
+    if(prev){
+      var d2 = Math.max(1, (prev.doneAt - prev.startedAt) / 86400000), per2 = (revPages(prev) - (prev.from || 0)) / d2;
+      if(per2 > 0){ g.pagePerDay = per2; g.borrowed = prev.no; }
+    }
   }
+  if(g.pagePerDay && r.total && pNow < r.total) g.pageDays = Math.ceil((r.total - pNow) / g.pagePerDay);
+  var rt = revTime(w, r), moved = pNow - from;
+  if(rt && moved > 0) g.minPerPage = rt / 60000 / moved;
   return g;
 }
+/* 개정 작품의 새 글 가늠 — 참고 분량이 있으면 최근 14일의 하루 매수로 */
+function newGuess(w){
+  var g = {}, now = Date.now();
+  if(!w.targetMae) return g;
+  var cNow = workChars(w), left = w.targetMae - maeOf(cNow), ids = {};
+  cntPieces(w).forEach(function(m){ ids[m.id] = 1; });
+  var since = now - 14 * 86400000, net = S.log.edits.filter(function(x){ return ids[x.ms] && x.t >= since; }).reduce(function(a, x){ return a + (x.a - x.b); }, 0);
+  g.newLeft = Math.max(0, left);
+  if(left > 0 && net > 0){ g.newPerDay = maeOf(net) / 14; g.newDays = Math.ceil(left / g.newPerDay); }
+  return g;
+}
+/* 회차마다 한 줄 — "개정 1차 · 312 / 312쪽 (100%) · 9월 12일 ~ 10월 3일 · 22일 · 21시간 · 1쪽에 4분 · 78,000자 → 74,500자" */
 function revLines(w){
-  var out = [], pNow = pagesNow(w), g = revGuess(w), today = ymd(Date.now());
-  var rt = revTime(w);
-  out.push("개정 · " + pNow + (w.pagesTotal ? " / " + w.pagesTotal + "쪽 (" + Math.round(pNow / w.pagesTotal * 100) + "%)" : "쪽")
-    + (rt ? " · " + spanText(rt) + (w.bookMs ? "(책 고치기 " + spanText(w.bookMs) + " 포함)" : "") : "") + (g.minPerPage ? ' <em>· 1쪽에 ' + Math.round(g.minPerPage) + '분</em>' : ""));
-  if(!workDone(w)){
-    if(w.pagesTotal && pNow < w.pagesTotal){
-      out.push('<em>쪽수 가늠 · ' + (g.pageDays ? '하루 ' + m1(g.pagePerDay) + '쪽으로 약 ' + g.pageDays + '일 · ' + addDays(today, g.pageDays).replace(/-/g, ".") + '쯤' : '쪽수를 두 번 이상 적으면 가늠이 생깁니다') + '</em>');
+  var out = [], today = ymd(Date.now());
+  revsOf(w).forEach(function(r){
+    var g = revGuess(w, r), rt = revTime(w, r), pn = revPages(r);
+    var c1 = r.doneAt ? (r.chars1 != null ? r.chars1 : null) : workChars(w);
+    out.push(revPagesText(r)
+      + (r.doneAt ? " · " + dayText(r.startedAt) + " ~ " + dayText(r.doneAt) + " · " + spanDays(r.startedAt, r.doneAt) + "일" : " · " + dayText(r.startedAt) + " 시작 · " + spanDays(r.startedAt, Date.now()) + "일째")
+      + (rt ? " · " + spanText(rt) : "") + (g.minPerPage ? ' <em>· 1쪽에 ' + Math.round(g.minPerPage) + '분</em>' : "")
+      + (r.chars0 > 0 && c1 != null ? " · " + fmt(r.chars0) + "자 → " + fmt(c1) + "자 (" + signed(c1 - r.chars0) + ")" : ""));
+    if(!r.doneAt && r.total && pn < r.total){
+      out.push('<em>쪽수 가늠 · ' + (g.pageDays ? '하루 ' + m1(g.pagePerDay) + '쪽으로 약 ' + g.pageDays + '일 · ' + addDays(today, g.pageDays).replace(/-/g, ".") + '쯤' + (g.borrowed ? ' (' + g.borrowed + '차의 속도로)' : '') : '쪽수를 두 번 이상 적으면 가늠이 생깁니다') + '</em>');
     }
-    if(w.targetMae){
-      out.push('<em>새 글 가늠 · ' + (g.newLeft === 0 ? '참고 ' + w.targetMae + '매를 채웠습니다' :
-        g.newDays ? '남은 ' + m1(g.newLeft) + '매, 하루 ' + m1(g.newPerDay) + '매로 약 ' + g.newDays + '일 · ' + addDays(today, g.newDays).replace(/-/g, ".") + '쯤' : '남은 ' + m1(g.newLeft) + '매 · 최근 14일에 쓴 새 글이 없어 가늠하지 않습니다') + '</em>');
-    }
+  });
+  if(isRevision(w) && !workDone(w) && w.targetMae){
+    var n = newGuess(w);
+    out.push('<em>새 글 가늠 · ' + (n.newLeft === 0 ? '참고 ' + w.targetMae + '매를 채웠습니다' :
+      n.newDays ? '남은 ' + m1(n.newLeft) + '매, 하루 ' + m1(n.newPerDay) + '매로 약 ' + n.newDays + '일 · ' + addDays(today, n.newDays).replace(/-/g, ".") + '쯤' : '남은 ' + m1(n.newLeft) + '매 · 최근 14일에 쓴 새 글이 없어 가늠하지 않습니다') + '</em>');
   }
   return out;
 }
@@ -4234,7 +4414,7 @@ function renderAnaRecs(){
     if(own && r.fCnt && r.cNow) t2 += ' <em>· 1매에 ' + Math.round(r.fCnt / 60000 / (r.cNow / 200)) + '분' + (twR2 ? ' · 떠들기까지 ' + Math.round(twR2) + '분' : '') + '</em>';
     html += '<div class="ln">' + t2 + '</div>';
     if(isNovel(w)) html += chLines(w).map(function(t){ return '<div class="ln">' + t + '</div>'; }).join("");
-    if(isRevision(w)) html += revLines(w).map(function(t){ return '<div class="ln">' + t + '</div>'; }).join("");
+    if(isRevision(w) || revsOf(w).length) html += revLines(w).map(function(t){ return '<div class="ln">' + t + '</div>'; }).join("");
     if(w.due){
       var t4 = "마감 " + w.due.replace(/-/g, ".");
       if(r.allFin && r.lastFin) t4 += " · 마지막 원고 완성 " + dayText(r.lastFin) + " (" + diffText(Math.round((keyDate(dayKey(r.lastFin)) - keyDate(w.due)) / 86400000)) + ")";
@@ -4357,6 +4537,24 @@ $("#csvEdit").addEventListener("click", function(){
   });
   saveCsv("변경", rows);
 });
+$("#csvRev").addEventListener("click", function(){
+  var rows = [["작품","종류","회차","전체 쪽수","시작 쪽","지금 쪽","시작","마침","날수","고친 쪽수","시간(분)","1쪽에(분)","시작 때 글자","마칠 때 글자"]];
+  S.works.forEach(function(w){
+    revsOf(w).forEach(function(r){
+      var rt = revTime(w, r), moved = revPages(r) - (r.from || 0);
+      rows.push([w.title, w.kind || "", r.no, r.total || "", r.from || 0, revPages(r), csvDate(r.startedAt), csvDate(r.doneAt), spanDays(r.startedAt, r.doneAt || Date.now()),
+        moved, Math.round(rt / 60000), rt && moved > 0 ? Math.round(rt / 60000 / moved) : "", r.chars0 == null ? "" : r.chars0, r.chars1 == null ? "" : r.chars1]);
+    });
+  });
+  saveCsv("개정회차", rows);
+});
+$("#csvPg").addEventListener("click", function(){
+  var rows = [["작품","회차","시각","하루(4시 기준)","쪽","전체 쪽수"]];
+  S.works.forEach(function(w){
+    revsOf(w).forEach(function(r){ revLog(r).forEach(function(x){ rows.push([w.title, r.no, csvDate(x.t), dayKey(x.t), x.p, r.total || ""]); }); });
+  });
+  saveCsv("쪽수", rows);
+});
 $("#anaRange").addEventListener("change", function(){ S.anaRange = this.value; save(); renderAna(); });
 $("#anaFrom").addEventListener("change", function(){ S.anaFrom = this.value; save(); renderAna(); });
 $("#anaTo").addEventListener("change", function(){ S.anaTo = this.value; save(); renderAna(); });
@@ -4373,7 +4571,7 @@ function renderSet(){
   $("#focus1cut").value = S.focus1Cut || "";
   $("#rest1cut").value = S.rest1Cut || "";
   $("#gyocut").value = S.gyoCut || "";
-  ["pfz","plh","pmax","ppad","pind","ifz","ilh","daily","dayStart","prfz","prlh","goalH","goalM"].forEach(function(k){
+  ["pfz","plh","pmax","ppad","pind","ifz","ilh","daily","dailyPg","dayStart","prfz","prlh","goalH","goalM"].forEach(function(k){
     $("#"+k).value = S[k];
   });
   $("#smart").checked = S.smart !== false;
@@ -4484,6 +4682,7 @@ function endFocusSC(at, stopped){
     var fm = msById(ss.id);
     logSess({ ms:ss.id, type: gyoWork(ss.id) ? "gyo" : "focus", start:ss.start, end:end, plan:ss.mins*60000,
               how: stopped ? "stop" : "full", c0: ss.c0 == null ? null : ss.c0, c1: fm ? len(fm.text) : null });
+    if(gyoWork(ss.id)) askPagesIfNew(gyoWork(ss.id));   /* 개정 회차 중이면 그날 처음 한 번 쪽수를 묻는다 */
   }
   if(!stopped && ss && ss.rest){
     /* 다 채운 몰입 — 휴식 분 동안 검은 화면. 사파리가 늦게 앞으로 와도 시각으로 맞춘다 */
@@ -4912,6 +5111,7 @@ $("#fsel").addEventListener("change", function(){ S.focusMin = parseInt(this.val
 num($("#goalH"),"goalH",0,16,3,function(){ renderToday(); shareConf(); });
 num($("#goalM"),"goalM",0,59,0,function(){ renderToday(); shareConf(); });
 num($("#daily"),"daily",0,100000,1000,function(){ renderNet(); });
+num($("#dailyPg"),"dailyPg",0,1000,0,function(){ checkPages(dayKey(Date.now())); renderCal(); });
 /* 한 편 분량 — 2,667 · 5,334 · 8,000을 한 묶음으로 되풀이한다 */
 function ladder(n){ return Math.floor(n/3)*8000 + [0,2667,5334][n%3]; }
 function ladderMove(p, dir){
