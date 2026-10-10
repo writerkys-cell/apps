@@ -261,6 +261,20 @@ ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
 .addrow input{flex:1;background:none;border:none;border-bottom:1px solid var(--rule);padding:.4rem 0}
 .addrow input::placeholder{color:var(--ink-faint)}
 .addrow button{color:var(--seal);padding:0 .3rem;font-size:.95rem}
+/* 종류 태그: 쓰기 · 읽기 */
+.kinds{display:flex;gap:.35rem;flex:none}
+.kinds button{
+  font-size:.78rem;padding:.2rem .5rem;border:1px solid var(--rule);border-radius:999px;
+  color:var(--ink-faint);background:var(--paper-2);line-height:1.3;
+}
+.kinds button.sel{background:var(--seal-wash);border-color:var(--seal-soft);color:var(--seal)}
+.kind{
+  display:inline-block;font-size:.72rem;color:var(--seal);border:1px solid var(--seal-soft);
+  border-radius:2px;padding:.05rem .3rem;margin-right:.4rem;vertical-align:.12em;line-height:1.4;letter-spacing:.04em;
+}
+.now .kind{margin:0 0 0 .5rem;vertical-align:.1em}
+.editor .kinds{margin-bottom:.6rem}
+ol.did li .kind{font-size:.68rem}
 .listfoot{display:flex;gap:1.2rem;margin-top:1.8rem;font-size:.85rem;color:var(--ink-faint)}
 .listfoot button{color:var(--ink-faint);border-bottom:1px dotted var(--rule);padding-bottom:1px}
 
@@ -346,6 +360,10 @@ ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
   <ol class="list" id="listBox"></ol>
   <div class="addrow">
     <input id="taskIn" placeholder="할 일을 적습니다" enterkeyhint="done">
+    <div class="kinds" id="kindPick">
+      <button data-kind="write">쓰기</button>
+      <button data-kind="read">읽기</button>
+    </div>
     <button id="taskAdd">더하기</button>
   </div>
   <div class="listfoot">
@@ -477,6 +495,10 @@ const fmtNote = note => (note || '').split('\n').map(l => {
 const runShortcut = (name, input) =>
   location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name)
     + '&input=text&text=' + encodeURIComponent(String(input));
+// 종류 태그: 보여주기만 한다. 버튼 동작에는 관여하지 않는다
+const KINDS = {write:'쓰기', read:'읽기'};
+const kindTag = k => KINDS[k] ? `<span class="kind">${KINDS[k]}</span>` : '';
+let pickKind = '';                        // 목록 입력칸 옆에서 켜 둔 종류
 const linkTag = url => url ? `<a class="lnk" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ''} aria-label="열기">↗</a>` : '';
 
 // 사슬이 비어 있으면 첫 미실행 항목을 뿌리로 삼는다
@@ -530,7 +552,7 @@ function finish(taskId, reentryText){
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
   if(reentryText && reentryText.trim()){
     const r = splitLink(reentryText);
-    S.tasks.push({id:uid(), text:r.text, url:r.url || t.url || '', note:t.note || '', done:false, doneAt:null, createdAt:now(), lost:0});
+    S.tasks.push({id:uid(), text:r.text, url:r.url || t.url || '', note:t.note || '', kind:t.kind || '', done:false, doneAt:null, createdAt:now(), lost:0});
   }
   if(wasRoot){ S.laps.push(now()); S.laps = S.laps.slice(-300); lapFlash = true; }
   commit();
@@ -564,12 +586,12 @@ function drop(taskId){
   commit();
 }
 
-function addTask(text){
+function addTask(text, kind){
   if(!text.trim()) return;
   const wasReady = !candidate();           // 실행 중이었다면 화면을 흔들지 않는다
   const r = splitLink(text);
   if(!r.text) return;
-  const t = {id:uid(), text:r.text, url:r.url, note:'', done:false, doneAt:null, createdAt:now(), lost:0};
+  const t = {id:uid(), text:r.text, url:r.url, note:'', kind:kind || '', done:false, doneAt:null, createdAt:now(), lost:0};
   S.tasks.push(t);
   if(wasReady && S.chain.length) S.cursor = t.id;
   commit();
@@ -589,7 +611,7 @@ function knot(){
   Object.keys(bucket).forEach(d => {
     const items = bucket[d]
       .sort((a,b) => (a.doneAt||'').localeCompare(b.doneAt||''))
-      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||''}));
+      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||'', kind:t.kind||''}));
     const laps = S.laps.filter(x => localDate(new Date(x)) === d).length;
     const prev = S.log.find(e => e.date === d);
     if(prev){
@@ -655,6 +677,7 @@ const REASONS = [
 ];
 let reentryOpen = null, reentryTag = -1;
 let editOpen = null, editTag = -1;        // 목록에서 고쳐 적는 중인 항목
+let editKind = null;                      // 편집기에서 고른 종류 (null이면 아직 안 건드림)
 let memoOpen = null;                      // 실행 화면에서 메모를 적는 중인 항목
 let memoFull = null;                      // 실행 화면에서 메모를 펼쳐 둔 항목
 // 두 줄로 접힌 글이 실제로 잘려 있는가
@@ -739,7 +762,7 @@ function renderStage(){
   box.innerHTML = lap + `
     <div class="chainbar" style="text-align:center">${trail}</div>
     <div class="now">
-      <span class="lab">지금 할 일</span>
+      <span class="lab">지금 할 일${kindTag(a.kind)}</span>
       <div>${title}</div>
       ${memo}
     </div>
@@ -768,10 +791,12 @@ function renderStage(){
   }
 
   $('#actStart').onclick = () => { a.startedAt = now(); commit(); runShortcut('할일시작', cfg.minutes || 25); };
-  $('#actDone').onclick = () => { runShortcut('할일끝', a.text); reentryOpen = null; lapFlash = false; finish(a.id, null); };
+  // 「시작」을 거친 할 일만 할일끝 단축어를 부른다. 링크로 넘어가 제 타이머를 쓴 일은 조용히 정리한다
+  const endShortcut = () => { if(a.startedAt) runShortcut('할일끝', a.text); };
+  $('#actDone').onclick = () => { endShortcut(); reentryOpen = null; lapFlash = false; finish(a.id, null); };
   $('#actDrop').onclick = () => { reentryOpen = null; lapFlash = false; drop(a.id); };
   $('#actPart').onclick = () => {
-    runShortcut('할일끝', a.text);
+    endShortcut();
     lapFlash = false; reentryOpen = a.id; reentryTag = -1;
     a.startedAt = null; commit();          // 시작 기록을 지우고 다시 그리면 다시 적기 칸이 열린다
   };
@@ -826,7 +851,7 @@ function renderList(){
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">${tired ? '고쳐 적기' : '고치기'}</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${tired?'tired':''}">
       <span class="gutter">${dot}</span>
-      <span class="body">${esc(t.text)}${linkTag(t.url)}${t.note
+      <span class="body">${kindTag(t.kind)}${esc(t.text)}${linkTag(t.url)}${t.note
         ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${fmtNote(t.note)}</span>` : ''}</span>
       ${lost}${ed}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
@@ -842,7 +867,10 @@ function editorHtml(t, tired){
       <p class="note">${t.lost}번 밀렸습니다. 막힌 자리를 그대로 두면 다음에도 집니다. 하고 싶어질 만한 다음 걸음으로 바꿔 적으세요.</p>
       <div class="tags">${REASONS.map((r,i) =>
         `<button data-etag="${i}" class="${i===editTag?'sel':''}">${r[0]}</button>`).join('')}</div>` : '';
+  const ek = editKind === null ? (t.kind || '') : editKind;
   return `<li class="editor" id="edBox">${guide}
+      <div class="kinds">${Object.entries(KINDS).map(([k,l]) =>
+        `<button data-ekind="${k}" class="${ek===k?'sel':''}">${l}</button>`).join('')}</div>
       <input id="edTxt" value="${esc(val)}" placeholder="할 일">
       <input id="edUrl" value="${esc(t.url || '')}" placeholder="링크 (비우면 없음)" autocapitalize="off" autocorrect="off" spellcheck="false">
       <textarea id="edNote" placeholder="메모">${esc(t.note || '')}</textarea>
@@ -856,17 +884,23 @@ function wireEditor(){
   const box = $('#edBox'); if(!box) return;
   const t = byId(editOpen); if(!t) return;
   box.querySelectorAll('[data-etag]').forEach(b => b.onclick = () => { editTag = +b.dataset.etag; renderList(); });
+  box.querySelectorAll('[data-ekind]').forEach(b => b.onclick = () => {
+    const cur = editKind === null ? (t.kind || '') : editKind;
+    editKind = cur === b.dataset.ekind ? '' : b.dataset.ekind;   // 같은 걸 다시 누르면 뗀다
+    b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x.dataset.ekind === editKind));
+  });
   const save = () => {
     const r = splitLink($('#edTxt').value);
     if(!r.text) return;
     const url = r.url || $('#edUrl').value.trim();
     if(r.text !== t.text) t.lost = 0;   // 새로 적은 항목은 다시 센다
     t.text = r.text; t.url = url; t.note = $('#edNote').value.trim();
-    editOpen = null; editTag = -1;
+    if(editKind !== null) t.kind = editKind;
+    editOpen = null; editTag = -1; editKind = null;
     commit();
   };
   $('#edGo').onclick = save;
-  $('#edCancel').onclick = () => { editOpen = null; editTag = -1; renderList(); };
+  $('#edCancel').onclick = () => { editOpen = null; editTag = -1; editKind = null; renderList(); };
   ['edTxt','edUrl'].forEach(id => $('#'+id).addEventListener('keydown', e => {
     if(e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return;
     e.preventDefault(); save();
@@ -886,7 +920,7 @@ function renderKnot(){
 
   let h = `<div class="day today"><h3>오늘 한 일 <span>${mine.length}</span></h3>`;
   h += mine.length
-    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${esc(t.text)}${t.note?`<small class="n nt clamp" data-ntoggle>${fmtNote(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
+    ? `<ol class="did">${mine.map(t => `<li><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${kindTag(t.kind)}${esc(t.text)}${t.note?`<small class="n nt clamp" data-ntoggle>${fmtNote(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
     : `<p class="none">아직 없습니다.</p>`;
   if(lapsToday) h += `<div class="laps">${'<i></i>'.repeat(Math.min(lapsToday,12))}<span>뿌리까지 ${lapsToday}바퀴</span></div>`;
   if(doneAll.length) h += `<button class="knotbtn" id="btnKnot">하루를 매듭짓다</button>
@@ -896,7 +930,7 @@ function renderKnot(){
   h += S.log.slice(0,20).map(e => `
     <div class="day">
       <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span>${e.laps?`<em>${e.laps}바퀴</em>`:''}</h3>
-      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${esc(i.text)}${i.note?`<small class="n nt clamp" data-ntoggle>${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
+      <ol class="did">${e.items.map(i => `<li><span class="t">${i.at?hh(i.at):''}</span><span>${kindTag(i.kind)}${esc(i.text)}${i.note?`<small class="n nt clamp" data-ntoggle>${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
     </div>`).join('');
 
   if(!mine.length && !doneAll.length && !S.log.length)
@@ -943,7 +977,7 @@ document.addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]');
   if(ed){
     editOpen = editOpen === ed.dataset.edit ? null : ed.dataset.edit;
-    editTag = -1; renderList(); return;
+    editTag = -1; editKind = null; renderList(); return;
   }
   const d = e.target.closest('[data-del]');
   if(d){
@@ -990,7 +1024,13 @@ function wireEnter(input, fn){
   return take;
 }
 
-const takeTask = wireEnter($('#taskIn'), addTask);
+const setPick = k => {
+  pickKind = k;
+  document.querySelectorAll('#kindPick button').forEach(b => b.classList.toggle('sel', b.dataset.kind === k));
+};
+document.querySelectorAll('#kindPick button').forEach(b =>
+  b.onclick = () => { setPick(pickKind === b.dataset.kind ? '' : b.dataset.kind); $('#taskIn').focus(); });
+const takeTask = wireEnter($('#taskIn'), v => { addTask(v, pickKind); setPick(''); });
 $('#taskAdd').onclick = takeTask;
 
 const takeToday = wireEnter($('#todayIn'), v => { addTask(v); toast('목록 끝에 넣었습니다'); });
