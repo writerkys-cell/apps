@@ -120,6 +120,8 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:1.3rem}
 .acts button{padding:.8rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.98rem}
 .acts .start{background:var(--seal);border-color:var(--seal);color:#fff8f2}
+.acts .start:disabled{background:var(--seal-wash);border-color:var(--seal-soft);color:var(--seal);cursor:default;font-size:.9rem}
+.acts .start.over{background:none;border-color:var(--seal);color:var(--seal);font-size:.9rem}
 .acts .done{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 .acts .drop{border-color:var(--rule);color:var(--ink-soft)}
 .now a.txt{color:var(--ink);text-decoration:none;-webkit-tap-highlight-color:transparent}
@@ -499,6 +501,17 @@ function candidate(){
 
 const benchmark = () => byId(S.chain[S.chain.length - 1]);
 
+// 「시작」 버튼의 상태: 아직 안 눌렀다 · 진행 중(남은 분) · 시간이 다 됐다
+function startState(t){
+  if(!t || !t.startedAt) return {txt:'시작', dis:false, over:false};
+  const mins = cfg.minutes || 25;
+  const d = new Date(t.startedAt);
+  const left = Math.ceil(mins - (Date.now() - d.getTime()) / 60000);
+  if(left <= 0) return {txt:'시간 끝 · 다시 시작', dis:false, over:true};
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  return {txt:`${hm} 시작 · ${left}분 남음`, dis:true, over:false};
+}
+
 function answer(yes){
   const c = candidate(); if(!c) return;
   if(yes) S.chain.push(c.id);
@@ -512,7 +525,7 @@ let lapFlash = false;
 function finish(taskId, reentryText){
   const t = byId(taskId); if(!t) return;
   const wasRoot = S.chain.length === 1 && S.chain[0] === taskId;   // 뿌리까지 내려왔다
-  t.done = true; t.doneAt = now();
+  t.done = true; t.doneAt = now(); t.startedAt = null;
   S.chain = S.chain.filter(id => id !== taskId);
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
   if(reentryText && reentryText.trim()){
@@ -722,6 +735,7 @@ function renderStage(){
     : a.note
       ? `<div class="memo"><p id="memoEdit" class="nt clamp ${memoFull === a.id ? 'open' : ''}">${fmtNote(a.note)}</p></div>`
       : `<div class="memo"><button class="add" id="memoEdit">메모</button></div>`;
+  const st = startState(a);
   box.innerHTML = lap + `
     <div class="chainbar" style="text-align:center">${trail}</div>
     <div class="now">
@@ -730,7 +744,7 @@ function renderStage(){
       ${memo}
     </div>
     <div class="acts">
-      <button class="start" id="actStart">시작</button>
+      <button class="start ${st.over?'over':''}" id="actStart" ${st.dis?'disabled':''}>${st.txt}</button>
       <button id="actPart">조금 했다</button>
       <button class="done" id="actDone">끝냈다</button>
       <button class="drop" id="actDrop">이제 필요 없다</button>
@@ -753,10 +767,14 @@ function renderStage(){
     $('#memoCancel').onclick = () => { memoOpen = null; renderStage(); };
   }
 
-  $('#actStart').onclick = () => runShortcut('할일시작', cfg.minutes || 25);
+  $('#actStart').onclick = () => { a.startedAt = now(); commit(); runShortcut('할일시작', cfg.minutes || 25); };
   $('#actDone').onclick = () => { runShortcut('할일끝', a.text); reentryOpen = null; lapFlash = false; finish(a.id, null); };
   $('#actDrop').onclick = () => { reentryOpen = null; lapFlash = false; drop(a.id); };
-  $('#actPart').onclick = () => { runShortcut('할일끝', a.text); lapFlash = false; reentryOpen = a.id; reentryTag = -1; renderReentry(a); };
+  $('#actPart').onclick = () => {
+    runShortcut('할일끝', a.text);
+    lapFlash = false; reentryOpen = a.id; reentryTag = -1;
+    a.startedAt = null; commit();          // 시작 기록을 지우고 다시 그리면 다시 적기 칸이 열린다
+  };
 
   if(reentryOpen === a.id) renderReentry(a);
 }
@@ -901,6 +919,14 @@ function renderKnot(){
   const b = $('#btnKnot');
   if(b) b.onclick = () => { const n = knot(); if(n) toast(n + '개를 갈무리했습니다'); };
 }
+
+// 30초마다 「시작」 버튼의 남은 시간만 고쳐 쓴다 (적는 칸이 열려 있어도 흔들리지 않게)
+setInterval(() => {
+  const b = $('#actStart'); if(!b) return;
+  const a = benchmark(); if(!a || !a.startedAt) return;
+  const st = startState(a);
+  b.textContent = st.txt; b.disabled = st.dis; b.classList.toggle('over', st.over);
+}, 30000);
 
 /* ══════════ 클릭 ══════════ */
 document.addEventListener('click', e => {
