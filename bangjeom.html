@@ -228,6 +228,8 @@ ol.list li:hover .ed,ol.list li:focus-within .ed{visibility:visible}
   padding:.55rem .9rem;border:1px solid var(--rule);border-radius:2px;background:var(--paper-2);
 }
 .knot .week b{font-weight:700;color:var(--ink)}
+.jjokrow{display:flex;align-items:baseline;gap:.7rem;margin:-.7rem 0 1.4rem;font-size:.8rem;color:var(--ink-faint);line-height:1.6}
+.jjokrow button{color:var(--seal);border-bottom:1px dotted var(--seal-soft);padding-bottom:1px;font-size:.85rem;flex:none}
 .knot .week em{font-style:normal;color:var(--seal)}
 .knot .day{border-bottom:1px solid var(--rule);padding:0 0 1.4rem;margin-bottom:1.4rem}
 .knot .day.today{border-bottom-width:2px;border-bottom-color:var(--ink)}
@@ -412,6 +414,7 @@ ol.did li .kind{font-size:.68rem}
       <button id="btnRestore">직전으로 되돌리기</button>
     </div>
     <div class="note" id="syncNote"></div>
+    <p style="margin-top:.7rem">끝낸 일은 같은 프로젝트의 <b>bangjeom_inbox</b> 표에도 한 줄씩 보냅니다. 쪽글에 같은 주소와 키를 넣어 두면 쪽글이 그날 노트에 가져갑니다. 못 보낸 것은 다음에 연결될 때 다시 보냅니다.</p>
     <p style="margin-top:.7rem">어느 쪽이 최신인지는 기기 시계가 아니라 서버 문서의 판번호로 가립니다. 기기끼리 시각이 어긋나도 판정이 뒤집히지 않습니다. 양쪽에 서로 다른 변경이 있으면 어느 쪽을 살릴지 묻고, 버리는 쪽은 백업에 남겨 「직전으로 되돌리기」로 살릴 수 있습니다.</p>
   </section>
 
@@ -431,7 +434,22 @@ create policy "anon read"  on bangjeom for select using (true);
 create policy "anon write" on bangjeom for insert with check (true);
 create policy "anon edit"  on bangjeom for update using (true) with check (true);
 
-alter publication supabase_realtime add table bangjeom;</pre>
+alter publication supabase_realtime add table bangjeom;
+
+-- 쪽글로 보내는 편지함
+create table if not exists bangjeom_inbox (
+  id text primary key,
+  at bigint not null,
+  text text not null,
+  device text,
+  created_at timestamptz not null default now()
+);
+
+alter table bangjeom_inbox enable row level security;
+
+create policy "anon read"  on bangjeom_inbox for select using (true);
+create policy "anon write" on bangjeom_inbox for insert with check (true);
+create policy "anon edit"  on bangjeom_inbox for update using (true) with check (true);</pre>
     <div class="btns"><button id="btnSql">복사하기</button></div>
   </section>
 
@@ -470,7 +488,7 @@ cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',minutes:25}, cfg);
 if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
 const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
 
-const blank = () => ({v:2, rev:0, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], updatedAt:now()});
+const blank = () => ({v:2, rev:0, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], outbox:[], updatedAt:now()});
 let S = Object.assign(blank(), JSON.parse(LS.get('bangjeom.state') || 'null') || {});
 
 /* ══════════ 알고리즘 ══════════ */
@@ -555,7 +573,9 @@ function finish(taskId, reentryText){
     S.tasks.push({id:uid(), text:r.text, url:r.url || t.url || '', note:t.note || '', kind:t.kind || '', done:false, doneAt:null, createdAt:now(), lost:0});
   }
   if(wasRoot){ S.laps.push(now()); S.laps = S.laps.slice(-300); lapFlash = true; }
+  (S.outbox = S.outbox || []).push(jjokOf({ms:Date.parse(t.doneAt), text:t.text, note:t.note, kind:t.kind}));
   commit();
+  flushOutbox();
 }
 
 // 포스터의 유일한 우선순위 조작: 급해진 것은 점을 지우고 끝으로 옮긴다
@@ -909,6 +929,49 @@ function wireEditor(){
   $('#edTxt').focus();
 }
 
+// 쪽글의 「조각 받기」가 읽는 꼴로 끝낸 일을 모은다 (최근 14일, 매듭지은 것과 아직 안 지은 것 모두)
+// id는 끝낸 시각과 제목에서 만들어 매듭 전후로 같다. 쪽글이 이걸로 겹침을 걸러 낸다
+function jjokItems(){
+  const since = Date.now() - 14 * 86400000;
+  const rows = [];
+  S.tasks.filter(t => t.done && t.doneAt).forEach(t =>
+    rows.push({at:t.doneAt, text:t.text, note:t.note, kind:t.kind}));
+  S.log.forEach(e => e.items.forEach(i => i.at && rows.push({at:i.at, text:i.text, note:i.note, kind:i.kind})));
+  return rows
+    .map(r => ({...r, ms:Date.parse(r.at)}))
+    .filter(r => r.ms >= since)
+    .sort((a,b) => a.ms - b.ms)
+    .map(jjokOf);
+}
+// 끝낸 항목 하나를 쪽글 조각 하나로
+const jjokOf = r => ({
+  id:`bj-${r.ms}-${r.text.slice(0,12)}`,
+  at:r.ms,
+  text:(KINDS[r.kind] ? `#${KINDS[r.kind]} ` : '') + r.text + (r.note ? '\n' + r.note : '')
+});
+
+// 쪽글 편지함(bangjeom_inbox)으로 보내기. 못 보낸 것은 outbox에 남겨 두었다가 다음에 다시 보낸다
+let outboxWarned = false;
+async function flushOutbox(){
+  if(!sb || !S.outbox || !S.outbox.length) return;
+  const rows = S.outbox.map(x => ({id:x.id, at:x.at, text:x.text, device:cfg.device}));
+  const { error } = await sb.from('bangjeom_inbox').upsert(rows);
+  if(error){
+    if(!outboxWarned){ outboxWarned = true; toast('쪽글 편지함에 못 보냈습니다 · 표가 있는지 확인하세요'); }
+    return;
+  }
+  S.outbox = [];
+  commit();
+}
+async function copyJjok(){
+  const items = jjokItems();
+  if(!items.length){ toast('복사할 게 없습니다'); return; }
+  try{
+    await navigator.clipboard.writeText(JSON.stringify({items}, null, 1));
+    toast(`${items.length}개를 복사했습니다 · 쪽글의 조각 받기에 붙여 넣으세요`);
+  }catch(e){ toast('복사하지 못했습니다. 다시 눌러 보세요'); }
+}
+
 function renderKnot(){
   const today = localDate();
   const doneAll = S.tasks.filter(t => t.done);
@@ -949,7 +1012,15 @@ function renderKnot(){
       most ? ` · 가장 많이 진 항목 <em>「${esc(most.text)}」</em> ${most.lost}번` : ''}</div>` + h;
   }
 
+  const jj = jjokItems().length;
+  if(jj){
+    const row = `<div class="jjokrow"><button id="btnJjok">쪽글로 복사</button><span>최근 14일 끝낸 일 ${jj}개. 편지함이 막혔을 때 쪽글의 조각 받기에 붙여 넣는 예비 길입니다.</span></div>`;
+    // 주간 요약 줄 바로 아래에 둔다
+    h = h.includes('<div class="day today">') ? h.replace('<div class="day today">', row + '<div class="day today">') : row + h;
+  }
+
   $('#knotBox').innerHTML = h;
+  const j = $('#btnJjok'); if(j) j.onclick = copyJjok;
   const b = $('#btnKnot');
   if(b) b.onclick = () => { const n = knot(); if(n) toast(n + '개를 갈무리했습니다'); };
 }
@@ -1110,6 +1181,7 @@ async function connect(silent){
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
     sb = createClient(cfg.url, cfg.key, {realtime:{params:{eventsPerSecond:4}}});
     await pull(true);
+    flushOutbox();
     if(chan) sb.removeChannel(chan);
     chan = sb.channel('bangjeom-' + cfg.list)
       .on('postgres_changes',
