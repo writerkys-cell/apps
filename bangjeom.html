@@ -119,7 +119,8 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 }
 .acts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:1.3rem}
 .acts button{padding:.8rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.98rem}
-.acts .done{grid-column:1/-1;background:var(--seal);border-color:var(--seal);color:#fff8f2}
+.acts .start{background:var(--seal);border-color:var(--seal);color:#fff8f2}
+.acts .done{background:var(--ink);border-color:var(--ink);color:var(--paper)}
 .acts .drop{border-color:var(--rule);color:var(--ink-soft)}
 .now a.txt{color:var(--ink);text-decoration:none;-webkit-tap-highlight-color:transparent}
 .now a.txt::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.35em;vertical-align:.25em}
@@ -362,6 +363,9 @@ ol.did li .t{flex:none;font-size:.78rem;color:var(--ink-faint);width:2.6rem}
     <p>기기 이름은 어느 쪽에서 고쳤는지 표시하는 데만 씁니다.</p>
     <label for="sDevice">이 기기</label>
     <input type="text" id="sDevice" placeholder="맥북">
+    <label for="sMinutes" style="margin-top:1rem">한 번에 할애하는 시간 (분)</label>
+    <input type="number" id="sMinutes" inputmode="numeric" min="1" max="600" placeholder="25" style="width:6rem">
+    <p style="margin-top:.4rem">「시작」을 누르면 단축어 <b>할일시작</b>에 이 숫자를 넘깁니다. 「조금 했다」와 「끝냈다」는 단축어 <b>할일끝</b>에 할 일 제목을 넘깁니다. 두 단축어는 단축어 앱에 그 이름으로 만들어 두세요.</p>
     <label class="row"><input type="checkbox" id="sLost"> 목록에 진 횟수 보이기</label>
     <p style="margin-top:.4rem">훑기에서 밀린 횟수입니다. 자꾸 지는 항목은 게으름이 아니라 잘못 적힌 항목일 때가 많습니다. 숫자가 신경 쓰이면 꺼두세요.</p>
   </section>
@@ -442,7 +446,7 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7
 const now = () => new Date().toISOString();
 
 let cfg = JSON.parse(LS.get('bangjeom.cfg') || '{}');
-cfg = Object.assign({url:'',key:'',list:'bangjeom',device:''}, cfg);
+cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',minutes:25}, cfg);
 if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
 const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
 
@@ -467,6 +471,10 @@ const fmtNote = note => (note || '').split('\n').map(l => {
   if(m) return `<span class="li">${esc(m[1])}</span>`;
   return l.trim() ? `<span class="ex">${esc(l.trim())}</span>` : '';
 }).join('');
+// 단축어 실행: 이름과 입력 글자를 넘긴다. 앱 안의 동작은 그대로 이어진다
+const runShortcut = (name, input) =>
+  location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name)
+    + '&input=text&text=' + encodeURIComponent(String(input));
 const linkTag = url => url ? `<a class="lnk" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ''} aria-label="열기">↗</a>` : '';
 
 // 사슬이 비어 있으면 첫 미실행 항목을 뿌리로 삼는다
@@ -722,8 +730,9 @@ function renderStage(){
       ${memo}
     </div>
     <div class="acts">
-      <button class="done" id="actDone">끝냈다</button>
+      <button class="start" id="actStart">시작</button>
       <button id="actPart">조금 했다</button>
+      <button class="done" id="actDone">끝냈다</button>
       <button class="drop" id="actDrop">이제 필요 없다</button>
     </div>
     <div id="reBox"></div>`;
@@ -744,9 +753,10 @@ function renderStage(){
     $('#memoCancel').onclick = () => { memoOpen = null; renderStage(); };
   }
 
-  $('#actDone').onclick = () => { reentryOpen = null; lapFlash = false; finish(a.id, null); };
+  $('#actStart').onclick = () => runShortcut('할일시작', cfg.minutes || 25);
+  $('#actDone').onclick = () => { runShortcut('할일끝', a.text); reentryOpen = null; lapFlash = false; finish(a.id, null); };
   $('#actDrop').onclick = () => { reentryOpen = null; lapFlash = false; drop(a.id); };
-  $('#actPart').onclick = () => { lapFlash = false; reentryOpen = a.id; reentryTag = -1; renderReentry(a); };
+  $('#actPart').onclick = () => { runShortcut('할일끝', a.text); lapFlash = false; reentryOpen = a.id; reentryTag = -1; renderReentry(a); };
 
   if(reentryOpen === a.id) renderReentry(a);
 }
@@ -972,6 +982,11 @@ Object.entries(fields).forEach(([el,k]) => {
   const n = $('#'+el);
   n.value = cfg[k] || '';
   n.addEventListener('change', () => { cfg[k] = n.value.trim(); saveCfg(); render(); });
+});
+$('#sMinutes').value = cfg.minutes || 25;
+$('#sMinutes').addEventListener('change', e => {
+  const v = parseInt(e.target.value, 10);
+  cfg.minutes = v > 0 ? v : 25; e.target.value = cfg.minutes; saveCfg();
 });
 $('#sLost').checked = cfg.showLost !== false;
 $('#sLost').addEventListener('change', e => { cfg.showLost = e.target.checked; saveCfg(); render(); });
