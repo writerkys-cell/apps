@@ -460,6 +460,7 @@ ol.did li .kind{font-size:.68rem}
       <button id="btnRestore">직전으로 되돌리기</button>
     </div>
     <div class="note" id="syncNote"></div>
+    <p style="margin-top:.7rem">단축어로 할 일을 넣을 수도 있습니다. 같은 프로젝트의 <b>bangjeom_todo</b> 표에 줄을 넣으면 방점이 열릴 때와 연결돼 있는 동안 바로 목록 끝에 붙입니다. 단축어는 「URL 내용 가져오기」 하나로 됩니다. 방식 POST, 주소 <code>프로젝트URL/rest/v1/bangjeom_todo</code>, 머리글 <code>apikey</code>와 <code>Authorization: Bearer</code>에 anon 키, <code>Content-Type: application/json</code>, 본문 <code>{"list":"목록 이름","text":"제목 링크"}</code>. 공유 시트에서 받은 글을 본문에 넣으면 메일이나 웹페이지를 그대로 할 일로 보낼 수 있습니다.</p>
     <p style="margin-top:.7rem">끝낸 일은 같은 프로젝트의 <b>bangjeom_inbox</b> 표에도 한 줄씩 보냅니다. 앞에 <b>#완료</b> 태그가 붙고, 메모는 그 아래 자식 줄로 들어갑니다. 쪽글에 같은 주소와 키를 넣어 두면 쪽글이 그날 노트에 가져갑니다. 못 보낸 것은 다음에 연결될 때 다시 보냅니다.</p>
     <p style="margin-top:.7rem">어느 쪽이 최신인지는 기기 시계가 아니라 서버 문서의 판번호로 가립니다. 기기끼리 시각이 어긋나도 판정이 뒤집히지 않습니다. 양쪽에 서로 다른 변경이 있으면 어느 쪽을 살릴지 묻고, 버리는 쪽은 백업에 남겨 「직전으로 되돌리기」로 살릴 수 있습니다.</p>
   </section>
@@ -495,7 +496,26 @@ alter table bangjeom_inbox enable row level security;
 
 create policy "anon read"  on bangjeom_inbox for select using (true);
 create policy "anon write" on bangjeom_inbox for insert with check (true);
-create policy "anon edit"  on bangjeom_inbox for update using (true) with check (true);</pre>
+create policy "anon edit"  on bangjeom_inbox for update using (true) with check (true);
+
+-- 단축어로 받는 할 일
+create table if not exists bangjeom_todo (
+  id uuid primary key default gen_random_uuid(),
+  list text not null default 'bangjeom',
+  text text not null,
+  kind text,
+  device text,
+  created_at timestamptz not null default now(),
+  taken_at timestamptz
+);
+
+alter table bangjeom_todo enable row level security;
+
+create policy "anon read"  on bangjeom_todo for select using (true);
+create policy "anon write" on bangjeom_todo for insert with check (true);
+create policy "anon edit"  on bangjeom_todo for update using (true) with check (true);
+
+alter publication supabase_realtime add table bangjeom_todo;</pre>
     <div class="btns"><button id="btnSql">복사하기</button></div>
   </section>
 
@@ -1356,6 +1376,21 @@ function setSync(cls, txt){
 }
 const okLabel = () => cfg.device + (dirty ? ' · 올릴 것 있음' : ' · 연결됨');
 
+async function pullTodo(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.from('bangjeom_todo')
+      .update({taken_at:now(), device:cfg.device})
+      .eq('list', cfg.list).is('taken_at', null)
+      .select();
+    if(error || !data || !data.length) return;
+    data.sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
+    let n = 0;
+    data.forEach(r => { if(r.text && String(r.text).trim()){ addTask(String(r.text), KINDS[r.kind] ? r.kind : ''); n++; } });
+    if(n) toast(`단축어에서 ${n}개를 받았습니다`);
+  }catch(e){ /* 표가 없으면 조용히 */ }
+}
+
 async function connect(silent){
   if(!cfg.url || !cfg.key){ if(!silent) $('#syncNote').textContent = '주소와 키를 넣어주세요.'; return; }
   setSync('busy','잇는 중');
@@ -1364,11 +1399,15 @@ async function connect(silent){
     sb = createClient(cfg.url, cfg.key, {realtime:{params:{eventsPerSecond:4}}});
     await pull(true);
     flushOutbox();
+    pullTodo();
     if(chan) sb.removeChannel(chan);
     chan = sb.channel('bangjeom-' + cfg.list)
       .on('postgres_changes',
         {event:'*', schema:'public', table:'bangjeom', filter:'id=eq.'+cfg.list},
         p => apply(p.new))
+      .on('postgres_changes',
+        {event:'INSERT', schema:'public', table:'bangjeom_todo'},
+        () => pullTodo())
       .subscribe(st => {
         if(st === 'SUBSCRIBED') setSync('on', okLabel());
         if(st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') setSync('err','끊김');
@@ -1494,7 +1533,7 @@ $('#btnPush').onclick = () => sb ? push(true).then(() => toast('올렸습니다'
 $('#btnRestore').onclick = restore;
 
 // 아이폰에서 앱을 다시 열 때 최신 상태를 당겨오고, 날짜가 넘어갔는지도 본다
-document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); if(sb) pull(true); } });
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); if(sb){ pull(true); pullTodo(); } } });
 window.addEventListener('focus', () => { render(); if(sb) pull(true); });
 
 /* ══════════ 시작 ══════════ */
