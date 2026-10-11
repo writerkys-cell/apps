@@ -178,7 +178,9 @@ ol.did li .dur{flex:none;font-size:.78rem;color:var(--seal);margin-left:auto;pad
 .sheet .head .ttl a{color:var(--ink);text-decoration:none}
 .sheet .head .ttl a::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.35em;vertical-align:.25em}
 .sheet .head .x{color:var(--ink-faint);font-size:1rem;padding:.2rem .4rem;flex:none}
-.sheet .body{flex:1;overflow-y:auto;min-height:6rem;font-size:.95rem;line-height:1.75;color:var(--ink)}
+.sheet .body{flex:1;overflow-y:auto;min-height:6rem;font-size:1.05rem;line-height:1.9;color:var(--ink)}
+.sheet .body .nt .li,.sheet .body .nt .cb,.sheet .body .nt .ex{margin-bottom:.15em}
+.sheet .addline input{font-size:1rem}
 .sheet .body .nt{padding-left:.4em}
 .sheet .body .none{color:var(--ink-faint);font-size:.9rem;padding:.5rem 0 0}
 .sheet .foot{border-top:1px solid var(--rule);padding-top:.7rem;margin-top:.7rem}
@@ -608,6 +610,17 @@ const endLine = startedAt => {
   const d = new Date(), m = Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 60000));
   return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 끝 · ${m}분`;
 };
+// 본문만: 시작·끝 줄과 지난번 요약은 빼고, 항목·체크 표시는 떼고 문장만 남긴다
+const plainBody = note => (note || '').split('\n').map(l => l.trim())
+  .filter(l => l && !TS_RE.test(l) && !END_RE.test(l) && !/^지난번 /.test(l))
+  .map(l => l.replace(/^\[[ xX]?\]\s*/, '').replace(/^-\s*/, ''))
+  .join('\n');
+async function copyBody(note){
+  const txt = plainBody(note);
+  if(!txt){ toast('복사할 문장이 없습니다'); return; }
+  try{ await navigator.clipboard.writeText(txt); toast(`${txt.split('\n').length}줄을 복사했습니다`); }
+  catch(e){ toast('복사하지 못했습니다. 다시 눌러 보세요'); }
+}
 const appendLine = (note, line) => ((note || '').trim() ? note.replace(/\s+$/, '') + '\n' : '') + line;
 const fmtNote = note => (note || '').split('\n').map((l, i) => {
   const cb = l.match(/^\s*\[([ xX]?)\]\s*(.*)$/);
@@ -852,6 +865,7 @@ let reentryOpen = null, reentryTag = -1;
 let editOpen = null, editTag = -1;        // 목록에서 고쳐 적는 중인 항목
 let editKind = null;                      // 편집기에서 고른 종류 (null이면 아직 안 건드림)
 let sheet = null, sheetEdit = false;      // 열려 있는 일 페이지 {id} 또는 {row, ro:true}
+let editBase = null;                      // 통째 고치기를 열 때의 본문. 저장할 때 달라져 있으면 다른 기기가 고친 것
 // 두 줄로 접힌 글이 실제로 잘려 있는가
 const clipped = el => el.scrollHeight > el.clientHeight + 1;
 const noteOpen = new Set();               // 목록에서 메모를 펼쳐 둔 항목
@@ -1084,6 +1098,9 @@ function wireEditor(){
     const r = splitLink($('#edTxt').value);
     if(!r.text) return;
     const url = r.url || $('#edUrl').value.trim();
+    if(editBase !== null && (t.note || '') !== editBase && $('#edNote').value.trim() !== (t.note || '').trim()){
+      toast('다른 기기에서 고쳐졌습니다 · 그만두고 다시 열어 주세요'); return;
+    }
     if(r.text !== t.text) t.lost = 0;   // 새로 적은 항목은 다시 센다
     t.text = r.text; t.url = url; t.note = $('#edNote').value.trim();
     if(editKind !== null) t.kind = editKind;
@@ -1181,10 +1198,12 @@ function renderSheet(){
       foot.innerHTML = `<span class="ro">보관한 기록 · ${when}</span>
         <div class="acts2">
           <button id="shReuse">목록에 다시 올리기</button>
+          <button id="shCopyRo">본문만 복사</button>
           <button id="shClaude">클로드에게</button>
           <button class="dim" id="shUnarc">보관함에서 지우기</button>
         </div>`;
       $('#shReuse').onclick = () => reuseArchived(d);
+      $('#shCopyRo').onclick = () => copyBody(d.note);
       $('#shClaude').onclick = () => copyForClaude(d);
       $('#shUnarc').onclick = () => {
         if(!confirm(`「${d.text}」\n\n보관함에서 지웁니까?`)) return;
@@ -1193,7 +1212,8 @@ function renderSheet(){
     }else{
       const dup = isArchived(d);
       foot.innerHTML = `<span class="ro">끝낸 기록 · ${when}</span>
-        <div class="acts2"><button id="shArc" ${dup ? 'class="dim"' : ''}>${dup ? '보관함에 있습니다' : '보관하기'}</button></div>`;
+        <div class="acts2"><button id="shArc" ${dup ? 'class="dim"' : ''}>${dup ? '보관함에 있습니다' : '보관하기'}</button><button id="shCopyRo">본문만 복사</button></div>`;
+      $('#shCopyRo').onclick = () => copyBody(d.note);
       $('#shArc').onclick = () => {
         if(isArchived(d)) return;
         (S.archive = S.archive || []).push({id:uid(), text:d.text, kind:d.kind||'', url:d.url||'', note:d.note||'', at:d.at||now(), savedAt:now()});
@@ -1207,14 +1227,21 @@ function renderSheet(){
       foot.innerHTML = `<textarea id="shTa"></textarea>
         <div class="row"><button id="shEdCancel">그만두기</button><button class="go" id="shEdGo">저장</button></div>`;
       const ta = $('#shTa'); ta.value = d.note || ''; grow(ta); ta.addEventListener('input', () => grow(ta)); ta.focus();
-      $('#shEdCancel').onclick = () => { sheetEdit = false; renderSheet(); };
-      $('#shEdGo').onclick = () => { const t = byId(sheet.id); if(t){ t.note = ta.value.trim(); } sheetEdit = false; commit(); };
+      $('#shEdCancel').onclick = () => { sheetEdit = false; editBase = null; renderSheet(); };
+      $('#shEdGo').onclick = () => {
+        const t = byId(sheet.id);
+        if(t && editBase !== null && (t.note || '') !== editBase){
+          toast('다른 기기에서 고쳐졌습니다 · 그만두고 다시 열어 주세요'); return;   // 적은 글은 칸에 남아 있다
+        }
+        if(t){ t.note = ta.value.trim(); }
+        sheetEdit = false; editBase = null; commit();
+      };
     }
     return;
   }
   if(!$('#shIn')){
     foot.innerHTML = `<div class="addline"><input id="shIn" placeholder="한 줄 적기 · []로 시작하면 체크박스, -로 시작하면 항목" enterkeyhint="done"><button id="shAdd">더하기</button></div>
-      <div class="tools"><button id="shEdit">전체 고치기</button></div>`;
+      <div class="tools"><button id="shEdit">전체 고치기</button><button id="shCopy">본문만 복사</button></div>`;
     const take = wireEnter($('#shIn'), v => {
       const t = byId(sheet.id); if(!t) return;
       t.note = ((t.note || '').trim() ? t.note.replace(/\s+$/, '') + '\n' : '') + v.trim();
@@ -1222,7 +1249,8 @@ function renderSheet(){
       $('#shBody').scrollTop = $('#shBody').scrollHeight;
     });
     $('#shAdd').onclick = take;
-    $('#shEdit').onclick = () => { sheetEdit = true; renderSheet(); };
+    $('#shEdit').onclick = () => { const t = byId(sheet.id); editBase = t ? (t.note || '') : ''; sheetEdit = true; renderSheet(); };
+    $('#shCopy').onclick = () => { const t = byId(sheet.id); if(t) copyBody(t.note); };
   }
 }
 $('#shClose').onclick = closeSheet;
@@ -1484,6 +1512,7 @@ document.addEventListener('click', e => {
   const ed = e.target.closest('[data-edit]');
   if(ed){
     editOpen = editOpen === ed.dataset.edit ? null : ed.dataset.edit;
+    const et = editOpen ? byId(editOpen) : null; editBase = et ? (et.note || '') : null;
     editTag = -1; editKind = null; renderList(); return;
   }
   const d = e.target.closest('[data-del]');
