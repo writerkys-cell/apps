@@ -82,6 +82,9 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 }
 .fixed li.done span{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft)}
 .fixed li span{flex:1}
+.fixed li a.fl{color:inherit;text-decoration:none;border-bottom:1px solid var(--seal-wash)}
+.fixed li a.fl::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.3em;vertical-align:.2em}
+.fixed li.done a.fl{border-bottom-color:transparent}
 .fixed li button.x{color:var(--ink-faint);font-size:.85rem;padding:0 .3rem;visibility:hidden}
 .fixed li:hover button.x,.fixed li:focus-within button.x{visibility:visible}
 .fixed .add{display:flex;gap:.5rem;margin-top:.5rem}
@@ -270,6 +273,20 @@ ol.list li:hover .ed,ol.list li:focus-within .ed{visibility:visible}
 .lapnote span{display:block;color:var(--ink-soft);font-size:.83rem;margin-top:.15rem}
 
 /* ── 매듭 ── */
+.habit{margin:0 0 1.4rem;padding-bottom:1.1rem;border-bottom:1px solid var(--rule)}
+.habit .hrow{display:flex;align-items:center;gap:.7rem;padding:.3rem 0;font-size:.88rem}
+.habit .hname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.habit .cells{display:flex;gap:.45rem;flex:none}
+.habit .wk{display:flex;gap:3px}
+.habit .c{width:9px;height:9px;border-radius:1px;display:block;box-sizing:border-box}
+.habit .c.on{background:var(--ink)}
+.habit .c.off{border:1px solid var(--ink-faint)}
+.habit .c.none{background:none;position:relative}
+.habit .c.none::after{content:'';position:absolute;left:3px;top:3px;width:3px;height:3px;border-radius:50%;background:var(--rule)}
+.habit .c.today{outline:1px solid var(--seal);outline-offset:1px}
+.habit .hnum{flex:none;width:3.2rem;text-align:right;font-size:.75rem;color:var(--seal)}
+.habit .hcap{font-size:.75rem;color:var(--ink-faint);letter-spacing:.06em;margin-bottom:.3rem;display:flex;justify-content:space-between}
+@media (max-width:480px){.habit .c{width:7px;height:7px}.habit .cells{gap:.3rem}.habit .wk{gap:2px}}
 .knot .week{
   font-size:.85rem;color:var(--ink-soft);line-height:1.8;margin-bottom:1.4rem;
   padding:.55rem .9rem;border:1px solid var(--rule);border-radius:2px;background:var(--paper-2);
@@ -456,7 +473,7 @@ ol.did li .kind{font-size:.68rem}
 
   <section>
     <h2>링크</h2>
-    <p>할 일 뒤에 링크를 띄어 적으면 링크는 떼어 두고 제목만 남습니다. 실행 화면에서 제목을 누르면 그 링크가 열립니다.</p>
+    <p>할 일 뒤에 링크를 띄어 적으면 링크는 떼어 두고 제목만 남습니다. 실행 화면에서 제목을 누르면 그 링크가 열립니다. 고정 블록도 같습니다. 글자를 누르면 열립니다.</p>
     <p>things:///show?id=… · x-devonthink-item://… · shortcuts://run-shortcut?name=… · x-scrivener-item:///… 처럼 앱이 받는 주소면 무엇이든 됩니다.</p>
   </section>
 
@@ -814,9 +831,20 @@ const localDate = d => {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 };
 // 날짜가 바뀌면 체크가 전부 풀린다. 매일 다시 하는 일이라는 뜻이다.
+// 그날의 고정 블록 결과를 날짜 기록에 남긴다. 같은 날을 두 번 적게 되면 합친다 (한쪽이라도 했으면 한 것)
+function recordFixed(date){
+  if(!date || !S.fixed.length) return;
+  let e = S.log.find(x => x.date === date);
+  if(!e){ e = {date, items:[], laps:0}; S.log.push(e); }
+  e.fixed = e.fixed || {};
+  S.fixed.forEach(f => { e.fixed[f.text] = !!(e.fixed[f.text] || f.done); });
+  S.log.sort((a,b) => b.date.localeCompare(a.date));
+  S.log = S.log.slice(0,90);
+}
 function rollFixed(){
   const today = localDate();
   if(S.fixedDate === today) return false;
+  recordFixed(S.fixedDate);
   S.fixedDate = today;
   S.fixed.forEach(f => f.done = false);
   if(cfg.dailyReset !== false){
@@ -890,7 +918,9 @@ function renderFixed(){
   $('#fixedList').innerHTML = S.fixed.map((f,i) => `
     <li class="${f.done?'done':''}">
       <button class="chk" data-fix="${i}" aria-label="했음"></button>
-      <span>${esc(f.text)}</span>
+      <span>${f.url
+        ? `<a class="fl" href="${esc(f.url)}"${/^https?:/i.test(f.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(f.text)}</a>`
+        : esc(f.text)}</span>
       <button class="x" data-fixdel="${i}" aria-label="지우기">지움</button>
     </li>`).join('')
     || `<li><span style="color:var(--ink-faint);font-size:.9rem">협상 없이 그냥 하는 일만 여기에.</span></li>`;
@@ -1315,6 +1345,22 @@ function renderKnot(){
   const hh = iso => { const d = new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
 
   knotRows = [];
+  // 고정 블록 28일 표: 오늘이 맨 오른쪽, 7칸씩 묶음. 채움=한 날, 테두리=안 한 날, 점=기록 없는 날
+  let habit = '';
+  if(S.fixed.length){
+    const days = []; for(let i = 27; i >= 0; i--){ const d = new Date(); d.setDate(d.getDate() - i); days.push(localDate(d)); }
+    const rec = {}; S.log.forEach(e => { if(e.fixed) rec[e.date] = e.fixed; });
+    const state = (f, day) => day === today ? (f.done ? 'on' : 'off') : (!rec[day] ? 'none' : (rec[day][f.text] ? 'on' : 'off'));
+    const rows = S.fixed.map(f => {
+      const st = days.map(day => state(f, day));
+      let n = 0; for(let i = 26; i >= 0 && st[i] === 'on'; i--) n++;   // 어제부터 거슬러 센다
+      if(st[27] === 'on') n++;
+      const weeks = [0,1,2,3].map(w => `<span class="wk">${st.slice(w*7, w*7+7).map((x,i) =>
+        `<i class="c ${x} ${w===3&&i===6?'today':''}"></i>`).join('')}</span>`).join('');
+      return `<div class="hrow"><span class="hname">${esc(f.text)}</span><span class="cells">${weeks}</span><span class="hnum">${n >= 2 ? n + '일째' : ''}</span></div>`;
+    }).join('');
+    habit = `<div class="habit"><div class="hcap"><span>고정 블록 · 28일</span><span>${days[0].slice(5).replace('-','/')} – 오늘</span></div>${rows}</div>`;
+  }
   let h = `<div class="day today"><h3>오늘 한 일 <span>${mine.length}</span></h3>`;
   h += mine.length
     ? `<ol class="did">${mine.map(t => `<li data-knot="${knotRows.push({text:t.text, note:t.note, kind:t.kind, url:t.url, at:t.doneAt}) - 1}"><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${t.note?`<small class="n nt clamp">${fmtNote(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
@@ -1324,7 +1370,7 @@ function renderKnot(){
     <p class="hint">끝낸 항목 ${doneAll.length}개를 목록에서 걷어내 아래에 남깁니다.</p>`;
   h += `</div>`;
 
-  h += S.log.slice(0,20).map(e => `
+  h += S.log.filter(e => e.items.length).slice(0,20).map(e => `
     <div class="day">
       <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span>${e.laps?`<em>${e.laps}바퀴</em>`:''}</h3>
       <ol class="did">${e.items.map(i => `<li data-knot="${knotRows.push({text:i.text, note:i.note, kind:i.kind, at:i.at, url:i.url}) - 1}"><span class="t">${i.at?hh(i.at):''}</span><span>${urgTag(i)}${kindTag(i.kind)}${esc(i.text)}${i.note?`<small class="n nt clamp">${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
@@ -1353,6 +1399,7 @@ function renderKnot(){
     h = h.includes('<div class="day today">') ? h.replace('<div class="day today">', row + '<div class="day today">') : row + h;
   }
 
+  h = habit + h;                            // 고정 블록 표는 늘 맨 위에
   $('#knotBox').innerHTML = h;
   const j = $('#btnJjok'); if(j) j.onclick = copyJjok;
   const b = $('#btnKnot');
@@ -1582,7 +1629,9 @@ $('#todayUrgent').onclick = () => urgentFrom($('#todayIn'));
 $('#taskUrgent').onclick  = () => { urgentFrom($('#taskIn'), pickKind); setPick(''); };
 
 wireEnter($('#fixedIn'), v => {
-  S.fixed.push({text:v.trim(), done:false});
+  const r = splitLink(v);
+  if(!r.text) return;
+  S.fixed.push({text:r.text, url:r.url || '', done:false});
   commit();
 });
 $('#btnReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
