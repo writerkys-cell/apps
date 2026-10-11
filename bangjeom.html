@@ -1243,21 +1243,30 @@ function drawPipCanvas(cv, a){
   const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
   ctx.fillStyle = '#f4efe3'; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#9b2c25'; ctx.fillRect(0, 0, 10, H);
-  ctx.fillStyle = '#8a7f72'; ctx.font = '26px "Gowun Batang", serif'; ctx.textBaseline = 'top';
+  ctx.textBaseline = 'top'; ctx.textAlign = 'center';
   const st = startState(a);
   const sub = (KINDS[a.kind] ? KINDS[a.kind] + ' · ' : '') + st.txt.replace(/^\d{2}:\d{2} 시작 · /, '').replace(/^\d{2}:\d{2} 시작$/, '진행 중');
-  ctx.fillText('지금 할 일 · ' + sub, 44, 34);
   // 제목은 폭에 맞춰 줄을 바꾸고 세 줄까지
-  ctx.fillStyle = '#2b2622'; ctx.font = '700 54px "Gowun Batang", serif';
+  ctx.font = '700 54px "Gowun Batang", serif';
   const words = a.text.split(/(\s+)/), lines = []; let cur = '';
   words.forEach(w => {
-    if(ctx.measureText(cur + w).width > W - 88 && cur){ lines.push(cur.trim()); cur = w.trimStart(); }
+    if(ctx.measureText(cur + w).width > W - 100 && cur){ lines.push(cur.trim()); cur = w.trimStart(); }
     else cur += w;
   });
   if(cur.trim()) lines.push(cur.trim());
   if(lines.length > 3){ lines.length = 3; lines[2] = lines[2].slice(0, -1) + '…'; }
-  lines.forEach((l, i) => ctx.fillText(l, 44, 92 + i * 70));
-  ctx.fillStyle = '#9b2c25'; ctx.fillRect(44, 92 + lines.length * 70 + 6, Math.min(W - 88, ctx.measureText(lines[lines.length-1] || '').width), 4);
+  // 전체 블록(작은 줄 + 제목 줄들 + 밑줄)을 세로 가운데에 놓는다
+  const subH = 40, lineH = 70, gap = 14, block = subH + gap + lines.length * lineH + 10;
+  let y = Math.max(16, (H - block) / 2);
+  const cx = W / 2 + 5;
+  ctx.fillStyle = '#8a7f72'; ctx.font = '26px "Gowun Batang", serif';
+  ctx.fillText('지금 할 일 · ' + sub, cx, y);
+  y += subH + gap;
+  ctx.fillStyle = '#2b2622'; ctx.font = '700 54px "Gowun Batang", serif';
+  let widest = 0;
+  lines.forEach((l, i) => { ctx.fillText(l, cx, y + i * lineH); widest = Math.max(widest, ctx.measureText(l).width); });
+  y += lines.length * lineH + 2;
+  ctx.fillStyle = '#9b2c25'; ctx.fillRect(cx - widest / 2, y, widest, 4);
 }
 async function openVideoPip(a){
   const cv = document.createElement('canvas'); cv.width = 720; cv.height = 320;
