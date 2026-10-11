@@ -1263,12 +1263,15 @@ async function openVideoPip(a){
   const cv = document.createElement('canvas'); cv.width = 720; cv.height = 320;
   drawPipCanvas(cv, a);
   const v = document.createElement('video');
-  v.muted = true; v.playsInline = true; v.setAttribute('playsinline', '');
-  v.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px';
-  v.srcObject = cv.captureStream(2);
+  v.muted = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.autoplay = true;
+  // 사파리는 보이지 않는 영상은 그리지 않으므로 아주 작게라도 화면 안에 둔다
+  v.style.cssText = 'position:fixed;width:18px;height:8px;opacity:.02;pointer-events:none;left:0;bottom:0;z-index:0';
+  // 사파리는 캔버스가 다시 그려질 때만 프레임을 내보낸다. 2초마다 다시 그려 프레임을 계속 보낸다
+  v.srcObject = cv.captureStream();
   document.body.appendChild(v);
-  pipVideo = {v, cv};
-  const bye = () => { if(pipVideo && pipVideo.v === v){ pipVideo = null; v.remove(); renderStage(); } };
+  const timer = setInterval(() => { const t = benchmark(); if(t && t.startedAt) drawPipCanvas(cv, t); }, 2000);
+  pipVideo = {v, cv, timer};
+  const bye = () => { if(pipVideo && pipVideo.v === v){ clearInterval(timer); pipVideo = null; v.remove(); renderStage(); } };
   v.addEventListener('leavepictureinpicture', bye);
   v.addEventListener('webkitpresentationmodechanged', () => { if(v.webkitPresentationMode === 'inline') bye(); });
   try{
@@ -1279,7 +1282,7 @@ async function openVideoPip(a){
     else throw new Error('no pip');
     renderStage();                         // 버튼 글자를 "작은 창 닫기"로
   }catch(e){
-    pipVideo = null; v.remove();
+    clearInterval(timer); pipVideo = null; v.remove();
     toast('이 브라우저에서는 작은 창을 열지 못했습니다');
   }
 }
@@ -1319,7 +1322,7 @@ async function openPip(){
 }
 function closePip(){
   if(pipVideo){
-    const {v} = pipVideo; pipVideo = null;
+    const {v, timer} = pipVideo; pipVideo = null; clearInterval(timer);
     try{
       if(v.webkitPresentationMode === 'picture-in-picture') v.webkitSetPresentationMode('inline');
       else if(document.pictureInPictureElement === v) document.exitPictureInPicture();
@@ -1336,7 +1339,7 @@ function renderPip(){
   if(!pipOn()) return;
   const a = benchmark();
   if(!a || !a.startedAt){ closePip(); return; }
-  if(pipVideo){ drawPipCanvas(pipVideo.cv, a); return; }
+  if(pipVideo) return;                  // 영상 PiP는 제 타이머로 그린다
   const d = pipWin.document;
   const st = startState(a);
   d.getElementById('pTtl').textContent = a.text;
