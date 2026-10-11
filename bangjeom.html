@@ -169,6 +169,12 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 @media (min-width:600px){.sheet{align-items:center}.sheet .card{border-radius:6px;max-height:86vh}}
 .sheet .head{display:flex;align-items:baseline;gap:.5rem;border-bottom:2px solid var(--seal);padding-bottom:.6rem;margin-bottom:.8rem}
 .sheet .head .ttl{flex:1;font-size:1.25rem;line-height:1.4}
+.sheet .stat{font-size:.78rem;color:var(--ink-faint);letter-spacing:.06em;margin:-.4rem 0 .7rem}
+.sheet .foot .acts2{display:flex;flex-wrap:wrap;gap:1.2rem;margin-top:.5rem;font-size:.85rem}
+.sheet .foot .acts2 button{color:var(--seal);border-bottom:1px dotted var(--seal-soft);padding-bottom:1px}
+.sheet .foot .acts2 button.dim{color:var(--ink-faint);border-bottom-color:var(--rule)}
+.knot .arcnote{font-size:.85rem;color:var(--ink-soft);line-height:1.7;margin:0 0 1.2rem}
+ol.did li .dur{flex:none;font-size:.78rem;color:var(--seal);margin-left:auto;padding-left:.6rem;white-space:nowrap}
 .sheet .head .ttl a{color:var(--ink);text-decoration:none}
 .sheet .head .ttl a::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.35em;vertical-align:.25em}
 .sheet .head .x{color:var(--ink-faint);font-size:1rem;padding:.2rem .4rem;flex:none}
@@ -378,6 +384,7 @@ ol.did li .kind{font-size:.68rem}
   <button data-v="today" class="sel">오늘</button>
   <button data-v="list">목록</button>
   <button data-v="knot">매듭</button>
+  <button data-v="arc">보관</button>
   <button data-v="set">설정</button>
 </nav>
 
@@ -419,6 +426,11 @@ ol.did li .kind{font-size:.68rem}
 <!-- ─────────── 매듭 ─────────── -->
 <div class="view knot" id="v-knot">
   <div id="knotBox"></div>
+</div>
+
+<!-- ─────────── 보관 ─────────── -->
+<div class="view knot" id="v-arc">
+  <div id="arcBox"></div>
 </div>
 
 <!-- ─────────── 설정 ─────────── -->
@@ -561,7 +573,7 @@ cfg = Object.assign({url:'',key:'',list:'bangjeom',device:'',minutes:25}, cfg);
 if(!cfg.device) cfg.device = /iPhone|iPad/.test(navigator.userAgent) ? '아이폰' : '맥북';
 const saveCfg = () => LS.set('bangjeom.cfg', JSON.stringify(cfg));
 
-const blank = () => ({v:2, rev:0, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], outbox:[], updatedAt:now()});
+const blank = () => ({v:2, rev:0, tasks:[], chain:[], cursor:null, fixed:[], fixedDate:'', log:[], laps:[], outbox:[], archive:[], updatedAt:now()});
 let S = Object.assign(blank(), JSON.parse(LS.get('bangjeom.state') || 'null') || {});
 
 /* ══════════ 알고리즘 ══════════ */
@@ -581,6 +593,20 @@ function splitLink(text){
 const linkify = h => h.replace(/([a-z][a-z0-9+.-]*:\/\/[^\s<]+)/gi, u =>
   `<a href="${u}"${/^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''}>${u}</a>`);
 const TS_RE = /^\d{1,2}\/\d{1,2} \d{2}:\d{2} 시작$/;
+const END_RE = /^\d{1,2}\/\d{1,2} \d{2}:\d{2} 끝 · (\d+)분$/;
+const fmtMin = m => m >= 60 ? `${Math.floor(m/60)}시간${m%60 ? ' ' + m%60 + '분' : ''}` : `${m}분`;
+// 페이지의 시작·끝 줄을 세어 세션 수와 걸린 시간 합계를 낸다
+function sessionsOf(note){
+  let count = 0, total = 0;
+  (note || '').split('\n').forEach(l => { const m = l.trim().match(END_RE); if(m){ count++; total += +m[1]; } });
+  return {count, total};
+}
+const statLine = note => { const s = sessionsOf(note); return s.count ? `세션 ${s.count} · 모두 ${fmtMin(s.total)}` : ''; };
+const endLine = startedAt => {
+  const d = new Date(), m = Math.max(1, Math.round((Date.now() - new Date(startedAt).getTime()) / 60000));
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 끝 · ${m}분`;
+};
+const appendLine = (note, line) => ((note || '').trim() ? note.replace(/\s+$/, '') + '\n' : '') + line;
 const fmtNote = note => (note || '').split('\n').map((l, i) => {
   const cb = l.match(/^\s*\[([ xX]?)\]\s*(.*)$/);
   if(cb) return `<span class="cb ${cb[1].trim() ? 'on' : ''}" data-ln="${i}">${linkify(esc(cb[2]))}</span>`;
@@ -588,7 +614,7 @@ const fmtNote = note => (note || '').split('\n').map((l, i) => {
   if(m) return `<span class="li">${linkify(esc(m[1]))}</span>`;
   const t = l.trim();
   if(!t) return '';
-  if(TS_RE.test(t)) return `<span class="ts">${esc(t)}</span>`;
+  if(TS_RE.test(t) || END_RE.test(t)) return `<span class="ts">${esc(t)}</span>`;
   return `<span class="ex">${linkify(esc(t))}</span>`;
 }).join('');
 // 체크박스 줄 하나를 뒤집는다
@@ -748,7 +774,7 @@ function knot(){
   Object.keys(bucket).forEach(d => {
     const items = bucket[d]
       .sort((a,b) => (a.doneAt||'').localeCompare(b.doneAt||''))
-      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||'', kind:t.kind||'', urgent:!!t.urgent}));
+      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||'', kind:t.kind||'', urgent:!!t.urgent, url:t.url||''}));
     const laps = S.laps.filter(x => localDate(new Date(x)) === d).length;
     const prev = S.log.find(e => e.date === d);
     if(prev){
@@ -839,6 +865,7 @@ function render(){
   renderStage();
   renderList();
   renderKnot();
+  renderArc();
   if(sheet) renderSheet();
   renderPip();
 }
@@ -950,10 +977,11 @@ function renderStage(){
   };
   // 「시작」을 거친 할 일만 할일끝 단축어를 부른다. 링크로 넘어가 제 타이머를 쓴 일은 조용히 정리한다
   const endShortcut = () => { if(a.startedAt) runShortcut('할일끝', a.text); };
-  $('#actDone').onclick = () => { closeSheet(); closePip(); endShortcut(); reentryOpen = null; lapFlash = false; finish(a.id, null); };
+  const stamp = () => { if(a.startedAt) a.note = appendLine(a.note, endLine(a.startedAt)); };
+  $('#actDone').onclick = () => { closeSheet(); closePip(); endShortcut(); stamp(); reentryOpen = null; lapFlash = false; finish(a.id, null); };
   $('#actDrop').onclick = () => { closeSheet(); closePip(); reentryOpen = null; lapFlash = false; drop(a.id); };
   $('#actPart').onclick = () => {
-    closeSheet(); closePip(); endShortcut();
+    closeSheet(); closePip(); endShortcut(); stamp();
     lapFlash = false; reentryOpen = a.id; reentryTag = -1;
     a.startedAt = null; commit();          // 시작 기록을 지우고 다시 그리면 다시 적기 칸이 열린다
   };
@@ -1127,6 +1155,10 @@ function renderSheet(){
   $('#shTtl').innerHTML = kindTag(d.kind) + (d.url
     ? `<a href="${esc(d.url)}"${/^https?:/i.test(d.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(d.text)}</a>`
     : esc(d.text));
+  const stat = statLine(d.note);
+  let se = $('#shStat');
+  if(!se){ se = document.createElement('div'); se.id = 'shStat'; se.className = 'stat'; $('#shBody').before(se); }
+  se.textContent = stat; se.style.display = stat ? '' : 'none';
   if(!sheetEdit){
     $('#shBody').innerHTML = d.note
       ? `<div class="nt ${sheet.ro ? '' : 'live'}">${fmtNote(d.note)}</div>`
@@ -1138,7 +1170,30 @@ function renderSheet(){
   }
   const foot = $('#shFoot');
   if(sheet.ro){
-    foot.innerHTML = `<span class="ro">끝낸 기록 · ${d.at ? new Date(d.at).toLocaleString('ko-KR', {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : ''}</span>`;
+    const when = d.at ? new Date(d.at).toLocaleString('ko-KR', {year:'numeric', month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    if(sheet.arc !== undefined){
+      foot.innerHTML = `<span class="ro">보관한 기록 · ${when}</span>
+        <div class="acts2">
+          <button id="shReuse">목록에 다시 올리기</button>
+          <button id="shClaude">클로드에게</button>
+          <button class="dim" id="shUnarc">보관함에서 지우기</button>
+        </div>`;
+      $('#shReuse').onclick = () => reuseArchived(d);
+      $('#shClaude').onclick = () => copyForClaude(d);
+      $('#shUnarc').onclick = () => {
+        if(!confirm(`「${d.text}」\n\n보관함에서 지웁니까?`)) return;
+        S.archive.splice(sheet.arc, 1); closeSheet(); commit();
+      };
+    }else{
+      const dup = isArchived(d);
+      foot.innerHTML = `<span class="ro">끝낸 기록 · ${when}</span>
+        <div class="acts2"><button id="shArc" ${dup ? 'class="dim"' : ''}>${dup ? '보관함에 있습니다' : '보관하기'}</button></div>`;
+      $('#shArc').onclick = () => {
+        if(isArchived(d)) return;
+        (S.archive = S.archive || []).push({id:uid(), text:d.text, kind:d.kind||'', url:d.url||'', note:d.note||'', at:d.at||now(), savedAt:now()});
+        commit(); renderSheet(); toast('보관함에 넣었습니다');
+      };
+    }
     return;
   }
   if(sheetEdit){
@@ -1168,6 +1223,53 @@ $('#shClose').onclick = closeSheet;
 $('#sheet').addEventListener('click', e => { if(e.target === $('#sheet')) closeSheet(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape' && sheet) closeSheet(); });
 
+/* ══════════ 보관함 ══════════ */
+const isArchived = d => (S.archive || []).some(x => x.text === d.text && x.at === d.at);
+function openArchived(i){ const x = S.archive[i]; if(!x) return; sheet = {row:x, ro:true, arc:i}; sheetEdit = false; renderSheet(); }
+// 보관한 기록을 새 할 일로: 체크는 비우고 시작·끝 줄은 빼고, 지난번 요약을 맨 위에 한 줄
+function reuseArchived(d){
+  const s = sessionsOf(d.note);
+  const body = (d.note || '').split('\n')
+    .filter(l => !TS_RE.test(l.trim()) && !END_RE.test(l.trim()) && !/^지난번 /.test(l.trim()))
+    .map(l => l.replace(/^(\s*)\[[xX]\]/, '$1[]'))
+    .join('\n').trim();
+  const when = d.at ? localDate(new Date(d.at)).replace(/-/g, '/') : '';
+  const head = `지난번 ${when}` + (s.count ? ` · 세션 ${s.count} · 모두 ${fmtMin(s.total)}` : '');
+  S.tasks.push({id:uid(), text:d.text, url:d.url || '', note:head + (body ? '\n' + body : ''), kind:d.kind || '',
+                done:false, doneAt:null, createdAt:now(), lost:0});
+  closeSheet(); commit();
+  toast('목록 끝에 올렸습니다');
+}
+// 제목·기록을 프롬프트와 함께 클립보드에: 클로드에게 붙여 넣기만 하면 된다
+async function copyForClaude(d){
+  const s = sessionsOf(d.note);
+  const when = d.at ? localDate(new Date(d.at)) : '';
+  const txt = `아래는 내가 '방점' 앱으로 「${d.text}」를 하면서 남긴 기록이다. 한 단계씩 적은 줄, 체크한 항목([x]), 세션의 시작·끝 시각과 걸린 시간이 들어 있다.
+이 기록을 읽고, 다음에 같은 일을 할 때 더 쉽고 빠르게 할 수 있는 방법을 제안해 줘. 특히 시간이 많이 든 단계, 순서를 바꾸면 나은 단계, 미리 준비해 두면 좋은 것, 아예 없애도 되는 단계를 짚어 줘. 마지막에 다음번에 그대로 쓸 수 있는 체크리스트를 '- [ ] 항목' 꼴로 만들어 줘.
+
+제목: ${d.text}${KINDS[d.kind] ? ` (${KINDS[d.kind]})` : ''}
+마지막으로 한 날: ${when}
+${s.count ? `세션 ${s.count} · 모두 ${fmtMin(s.total)}` : '세션 기록 없음'}
+
+기록:
+${(d.note || '').trim() || '(없음)'}`;
+  try{ await navigator.clipboard.writeText(txt); toast('복사했습니다 · 클로드에게 붙여 넣으세요'); }
+  catch(e){ toast('복사하지 못했습니다. 다시 눌러 보세요'); }
+}
+function renderArc(){
+  const list = (S.archive || []).map((x, i) => ({...x, i})).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  let h = `<p class="arcnote">해마다 돌아오는 일의 기록을 둡니다. 매듭에서 기록을 열고 「보관하기」를 누르면 여기에 남고, 90일이 지나도 지워지지 않습니다. 열어서 「목록에 다시 올리기」를 누르면 체크를 비운 새 할 일이 끝에 적힙니다.</p>`;
+  if(!list.length){
+    h += `<div class="empty"><strong>아직 보관한 기록이 없습니다</strong>매듭의 기록을 열면 「보관하기」가 있습니다.</div>`;
+  }else{
+    h += `<ol class="did">${list.map(x => {
+      const s = sessionsOf(x.note);
+      return `<li data-arc="${x.i}"><span class="t">${x.at ? localDate(new Date(x.at)).slice(2).replace(/-/g,'.') : ''}</span><span>${kindTag(x.kind)}${esc(x.text)}</span>${s.count ? `<span class="dur">${fmtMin(s.total)}</span>` : ''}</li>`;
+    }).join('')}</ol>`;
+  }
+  $('#arcBox').innerHTML = h;
+}
+
 let knotRows = [];
 function renderKnot(){
   const today = localDate();
@@ -1191,7 +1293,7 @@ function renderKnot(){
   h += S.log.slice(0,20).map(e => `
     <div class="day">
       <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span>${e.laps?`<em>${e.laps}바퀴</em>`:''}</h3>
-      <ol class="did">${e.items.map(i => `<li data-knot="${knotRows.push({text:i.text, note:i.note, kind:i.kind, at:i.at}) - 1}"><span class="t">${i.at?hh(i.at):''}</span><span>${urgTag(i)}${kindTag(i.kind)}${esc(i.text)}${i.note?`<small class="n nt clamp">${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
+      <ol class="did">${e.items.map(i => `<li data-knot="${knotRows.push({text:i.text, note:i.note, kind:i.kind, at:i.at, url:i.url}) - 1}"><span class="t">${i.at?hh(i.at):''}</span><span>${urgTag(i)}${kindTag(i.kind)}${esc(i.text)}${i.note?`<small class="n nt clamp">${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
     </div>`).join('');
 
   if(!mine.length && !doneAll.length && !S.log.length)
@@ -1363,6 +1465,8 @@ function renderPip(){
 document.addEventListener('click', e => {
   const m = e.target.closest('[data-end]');
   if(m){ moveEnd(m.dataset.end); return; }
+  const ar = e.target.closest('[data-arc]');
+  if(ar){ openArchived(+ar.dataset.arc); return; }
   const kr = e.target.closest('[data-knot]');
   if(kr){ if(!e.target.closest('a')) openSheetRow(knotRows[+kr.dataset.knot]); return; }
   const nt = e.target.closest('[data-note]');
