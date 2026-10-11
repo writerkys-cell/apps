@@ -115,14 +115,20 @@ a.strip:hover{background:rgba(155,59,50,.035)}
 .datehead h2{font-size:21px;font-weight:700;margin:0;letter-spacing:.02em}
 .datehead .sub{font-size:13px;color:var(--ink-soft)}
 .mpnote{font-size:13.5px;color:var(--seal);margin:-8px 0 14px}
-textarea#editor{width:100%;min-height:55vh;resize:vertical;border:none;background:transparent;color:var(--ink);
-  font-size:17px;line-height:2.05;padding:4px 0}
+/* 편집기는 textarea지만 글자는 투명하고, 바로 뒤의 .edback이 같은 글을 같은 자리에 그린다(시각 줄만 고딕·굵게). 둘의 글꼴·크기·줄간격·여백·줄바꿈 규칙이 같아야 한다. */
+.edwrap{position:relative}
+.edback,textarea#editor{display:block;width:100%;margin:0;border:none;font-family:var(--serif);font-size:17px;line-height:2.05;padding:4px 0;letter-spacing:normal;
+  white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;-webkit-text-size-adjust:100%}
+.edback{position:absolute;inset:0;overflow:hidden;pointer-events:none;color:var(--ink)}
+.edback .ts,.entryBody .ts{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-weight:700;font-size:.82em;letter-spacing:.06em;color:var(--deep)}
+textarea#editor{position:relative;min-height:55vh;resize:none;overflow:hidden;background:transparent;color:transparent;caret-color:var(--ink)}
 textarea#editor:focus-visible{outline:none}
 textarea#editor::placeholder{color:#b4ad9c}
+textarea#editor::selection{background:rgba(63,85,102,.22)}
 .statusline{display:flex;justify-content:space-between;font-size:12.5px;color:var(--faint);border-top:1px solid var(--line);padding-top:10px;margin-top:8px}
 /* 타자기 모드: 최근 다섯 줄만 보이고 그 위는 종이로 스민다 */
-section[data-v="morning"].tw textarea#editor{height:calc(2.05em*5 + 8px);min-height:0;resize:none;overflow-y:auto;scrollbar-width:none;
-  -webkit-mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.12) 34%,#000 68%);mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.12) 34%,#000 68%)}
+section[data-v="morning"].tw textarea#editor{height:calc(2.05em*5 + 8px);min-height:0;overflow-y:auto;scrollbar-width:none}
+section[data-v="morning"].tw .edwrap{-webkit-mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.12) 34%,#000 68%);mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.12) 34%,#000 68%)}
 section[data-v="morning"].tw textarea#editor::-webkit-scrollbar{display:none}
 
 /* ── 리뷰 (안으로는 close) ── */
@@ -325,7 +331,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media (max-width:520px){
   .top{padding:12px 14px 0} main{padding:20px 16px 100px}
-  .day .d{font-size:28px} .strip-name{font-size:18px} textarea#editor{font-size:16px}
+  .day .d{font-size:28px} .strip-name{font-size:18px} .edback,textarea#editor{font-size:16px}
   nav button{padding:6px 7px 9px;font-size:14px;letter-spacing:.02em}
 }
 </style>
@@ -374,7 +380,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
   <section data-v="morning">
     <div class="datehead"><h2 id="mpDate"></h2><span class="sub">일지 · 현재형으로</span></div>
     <p class="mpnote" id="mpNote" hidden></p>
-    <textarea id="editor" placeholder="현재형으로 적습니다. 지금 느끼는 것, 지금 생각하는 것, 지금 일어나고 있는 일을." spellcheck="false"></textarea>
+    <div class="edwrap"><div class="edback" id="edBack" aria-hidden="true"></div><textarea id="editor" placeholder="현재형으로 적습니다. 지금 느끼는 것, 지금 생각하는 것, 지금 일어나고 있는 일을." spellcheck="false"></textarea></div>
     <div class="statusline"><span id="saveStat">아직 적은 것이 없습니다</span><span id="charStat"></span></div>
   </section>
 
@@ -822,7 +828,7 @@ function mergeAppend(k,loc,rem){
       let c=0; while(c<L.length&&c<R.length&&L[c]===R[c]) c++;
       c=L.lastIndexOf('\n',c)+1; /* 줄 머리부터 */
       const mine=L.slice(c).trim();
-      text=mine? R.replace(/\s+$/,'')+'\n\n— '+myDevice()+'에서 같은 때 적은 것 · 합치지 못해 그대로 둠 —\n'+mine+'\n' : R;
+      text=mine? R.replace(/\s+$/,'')+'\n— '+myDevice()+'에서 같은 때 적은 것 · 합치지 못해 그대로 둠 —\n'+mine+'\n' : R;
     }
   }
   const have=new Set((loc.annotations||[]).map(a=>a.id)); let an=false;
@@ -894,10 +900,23 @@ function saveToday(){
 function mpProgress(){
   const n=countWords(editor.value);
   $('charStat').textContent=editor.value.length?n+'단어 · '+editor.value.length.toLocaleString()+'자':'';
+  renderBack();
   applyMpModes();
 }
+/* 시각 줄(‘HH:MM’만 있는 줄)을 <b class="ts">로 감싼 HTML. 편집기 뒤판과 리뷰가 같이 쓴다. */
+function stampHTML(text){ return esc(text).replace(/(^|\n)(\d{1,2}:\d\d)(?=\n|$)/g,(m,a,b)=>a+'<b class="ts">'+b+'</b>'); }
+function renderBack(){
+  const back=$('edBack'); if(!back) return;
+  back.innerHTML=stampHTML(editor.value)+'\u200b'; /* 끝의 빈 줄도 높이를 갖게 */
+  if(!twOn()){ editor.style.height='auto'; editor.style.height=editor.scrollHeight+'px'; }
+  else editor.style.height='';
+  back.scrollTop=editor.scrollTop;
+}
+window.addEventListener('resize',()=>{ if(view==='morning') renderBack(); });
 function applyMpModes(){
-  document.querySelector('section[data-v="morning"]').classList.toggle('tw',twOn());
+  const sec=document.querySelector('section[data-v="morning"]'), was=sec.classList.contains('tw');
+  sec.classList.toggle('tw',twOn());
+  if(was!==twOn()) renderBack();
   if(twOn()) editor.scrollTop=editor.scrollHeight;
 }
 
@@ -915,7 +934,7 @@ function stampNow(){
   if(Date.now()-lastStamp<2000 || !stampDue()) return;
   if(editor.selectionStart!==editor.value.length || editor.selectionEnd!==editor.value.length) return; /* 가운데를 고치는 건 새 기록이 아니다 */
   const t=new Date(), hm=pad(t.getHours())+':'+pad(t.getMinutes());
-  const v=editor.value, sep=v?(/\n\n$/.test(v)?'':/\n$/.test(v)?'\n':'\n\n'):'';
+  const v=editor.value, sep=(v&&!/\n$/.test(v))?'\n':'';
   editor.value=v+sep+hm+'\n'; lastStamp=Date.now();
   snapEnd(); mpProgress();
 }
@@ -957,7 +976,7 @@ document.addEventListener('selectionchange',()=>{
   if(!lockOn()||document.activeElement!==editor||view!=='morning') return;
   if(editor.selectionStart===editor.selectionEnd && editor.selectionStart<lockBoundary()){ snapEnd(); lockWarn(); }
 });
-editor.addEventListener('scroll',()=>{ if(twOn() && editor.scrollTop<editor.scrollHeight-editor.clientHeight-2) editor.scrollTop=editor.scrollHeight; });
+editor.addEventListener('scroll',()=>{ if(twOn() && editor.scrollTop<editor.scrollHeight-editor.clientHeight-2) editor.scrollTop=editor.scrollHeight; $('edBack').scrollTop=editor.scrollTop; });
 
 /* ═════════ 리뷰 — 지난 일지에 붉은 주석 (전에는 하루 정리) ═════════ */
 let agoN=1, anchorDay=parseKey(dayKey()).getDate(), curKey=null;
@@ -1010,8 +1029,10 @@ function renderEntry(host,k){
   const body=document.createElement('div'); body.className='entryBody'; body.dataset.key=k;
   const text=e.text, anns=(e.annotations||[]).slice().sort((a,b)=>a.start-b.start);
   let pos=0;
+  /* 글은 텍스트 노드로 넣되 시각 줄만 <b class="ts">로 감싼다. 글자 수는 그대로라 주석의 start·end(offsetIn)가 어긋나지 않는다. */
+  const put=str=>{ const re=/(^|\n)(\d{1,2}:\d\d)(?=\n|$)/g; let i=0, m; while((m=re.exec(str))){ const at=m.index+m[1].length; if(at>i) body.appendChild(document.createTextNode(str.slice(i,at))); const b=document.createElement('b'); b.className='ts'; b.textContent=m[2]; body.appendChild(b); i=at+m[2].length; } if(i<str.length) body.appendChild(document.createTextNode(str.slice(i))); };
   anns.forEach(a=>{
-    if(a.start>pos) body.appendChild(document.createTextNode(text.slice(pos,a.start)));
+    if(a.start>pos) put(text.slice(pos,a.start));
     const an=document.createElement('span'); an.className='anchor'; an.textContent=text.slice(a.start,a.end); body.appendChild(an);
     const note=document.createElement('span'); note.className='note'; note.contentEditable='false';
     const nd=document.createElement('span'); nd.className='ndate'; nd.textContent=' 〔'+a.date+'〕 '; note.appendChild(nd);
@@ -1021,7 +1042,7 @@ function renderEntry(host,k){
     note.appendChild(del); body.appendChild(note);
     pos=Math.max(pos,a.end);
   });
-  if(pos<text.length) body.appendChild(document.createTextNode(text.slice(pos)));
+  if(pos<text.length) put(text.slice(pos));
   host.appendChild(body);
   body.addEventListener('mouseup',()=>maybePop(body));
   body.addEventListener('touchend',()=>setTimeout(()=>maybePop(body),10));
@@ -1441,7 +1462,7 @@ function foldMemos(){
       const t=Date.parse(n.createdAt)||Date.now(), k=dayKey(t), d=new Date(t);
       if(!MP.entries[k]) MP.entries[k]={text:'',annotations:[]};
       const e=MP.entries[k], v=e.text||'';
-      const sep=v?(/\n\n$/.test(v)?'':/\n$/.test(v)?'\n':'\n\n'):'';
+      const sep=(v&&!/\n$/.test(v))?'\n':'';
       e.text=v+sep+pad(d.getHours())+':'+pad(d.getMinutes())+'\n'+String(n.text).trim()+'\n';
       e.words=countWords(e.text); touched[k]=1;
       n.state='done'; n.to='ilji'; n.doneAt=new Date().toISOString(); n.updatedAt=n.doneAt; MEMO.notes[n.id]=n; MEMO.dirty[n.id]=1;
