@@ -85,8 +85,10 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .fixed li a.fl{color:inherit;text-decoration:none;border-bottom:1px solid var(--seal-wash)}
 .fixed li a.fl::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.3em;vertical-align:.2em}
 .fixed li.done a.fl{border-bottom-color:transparent}
-.fixed li button.x{color:var(--ink-faint);font-size:.85rem;padding:0 .3rem;visibility:hidden}
-.fixed li:hover button.x,.fixed li:focus-within button.x{visibility:visible}
+.fixed li button.x,.fixed li button.ed{color:var(--ink-faint);font-size:.85rem;padding:0 .3rem;visibility:hidden;flex:none}
+.fixed li:hover button.x,.fixed li:focus-within button.x,.fixed li:hover button.ed,.fixed li:focus-within button.ed{visibility:visible}
+@media (hover:none){.fixed li button.ed{visibility:visible}}
+.fixed .add .cancel{color:var(--ink-faint);font-size:.85rem;flex:none}
 .fixed .add{display:flex;gap:.5rem;margin-top:.5rem}
 .fixed .add input{flex:1;background:none;border:none;border-bottom:1px dotted var(--rule);padding:.2rem 0;font-size:.92rem}
 .fixed .add input::placeholder{color:var(--ink-faint)}
@@ -414,6 +416,7 @@ ol.did li .kind{font-size:.68rem}
     <ul id="fixedList"></ul>
     <div class="add">
       <input id="fixedIn" placeholder="목록에 올리지 않고 그냥 하는 일" enterkeyhint="done">
+      <button class="cancel" id="fixedCancel" hidden>그만두기</button>
     </div>
   </div>
   <div class="stage" id="stage"></div>
@@ -831,13 +834,26 @@ const localDate = d => {
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 };
 // 날짜가 바뀌면 체크가 전부 풀린다. 매일 다시 하는 일이라는 뜻이다.
+// 고정 블록 항목마다 고유 표를 둔다. 제목을 바꿔도 기록이 이어지도록 기록은 이 표로 묶는다.
+// 표가 없던 때의 기록(글자로 묶인 것)은 처음 한 번 표로 옮겨 적는다
+function ensureFixedIds(){
+  let changed = false;
+  S.fixed.forEach(f => {
+    if(f.id) return;
+    f.id = uid(); changed = true;
+    S.log.forEach(e => { if(e.fixed && f.text in e.fixed){ e.fixed[f.id] = e.fixed[f.text]; } });
+  });
+  return changed;
+}
+const fixedKey = (rec, f) => f.id in rec ? rec[f.id] : rec[f.text];
 // 그날의 고정 블록 결과를 날짜 기록에 남긴다. 같은 날을 두 번 적게 되면 합친다 (한쪽이라도 했으면 한 것)
 function recordFixed(date){
   if(!date || !S.fixed.length) return;
+  ensureFixedIds();
   let e = S.log.find(x => x.date === date);
   if(!e){ e = {date, items:[], laps:0}; S.log.push(e); }
   e.fixed = e.fixed || {};
-  S.fixed.forEach(f => { e.fixed[f.text] = !!(e.fixed[f.text] || f.done); });
+  S.fixed.forEach(f => { e.fixed[f.id] = !!(e.fixed[f.id] || e.fixed[f.text] || f.done); });
   S.log.sort((a,b) => b.date.localeCompare(a.date));
   S.log = S.log.slice(0,90);
 }
@@ -902,6 +918,7 @@ const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight
 const TIRED = 3;                          // 이만큼 지면 눈에 띄게 한다
 
 function render(){
+  if(ensureFixedIds()) LS.set('bangjeom.state', JSON.stringify(S));
   if(rollFixed()){                          // 자정을 넘겼으면 그 사실만 이 기기에 저장한다
     LS.set('bangjeom.state', JSON.stringify(S));
   }
@@ -921,6 +938,7 @@ function renderFixed(){
       <span>${f.url
         ? `<a class="fl" href="${esc(f.url)}"${/^https?:/i.test(f.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(f.text)}</a>`
         : esc(f.text)}</span>
+      <button class="ed" data-fixedit="${i}" aria-label="고치기">고치기</button>
       <button class="x" data-fixdel="${i}" aria-label="지우기">지움</button>
     </li>`).join('')
     || `<li><span style="color:var(--ink-faint);font-size:.9rem">협상 없이 그냥 하는 일만 여기에.</span></li>`;
@@ -1350,7 +1368,7 @@ function renderKnot(){
   if(S.fixed.length){
     const days = []; for(let i = 27; i >= 0; i--){ const d = new Date(); d.setDate(d.getDate() - i); days.push(localDate(d)); }
     const rec = {}; S.log.forEach(e => { if(e.fixed) rec[e.date] = e.fixed; });
-    const state = (f, day) => day === today ? (f.done ? 'on' : 'off') : (!rec[day] ? 'none' : (rec[day][f.text] ? 'on' : 'off'));
+    const state = (f, day) => day === today ? (f.done ? 'on' : 'off') : (!rec[day] ? 'none' : (fixedKey(rec[day], f) ? 'on' : 'off'));
     const rows = S.fixed.map(f => {
       const st = days.map(day => state(f, day));
       let n = 0; for(let i = 26; i >= 0 && st[i] === 'on'; i--) n++;   // 어제부터 거슬러 센다
@@ -1570,9 +1588,12 @@ document.addEventListener('click', e => {
   }
   const f = e.target.closest('[data-fix]');
   if(f){ const i = +f.dataset.fix; S.fixed[i].done = !S.fixed[i].done; commit(); return; }
+  const fe = e.target.closest('[data-fixedit]');
+  if(fe){ setFixedEdit(+fe.dataset.fixedit); return; }
   const fd = e.target.closest('[data-fixdel]');
   if(fd){
     const i = +fd.dataset.fixdel;
+    if(fixedEdit === i) setFixedEdit(null);
     if(S.fixed[i] && confirm(`「${S.fixed[i].text}」\n\n고정 블록에서 지웁니까?`)){
       S.fixed.splice(i,1); commit();
     }
@@ -1631,10 +1652,29 @@ $('#taskUrgent').onclick  = () => { urgentFrom($('#taskIn'), pickKind); setPick(
 wireEnter($('#fixedIn'), v => {
   const r = splitLink(v);
   if(!r.text) return;
-  S.fixed.push({text:r.text, url:r.url || '', done:false});
+  if(fixedEdit !== null && S.fixed[fixedEdit]){      // 고치는 중이면 그 항목에 덮어 적는다. 표와 체크는 그대로
+    S.fixed[fixedEdit].text = r.text; S.fixed[fixedEdit].url = r.url || '';
+    setFixedEdit(null);
+  }else{
+    S.fixed.push({id:uid(), text:r.text, url:r.url || '', done:false});
+  }
   commit();
 });
 $('#btnReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
+
+// 고정 블록 고치기: 입력칸에 제목과 링크를 불러오고, 엔터로 저장한다
+let fixedEdit = null;
+function setFixedEdit(i){
+  fixedEdit = i;
+  const inp = $('#fixedIn'), c = $('#fixedCancel');
+  if(i === null){ inp.value = ''; inp.placeholder = '목록에 올리지 않고 그냥 하는 일'; c.hidden = true; return; }
+  const f = S.fixed[i];
+  inp.value = f.text + (f.url ? ' ' + f.url : '');
+  inp.placeholder = '고치는 중 · 엔터로 저장';
+  c.hidden = false;
+  inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
+}
+$('#fixedCancel').onclick = () => setFixedEdit(null);
 
 /* ══════════ 설정 ══════════ */
 const fields = {sUrl:'url', sKey:'key', sList:'list', sDevice:'device'};
