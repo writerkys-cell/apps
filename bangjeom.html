@@ -916,12 +916,12 @@ function renderStage(){
     <div class="skiprow">
       <button class="skip" id="stageReset">점을 모두 지우고 다시 고르기</button>
       ${a.startedAt ? `<button class="skip void" id="actVoid">할일 무효</button>` : ''}
-      ${a.startedAt && canPip() ? `<button class="skip" id="actPip">${pipWin ? '작은 창 닫기' : '작게 띄우기'}</button>` : ''}
+      ${a.startedAt && canPip() ? `<button class="skip" id="actPip">${pipOn() ? '작은 창 닫기' : '작게 띄우기'}</button>` : ''}
     </div>`;
   $('#stageReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
   // 「할일 무효」: 시작 전으로 되돌린다. 시작 시각을 지우고 페이지의 시작 줄을 떼되, 그 뒤에 적은 줄은 남긴다
   const pb = $('#actPip');
-  if(pb) pb.onclick = () => pipWin ? closePip() : openPip();
+  if(pb) pb.onclick = () => pipOn() ? closePip() : openPip();
   const vb = $('#actVoid');
   if(vb) vb.onclick = () => {
     closeSheet(); closePip();
@@ -1230,11 +1230,64 @@ setInterval(() => {
 }, 30000);
 
 /* ══════════ 작은 창 (문서 PiP · 크롬/엣지) ══════════ */
-let pipWin = null;
-const canPip = () => 'documentPictureInPicture' in window;
+let pipWin = null;          // 문서 PiP 창 (크롬·엣지)
+let pipVideo = null;        // 영상 PiP (사파리·아이폰): 글자를 그림으로 그려 띄운다
+const canDocPip = () => 'documentPictureInPicture' in window;
+const canVideoPip = () => !!HTMLCanvasElement.prototype.captureStream
+  && (!!document.pictureInPictureEnabled || 'webkitSupportsPresentationMode' in HTMLVideoElement.prototype);
+const canPip = () => canDocPip() || canVideoPip();
+const pipOn = () => !!(pipWin || pipVideo);
+
+/* ---- 영상 PiP: 제목과 남은 시간을 캔버스에 그려 영상으로 띄운다. 버튼은 없고, PiP 창의 "원래 화면으로"로 돌아온다 ---- */
+function drawPipCanvas(cv, a){
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.fillStyle = '#f4efe3'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#9b2c25'; ctx.fillRect(0, 0, 10, H);
+  ctx.fillStyle = '#8a7f72'; ctx.font = '26px "Gowun Batang", serif'; ctx.textBaseline = 'top';
+  const st = startState(a);
+  const sub = (KINDS[a.kind] ? KINDS[a.kind] + ' · ' : '') + st.txt.replace(/^\d{2}:\d{2} 시작 · /, '').replace(/^\d{2}:\d{2} 시작$/, '진행 중');
+  ctx.fillText('지금 할 일 · ' + sub, 44, 34);
+  // 제목은 폭에 맞춰 줄을 바꾸고 세 줄까지
+  ctx.fillStyle = '#2b2622'; ctx.font = '700 54px "Gowun Batang", serif';
+  const words = a.text.split(/(\s+)/), lines = []; let cur = '';
+  words.forEach(w => {
+    if(ctx.measureText(cur + w).width > W - 88 && cur){ lines.push(cur.trim()); cur = w.trimStart(); }
+    else cur += w;
+  });
+  if(cur.trim()) lines.push(cur.trim());
+  if(lines.length > 3){ lines.length = 3; lines[2] = lines[2].slice(0, -1) + '…'; }
+  lines.forEach((l, i) => ctx.fillText(l, 44, 92 + i * 70));
+  ctx.fillStyle = '#9b2c25'; ctx.fillRect(44, 92 + lines.length * 70 + 6, Math.min(W - 88, ctx.measureText(lines[lines.length-1] || '').width), 4);
+}
+async function openVideoPip(a){
+  const cv = document.createElement('canvas'); cv.width = 720; cv.height = 320;
+  drawPipCanvas(cv, a);
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.setAttribute('playsinline', '');
+  v.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px';
+  v.srcObject = cv.captureStream(2);
+  document.body.appendChild(v);
+  pipVideo = {v, cv};
+  const bye = () => { if(pipVideo && pipVideo.v === v){ pipVideo = null; v.remove(); renderStage(); } };
+  v.addEventListener('leavepictureinpicture', bye);
+  v.addEventListener('webkitpresentationmodechanged', () => { if(v.webkitPresentationMode === 'inline') bye(); });
+  try{
+    await v.play();
+    drawPipCanvas(cv, a);
+    if(v.webkitSupportsPresentationMode && v.webkitSupportsPresentationMode('picture-in-picture')) v.webkitSetPresentationMode('picture-in-picture');
+    else if(v.requestPictureInPicture) await v.requestPictureInPicture();
+    else throw new Error('no pip');
+    renderStage();                         // 버튼 글자를 "작은 창 닫기"로
+  }catch(e){
+    pipVideo = null; v.remove();
+    toast('이 브라우저에서는 작은 창을 열지 못했습니다');
+  }
+}
+
 async function openPip(){
-  if(!canPip() || pipWin) return;
+  if(!canPip() || pipOn()) return;
   const a = benchmark(); if(!a || !a.startedAt) return;
+  if(!canDocPip()) return openVideoPip(a);
   try{
     pipWin = await window.documentPictureInPicture.requestWindow({width:340, height:168});
   }catch(e){ toast('작은 창을 열지 못했습니다'); pipWin = null; return; }
@@ -1265,14 +1318,25 @@ async function openPip(){
   renderStage();
 }
 function closePip(){
-  if(!pipWin) return;
-  const w = pipWin; pipWin = null;
-  try{ w.close(); }catch(e){}
+  if(pipVideo){
+    const {v} = pipVideo; pipVideo = null;
+    try{
+      if(v.webkitPresentationMode === 'picture-in-picture') v.webkitSetPresentationMode('inline');
+      else if(document.pictureInPictureElement === v) document.exitPictureInPicture();
+    }catch(e){}
+    v.remove();
+  }
+  if(pipWin){
+    const w = pipWin; pipWin = null;
+    try{ w.close(); }catch(e){}
+  }
+  if($('#actPip')) renderStage();          // 버튼 글자를 "작게 띄우기"로 되돌린다
 }
 function renderPip(){
-  if(!pipWin) return;
+  if(!pipOn()) return;
   const a = benchmark();
   if(!a || !a.startedAt){ closePip(); return; }
+  if(pipVideo){ drawPipCanvas(pipVideo.cv, a); return; }
   const d = pipWin.document;
   const st = startState(a);
   d.getElementById('pTtl').textContent = a.text;
