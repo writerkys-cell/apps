@@ -69,6 +69,11 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .fixed{border-left:3px double var(--seal-soft);padding:.1rem 0 .1rem .85rem;margin-bottom:1.2rem}
 .fixed h2{font-size:.82rem;font-weight:400;color:var(--ink-faint);letter-spacing:.14em;margin:0 0 .45rem}
 .fixed h2 span{letter-spacing:0;margin-left:.6rem;font-size:.78rem;color:var(--ink-faint);opacity:.8}
+[hidden]{display:none !important}
+.fixed .mini{display:block;font-size:.82rem;color:var(--ink-faint);letter-spacing:.14em;padding:.15rem 0}
+.fixed .mini b{font-weight:400;letter-spacing:0;color:var(--seal);margin-left:.6rem}
+.fixed.folded{padding-top:.05rem;padding-bottom:.05rem}
+.fixed h2 .fold{letter-spacing:0;margin-left:.6rem;color:var(--seal);cursor:pointer;opacity:1}
 .fixed ul{list-style:none;margin:0;padding:0}
 .fixed li{display:flex;align-items:flex-start;gap:.55rem;padding:.12rem 0}
 .fixed li button.chk{
@@ -412,9 +417,10 @@ ol.did li .kind{font-size:.68rem}
 <!-- ─────────── 오늘 ─────────── -->
 <div class="view sel" id="v-today">
   <div class="fixed" id="fixedBox">
-    <h2>고정 블록 <span>매일 밤 다시 채워집니다</span></h2>
+    <button class="mini" id="fixedMini" hidden></button>
+    <h2 id="fixedHead">고정 블록 <span>매일 밤 다시 채워집니다</span></h2>
     <ul id="fixedList"></ul>
-    <div class="add">
+    <div class="add" id="fixedAdd">
       <input id="fixedIn" placeholder="목록에 올리지 않고 그냥 하는 일" enterkeyhint="done">
       <button class="cancel" id="fixedCancel" hidden>그만두기</button>
     </div>
@@ -466,6 +472,8 @@ ol.did li .kind{font-size:.68rem}
     <input type="number" id="sMinutes" inputmode="numeric" min="0" max="600" placeholder="25" style="width:6rem">
     <p style="margin-top:.4rem">0이면 시간을 정하지 않습니다. 「시작」 버튼과 작은 창에 남은 시간 대신 지난 시간이 뜨고, 끝낼 때까지 그대로 이어집니다. 단축어에는 0이 넘어가니 거기서 타이머를 건너뛰면 됩니다.</p>
     <p style="margin-top:.4rem">「시작」을 누르면 단축어 <b>할일시작</b>에 이 숫자를 넘깁니다. 「조금 했다」와 「끝냈다」는 단축어 <b>할일끝</b>에 할 일 제목을 넘깁니다. 두 단축어는 단축어 앱에 그 이름으로 만들어 두세요.</p>
+    <label class="row"><input type="checkbox" id="sHideDone"> 체크하면 고정 블록에서 숨기기</label>
+    <p style="margin-top:.4rem">체크한 항목은 바로 사라지고, 다 체크하면 블록이 "고정 블록 3/3" 한 줄로 줄어듭니다. 그 줄을 누르면 잠깐 펼쳐져 체크를 풀거나 고칠 수 있습니다. 자정이 지나면 다시 다 보입니다.</p>
     <label class="row"><input type="checkbox" id="sAutoPip"> 시작하면 작은 창 띄우기</label>
     <p style="margin-top:.4rem">「시작」을 누르면 지금 할 일을 보여주는 작은 창이 다른 앱 위에 뜹니다. 크롬·엣지에서는 버튼이 든 창, 사파리에서는 글자만 든 창입니다. 아이폰처럼 좁은 화면에서는 자동으로 띄우지 않습니다.</p>
     <label class="row"><input type="checkbox" id="sDaily"> 자정에 점 모두 지우기</label>
@@ -918,6 +926,7 @@ const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight
 const TIRED = 3;                          // 이만큼 지면 눈에 띄게 한다
 
 function render(){
+  fixedPeek = false;
   if(ensureFixedIds()) LS.set('bangjeom.state', JSON.stringify(S));
   if(rollFixed()){                          // 자정을 넘겼으면 그 사실만 이 기기에 저장한다
     LS.set('bangjeom.state', JSON.stringify(S));
@@ -931,8 +940,24 @@ function render(){
   renderPip();
 }
 
+let fixedPeek = false;                    // 접힌 블록을 잠깐 펼쳐 둔 상태. 다음 그리기에서 다시 접힌다
 function renderFixed(){
-  $('#fixedList').innerHTML = S.fixed.map((f,i) => `
+  const hide = !!cfg.hideDone && !fixedPeek;
+  const done = S.fixed.filter(f => f.done).length, all = S.fixed.length;
+  const folded = hide && all > 0 && done === all;
+  $('#fixedBox').classList.toggle('folded', folded);
+  $('#fixedMini').hidden = !folded;
+  $('#fixedHead').hidden = folded; $('#fixedList').hidden = folded; $('#fixedAdd').hidden = folded;
+  if(folded){
+    $('#fixedMini').innerHTML = `고정 블록 <b>${done}/${all} 했음 · 보기</b>`;
+    $('#fixedMini').onclick = () => { fixedPeek = true; renderFixed(); };
+    return;
+  }
+  $('#fixedHead').innerHTML = '고정 블록 ' + (fixedPeek
+    ? `<span class="fold" id="fixedFold">다 했음 · 접기</span>`
+    : (hide && done ? `<span>${done}/${all} 했음</span>` : `<span>매일 밤 다시 채워집니다</span>`));
+  const ff = $('#fixedFold'); if(ff) ff.onclick = () => { fixedPeek = false; renderFixed(); };
+  $('#fixedList').innerHTML = S.fixed.map((f,i) => ({f, i})).filter(({f}) => !(hide && f.done)).map(({f, i}) => `
     <li class="${f.done?'done':''}">
       <button class="chk" data-fix="${i}" aria-label="했음"></button>
       <span>${f.url
@@ -1688,6 +1713,8 @@ $('#sMinutes').addEventListener('change', e => {
   const v = parseInt(e.target.value, 10);
   cfg.minutes = v >= 0 ? v : 25; e.target.value = cfg.minutes; saveCfg();
 });
+$('#sHideDone').checked = !!cfg.hideDone;
+$('#sHideDone').addEventListener('change', e => { cfg.hideDone = e.target.checked; saveCfg(); render(); });
 $('#sAutoPip').checked = cfg.autoPip !== false;
 $('#sAutoPip').addEventListener('change', e => { cfg.autoPip = e.target.checked; saveCfg(); });
 $('#sDaily').checked = cfg.dailyReset !== false;
