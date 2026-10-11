@@ -388,6 +388,8 @@ ol.did li .kind{font-size:.68rem}
     <label for="sMinutes" style="margin-top:1rem">한 번에 할애하는 시간 (분)</label>
     <input type="number" id="sMinutes" inputmode="numeric" min="1" max="600" placeholder="25" style="width:6rem">
     <p style="margin-top:.4rem">「시작」을 누르면 단축어 <b>할일시작</b>에 이 숫자를 넘깁니다. 「조금 했다」와 「끝냈다」는 단축어 <b>할일끝</b>에 할 일 제목을 넘깁니다. 두 단축어는 단축어 앱에 그 이름으로 만들어 두세요.</p>
+    <label class="row"><input type="checkbox" id="sDaily"> 자정에 점 모두 지우기</label>
+    <p style="margin-top:.4rem">날짜가 바뀌면 고정 블록과 함께 점을 전부 지우고 목록 맨 위부터 다시 고릅니다. 「시작」을 눌러 진행 중인 일이 있으면 그것만 남깁니다.</p>
     <label class="row"><input type="checkbox" id="sLost"> 목록에 진 횟수 보이기</label>
     <p style="margin-top:.4rem">훑기에서 밀린 횟수입니다. 자꾸 지는 항목은 게으름이 아니라 잘못 적힌 항목일 때가 많습니다. 숫자가 신경 쓰이면 꺼두세요.</p>
   </section>
@@ -661,6 +663,14 @@ function rollFixed(){
   if(S.fixedDate === today) return false;
   S.fixedDate = today;
   S.fixed.forEach(f => f.done = false);
+  if(cfg.dailyReset !== false){
+    // 점도 함께 지운다. 「시작」을 눌러 진행 중인 일이 있으면 그것만 뿌리로 남긴다
+    const keep = S.chain.find(id => { const t = byId(id); return t && !t.done && t.startedAt; });
+    S.chain = keep ? [keep] : [];
+    // 남긴 일이 있으면 훑기를 건너뛰고 바로 그 일을 보여준다 (끝내면 그 자리 다음부터 다시 훑는다)
+    S.cursor = keep ? S.tasks[S.tasks.length - 1].id : null;
+    reentryOpen = null;
+  }
   return true;
 }
 
@@ -753,7 +763,9 @@ function renderStage(){
         <button class="no"  id="ansNo">아니다</button>
         <button class="yes" id="ansYes">더 하고 싶다</button>
       </div>
-      <button class="skip" id="skipAll">훑기 그만두고 지금 사슬로</button>`;
+      <button class="skip" id="skipAll">훑기 그만두고 지금 사슬로</button>
+      <button class="skip" id="stageReset">점을 모두 지우고 다시 고르기</button>`;
+    $('#stageReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
     $('#ansYes').onclick = () => { lapFlash = false; answer(true); };
     $('#ansNo').onclick  = () => { lapFlash = false; answer(false); };
     $('#skipAll').onclick = () => { lapFlash = false; S.cursor = S.tasks[S.tasks.length-1].id; commit(); };
@@ -792,7 +804,9 @@ function renderStage(){
       <button class="done" id="actDone">끝냈다</button>
       <button class="drop" id="actDrop">이제 필요 없다</button>
     </div>
-    <div id="reBox"></div>`;
+    <div id="reBox"></div>
+    <button class="skip" id="stageReset">점을 모두 지우고 다시 고르기</button>`;
+  $('#stageReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
 
   const me = $('#memoEdit');
   if(me) me.onclick = () => {
@@ -1125,6 +1139,8 @@ $('#sMinutes').addEventListener('change', e => {
   const v = parseInt(e.target.value, 10);
   cfg.minutes = v > 0 ? v : 25; e.target.value = cfg.minutes; saveCfg();
 });
+$('#sDaily').checked = cfg.dailyReset !== false;
+$('#sDaily').addEventListener('change', e => { cfg.dailyReset = e.target.checked; saveCfg(); });
 $('#sLost').checked = cfg.showLost !== false;
 $('#sLost').addEventListener('change', e => { cfg.showLost = e.target.checked; saveCfg(); render(); });
 
