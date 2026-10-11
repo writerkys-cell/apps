@@ -429,7 +429,8 @@ ol.did li .kind{font-size:.68rem}
     <label for="sDevice">이 기기</label>
     <input type="text" id="sDevice" placeholder="맥북">
     <label for="sMinutes" style="margin-top:1rem">한 번에 할애하는 시간 (분)</label>
-    <input type="number" id="sMinutes" inputmode="numeric" min="1" max="600" placeholder="25" style="width:6rem">
+    <input type="number" id="sMinutes" inputmode="numeric" min="0" max="600" placeholder="25" style="width:6rem">
+    <p style="margin-top:.4rem">0이면 시간을 정하지 않습니다. 「시작」 버튼에 남은 시간이 뜨지 않고, 끝낼 때까지 "시작" 상태로만 남습니다. 단축어에는 0이 넘어가니 거기서 타이머를 건너뛰면 됩니다.</p>
     <p style="margin-top:.4rem">「시작」을 누르면 단축어 <b>할일시작</b>에 이 숫자를 넘깁니다. 「조금 했다」와 「끝냈다」는 단축어 <b>할일끝</b>에 할 일 제목을 넘깁니다. 두 단축어는 단축어 앱에 그 이름으로 만들어 두세요.</p>
     <label class="row"><input type="checkbox" id="sDaily"> 자정에 점 모두 지우기</label>
     <p style="margin-top:.4rem">날짜가 바뀌면 고정 블록과 함께 점을 전부 지우고 목록 맨 위부터 다시 고릅니다. 「시작」을 눌러 진행 중인 일이 있으면 그것만 남깁니다.</p>
@@ -610,13 +611,15 @@ function candidate(){
 const benchmark = () => byId(S.chain[S.chain.length - 1]);
 
 // 「시작」 버튼의 상태: 아직 안 눌렀다 · 진행 중(남은 분) · 시간이 다 됐다
+const minutes = () => (typeof cfg.minutes === 'number' && cfg.minutes >= 0) ? cfg.minutes : 25;
 function startState(t){
   if(!t || !t.startedAt) return {txt:'시작', dis:false, over:false};
-  const mins = cfg.minutes || 25;
+  const mins = minutes();
   const d = new Date(t.startedAt);
+  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  if(mins === 0) return {txt:`${hm} 시작`, dis:true, over:false};   // 시간을 정하지 않음: 끝낼 때까지 그대로
   const left = Math.ceil(mins - (Date.now() - d.getTime()) / 60000);
   if(left <= 0) return {txt:'시간 끝 · 다시 시작', dis:false, over:true};
-  const hm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
   return {txt:`${hm} 시작 · ${left}분 남음`, dis:true, over:false};
 }
 
@@ -915,7 +918,7 @@ function renderStage(){
     a.startedAt = now();
     a.note = ((a.note || '').trim() ? a.note.replace(/\s+$/, '') + '\n' : '') + tsLine();
     commit();
-    runShortcut('할일시작', cfg.minutes || 25);
+    runShortcut('할일시작', minutes());
     openSheet(a.id);
   };
   // 「시작」을 거친 할 일만 할일끝 단축어를 부른다. 링크로 넘어가 제 타이머를 쓴 일은 조용히 정리한다
@@ -1297,10 +1300,10 @@ Object.entries(fields).forEach(([el,k]) => {
   n.value = cfg[k] || '';
   n.addEventListener('change', () => { cfg[k] = n.value.trim(); saveCfg(); render(); });
 });
-$('#sMinutes').value = cfg.minutes || 25;
+$('#sMinutes').value = minutes();
 $('#sMinutes').addEventListener('change', e => {
   const v = parseInt(e.target.value, 10);
-  cfg.minutes = v > 0 ? v : 25; e.target.value = cfg.minutes; saveCfg();
+  cfg.minutes = v >= 0 ? v : 25; e.target.value = cfg.minutes; saveCfg();
 });
 $('#sDaily').checked = cfg.dailyReset !== false;
 $('#sDaily').addEventListener('change', e => { cfg.dailyReset = e.target.checked; saveCfg(); });
