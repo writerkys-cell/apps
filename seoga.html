@@ -218,6 +218,11 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 ul.plain{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
 ul.plain li{padding:9px 2px;border-bottom:1px solid var(--line);font-size:15.5px;display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 ul.plain li .m{font-size:13px;color:var(--ink-soft)}
+/* 병렬독서 중: 읽기 첫 화면에서 한 번 눌러 갈아타는 목록 */
+.para{margin-top:30px}
+.para ul.plain li{cursor:pointer}
+.para ul.plain li:hover{background:rgba(63,85,102,.05)}
+.para ul.plain li .m{white-space:nowrap}
 .lines{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--line)}
 .lines li{padding:10px 2px;border-bottom:1px solid var(--line)}
 .lines .lr{font-size:12.5px;color:var(--ink-soft);letter-spacing:.02em}
@@ -344,6 +349,9 @@ function live(){ return S.books.filter(b=>!b.jar&&!b.discarded&&!b.held); }
 /* 보류: 읽다가 놓은 책의 기록. 실제 책은 서가에서 치우고, 쪽과 이유만 남긴다. */
 function heldBooks(){ return S.books.filter(b=>b.held).sort((a,b)=>(b.heldAt||'').localeCompare(a.heldAt||'')||(b.updated||'').localeCompare(a.updated||'')); }
 function holdLine(b){ if(!b.total) return 0; return b.total>=300?100:Math.ceil(b.total/3); }
+/* 병렬독서 중: 다음 읽을 책 가운데 1위가 아니면서 멈춘 쪽이 있는 책. 읽다가 다른 책으로 갈아탔지만 보류하지 않은 책이다. */
+function isParallel(b){ return b.category==='next'&&!b.discarded&&!b.held&&!b.binAt&&b.page>0&&rankOf(b)>1; }
+function parallelBooks(){ return ordered('next').slice(1).filter(b=>b.page>0); }
 function gifts(){ return live().filter(b=>b.gift).sort((a,b)=>(b.received||'').localeCompare(a.received||'')||(b.added||'').localeCompare(a.added||'')); }
 function undecided(){ return live().filter(b=>!b.category).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 /* 빌린 책: 도서관에서 빌려 와 집에 둔 책. 가진 책이 아니므로 폐기 판단에 끼지 않는다. 반납하면 자리를 비우고 기록으로 남는다. */
@@ -404,6 +412,7 @@ function stateLabel(b){
 function badges(b,rank){
   let s='';
   if(rank===1&&b.category==='next'&&!b.discarded) s+='<span class="badge b-read">지금 읽는 책</span>';
+  else if(isParallel(b)) s+='<span class="badge b-read">병렬독서 중</span>';
   if(b.gift) s+='<span class="badge b-gift">증정본</span>';
   if(b.borrowed) s+=`<span class="badge b-lib">${b.returnedAt?'빌려 읽음':'빌린 책'}</span>`;
   if(b.discarded) s+='<span class="badge b-gone">폐기함</span>';
@@ -809,6 +818,7 @@ function rowHTML(b,rank,showState){
   const dot=b.category?CAT[b.category].dot:'d-none';
   const meta=[[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')];
   if(showState) meta.push(stateLabel(b));
+  if(isParallel(b)) meta.push(b.page+'쪽까지'+(b.pageAt?' · '+esc(mdLabel(b.pageAt)):''));
   if(b.gift&&b.received) meta.push(esc(b.received)+' 받음');
   if(inBin(b)) meta.push(daysBetween(b.binAt,today())+'일째'+(b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''));
   if(b.borrowed) meta.push(`<span${isLate(b)?' style="color:var(--seal)"':''}>${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}${isLate(b)?' · 반납일 지남':''}</span>`);
@@ -1408,7 +1418,15 @@ function vRead(){
       <button class="linkish" onclick="askClaude('${b.id}')">클로드에게</button>
       <button class="linkish" onclick="addForReading()">새 책 담아 읽기</button>
       <button class="linkish" onclick="startHold('${b.id}')">${borrowedNow(b)?'이 책 보류 · 반납':'이 책 보류'}</button></div>`
+    + parallelHTML()
     + tailHTML();
+}
+/* 병렬독서 중: 읽다가 다른 책으로 갈아탄 책들. 한 번 눌러 그 책으로 갈아탄다(지금 읽는 책은 2위로). 읽는 중에는 보이지 않는다. */
+function parallelHTML(){
+  const ps=parallelBooks(); if(!ps.length) return '';
+  return `<section class="para"><h2 class="sec"><span class="tagdot d-next"></span>병렬독서 중 · ${ps.length}권</h2>
+    <ul class="plain">${ps.map(b=>`<li onclick="readNow('${b.id}')"><span>${esc(b.title)}${b.author?` <span class="m">${esc(b.author)}</span>`:''}</span><span class="m">${b.page}쪽까지${b.pageAt?' · '+mdLabel(b.pageAt):''}</span></li>`).join('')}</ul>
+    <p class="hint">누르면 그 책으로 갈아탑니다. 지금 읽는 책은 2위로 내려갑니다.</p></section>`;
 }
 /* 읽기 첫 화면의 아래쪽: 서가에서는 달력과 통계, 읽기 전용 화면에서는 밑줄 뽑기 */
 function tailHTML(){ if(!SOLO) return statsHTML(); return `<div class="solo-draw">${drawHTML()}${jarHTML()}</div>`; }
