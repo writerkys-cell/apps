@@ -492,6 +492,8 @@ ol.did li .kind{font-size:.68rem}
     <p style="margin-top:.4rem">체크한 항목은 바로 사라지고, 다 체크하면 블록이 "고정 블록 3/3" 한 줄로 줄어듭니다. 그 줄을 누르면 잠깐 펼쳐져 체크를 풀거나 고칠 수 있습니다. 자정이 지나면 다시 다 보입니다.</p>
     <label class="row"><input type="checkbox" id="sAutoPip"> 시작하면 작은 창 띄우기</label>
     <p style="margin-top:.4rem">「시작」을 누르면 지금 할 일을 보여주는 작은 창이 다른 앱 위에 뜹니다. 크롬·엣지에서는 버튼이 든 창, 사파리에서는 글자만 든 창입니다. 아이폰처럼 좁은 화면에서는 자동으로 띄우지 않습니다.</p>
+    <label class="row"><input type="checkbox" id="sNoRescan"> 끝낸 뒤 다시 훑지 않기</label>
+    <p style="margin-top:.4rem">켜면 「끝냈다」「조금 했다」 뒤에 바로 사슬의 다음 점으로 넘어가고, 사슬이 다 비었을 때 맨 위부터 훑습니다. 끄면 포스터의 원래 방식대로 일을 끝낼 때마다 그 자리 다음부터 다시 훑습니다.</p>
     <label class="row"><input type="checkbox" id="sDaily"> 자정에 점 모두 지우기</label>
     <p style="margin-top:.4rem">날짜가 바뀌면 고정 블록과 함께 점을 전부 지우고 목록 맨 위부터 다시 고릅니다. 「시작」을 눌러 진행 중인 일이 있으면 그것만 남깁니다.</p>
     <label class="row"><input type="checkbox" id="sLost"> 목록에 진 횟수 보이기</label>
@@ -806,6 +808,7 @@ function finish(taskId, reentryText){
   S.chain = S.chain.filter(id => id !== taskId);
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
   afterDueChain(t);                        // 마감 사슬이었으면 그 규칙이 앞선다
+  stayOnChain();
   if(reentryText && reentryText.trim()){
     const q = splitDue(reentryText);
     const r = splitLink(q.text);
@@ -849,6 +852,7 @@ function drop(taskId){
   S.tasks.splice(i,1);
   S.chain = S.chain.filter(id => id !== taskId);
   afterDueChain(t);
+  stayOnChain();
   commit();
 }
 
@@ -984,6 +988,11 @@ function seedDueChain(){
   if(keep) S.chain.push(keep);
   S.cursor = S.tasks[S.tasks.length - 1].id;          // 훑기를 건너뛰고 사슬부터
   askedDue = new Set();
+}
+// "끝낸 뒤 다시 훑지 않기": 사슬에 점이 남아 있으면 훑기를 건너뛰고 다음 점으로, 다 비었으면 맨 위부터 훑는다
+function stayOnChain(){
+  if(cfg.noRescan === false) return;
+  S.cursor = S.chain.length ? S.tasks[S.tasks.length - 1].id : null;
 }
 // 마감 사슬의 일을 끝내거나 버린 뒤: 남은 마감 일이 있으면 계속 그것부터, 다 비었으면 그날의 훑기를 처음부터
 function afterDueChain(t){
@@ -1838,6 +1847,8 @@ $('#sHideDone').checked = !!cfg.hideDone;
 $('#sHideDone').addEventListener('change', e => { cfg.hideDone = e.target.checked; saveCfg(); render(); });
 $('#sAutoPip').checked = cfg.autoPip !== false;
 $('#sAutoPip').addEventListener('change', e => { cfg.autoPip = e.target.checked; saveCfg(); });
+$('#sNoRescan').checked = cfg.noRescan !== false;
+$('#sNoRescan').addEventListener('change', e => { cfg.noRescan = e.target.checked; saveCfg(); });
 $('#sDaily').checked = cfg.dailyReset !== false;
 $('#sDaily').addEventListener('change', e => { cfg.dailyReset = e.target.checked; saveCfg(); });
 $('#sLost').checked = cfg.showLost !== false;
