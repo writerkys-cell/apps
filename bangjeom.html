@@ -206,6 +206,14 @@ ol.did li .dur{flex:none;font-size:.78rem;color:var(--seal);margin-left:auto;pad
 .sheet .ro{font-size:.78rem;color:var(--ink-faint);letter-spacing:.1em}
 ol.did li{cursor:pointer}
 .list .lnk{color:var(--seal);font-size:.8rem;text-decoration:none;margin-left:.35rem;vertical-align:.1em}
+.due{font-size:.72rem;color:var(--ink-faint);margin-left:.45rem;letter-spacing:.03em;white-space:nowrap}
+.due.today{color:var(--seal-soft)}
+.due.over{color:var(--seal)}
+.addrow input[type=date],.editor input[type=date]{
+  flex:none;width:auto;font-size:.85rem;color:var(--ink-soft);background:none;border:none;
+  border-bottom:1px solid var(--rule);padding:.25rem 0;font-family:inherit;
+}
+.editor input[type=date]{display:block;margin-bottom:.5rem;padding:.4rem .7rem;border:1px solid var(--rule);border-radius:2px;background:#fbf8f1}
 ol.list li .body .note{font-size:.82rem;color:var(--ink-soft);line-height:1.55;margin-top:.15rem;cursor:pointer}
 ol.list li.done .body .note{text-decoration:none;color:var(--ink-faint)}
 ol.did li small.n{font-size:.8rem;color:var(--ink-faint);line-height:1.5;margin-top:.05rem;cursor:pointer}
@@ -443,6 +451,7 @@ ol.did li .kind{font-size:.68rem}
       <button data-kind="write">쓰기</button>
       <button data-kind="read">읽기</button>
     </div>
+    <input type="date" id="taskDue" title="기한">
     <button id="taskAdd">더하기</button>
     <button class="urgent" id="taskUrgent">긴급</button>
   </div>
@@ -486,6 +495,7 @@ ol.did li .kind{font-size:.68rem}
     <h2>링크</h2>
     <p>할 일 뒤에 링크를 띄어 적으면 링크는 떼어 두고 제목만 남습니다. 실행 화면에서 제목을 누르면 그 링크가 열립니다. 고정 블록도 같습니다. 글자를 누르면 열립니다.</p>
     <p>things:///show?id=… · x-devonthink-item://… · shortcuts://run-shortcut?name=… · x-scrivener-item:///… 처럼 앱이 받는 주소면 무엇이든 됩니다.</p>
+    <p>기한은 제목 끝에 <b>@10/21</b> <b>@2026-10-21</b> <b>@내일</b> <b>@3d</b>처럼 적거나 목록의 날짜 칸으로 넣습니다. 기한이 오늘이거나 지난 항목은 훑을 때 먼저 묻고, 7일 안인 항목이 그다음입니다. 목록 순서 자체는 바뀌지 않습니다.</p>
   </section>
 
   <section>
@@ -675,6 +685,42 @@ const runShortcut = (name, input) =>
 const KINDS = {write:'쓰기', read:'읽기'};
 const kindTag = k => KINDS[k] ? `<span class="kind">${KINDS[k]}</span>` : '';
 let pickKind = '';                        // 목록 입력칸 옆에서 켜 둔 종류
+// 기한(due): "YYYY-MM-DD" 문자열. 없으면 키 자체를 두지 않는다
+const DUE_RE = /(^|\s)@(\S+)(?=\s|$)/;
+function parseDue(tok){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const plus = n => { const d = new Date(today); d.setDate(d.getDate() + n); return localDate(d); };
+  if(tok === '오늘') return plus(0);
+  if(tok === '내일') return plus(1);
+  if(tok === '모레') return plus(2);
+  let m;
+  if((m = tok.match(/^(\d+)d$/))) return plus(+m[1]);
+  if((m = tok.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return localDate(new Date(+m[1], +m[2]-1, +m[3]));
+  if((m = tok.match(/^(\d{1,2})[\/.](\d{1,2})$/))){
+    let d = new Date(today.getFullYear(), +m[1]-1, +m[2]);
+    if(d < today) d.setFullYear(d.getFullYear() + 1);         // 이미 지난 날짜면 내년
+    return localDate(d);
+  }
+  return null;
+}
+// 제목 속의 @10/21 · @2026-10-21 · @내일 · @3d 를 떼어 기한으로
+function splitDue(text){
+  const m = (text || '').match(DUE_RE);
+  if(!m) return {text:text || '', due:null};
+  const due = parseDue(m[2]);
+  if(!due) return {text, due:null};
+  return {text:text.replace(m[0], m[1] ? ' ' : '').replace(/\s+/g,' ').trim(), due};
+}
+const dueDays = t => {
+  if(!t || !t.due) return null;
+  const d = new Date(t.due + 'T00:00:00'), today = new Date(); today.setHours(0,0,0,0);
+  return Math.round((d - today) / 86400000);
+};
+const dueTag = t => {
+  const n = dueDays(t); if(n === null) return '';
+  const lab = n === 0 ? '오늘' : n < 0 ? `${-n}일 지남` : `~${+t.due.slice(5,7)}/${+t.due.slice(8,10)}`;
+  return `<span class="due ${n < 0 ? 'over' : n === 0 ? 'today' : ''}" title="${t.due}">${lab}</span>`;
+};
 const linkTag = url => url ? `<a class="lnk" href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ''} aria-label="열기">↗</a>` : '';
 
 // 사슬이 비어 있으면 첫 미실행 항목을 뿌리로 삼는다
@@ -688,14 +734,22 @@ function ensureChain(){
 }
 
 // 다음 후보: 커서 다음 위치부터, 안 끝났고 점 안 찍힌 첫 항목
-function candidate(){
+// 기한 때문에 순서를 당겨 물어본 항목. 한 바퀴 안에서 두 번 묻지 않으려고 기억해 둔다
+let askedDue = new Set();
+function candidateInfo(){
+  const open = t => !t.done && !S.chain.includes(t.id) && !askedDue.has(t.id);
+  for(const tier of [n => n <= 0, n => n <= 7]){
+    const c = S.tasks.find(t => open(t) && t.due && tier(dueDays(t)));
+    if(c) return {t:c, due:true};
+  }
   const start = S.cursor ? idxOf(S.cursor) + 1 : 0;
   for(let i = Math.max(start,0); i < S.tasks.length; i++){
     const t = S.tasks[i];
-    if(!t.done && !S.chain.includes(t.id)) return t;
+    if(open(t)) return {t, due:false};
   }
   return null;
 }
+function candidate(){ const c = candidateInfo(); return c ? c.t : null; }
 
 const benchmark = () => byId(S.chain[S.chain.length - 1]);
 
@@ -716,10 +770,12 @@ function startState(t){
 }
 
 function answer(yes){
-  const c = candidate(); if(!c) return;
+  const ci = candidateInfo(); if(!ci) return;
+  const c = ci.t;
   if(yes) S.chain.push(c.id);
-  else c.lost = (c.lost || 0) + 1;        // 몇 번이나 밀렸는지 세어둔다
-  S.cursor = c.id;
+  else c.lost = (c.lost || 0) + 1;        // 몇 번이나 밀렸는지 세어둔다. 기한은 건드리지 않는다
+  if(ci.due) askedDue.add(c.id);          // 당겨 물은 것은 커서를 옮기지 않는다
+  else S.cursor = c.id;
   commit();
 }
 
@@ -727,13 +783,17 @@ let lapFlash = false;
 
 function finish(taskId, reentryText){
   const t = byId(taskId); if(!t) return;
+  askedDue = new Set();
   const wasRoot = S.chain.length === 1 && S.chain[0] === taskId;   // 뿌리까지 내려왔다
   t.done = true; t.doneAt = now(); t.startedAt = null;
   S.chain = S.chain.filter(id => id !== taskId);
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
   if(reentryText && reentryText.trim()){
-    const r = splitLink(reentryText);
-    S.tasks.push({id:uid(), text:r.text, url:r.url || t.url || '', note:t.note || '', kind:t.kind || '', done:false, doneAt:null, createdAt:now(), lost:0});
+    const q = splitDue(reentryText);
+    const r = splitLink(q.text);
+    const nt = {id:uid(), text:r.text, url:r.url || t.url || '', note:t.note || '', kind:t.kind || '', done:false, doneAt:null, createdAt:now(), lost:0};
+    if(q.due || t.due) nt.due = q.due || t.due;
+    S.tasks.push(nt);
   }
   if(wasRoot){ S.laps.push(now()); S.laps = S.laps.slice(-300); lapFlash = true; }
   const top = benchmark();
@@ -765,29 +825,34 @@ function rescueCursor(ids){
 
 function drop(taskId){
   const i = idxOf(taskId); if(i < 0) return;
+  askedDue.delete(taskId);
   if(S.cursor === taskId) S.cursor = i > 0 ? S.tasks[i-1].id : null;
   S.tasks.splice(i,1);
   S.chain = S.chain.filter(id => id !== taskId);
   commit();
 }
 
-function addTask(text, kind){
+function addTask(text, kind, due){
   if(!text.trim()) return;
   const wasReady = !candidate();           // 실행 중이었다면 화면을 흔들지 않는다
-  const r = splitLink(text);
+  const q = splitDue(text);
+  const r = splitLink(q.text);
   if(!r.text) return;
   const t = {id:uid(), text:r.text, url:r.url, note:'', kind:kind || '', done:false, doneAt:null, createdAt:now(), lost:0};
+  if(q.due || due) t.due = q.due || due;   // 제목의 @표가 날짜 칸보다 앞선다
   S.tasks.push(t);
   if(wasReady && S.chain.length) S.cursor = t.id;
   commit();
 }
 
 // 긴급: 목록 끝에 적고 바로 점을 찍는다. 진행 중인 일이 있으면 그 바로 아래에 끼워 두고, 없으면 지금 할 일로 올린다
-function addUrgent(text, kind){
+function addUrgent(text, kind, due){
   if(!text.trim()) return false;
-  const r = splitLink(text);
+  const q = splitDue(text);
+  const r = splitLink(q.text);
   if(!r.text) return false;
   const t = {id:uid(), text:r.text, url:r.url, note:'', kind:kind || '', urgent:true, done:false, doneAt:null, createdAt:now(), lost:0};
+  if(q.due || due) t.due = q.due || due;
   S.tasks.push(t);
   ensureChain();
   const cur = benchmark();
@@ -803,7 +868,7 @@ function addUrgent(text, kind){
 }
 const urgTag = t => t && t.urgent ? '<span class="kind urg">긴급</span>' : '';
 
-function resetChain(){ S.chain = []; S.cursor = null; commit(); }
+function resetChain(){ S.chain = []; S.cursor = null; askedDue = new Set(); commit(); }
 
 // 하루의 매듭: 끝낸 항목을 날짜별로 갈무리하고 목록에서 걷어낸다
 function knot(){
@@ -817,7 +882,7 @@ function knot(){
   Object.keys(bucket).forEach(d => {
     const items = bucket[d]
       .sort((a,b) => (a.doneAt||'').localeCompare(b.doneAt||''))
-      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||'', kind:t.kind||'', urgent:!!t.urgent, url:t.url||''}));
+      .map(t => ({text:t.text, at:t.doneAt, lost:t.lost||0, note:t.note||'', kind:t.kind||'', urgent:!!t.urgent, url:t.url||'', ...(t.due ? {due:t.due} : {})}));
     const laps = S.laps.filter(x => localDate(new Date(x)) === d).length;
     const prev = S.log.find(e => e.date === d);
     if(prev){
@@ -1129,7 +1194,7 @@ function renderList(){
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">${tired ? '고쳐 적기' : '고치기'}</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${tired?'tired':''}">
       <span class="gutter">${dot}</span>
-      <span class="body">${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${linkTag(t.url)}${t.note
+      <span class="body">${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${linkTag(t.url)}${t.done ? '' : dueTag(t)}${t.note
         ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${fmtNote(t.note)}</span>` : ''}</span>
       ${lost}${ed}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
@@ -1151,6 +1216,7 @@ function editorHtml(t, tired){
         `<button data-ekind="${k}" class="${ek===k?'sel':''}">${l}</button>`).join('')}</div>
       <input id="edTxt" value="${esc(val)}" placeholder="할 일">
       <input id="edUrl" value="${esc(t.url || '')}" placeholder="링크 (비우면 없음)" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input type="date" id="edDue" value="${t.due || ''}" title="기한 (비우면 없음)">
       <textarea id="edNote" placeholder="메모">${esc(t.note || '')}</textarea>
       <div class="row">
         <button id="edCancel">그만두기</button>
@@ -1176,6 +1242,7 @@ function wireEditor(){
     }
     if(r.text !== t.text) t.lost = 0;   // 새로 적은 항목은 다시 센다
     t.text = r.text; t.url = url; t.note = $('#edNote').value.trim();
+    { const q = splitDue(t.text); const dv = q.due || $('#edDue').value; t.text = q.text || t.text; if(dv) t.due = dv; else delete t.due; }
     if(editKind !== null) t.kind = editKind;
     editOpen = null; editTag = -1; editKind = null;
     commit();
@@ -1659,20 +1726,20 @@ const setPick = k => {
 };
 document.querySelectorAll('#kindPick button').forEach(b =>
   b.onclick = () => { setPick(pickKind === b.dataset.kind ? '' : b.dataset.kind); $('#taskIn').focus(); });
-const takeTask = wireEnter($('#taskIn'), v => { addTask(v, pickKind); setPick(''); });
+const takeTask = wireEnter($('#taskIn'), v => { addTask(v, pickKind, $('#taskDue').value); setPick(''); $('#taskDue').value = ''; });
 $('#taskAdd').onclick = takeTask;
 
 const takeToday = wireEnter($('#todayIn'), v => { addTask(v); toast('목록 끝에 넣었습니다'); });
 $('#todayAddBtn').onclick = takeToday;
-const urgentFrom = (inp, kind) => {
+const urgentFrom = (inp, kind, due) => {
   const v = inp.value;
   if(!v.trim()){ toast('먼저 할 일을 적으세요'); inp.focus(); return; }
   inp.value = '';
-  const busy = addUrgent(v, kind);
+  const busy = addUrgent(v, kind, due);
   toast(busy ? '지금 일을 마치면 바로 이어집니다' : '지금 할 일로 올렸습니다');
 };
 $('#todayUrgent').onclick = () => urgentFrom($('#todayIn'));
-$('#taskUrgent').onclick  = () => { urgentFrom($('#taskIn'), pickKind); setPick(''); };
+$('#taskUrgent').onclick  = () => { urgentFrom($('#taskIn'), pickKind, $('#taskDue').value); setPick(''); $('#taskDue').value = ''; };
 
 wireEnter($('#fixedIn'), v => {
   const r = splitLink(v);
