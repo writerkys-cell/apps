@@ -245,6 +245,7 @@ ol.did li small.n{font-size:.8rem;color:var(--ink-faint);line-height:1.5;margin-
 /* ── 목록 ── */
 .chainbar{font-size:.83rem;color:var(--ink-soft);margin-bottom:1.1rem;line-height:1.7}
 .chainbar em{font-style:normal;color:var(--seal)}
+.chainbar .ad{font-style:normal;font-size:.68rem;color:var(--seal);border:1px solid var(--seal-soft);border-radius:2px;padding:0 .25rem;margin-left:.3rem;vertical-align:.1em}
 ol.list{list-style:none;margin:0;padding:0}
 ol.list li{display:flex;align-items:flex-start;min-height:2rem;border-bottom:1px dotted var(--rule)}
 ol.list li .gutter{
@@ -751,6 +752,8 @@ function ensureChain(){
 // 기한 때문에 순서를 당겨 물어본 항목. 한 바퀴 안에서 두 번 묻지 않으려고 기억해 둔다
 let askedDue = new Set();
 function candidateInfo(){
+  // 마감 사슬이 남아 있는 동안은 훑지 않는다. 그걸 다 끝내야 그날의 선택이 시작된다
+  if(S.chain.some(id => { const x = byId(id); return x && x.autoDue; })) return null;
   const open = t => !t.done && !S.chain.includes(t.id) && !askedDue.has(t.id);
   for(const tier of [n => n <= 0, n => n <= 7]){
     const c = S.tasks.find(t => open(t) && t.due && tier(dueDays(t)));
@@ -798,10 +801,11 @@ let lapFlash = false;
 function finish(taskId, reentryText){
   const t = byId(taskId); if(!t) return;
   askedDue = new Set();
-  const wasRoot = S.chain.length === 1 && S.chain[0] === taskId;   // 뿌리까지 내려왔다
+  const wasRoot = S.chain.length === 1 && S.chain[0] === taskId && !t.autoDue;   // 뿌리까지 내려왔다 (마감 사슬은 바퀴로 세지 않는다)
   t.done = true; t.doneAt = now(); t.startedAt = null;
   S.chain = S.chain.filter(id => id !== taskId);
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
+  afterDueChain(t);                        // 마감 사슬이었으면 그 규칙이 앞선다
   if(reentryText && reentryText.trim()){
     const q = splitDue(reentryText);
     const r = splitLink(q.text);
@@ -840,9 +844,11 @@ function rescueCursor(ids){
 function drop(taskId){
   const i = idxOf(taskId); if(i < 0) return;
   askedDue.delete(taskId);
+  const t = S.tasks[i];
   if(S.cursor === taskId) S.cursor = i > 0 ? S.tasks[i-1].id : null;
   S.tasks.splice(i,1);
   S.chain = S.chain.filter(id => id !== taskId);
+  afterDueChain(t);
   commit();
 }
 
@@ -958,6 +964,33 @@ function rollFixed(){
     S.cursor = keep ? S.tasks[S.tasks.length - 1].id : null;
     reentryOpen = null;
   }
+  seedDueChain();
+  return true;
+}
+
+// 마감 사슬: 마감이 내일이거나 그보다 앞선 일에 점을 찍어 사슬 위에 올린다.
+// 가장 가까운 마감이 맨 위(지금 할 일). 「시작」을 눌러 둔 일이 있으면 그것이 그 위에 남는다.
+// 이 사슬을 다 끝내야 그날의 훑기가 목록 맨 위부터 시작된다
+function seedDueChain(){
+  const due = S.tasks
+    .filter(t => !t.done && t.due && dueDays(t) <= 1 && !S.chain.includes(t.id))
+    .sort((a, b) => dueDays(b) - dueDays(a));          // 먼 것부터 넣어 가까운 것이 맨 위에 오게
+  if(!due.length) return;
+  due.forEach(t => t.autoDue = true);
+  const top = S.chain.length ? S.chain[S.chain.length - 1] : null;
+  const keep = top && byId(top) && byId(top).startedAt ? top : null;
+  if(keep) S.chain = S.chain.slice(0, -1);
+  S.chain.push(...due.map(t => t.id));
+  if(keep) S.chain.push(keep);
+  S.cursor = S.tasks[S.tasks.length - 1].id;          // 훑기를 건너뛰고 사슬부터
+  askedDue = new Set();
+}
+// 마감 사슬의 일을 끝내거나 버린 뒤: 남은 마감 일이 있으면 계속 그것부터, 다 비었으면 그날의 훑기를 처음부터
+function afterDueChain(t){
+  if(!t || !t.autoDue) return false;
+  delete t.autoDue;
+  const left = S.chain.some(id => { const x = byId(id); return x && x.autoDue; });
+  S.cursor = left ? S.tasks[S.tasks.length - 1].id : null;
   return true;
 }
 
@@ -1077,7 +1110,11 @@ function renderStage(){
         <button class="yes" id="ansYes">더 하고 싶다</button>
       </div>
       <button class="skip" id="skipAll">훑기 그만두고 지금 사슬로</button>
-      <button class="skip" id="stageReset">점을 모두 지우고 다시 고르기</button>`;
+      <div class="skiprow">
+        <button class="skip" id="stageReset">점을 모두 지우고 다시 고르기</button>
+        <button class="skip void" id="scanDrop">이 일은 버린다</button>
+      </div>`;
+    $('#scanDrop').onclick = () => { if(confirm(`「${c.text}」\n\n할 일이 아니었습니다. 지웁니까?`)) drop(c.id); };
     $('#stageReset').onclick = () => { if(confirm('점을 전부 지우고 처음부터 다시 고릅니까?')) resetChain(); };
     $('#ansYes').onclick = () => { lapFlash = false; answer(true); };
     $('#ansNo').onclick  = () => { lapFlash = false; answer(false); };
@@ -1090,7 +1127,7 @@ function renderStage(){
   if(!a){ box.innerHTML = lap + `<div class="empty">끝났습니다.</div>`; return; }
 
   const trail = S.chain.map((id,i) =>
-    (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text))).join('');
+    (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text)) + (byId(id).autoDue ? '<i class="ad">마감</i>' : '')).join('');
 
   const title = a.url
     ? `<a class="txt" href="${esc(a.url)}"${/^https?:/i.test(a.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(a.text)}</a>`
@@ -1195,7 +1232,7 @@ function renderList(){
   const act = S.chain[S.chain.length-1];
   $('#chainbar').innerHTML = S.chain.length
     ? '점 찍힌 순서 · ' + S.chain.map((id,i) =>
-        (i===S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text))).join(' › ')
+        (i===S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text)) + (byId(id).autoDue ? '<i class="ad">마감</i>' : '')).join(' › ')
     : '<span style="color:var(--ink-faint)">아직 점이 없습니다</span>';
 
   if(editOpen && !S.tasks.some(t => t.id === editOpen && !t.done)) editOpen = null;
