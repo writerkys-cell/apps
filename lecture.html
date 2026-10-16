@@ -51,6 +51,14 @@ details.menu>div label input{width:72px;padding:3px 6px}
 .lect .meta{color:var(--ink2);font-size:13px}
 .lect .del{position:absolute;top:10px;right:10px;opacity:0;font-size:12px}
 .lect:hover .del{opacity:1}
+.syncbox{margin-top:28px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+.syncbox h3{font-size:14px;font-weight:500;margin:0 0 8px}
+.syncform{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.syncform input{width:200px}
+.syncform.compact{flex-direction:column;align-items:stretch}
+.syncform.compact input{width:100%}
+.syncstat{font-size:12px;color:var(--muted);margin-top:6px}
+.syncstat.err{color:var(--bad)}
 .empty{border:1px dashed var(--line2);border-radius:12px;padding:40px;text-align:center;color:var(--ink2)}
 
 /* editor */
@@ -221,10 +229,10 @@ const ui={view:'home',lectureId:null,topicId:null,pane:'topic',a4memo:false,prTh
 let pres=null;
 
 /* ---------- data ---------- */
-function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);if(d&&Array.isArray(d.lectures))return d;}}catch(e){}return{lectures:[]};}
+function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);if(d&&Array.isArray(d.lectures)){d.deleted=d.deleted||[];return d;}}}catch(e){}return{lectures:[],deleted:[]};}
 let saveT=null;
 function save(now){
-  const l=cur();if(l)l.updatedAt=Date.now();
+  const l=cur();if(l){l.updatedAt=Date.now();markDirty(l.id);}
   clearTimeout(saveT);
   const f=()=>localStorage.setItem(STORE_KEY,JSON.stringify(db));
   if(now)f();else saveT=setTimeout(f,250);
@@ -314,7 +322,8 @@ function renderHome(){
         <button class="ghost del" data-act="delete" data-id="${l.id}">삭제</button>
       </div>`).join('')}</div>`
     :`<div class="empty">아직 강연이 없습니다. 제목 하나만 정하고 시작해 보세요.</div>`}
-    <p class="muted small" style="margin-top:28px">자료는 이 브라우저 안에만 저장됩니다. 다른 곳에서도 쓰려면 편집 화면의 내보내기에서 JSON 백업을 받아 두세요.</p>
+    <div class="syncbox">${syncPanelHtml()}</div>
+    <p class="muted small" style="margin-top:20px">자료는 이 브라우저 안에 저장되고, 로그인하면 수파베이스를 통해 다른 기기와 맞춰집니다. JSON 백업은 편집 화면의 내보내기에 있습니다.</p>
   </div>`;
 }
 
@@ -346,6 +355,8 @@ function renderEditor(){
         <label><span>분당 글자 수</span><input type="number" min="100" max="600" data-lf="cpm" value="${l.cpm}"></label>
         <label><span>카드 한 장 글자 수</span><input type="number" min="50" max="600" data-lf="cardChars" value="${l.cardChars}"></label>
         <div class="muted small" style="padding:4px 10px">말하는 속도로 대본의 예상 시간을 계산합니다. 보통 분당 250~300자입니다.</div>
+        <div class="sep"></div>
+        <div style="padding:2px 10px 6px">${syncPanelHtml(true)}</div>
       </div></details>
     </div>
     <div class="ed-meta">
@@ -447,10 +458,10 @@ app.addEventListener('click',e=>{
   const closeMenus=()=>app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));
   switch(act){
     case 'new':{const n=newLecture();db.lectures.push(n);ui.lectureId=n.id;ui.view='editor';save(true);render();app.querySelector('[data-lf=title]').focus();break;}
-    case 'sample':{const n=sample();db.lectures.push(n);save(true);render();break;}
+    case 'sample':{const n=sample();db.lectures.push(n);save(true);markDirty(n.id);render();break;}
     case 'import':document.getElementById('importFile').click();break;
     case 'open':ui.lectureId=id;ui.view='editor';render();break;
-    case 'delete':{e.stopPropagation();const x=db.lectures.find(l=>l.id===id);if(confirm(`"${x.title||'제목 없음'}" 강연을 삭제할까요? 되돌릴 수 없습니다.`)){db.lectures=db.lectures.filter(l=>l.id!==id);save(true);render();}break;}
+    case 'delete':{e.stopPropagation();const x=db.lectures.find(l=>l.id===id);if(confirm(`"${x.title||'제목 없음'}" 강연을 삭제할까요? 되돌릴 수 없습니다.`)){db.lectures=db.lectures.filter(l=>l.id!==id);db.deleted=(db.deleted||[]).filter(d=>d.id!==id);db.deleted.push({id,at:Date.now()});save(true);markDirty(id);render();}break;}
     case 'home':ui.view='home';save(true);render();break;
     case 'scratch':ui.pane='scratch';renderDerived();renderDetail();break;
     case 'copySkeleton':{const text=skeletonPrompt(l);const hadNew=!!unsentScratch(l);copyText(text).then(ok=>{if(!ok){toast('복사하지 못했습니다.');return;}if(hadNew){l.scratch=(l.scratch||'').replace(/\s+$/,'')+`\n\n── ${stampNow()} 정리에 보냄 ──\n\n`;save();renderDerived();renderDetail();toast('뼈대 정리 프롬프트를 복사했습니다. 클로드에 붙여 넣고, 답을 "클로드 답 가져오기"에 넣으세요.');}else{toast(lastSentScratch(l)?'새로 적은 생각이 없어 마지막에 보낸 생각을 다시 담아 복사했습니다.':'적은 생각이 없어 제목만으로 요청문을 복사했습니다.');}});break;}
@@ -487,6 +498,7 @@ app.addEventListener('input',e=>{
 });
 app.addEventListener('change',e=>{if(e.target.dataset.act==='a4memo')ui.a4memo=e.target.checked;});
 document.addEventListener('click',e=>{if(!e.target.closest('details.menu'))app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));});
+app.addEventListener('toggle',e=>{const d=e.target;if(!d.matches||!d.matches('details.menu')||!d.open)return;const m=d.querySelector(':scope>div');if(!m)return;m.style.left='';m.style.right='';const r=m.getBoundingClientRect();if(r.left<4){m.style.right='auto';m.style.left='0';}},true);
 /* drag reorder topics */
 let dragId=null;
 app.addEventListener('dragstart',e=>{const r=e.target.closest('.trow');if(!r)return;dragId=r.dataset.id;e.dataTransfer.effectAllowed='move';});
@@ -496,7 +508,7 @@ app.addEventListener('drop',e=>{const r=e.target.closest('.trow');if(!r||!dragId
 app.addEventListener('dragend',()=>{dragId=null;app.querySelectorAll('.trow.dragover').forEach(x=>x.classList.remove('dragover'));});
 document.getElementById('importFile').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{const d=JSON.parse(rd.result);const arr=Array.isArray(d.lectures)?d.lectures:[d];let n=0;for(const x of arr){if(!x||!Array.isArray(x.topics))continue;const c=JSON.parse(JSON.stringify(x));c.id=uid();c.topics.forEach(t=>{t.id=uid();(t.cards||[]).forEach(k=>k.id=uid());});c.updatedAt=Date.now();db.lectures.push(c);n++;}save(true);render();toast(n?`${n}개 강연을 불러왔습니다.`:'불러올 강연이 없습니다.');}catch(err){toast('JSON 파일을 읽지 못했습니다.');}e.target.value='';};
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);const arr=Array.isArray(d.lectures)?d.lectures:[d];let n=0;for(const x of arr){if(!x||!Array.isArray(x.topics))continue;const c=JSON.parse(JSON.stringify(x));c.id=uid();c.topics.forEach(t=>{t.id=uid();(t.cards||[]).forEach(k=>k.id=uid());});c.updatedAt=Date.now();db.lectures.push(c);markDirty(c.id);n++;}save(true);render();toast(n?`${n}개 강연을 불러왔습니다.`:'불러올 강연이 없습니다.');}catch(err){toast('JSON 파일을 읽지 못했습니다.');}e.target.value='';};
   rd.readAsText(f);
 });
 
@@ -866,7 +878,98 @@ function drawTimers(){
   el.innerHTML=parts.map(p=>`<span>${p}</span>`).join('');
 }
 
+/* ---------- sync (Supabase) ---------- */
+const SB_URL='https://bmuslkayijcgosmgvnah.supabase.co';
+const SB_KEY='sb_publishable_sEHvPL_9_RHCZK4Fpw3zoA_VM7j9pyt';
+const SESS_KEY='lecture.session';
+let sess=(()=>{try{return JSON.parse(localStorage.getItem(SESS_KEY))||null;}catch(e){return null;}})();
+const sync={dirty:new Set(),timer:null,busy:false,last:0,lastPull:0,msg:'',err:false};
+function setSess(x){sess=x;if(x)localStorage.setItem(SESS_KEY,JSON.stringify(x));else localStorage.removeItem(SESS_KEY);}
+function jwtExp(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000;}catch(e){return 0;}}
+async function sbFetch(path,opt={}){
+  const r=await fetch(SB_URL+path,{...opt,headers:{apikey:SB_KEY,'Content-Type':'application/json',...(opt.headers||{})}});
+  const text=await r.text();let j=null;try{j=text?JSON.parse(text):null;}catch(e){}
+  if(!r.ok){let msg=(j&&(j.msg||j.message||j.error_description||j.error))||text||String(r.status);
+    if(/relation .*lectures.* does not exist|PGRST205|Could not find the table/i.test(msg))msg='수파베이스에 lectures 표가 없습니다. supabase-setup.sql을 SQL Editor에서 실행하세요.';
+    else if(/Invalid login credentials/i.test(msg))msg='이메일 또는 비밀번호가 맞지 않습니다.';
+    else if(/Email not confirmed/i.test(msg))msg='이메일 확인이 아직입니다. 받은 메일의 링크를 누른 뒤 다시 로그인하세요.';
+    else if(/User already registered/i.test(msg))msg='이미 가입된 이메일입니다. 로그인하세요.';
+    else if(/rate limit/i.test(msg))msg='요청이 너무 잦습니다. 잠시 뒤 다시 하세요.';
+    const e=new Error(msg);e.status=r.status;throw e;}
+  return j;
+}
+async function sbSignUp(email,password){const j=await sbFetch('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password})});if(j&&j.access_token){setSess({access_token:j.access_token,refresh_token:j.refresh_token,user:j.user.id,email});return true;}return false;}
+async function sbSignIn(email,password){const j=await sbFetch('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});setSess({access_token:j.access_token,refresh_token:j.refresh_token,user:j.user.id,email});}
+async function sbToken(){if(!sess)return null;if(jwtExp(sess.access_token)-Date.now()<60000){let j;try{j=await sbFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:sess.refresh_token})});}catch(e){if(e.status===400||e.status===401){setSess(null);setSyncMsg('로그인이 풀렸습니다. 다시 로그인하세요.',true);renderSyncPanels();}throw e;}setSess({...sess,access_token:j.access_token,refresh_token:j.refresh_token});}return sess.access_token;}
+async function rest(path,opt={}){const tok=await sbToken();if(!tok)throw new Error('로그인이 필요합니다.');return sbFetch('/rest/v1'+path,{...opt,headers:{Authorization:'Bearer '+tok,...(opt.headers||{})}});}
+function setSyncMsg(m,err){sync.msg=m;sync.err=!!err;document.querySelectorAll('.syncstat').forEach(e=>{e.textContent=m;e.classList.toggle('err',!!err);});}
+function fmtTime(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function markDirty(id){if(!id)return;sync.dirty.add(id);if(!sess)return;clearTimeout(sync.timer);sync.timer=setTimeout(flushSync,1500);}
+async function pushLectures(ids){
+  const rows=[];for(const id of ids){const l=db.lectures.find(x=>x.id===id);if(l)rows.push({id:l.id,user_id:sess.user,data:l,updated_at:l.updatedAt||Date.now(),deleted:false});else{const d=(db.deleted||[]).find(x=>x.id===id);if(d)rows.push({id,user_id:sess.user,data:{},updated_at:d.at,deleted:true});}}
+  if(!rows.length)return;
+  await rest('/lectures?on_conflict=user_id,id',{method:'POST',keepalive:true,headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+}
+async function flushSync(){
+  if(!sess||sync.busy)return;const ids=[...sync.dirty];if(!ids.length)return;sync.dirty.clear();sync.busy=true;
+  try{await pushLectures(ids);sync.last=Date.now();setSyncMsg(`동기화됨 ${fmtTime(sync.last)}`);}
+  catch(e){ids.forEach(i=>sync.dirty.add(i));setSyncMsg('보내기 실패: '+e.message,true);}
+  finally{sync.busy=false;}
+}
+async function pullLectures(force){
+  if(!sess||sync.busy)return;if(!force&&Date.now()-sync.lastPull<10000)return;sync.busy=true;
+  try{
+    const rows=await rest('/lectures?select=id,data,updated_at,deleted');sync.lastPull=Date.now();
+    let changed=false;const toPush=new Set();const seen=new Set();db.deleted=db.deleted||[];
+    for(const r of rows){seen.add(r.id);const local=db.lectures.find(x=>x.id===r.id);const tomb=db.deleted.find(d=>d.id===r.id);
+      if(r.deleted){if(local){if((local.updatedAt||0)<=r.updated_at){db.lectures=db.lectures.filter(x=>x.id!==r.id);changed=true;}else toPush.add(r.id);}continue;}
+      if(tomb){if(tomb.at>=r.updated_at){toPush.add(r.id);continue;}db.deleted=db.deleted.filter(d=>d.id!==r.id);}
+      if(!r.data||!Array.isArray(r.data.topics))continue;
+      if(!local){db.lectures.push(r.data);changed=true;}
+      else if(r.updated_at>(local.updatedAt||0)){for(const k of Object.keys(local))delete local[k];Object.assign(local,r.data);changed=true;}
+      else if(r.updated_at<(local.updatedAt||0))toPush.add(r.id);}
+    for(const l of db.lectures)if(!seen.has(l.id))toPush.add(l.id);
+    for(const d of db.deleted)if(!seen.has(d.id))toPush.add(d.id);
+    if(changed){localStorage.setItem(STORE_KEY,JSON.stringify(db));if(!pres&&!document.querySelector('.modal-bg'))render();}
+    sync.busy=false;
+    if(toPush.size){toPush.forEach(i=>sync.dirty.add(i));await flushSync();}
+    else{sync.last=Date.now();setSyncMsg(`동기화됨 ${fmtTime(sync.last)}`);}
+  }catch(e){setSyncMsg('받기 실패: '+e.message,true);}
+  finally{sync.busy=false;}
+}
+function syncPanelHtml(compact){
+  if(sess)return `<h3 style="font-size:13px;font-weight:500;margin:0 0 6px">동기화 · ${esc(sess.email)}</h3>
+    <div class="syncform ${compact?'compact':''}"><button data-act="syncNow">지금 동기화</button><button class="ghost" data-act="syncOut">로그아웃</button></div>
+    <div class="syncstat ${sync.err?'err':''}">${esc(sync.msg)}</div>`;
+  return `<h3 style="font-size:13px;font-weight:500;margin:0 0 6px">동기화</h3>
+    <div class="syncform ${compact?'compact':''}"><input type="email" class="syncEmail" placeholder="이메일" autocomplete="username" style="width:${compact?'100%':'200px'}"><input type="password" class="syncPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" style="width:${compact?'100%':'200px'}"><button data-act="syncIn">로그인</button><button class="ghost" data-act="syncUp">처음이면 가입</button></div>
+    <div class="syncstat ${sync.err?'err':''}">${esc(sync.msg)||'로그인하면 이 브라우저의 강연과 수파베이스의 강연을 서로 맞춥니다. 같은 강연을 두 기기에서 고치면 나중에 저장한 쪽이 남습니다.'}</div>`;
+}
+function renderSyncPanels(){document.querySelectorAll('.syncbox').forEach(e=>e.innerHTML=syncPanelHtml(false));const m=document.querySelector('details.menu .syncform');if(m)m.parentElement.innerHTML=syncPanelHtml(true);}
+app.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
+  if(!/^sync(In|Up|Out|Now)$/.test(act))return;
+  const box=b.closest('.syncbox,details.menu')||app;
+  const email=(box.querySelector('.syncEmail')||{}).value||'',pw=(box.querySelector('.syncPw')||{}).value||'';
+  try{
+    if(act==='syncOut'){setSess(null);sync.dirty.clear();setSyncMsg('');renderSyncPanels();return;}
+    if(act==='syncNow'){setSyncMsg('동기화 중…');await pullLectures(true);return;}
+    if(!email||!pw){setSyncMsg('이메일과 비밀번호를 넣으세요.',true);return;}
+    if(pw.length<6){setSyncMsg('비밀번호는 6자 이상이어야 합니다.',true);return;}
+    b.disabled=true;setSyncMsg(act==='syncUp'?'가입 중…':'로그인 중…');
+    if(act==='syncUp'){const ok=await sbSignUp(email,pw);if(!ok){setSyncMsg('확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 여기서 로그인하세요.');b.disabled=false;return;}}
+    else await sbSignIn(email,pw);
+    setSyncMsg('로그인했습니다. 동기화 중…');renderSyncPanels();
+    db.lectures.forEach(l=>sync.dirty.add(l.id));(db.deleted||[]).forEach(d=>sync.dirty.add(d.id));
+    await pullLectures(true);renderSyncPanels();
+  }catch(err){setSyncMsg(err.message||String(err),true);b.disabled=false;}
+});
+window.addEventListener('focus',()=>pullLectures(false));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pullLectures(false);else if(sync.dirty.size)flushSync();});
+window.addEventListener('beforeunload',()=>{if(sync.dirty.size)flushSync();});
+
 render();
+if(sess){setSyncMsg('동기화 확인 중…');pullLectures(true);}
 </script>
 </body>
 </html>
