@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lecture</title>
+<style>
+:root{
+  --bg:#f6f5f0; --panel:#ffffff; --panel2:#f1efe8; --ink:#1f1f1d; --ink2:#5f5e5a; --muted:#8a8984;
+  --line:#e2e0d8; --line2:#c9c7bf;
+  --accent:#534ab7; --accent-bg:#eeedfe;
+  --ok:#0f6e56; --ok-bg:#e1f5ee; --warn:#854f0b; --warn-bg:#faeeda; --bad:#a32d2d; --bad-bg:#fcebeb;
+  --radius:8px;
+  --font:-apple-system,"Apple SD Gothic Neo",Pretendard,"Noto Sans KR",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5}
+button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px 12px;cursor:pointer}
+button:hover{background:var(--panel2)}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.primary:hover{background:#3a3a37}
+button.ghost{border-color:transparent;background:transparent}
+button.ghost:hover{background:var(--panel2)}
+button.danger{color:var(--bad)}
+input,textarea,select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px 10px}
+input:focus,textarea:focus{outline:2px solid var(--accent-bg);border-color:var(--accent)}
+textarea{resize:none;line-height:1.7}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+details.menu{position:relative}
+details.menu>summary{list-style:none;cursor:pointer;background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px 12px;user-select:none}
+details.menu>summary::-webkit-details-marker{display:none}
+details.menu>summary:hover{background:var(--panel2)}
+details.menu>div{position:absolute;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px;min-width:220px;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+details.menu>div button{display:block;width:100%;text-align:left;border:none;background:transparent;padding:8px 10px;border-radius:6px}
+details.menu>div button:hover{background:var(--panel2)}
+details.menu>div .sep{border-top:1px solid var(--line);margin:6px 0}
+details.menu>div label{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;font-size:13px}
+details.menu>div label input{width:72px;padding:3px 6px}
+
+/* home */
+.home{max-width:880px;margin:0 auto;padding:48px 24px}
+.home h1{font-size:28px;font-weight:500;margin:0 0 6px;letter-spacing:-.01em}
+.home .lead{color:var(--ink2);margin:0 0 28px}
+.home-actions{display:flex;gap:8px;margin-bottom:24px}
+.lect-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.lect{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer;position:relative}
+.lect:hover{border-color:var(--line2)}
+.lect h3{margin:0 0 6px;font-size:16px;font-weight:500}
+.lect .meta{color:var(--ink2);font-size:13px}
+.lect .del{position:absolute;top:10px;right:10px;opacity:0;font-size:12px}
+.lect:hover .del{opacity:1}
+.empty{border:1px dashed var(--line2);border-radius:12px;padding:40px;text-align:center;color:var(--ink2)}
+
+/* editor */
+.editor{display:flex;flex-direction:column;height:100vh}
+.ed-head{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.ed-head .title{font-size:17px;font-weight:500;border:1px solid transparent;background:transparent;min-width:260px;flex:1}
+.ed-head .title:hover{border-color:var(--line2)}
+.ed-head .title:focus{background:var(--panel)}
+.ed-meta{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--ink2);flex-wrap:wrap}
+.ed-meta label{display:flex;align-items:center;gap:6px}
+.ed-meta input{padding:4px 8px;font-size:13px}
+.ed-meta input.n{width:60px}
+.ed-meta input.t{width:110px}
+.ed-meta .spacer{flex:1}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.badge.bad{background:var(--bad-bg);color:var(--bad)}
+.timebar{display:flex;gap:2px;height:8px;margin:10px 16px 0;border-radius:4px;overflow:hidden}
+.timebar div{min-width:2px}
+.timebar .rest{background:transparent;border:1px dashed var(--line2);border-radius:4px}
+.timebar .over{background:var(--bad)}
+.ed-body{display:grid;grid-template-columns:300px minmax(0,1fr);flex:1;min-height:0}
+.sidebar{overflow:auto;border-right:1px solid var(--line);padding:12px}
+.sidebar .hd{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin:4px 6px 8px}
+.trow{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border-radius:var(--radius);cursor:pointer;border:1px solid transparent;margin-bottom:4px;background:var(--panel)}
+.trow:hover{border-color:var(--line)}
+.trow.sel{border-color:var(--line2);background:var(--panel2)}
+.trow.dragover{border-top:2px solid var(--accent)}
+.trow .dot{width:8px;height:8px;border-radius:2px;margin-top:6px;flex:none}
+.trow .mins{color:var(--muted);font-size:12px;min-width:34px;margin-top:2px}
+.trow .tt{flex:1;min-width:0}
+.trow .tt .name{font-size:13px;line-height:1.4;word-break:break-word}
+.trow .tt .name.ph{color:var(--muted)}
+.trow .tt .st{font-size:11px;margin-top:2px}
+.srow{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:var(--radius);cursor:pointer;border:1px solid var(--line);margin-bottom:12px;background:var(--panel);font-size:13px}
+.srow:hover{border-color:var(--line2)}
+.srow.sel{background:var(--panel2);border-color:var(--line2)}
+.srow .c{font-size:11px;color:var(--warn)}
+.scratch textarea{width:100%;min-height:46vh;font-size:15px}
+.scratch .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.card.draft{border-left:3px solid #c9b8ff}
+.tag{display:inline-block;padding:1px 6px;border-radius:5px;font-size:11px;background:var(--accent-bg);color:var(--accent);margin-left:6px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--panel);border-radius:12px;width:min(760px,100%);max-height:90vh;display:flex;flex-direction:column;padding:18px 20px}
+.modal h2{font-size:16px;font-weight:500;margin:0 0 6px}
+.modal textarea{width:100%;min-height:180px;flex:none;font-size:13px}
+.modal .prev{overflow:auto;flex:1;margin:12px 0;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;background:var(--panel2);min-height:56px}
+.modal .prev li{margin:3px 0}
+.modal .acts{display:flex;justify-content:flex-end;gap:8px}
+.st-empty{color:var(--muted)} .st-memo{color:var(--warn)} .st-wip{color:var(--warn)} .st-done{color:var(--ok)}
+.detail{overflow:auto;padding:18px 24px 80px}
+.detail .row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.detail .ttl{font-size:18px;font-weight:500;flex:1;min-width:0}
+.detail .lbl{font-size:12px;color:var(--muted);margin:14px 0 4px;display:flex;justify-content:space-between;align-items:baseline}
+.detail input.full{width:100%}
+.detail textarea.memo{width:100%;min-height:64px;background:var(--panel2);border-color:transparent}
+.detail textarea.memo:focus{background:var(--panel)}
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 8px}
+.card.over{border-color:#e9b56a}
+.card textarea{width:100%;min-height:72px;border:none;padding:2px 0;font-size:15px;background:transparent}
+.card textarea:focus{outline:none}
+.card .ft{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-top:4px}
+.card .ft .tools{display:flex;gap:2px;opacity:0}
+.card:hover .ft .tools,.card:focus-within .ft .tools{opacity:1}
+.card .ft .tools button{padding:2px 7px;font-size:12px;border-color:transparent}
+.card .ft .warn{color:var(--warn)}
+.addcard{border:1px dashed var(--line2);background:transparent;color:var(--ink2);width:100%;padding:10px}
+.detail .bottom{display:flex;justify-content:space-between;margin-top:28px;padding-top:14px;border-top:1px solid var(--line)}
+.nodetail{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;padding:40px}
+kbd{font:inherit;font-size:11px;border:1px solid var(--line2);border-radius:4px;padding:0 5px;background:var(--panel)}
+#present kbd{background:transparent;border-color:currentColor;opacity:.75;font-size:.85em}
+
+/* presentation */
+#present{position:fixed;inset:0;background:#141412;color:#f3f1ea;display:flex;flex-direction:column;z-index:100;--ps:1}
+#present[hidden]{display:none}
+#present.light{background:#faf9f5;color:#1f1f1d}
+.pr-top{display:flex;justify-content:space-between;align-items:center;padding:16px 28px;font-size:15px;color:#a9a69d;gap:16px}
+#present.light .pr-top{color:#6a6964}
+.pr-top .tm{display:flex;gap:22px;font-variant-numeric:tabular-nums}
+.pr-top .late{color:#f09595}
+.pr-top .tools{display:flex;gap:4px}
+.pr-top .tools button{background:transparent;border-color:#3a3a37;color:inherit;padding:3px 9px;font-size:13px}
+#present.light .pr-top .tools button{border-color:#c9c7bf}
+.pr-main{flex:1;display:flex;align-items:center;justify-content:center;padding:0 9vw;overflow:hidden}
+.pr-text{white-space:pre-wrap;line-height:1.65;max-width:1100px;font-size:calc(30px * var(--ps));word-break:keep-all}
+.pr-cover{text-align:center;max-width:1000px}
+.pr-cover .k{font-size:calc(16px * var(--ps));color:#a9a69d;margin-bottom:14px;letter-spacing:.04em}
+.pr-cover h2{font-size:calc(44px * var(--ps));font-weight:500;margin:0 0 16px;line-height:1.3;word-break:keep-all}
+.pr-cover p{font-size:calc(22px * var(--ps));color:#c9c7bf;margin:0;line-height:1.5}
+#present.light .pr-cover p{color:#5f5e5a}
+.pr-memo{margin-top:28px;font-size:calc(15px * var(--ps));color:#8f8c83;white-space:pre-wrap;text-align:left;border-left:2px solid #3a3a37;padding-left:14px;max-width:900px}
+.pr-next{padding:10px 28px;font-size:14px;color:#8f8c83;border-top:1px solid #2a2a27;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#present.light .pr-next{border-color:#e2e0d8}
+.pr-bar{display:flex;gap:2px;padding:0 28px 14px}
+.pr-bar div{height:6px;opacity:.35;border-radius:2px}
+.pr-bar div.cur{opacity:1}
+.pr-bar div.done{opacity:.7}
+
+/* print */
+#print-root{display:none}
+@media print{
+  body>*:not(#print-root){display:none !important}
+  #print-root{display:block}
+  body{background:#fff;color:#000}
+}
+.a6 .pcard{width:132mm;height:89mm;overflow:hidden;display:flex;flex-direction:column;page-break-after:always;break-after:page;font-size:12.5pt;line-height:1.55;color:#000}
+.a6 .pcard:last-child{page-break-after:auto;break-after:auto}
+.a6 .ph{display:flex;justify-content:space-between;font-size:8.5pt;color:#666;border-bottom:.5pt solid #999;padding-bottom:1.5mm;margin-bottom:3mm}
+.a6 .pb{flex:1;white-space:pre-wrap;word-break:keep-all;overflow:hidden}
+.a6 .pf{display:flex;justify-content:space-between;align-items:flex-end;font-size:8pt;color:#777;margin-top:2mm}
+.a6 .pf .m{white-space:pre-wrap;max-width:85%;font-size:8.5pt;color:#555}
+.a6 .cover{justify-content:center;text-align:center}
+.a6 .cover .k{font-size:9pt;color:#666;letter-spacing:.06em;margin-bottom:3mm}
+.a6 .cover h2{font-size:19pt;font-weight:600;margin:0 0 3mm;line-height:1.3;word-break:keep-all}
+.a6 .cover p{font-size:12pt;color:#333;margin:0;line-height:1.45}
+.a6 .cover .m{font-size:9pt;color:#555;white-space:pre-wrap;margin-top:5mm;text-align:left}
+.a6 .cover .pf{position:absolute;left:0;right:0;bottom:0}
+.a6 .pcard.cover{position:relative}
+.a6 .title{justify-content:center;text-align:center}
+.a6 .title h1{font-size:22pt;font-weight:600;margin:0 0 4mm;line-height:1.3;word-break:keep-all}
+.a6 .title p{margin:0;font-size:10pt;color:#555}
+.a4{font-size:11pt;line-height:1.75;color:#000}
+.a4 h1{font-size:20pt;font-weight:600;margin:0 0 2mm;line-height:1.3}
+.a4 .meta{color:#555;font-size:10pt;margin-bottom:8mm}
+.a4 h3{font-size:11pt;color:#444;margin:0 0 2mm;font-weight:600}
+.a4 table{width:100%;border-collapse:collapse;font-size:10pt;margin-bottom:4mm}
+.a4 th,.a4 td{border-bottom:.5pt solid #aaa;padding:1.6mm 2mm;text-align:left;vertical-align:top}
+.a4 th{border-bottom:1pt solid #333;font-weight:600;color:#333}
+.a4 td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.a4 .sec{display:grid;grid-template-columns:24mm minmax(0,1fr);column-gap:6mm;margin-top:9mm}
+.a4 .sec .lt{font-size:9pt;color:#555;border-top:1pt solid #333;padding-top:2mm;line-height:1.5}
+.a4 .sec .rt{border-top:1pt solid #333;padding-top:2mm;min-width:0}
+.a4 .sec h2{font-size:14pt;font-weight:600;margin:0 0 1mm;line-height:1.3}
+.a4 .sec .sum{color:#444;margin:0 0 3mm;font-size:10.5pt}
+.a4 .sec .memo{font-size:9.5pt;color:#555;background:#f3f2ee;padding:2mm 3mm;margin:0 0 3mm;white-space:pre-wrap;border-left:1pt solid #999}
+.a4 p{margin:0 0 3mm;white-space:pre-wrap;word-break:keep-all;page-break-inside:avoid;break-inside:avoid}
+.a4 .none{color:#888;font-style:italic}
+
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:200}
+#toast.show{opacity:1}
+@media (max-width:760px){
+  .ed-body{grid-template-columns:1fr}
+  .sidebar{border-right:none;border-bottom:1px solid var(--line);max-height:40vh}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="present" hidden></div>
+<div id="print-root"></div>
+<style id="pageStyle"></style>
+<input type="file" id="importFile" accept="application/json" hidden>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const STORE_KEY='lecture.v1';
+const COLORS=['#7F77DD','#5DCAA5','#F0997B','#85B7EB','#FAC775','#ED93B1','#97C459','#B4B2A9'];
+const app=document.getElementById('app');
+const presentEl=document.getElementById('present');
+const printRoot=document.getElementById('print-root');
+const pageStyle=document.getElementById('pageStyle');
+
+let db=load();
+const ui={view:'home',lectureId:null,topicId:null,pane:'topic',a4memo:false,prTheme:'dark'};
+let pres=null;
+
+/* ---------- data ---------- */
+function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);if(d&&Array.isArray(d.lectures))return d;}}catch(e){}return{lectures:[]};}
+let saveT=null;
+function save(now){
+  const l=cur();if(l)l.updatedAt=Date.now();
+  clearTimeout(saveT);
+  const f=()=>localStorage.setItem(STORE_KEY,JSON.stringify(db));
+  if(now)f();else saveT=setTimeout(f,250);
+}
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-3);
+const newLecture=(title='')=>({id:uid(),title,totalMinutes:60,date:'',place:'',startTime:'',audience:'',cpm:280,cardChars:200,scratch:'',topics:[],createdAt:Date.now(),updatedAt:Date.now()});
+const newTopic=()=>({id:uid(),title:'',summary:'',memo:'',minutes:10,cards:[newCard()]});
+const newCard=()=>({id:uid(),text:''});
+const cur=()=>db.lectures.find(l=>l.id===ui.lectureId);
+const DIV_SRC='── .*? 정리에 보냄 ──';
+const cleanScratch=s=>s.split('\n').filter(x=>!/^›/.test(x.trim())&&!/^──.*──$/.test(x.trim())).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+function scratchBatches(l){return (l.scratch||'').split(new RegExp(DIV_SRC)).map(cleanScratch);}
+function unsentScratch(l){const b=scratchBatches(l);return b[b.length-1];}
+function lastSentScratch(l){const b=scratchBatches(l);for(let i=b.length-2;i>=0;i--)if(b[i])return b[i];return '';}
+function freshForPrompt(l){const u=unsentScratch(l);if(u)return{text:u,resend:false};return{text:lastSentScratch(l),resend:true};}
+const stampNow=()=>{const n=new Date();return `${n.getMonth()+1}월 ${n.getDate()}일 ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;};
+const hasContent=l=>l.topics.some(t=>t.title.trim()||t.cards.some(c=>c.text.trim()));
+const curTopic=()=>{const l=cur();return l&&l.topics.find(t=>t.id===ui.topicId);};
+
+function sample(){
+  const l=newLecture('글쓰기는 왜 어려운가');
+  l.totalMinutes=60;l.startTime='14:00';l.place='시민도서관 강당';
+  const mk=(title,summary,minutes,memo,cards)=>{const t=newTopic();Object.assign(t,{title,summary,minutes,memo});t.cards=cards.map(x=>({id:uid(),text:x}));return t;};
+  l.topics=[
+    mk('도입: 빈 페이지 앞의 공포','누구나 첫 문장 앞에서 멈춘다',5,'청중에게 손 들게 하기',[
+      '여러분, 글을 쓰려고 앉았는데 한 글자도 못 쓴 경험 있으시죠. 저도 그렇습니다. 오늘 이 자리에 오신 분들 중 그런 경험이 한 번도 없는 분은 아마 안 계실 겁니다.',
+      '그런데 어느 날 깨달았어요. 문제는 글이 아니라 "시작"이라는 걸요. 오늘은 그 시작을 어떻게 가볍게 만들 수 있는지 이야기해 보려 합니다.']),
+    mk('어려움의 정체는 판단의 과부하','쓰기 전에 너무 많은 것을 동시에 결정하려 한다',15,'· 첫 책 쓸 때 경험\n· 편집자의 말',[
+      '글을 쓴다는 건 사실 수십 가지 판단을 동시에 하는 일입니다. 무엇을 말할지, 어떤 순서로, 어떤 말투로, 누구에게. 이걸 한꺼번에 하려니 손이 멈추는 거죠.']),
+    mk('작게 시작하는 세 가지 방법','시작의 문턱은 생각보다 낮출 수 있다',20,'· 1분짜리 단계 예시\n· 청중에게 질문 던지기',[
+      '첫 번째 방법은 "한 문장만 쓰기"입니다. 좋은 문장이 아니어도 됩니다. 오늘 쓸 글의 가장 못난 문장을 먼저 쓴다고 생각해 보세요.',
+      '두 번째는 "말로 먼저 하기"입니다. 친구에게 설명한다고 생각하고 녹음을 켜 보세요. 글보다 말이 훨씬 관대합니다.',
+      '']),
+    mk('마무리와 질의응답','',8,'',['']),
+  ];
+  l.audience='도서관 글쓰기 모임 30명. 글을 쓰고 싶지만 시작을 못 하는 분들';
+  l.scratch='첫 책 쓸 때 석 달 동안 첫 문장만 고친 이야기.\n"잘 쓰려는 마음"이 가장 큰 적이라는 말을 꼭 하고 싶다.\n마지막에 오늘 집에 가서 바로 해 볼 1분짜리 과제를 하나 내 주기.';
+  return l;
+}
+
+/* ---------- helpers ---------- */
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const chars=t=>(t||'').replace(/\n/g,'').length;
+const estMin=(l,t)=>chars(t)/(l.cpm||280);
+const topicChars=t=>t.cards.reduce((a,c)=>a+chars(c.text),0);
+const topicEst=(l,t)=>topicChars(t)/(l.cpm||280);
+const allocated=l=>l.topics.reduce((a,t)=>a+(+t.minutes||0),0);
+const lectEst=l=>l.topics.reduce((a,t)=>a+topicEst(l,t),0);
+const col=i=>COLORS[i%COLORS.length];
+function fmtDur(m){if(!m||m<=0)return'0분';const s=Math.round(m*60);if(s<60)return s+'초';const mm=Math.floor(s/60),ss=s%60;return ss?`${mm}분 ${ss}초`:`${mm}분`;}
+function fmtClock(ms){const s=Math.max(0,Math.floor(ms/1000));const m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+function clockAt(l,off){if(!l.startTime)return'';const p=l.startTime.split(':').map(Number);if(p.length<2||isNaN(p[0]))return'';const t=p[0]*60+p[1]+Math.round(off);return String(Math.floor(t/60)%24).padStart(2,'0')+':'+String(((t%60)+60)%60).padStart(2,'0');}
+function topicStart(l,i){let s=0;for(let k=0;k<i;k++)s+=(+l.topics[k].minutes||0);return s;}
+function topicStatus(l,t){
+  const filled=t.cards.filter(c=>c.text.trim()).length;
+  if(!filled)return t.memo.trim()?{label:'메모만',cls:'st-memo'}:{label:'비어 있음',cls:'st-empty'};
+  if(t.cards.some(c=>c.draft&&c.text.trim()))return{label:'초안 다듬는 중',cls:'st-wip'};
+  const est=topicEst(l,t);
+  if(t.minutes>0&&est>=t.minutes*0.8)return{label:'대본 완료',cls:'st-done'};
+  return{label:'작성 중',cls:'st-wip'};
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800);}
+function download(name,text,type='text/plain'){const b=new Blob([text],{type:type+';charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch(e){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}}
+function autogrow(ta){ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px';}
+const safeName=s=>(s||'lecture').replace(/[\\/:*?"<>|]+/g,'_').trim()||'lecture';
+
+/* ---------- render ---------- */
+function render(){
+  if(ui.view==='home')renderHome();else renderEditor();
+}
+function renderHome(){
+  const ls=[...db.lectures].sort((a,b)=>b.updatedAt-a.updatedAt);
+  app.innerHTML=`<div class="home">
+    <h1>lecture</h1>
+    <p class="lead">강연의 요지를 적고, 시간을 안배하고, 대본을 카드로 씁니다.</p>
+    <div class="home-actions">
+      <button class="primary" data-act="new">새 강연</button>
+      <button data-act="import">JSON 불러오기</button>
+      ${ls.length?'':'<button data-act="sample">예시 강연 만들기</button>'}
+    </div>
+    ${ls.length?`<div class="lect-grid">${ls.map(l=>`
+      <div class="lect" data-act="open" data-id="${l.id}">
+        <h3>${esc(l.title)||'<span class="muted">제목 없음</span>'}</h3>
+        <div class="meta">총 ${l.totalMinutes}분 · 요지 ${l.topics.length}개 · 대본 약 ${fmtDur(lectEst(l))}</div>
+        <div class="meta small">${l.date?esc(l.date)+' · ':''}${esc(l.place)||''}${l.place||l.date?' · ':''}수정 ${new Date(l.updatedAt).toLocaleDateString('ko-KR')}</div>
+        <button class="ghost del" data-act="delete" data-id="${l.id}">삭제</button>
+      </div>`).join('')}</div>`
+    :`<div class="empty">아직 강연이 없습니다. 제목 하나만 정하고 시작해 보세요.</div>`}
+    <p class="muted small" style="margin-top:28px">자료는 이 브라우저 안에만 저장됩니다. 다른 곳에서도 쓰려면 편집 화면의 내보내기에서 JSON 백업을 받아 두세요.</p>
+  </div>`;
+}
+
+function renderEditor(){
+  const l=cur();if(!l){ui.view='home';return renderHome();}
+  if(!l.topics.find(t=>t.id===ui.topicId))ui.topicId=l.topics[0]?.id||null;
+  app.innerHTML=`<div class="editor">
+    <div class="ed-head">
+      <button class="ghost" data-act="home">← 목록</button>
+      <input class="title" data-lf="title" value="${esc(l.title)}" placeholder="강연 제목">
+      <button data-act="present">발표 모드</button>
+      <details class="menu"><summary>인쇄 ▾</summary><div>
+        <button data-act="printA6">A6 가로 카드</button>
+        <button data-act="printA4">A4 세로 문서 (공유용)</button>
+        <label><span>A4에 메모 포함</span><input type="checkbox" data-act="a4memo" ${ui.a4memo?'checked':''} style="width:auto"></label>
+        <div class="sep"></div>
+        <div class="muted small" style="padding:4px 10px">인쇄 창에서 PDF로 저장을 고르면 PDF가 됩니다. 색 띠가 안 보이면 "배경 그래픽"을 켜 주세요.</div>
+      </div></details>
+      <details class="menu"><summary>내보내기 ▾</summary><div>
+        <button data-act="copyPrompt">슬라이드 프롬프트 복사</button>
+        <button data-act="copyMd">마크다운 복사</button>
+        <button data-act="dlMd">마크다운 파일 저장</button>
+        <div class="sep"></div>
+        <button data-act="dlJson">JSON 백업 저장</button>
+        <button data-act="dlJsonAs">JSON 백업을 다른 위치에 저장…</button>
+        <div class="muted small" style="padding:4px 10px">처음 한 번 저장 위치를 고르면(앱 파일이 있는 폴더를 권합니다) 다음부터는 같은 파일에 바로 덮어씁니다. 크롬, 엣지에서 되고, 다른 브라우저는 다운로드 폴더에 저장됩니다.</div>
+      </div></details>
+      <details class="menu"><summary>설정 ▾</summary><div>
+        <label><span>분당 글자 수</span><input type="number" min="100" max="600" data-lf="cpm" value="${l.cpm}"></label>
+        <label><span>카드 한 장 글자 수</span><input type="number" min="50" max="600" data-lf="cardChars" value="${l.cardChars}"></label>
+        <div class="muted small" style="padding:4px 10px">말하는 속도로 대본의 예상 시간을 계산합니다. 보통 분당 250~300자입니다.</div>
+      </div></details>
+    </div>
+    <div class="ed-meta">
+      <label>총 시간 <input class="n" type="number" min="1" data-lf="totalMinutes" value="${l.totalMinutes}"> 분</label>
+      <label>날짜 <input class="t" type="date" data-lf="date" value="${esc(l.date)}"></label>
+      <label>시작 시각 <input class="t" type="time" data-lf="startTime" value="${esc(l.startTime)}"></label>
+      <label>장소 <input class="t" style="width:150px" data-lf="place" value="${esc(l.place)}" placeholder="장소"></label>
+      <label>청중 <input class="t" style="width:240px" data-lf="audience" value="${esc(l.audience||'')}" placeholder="누가, 몇 명, 어떤 상태로 듣는지"></label>
+      <span class="spacer"></span>
+      <span id="alloc"></span>
+    </div>
+    <div class="timebar" id="timebar"></div>
+    <div class="ed-body">
+      <div class="sidebar">
+        <div class="srow ${ui.pane==='scratch'?'sel':''}" data-act="scratch"><span>생각 모으기</span><span class="c" id="scratchCnt"></span></div>
+        <div class="hd"><span>요지</span><span id="estTotal"></span></div>
+        <div id="tlist"></div>
+        <button class="addcard" data-act="addTopic" style="margin-top:6px">+ 요지 추가</button>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </div>`;
+  renderDerived();renderDetail();
+}
+function renderDerived(){
+  const l=cur();if(!l)return;
+  const a=allocated(l),rest=l.totalMinutes-a;
+  const alloc=document.getElementById('alloc');
+  alloc.innerHTML=`총 ${l.totalMinutes}분 중 ${a}분 배정 `+(rest>0?`<span class="badge warn">${rest}분 남음</span>`:rest<0?`<span class="badge bad">${-rest}분 초과</span>`:`<span class="badge ok">딱 맞음</span>`);
+  const tb=document.getElementById('timebar');
+  const total=Math.max(l.totalMinutes,a,1);
+  tb.innerHTML=l.topics.map((t,i)=>`<div style="flex:${+t.minutes||0};background:${col(i)}" title="${esc(t.title)} ${t.minutes}분"></div>`).join('')+(rest>0?`<div class="rest" style="flex:${rest}"></div>`:'');
+  document.getElementById('estTotal').textContent=`대본 약 ${fmtDur(lectEst(l))}`;
+  const un=chars(unsentScratch(l));document.getElementById('scratchCnt').textContent=un?`새 생각 ${un}자`:'';
+  updateSendHint();
+  document.querySelector('.srow')?.classList.toggle('sel',ui.pane==='scratch');
+  document.getElementById('tlist').innerHTML=l.topics.map((t,i)=>{const s=topicStatus(l,t);const est=topicEst(l,t);return`
+    <div class="trow ${ui.pane==='topic'&&t.id===ui.topicId?'sel':''}" draggable="true" data-act="selTopic" data-id="${t.id}">
+      <span class="dot" style="background:${col(i)}"></span>
+      <span class="mins">${t.minutes}분</span>
+      <div class="tt"><div class="name ${t.title?'':'ph'}">${esc(t.title)||'제목 없는 요지'}</div>
+      <div class="st ${s.cls}">${s.label}${est>0?` · 약 ${fmtDur(est)}`:''}</div></div>
+    </div>`;}).join('');
+}
+function updateSendHint(){const l=cur();const h=document.getElementById('sendHint');if(!l||!h)return;const un=chars(unsentScratch(l));const ls=lastSentScratch(l);h.textContent=un?`보낼 새 생각 ${un}자`:ls?`새 생각 없음. 마지막에 보낸 생각(${chars(ls)}자)을 다시 담습니다.`:'적은 생각이 없습니다.';}
+function renderScratch(){
+  const l=cur();const d=document.getElementById('detail');const first=!hasContent(l);
+  d.innerHTML=`<div class="scratch">
+    <div class="row"><div class="ttl" style="font-size:18px;font-weight:500">생각 모으기</div></div>
+    <p class="muted small" style="margin:0 0 10px">순서도 형식도 없이 떠오르는 대로 씁니다. 세 단계로 씁니다. 1) "뼈대 정리"로 요지와 시간과 메모를 세우고, 2) 뼈대가 서면 "대본 채우기"로 대본을 받고, 3) 카드를 내 말로 고칩니다. 생각은 강연 날까지 계속 적어도 됩니다.</p>
+    <textarea data-lf="scratch" placeholder="청중은 누구인지, 꼭 하고 싶은 말, 떠오르는 사례, 던지고 싶은 질문...">${esc(l.scratch||'')}</textarea>
+    <div class="bar"><button class="primary" data-act="copySkeleton">1. 뼈대 정리</button><button data-act="copyFill" ${first?'disabled title="뼈대가 선 뒤에 쓰는 기능입니다"':''}>2. 대본 채우기</button><button data-act="copyAudience" ${first?'disabled title="요지와 대본이 어느 정도 있을 때 쓰는 기능입니다"':''}>청중 눈으로 보기</button><button data-act="importOpen">클로드 답 가져오기</button><span class="muted small" id="sendHint"></span></div>
+    <p class="muted small"><b>뼈대 정리</b>는 ${first?'적은 생각으로 요지와 시간과 메모만 만들어 옵니다. 대본은 쓰지 않고, 재료가 있는 만큼만 시간을 잡으며 남는 시간은 비워 둡니다.':'마지막 구분선 아래의 새 생각만 보내고, 기존 요지의 메모에 더할 줄과 새 요지만 받아 옵니다. 대본은 쓰지 않습니다.'} 복사하면 보낸 자리에 구분선이 남습니다. 요지의 시간 합이 총 시간에 맞고 요지마다 메모가 있으면 뼈대가 선 것입니다.</p>
+    <p class="muted small"><b>대본 채우기</b>는 뼈대와 내가 쓴 카드와 생각 모으기 전체를 보내, 메모의 재료로만 요지마다 배정 시간까지 대본을 받아 옵니다. 내가 쓴 카드는 고치지 않고 그 앞뒤에 새 토막을 넣으며, 재료가 모자라면 "(재료 부족, 약 N분)"을 메모에 남깁니다. 인사말과 이음말은 "(보충)" 표시로 써 줍니다. 특정 요지를 자유롭게 채워도 되면 그 요지 메모에 "클로드가 채워도 됨"이라고 적으세요. 요지 하나만 채우려면 그 요지 화면 아래의 버튼을 쓰세요.</p>
+    <p class="muted small">"청중 눈으로 보기"는 요지와 대본 전체를 보내 청중이 궁금해할 질문, 빠진 곳, 사례의 방향을 받아 옵니다. 답은 쓰지 않고 질문만 돌아오며, 가져오면 이 칸 아래에 "›"로 시작하는 줄로 쌓입니다. "›" 줄은 다음 정리 요청에 보내지 않으니, 답할 생각은 그 아래 새 줄에 적으세요. 대본이 한두 장씩이라도 있을 때 돌려야 쓸모 있는 질문이 나옵니다.</p>
+  </div>`;
+  d.querySelectorAll('textarea').forEach(autogrow);
+  updateSendHint();
+}
+function renderDetail(){
+  const l=cur(),t=curTopic();const d=document.getElementById('detail');
+  document.querySelector('.srow')?.classList.toggle('sel',ui.pane==='scratch');
+  if(ui.pane==='scratch')return renderScratch();
+  if(!t){d.innerHTML=`<div class="nodetail">왼쪽에서 요지를 고르거나 새 요지를 추가하세요.<br><span class="small">요지 하나가 강연의 한 덩어리이고, 그 아래 토막 카드에 대본을 씁니다.<br>막막하면 "생각 모으기"에 떠오르는 대로 적고 클로드에게 정리를 맡겨 보세요.</span></div>`;return;}
+  const idx=l.topics.indexOf(t);const st=clockAt(l,topicStart(l,idx));
+  d.innerHTML=`
+    <div class="row">
+      <input class="ttl" data-tf="title" value="${esc(t.title)}" placeholder="요지 제목">
+      <label class="muted small" style="display:flex;align-items:center;gap:6px">배정 <input type="number" min="0" data-tf="minutes" value="${t.minutes}" style="width:64px">분</label>
+      ${st?`<span class="muted small">시작 ${st}</span>`:''}
+    </div>
+    <div class="lbl"><span>한 줄 요지</span></div>
+    <input class="full" data-tf="summary" value="${esc(t.summary)}" placeholder="이 요지에서 꼭 전할 한 문장">
+    <div class="lbl"><span>메모</span><span>키워드, 사례, 할 말의 재료</span></div>
+    <textarea class="memo" data-tf="memo" placeholder="· 예시&#10;· 경험담&#10;· 청중에게 던질 질문">${esc(t.memo)}</textarea>
+    <div class="lbl"><span>대본 카드</span><span id="topicEst"></span></div>
+    <div class="cards" id="cards">${t.cards.map(c=>cardHtml(l,c)).join('')}</div>
+    <button class="addcard" data-act="addCard" style="margin-top:10px">+ 토막 추가</button>
+    <p class="muted small" style="margin-top:14px">토막 하나가 카드 한 장입니다. A6 카드로 인쇄되고 발표 모드에서 한 장씩 넘어갑니다. 카드 한 장 분량(${l.cardChars}자)을 넘기면 알려 드립니다.</p>
+    <div class="bottom">
+      <div><button class="ghost" data-act="topicUp">↑ 위로</button><button class="ghost" data-act="topicDown">↓ 아래로</button><button class="ghost" data-act="copyFillOne">이 요지만 대본 채우기 프롬프트</button></div>
+      <button class="ghost danger" data-act="delTopic">이 요지 삭제</button>
+    </div>`;
+  d.querySelectorAll('textarea').forEach(autogrow);
+  updateTopicEst();
+}
+function cardHtml(l,c){const n=chars(c.text);return`<div class="card ${n>l.cardChars?'over':''} ${c.draft?'draft':''}" data-card="${c.id}">
+  <textarea data-cf="${c.id}" placeholder="말할 문장을 그대로 씁니다">${esc(c.text)}</textarea>
+  <div class="ft"><span class="cnt">${cardFoot(l,c)}</span>
+  <span class="tools"><button data-act="cardUp" data-id="${c.id}">↑</button><button data-act="cardDown" data-id="${c.id}">↓</button><button data-act="cardAddBelow" data-id="${c.id}">아래 추가</button><button data-act="cardDel" data-id="${c.id}">삭제</button></span></div></div>`;}
+function cardFoot(l,c){const text=c.text;const n=chars(text);return`${n}자 · 약 ${fmtDur(estMin(l,text))}`+(n>l.cardChars?` <span class="warn">카드 한 장(${l.cardChars}자)을 넘깁니다</span>`:'')+(c.draft?`<span class="tag" title="클로드가 쓴 초안입니다. 고치면 표시가 사라집니다.">클로드 초안</span>`:'');}
+function updateTopicEst(){const l=cur(),t=curTopic();if(!t)return;const e=document.getElementById('topicEst');if(!e)return;const est=topicEst(l,t);const over=t.minutes>0&&est>t.minutes*1.1;const under=t.minutes>0&&est<t.minutes*0.5&&est>0;
+  e.innerHTML=`${topicChars(t)}자 · 말로 하면 약 ${fmtDur(est)} <span class="${over?'badge bad':under?'badge warn':''}">(${t.minutes}분 배정)</span>`;}
+
+/* ---------- events ---------- */
+app.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act,id=b.dataset.id;const l=cur(),t=curTopic();
+  const closeMenus=()=>app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));
+  switch(act){
+    case 'new':{const n=newLecture();db.lectures.push(n);ui.lectureId=n.id;ui.view='editor';save(true);render();app.querySelector('[data-lf=title]').focus();break;}
+    case 'sample':{const n=sample();db.lectures.push(n);save(true);render();break;}
+    case 'import':document.getElementById('importFile').click();break;
+    case 'open':ui.lectureId=id;ui.view='editor';render();break;
+    case 'delete':{e.stopPropagation();const x=db.lectures.find(l=>l.id===id);if(confirm(`"${x.title||'제목 없음'}" 강연을 삭제할까요? 되돌릴 수 없습니다.`)){db.lectures=db.lectures.filter(l=>l.id!==id);save(true);render();}break;}
+    case 'home':ui.view='home';save(true);render();break;
+    case 'scratch':ui.pane='scratch';renderDerived();renderDetail();break;
+    case 'copySkeleton':{const text=skeletonPrompt(l);const hadNew=!!unsentScratch(l);copyText(text).then(ok=>{if(!ok){toast('복사하지 못했습니다.');return;}if(hadNew){l.scratch=(l.scratch||'').replace(/\s+$/,'')+`\n\n── ${stampNow()} 정리에 보냄 ──\n\n`;save();renderDerived();renderDetail();toast('뼈대 정리 프롬프트를 복사했습니다. 클로드에 붙여 넣고, 답을 "클로드 답 가져오기"에 넣으세요.');}else{toast(lastSentScratch(l)?'새로 적은 생각이 없어 마지막에 보낸 생각을 다시 담아 복사했습니다.':'적은 생각이 없어 제목만으로 요청문을 복사했습니다.');}});break;}
+    case 'copyFill':copyText(fillPrompt(l)).then(ok=>toast(ok?'대본 채우기 프롬프트를 복사했습니다. 답을 "클로드 답 가져오기"에 넣으세요.':'복사하지 못했습니다.'));break;
+    case 'copyFillOne':if(t)copyText(fillPrompt(l,t)).then(ok=>toast(ok?`"${t.title||'이 요지'}"만 채우는 프롬프트를 복사했습니다. 답은 생각 모으기의 "클로드 답 가져오기"에 넣으세요.`:'복사하지 못했습니다.'));break;
+    case 'importOpen':openImport();break;
+    case 'copyAudience':copyText(audiencePrompt(l)).then(ok=>toast(ok?'청중 눈으로 보기 프롬프트를 복사했습니다. 답은 "클로드 답 가져오기"에 넣으면 생각 모으기로 들어갑니다.':'복사하지 못했습니다.'));break;
+    case 'addTopic':{const n=newTopic();l.topics.push(n);ui.topicId=n.id;ui.pane='topic';save();renderDerived();renderDetail();document.querySelector('[data-tf=title]').focus();break;}
+    case 'selTopic':ui.topicId=id;ui.pane='topic';renderDerived();renderDetail();break;
+    case 'delTopic':{if(!t)break;const has=t.cards.some(c=>c.text.trim())||t.memo.trim()||t.title.trim();if(has&&!confirm(`"${t.title||'제목 없는 요지'}" 요지와 그 대본을 삭제할까요?`))break;const i=l.topics.indexOf(t);l.topics.splice(i,1);ui.topicId=(l.topics[i]||l.topics[i-1])?.id||null;save();renderDerived();renderDetail();break;}
+    case 'topicUp':case 'topicDown':{const i=l.topics.indexOf(t);const j=act==='topicUp'?i-1:i+1;if(j<0||j>=l.topics.length)break;[l.topics[i],l.topics[j]]=[l.topics[j],l.topics[i]];save();renderDerived();renderDetail();break;}
+    case 'addCard':{const c=newCard();t.cards.push(c);save();renderDetail();focusCard(c.id);break;}
+    case 'cardAddBelow':{const i=t.cards.findIndex(c=>c.id===id);const c=newCard();t.cards.splice(i+1,0,c);save();renderDetail();focusCard(c.id);break;}
+    case 'cardDel':{const c=t.cards.find(c=>c.id===id);if(c.text.trim()&&!confirm('이 토막을 삭제할까요?'))break;t.cards=t.cards.filter(c=>c.id!==id);save();renderDerived();renderDetail();break;}
+    case 'cardUp':case 'cardDown':{const i=t.cards.findIndex(c=>c.id===id);const j=act==='cardUp'?i-1:i+1;if(j<0||j>=t.cards.length)break;[t.cards[i],t.cards[j]]=[t.cards[j],t.cards[i]];save();renderDetail();focusCard(id);break;}
+    case 'present':closeMenus();startPresent();break;
+    case 'printA6':closeMenus();doPrint('a6');break;
+    case 'printA4':closeMenus();doPrint('a4');break;
+    case 'a4memo':ui.a4memo=b.checked;break;
+    case 'copyPrompt':closeMenus();copyText(slidePrompt(l)).then(ok=>toast(ok?'슬라이드 프롬프트를 복사했습니다. 클로드에 붙여 넣으세요.':'복사하지 못했습니다.'));break;
+    case 'copyMd':closeMenus();copyText(toMarkdown(l,true)).then(ok=>toast(ok?'마크다운을 복사했습니다.':'복사하지 못했습니다.'));break;
+    case 'dlMd':closeMenus();download(safeName(l.title)+'.md',toMarkdown(l,true),'text/markdown');break;
+    case 'dlJson':closeMenus();saveJsonBackup(l,false);break;
+    case 'dlJsonAs':closeMenus();saveJsonBackup(l,true);break;
+  }
+});
+function focusCard(id){const ta=document.querySelector(`[data-cf="${id}"]`);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}}
+app.addEventListener('input',e=>{
+  const el=e.target;const l=cur();if(!l)return;
+  if(el.dataset.lf){const k=el.dataset.lf;l[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);if(k==='cardChars'){renderDetail();}save();renderDerived();if(k==='cpm')renderDetail();return;}
+  const t=curTopic();if(!t)return;
+  if(el.dataset.tf){const k=el.dataset.tf;t[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);save();renderDerived();updateTopicEst();return;}
+  if(el.dataset.cf){const c=t.cards.find(c=>c.id===el.dataset.cf);if(!c)return;c.text=el.value;autogrow(el);const card=el.closest('.card');if(c.draft){delete c.draft;card.classList.remove('draft');}card.querySelector('.cnt').innerHTML=cardFoot(l,c);card.classList.toggle('over',chars(c.text)>l.cardChars);save();renderDerived();updateTopicEst();}
+});
+app.addEventListener('change',e=>{if(e.target.dataset.act==='a4memo')ui.a4memo=e.target.checked;});
+document.addEventListener('click',e=>{if(!e.target.closest('details.menu'))app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));});
+/* drag reorder topics */
+let dragId=null;
+app.addEventListener('dragstart',e=>{const r=e.target.closest('.trow');if(!r)return;dragId=r.dataset.id;e.dataTransfer.effectAllowed='move';});
+app.addEventListener('dragover',e=>{const r=e.target.closest('.trow');if(!r||!dragId)return;e.preventDefault();app.querySelectorAll('.trow.dragover').forEach(x=>x.classList.remove('dragover'));r.classList.add('dragover');});
+app.addEventListener('dragleave',e=>{const r=e.target.closest('.trow');if(r)r.classList.remove('dragover');});
+app.addEventListener('drop',e=>{const r=e.target.closest('.trow');if(!r||!dragId)return;e.preventDefault();const l=cur();const from=l.topics.findIndex(t=>t.id===dragId);let to=l.topics.findIndex(t=>t.id===r.dataset.id);if(from<0||to<0||from===to){dragId=null;renderDerived();return;}const [m]=l.topics.splice(from,1);l.topics.splice(to,0,m);dragId=null;save();renderDerived();renderDetail();});
+app.addEventListener('dragend',()=>{dragId=null;app.querySelectorAll('.trow.dragover').forEach(x=>x.classList.remove('dragover'));});
+document.getElementById('importFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);const arr=Array.isArray(d.lectures)?d.lectures:[d];let n=0;for(const x of arr){if(!x||!Array.isArray(x.topics))continue;const c=JSON.parse(JSON.stringify(x));c.id=uid();c.topics.forEach(t=>{t.id=uid();(t.cards||[]).forEach(k=>k.id=uid());});c.updatedAt=Date.now();db.lectures.push(c);n++;}save(true);render();toast(n?`${n}개 강연을 불러왔습니다.`:'불러올 강연이 없습니다.');}catch(err){toast('JSON 파일을 읽지 못했습니다.');}e.target.value='';};
+  rd.readAsText(f);
+});
+
+/* ---------- organize: prompt, parser, import ---------- */
+/* 1단계 뼈대: 요지·시간·한 줄 요지·메모만. 대본은 쓰지 않음 */
+const SKELETON_FORMAT=`답은 아래 형식만 지켜서, 앞뒤 설명 없이 마크다운으로 써 주세요. 대본 문단은 쓰지 마세요.
+
+## 요지 제목 (15분)
+> 한 줄 요지. 이 요지에서 꼭 전할 한 문장.
+메모:
+- 제가 적은 생각에서 이 요지에 들어갈 재료 (키워드, 사례, 질문)
+- 메모는 빈 줄로 끝냅니다
+
+## 다음 요지 제목 (5분)
+...
+
+## 제안
+- 비어 있는 시간을 채우려면 어떤 생각이 더 있어야 하는지, 질문으로만`;
+function skeletonPrompt(l){
+  const ff=freshForPrompt(l);const fresh=ff.text;const freshLabel=ff.resend&&fresh?' (새로 적은 것이 없어 마지막에 보낸 생각을 다시 담았습니다)':'';
+  const head=`강연 제목: ${l.title||'(미정, 제안해 주세요)'}
+청중: ${l.audience||'(미정)'}
+총 시간: ${l.totalMinutes}분 (넘지 말아야 할 한도입니다. 채워야 할 목표가 아닙니다)`;
+  if(!hasContent(l)){
+    return `아래는 제가 준비하는 강연에 대해 떠오르는 대로 적은 생각입니다. 이것을 바탕으로 강연의 뼈대만 잡아 주세요. 대본은 쓰지 마세요.
+
+${head}
+
+요청 사항:
+1. 제가 적은 생각을 요지로 묶어 주세요. 요지의 수는 재료가 있는 만큼만 만들고, 제 생각에 없는 요지를 지어내지 마세요.
+2. 요지마다 배정 시간을 분 단위로 적되, 그 재료를 실제로 말하는 데 걸릴 만큼만 잡아 주세요. 합이 총 시간에 못 미쳐도 됩니다. 남는 시간은 비워 두세요.
+3. 요지마다 한 줄 요지와 메모를 써 주세요. 메모는 제가 적은 생각에서 그 요지에 들어갈 재료를 옮겨 적는 것이고, 새 내용을 보태지 마세요.
+4. 맨 끝 "## 제안"에는 비어 있는 시간을 채우려면 어떤 생각이 더 있어야 할지 질문으로만 적어 주세요.
+${l.title?'':'5. 맨 첫 줄에 "# 제목" 형식으로 강연 제목을 제안해 주세요.\n'}
+${SKELETON_FORMAT}
+
+---
+제 생각${freshLabel}:
+
+${fresh||'(아직 적은 생각이 없습니다. 제목만 보고 요지 후보를 질문 형태로 제안해 주세요.)'}`;
+  }
+  const curr=l.topics.map(t=>`## ${t.title||'(제목 없음)'} (${t.minutes}분)\n${t.summary?'> '+t.summary+'\n':''}${t.memo.trim()?'메모:\n'+t.memo.trim().split('\n').map(x=>'- '+x.replace(/^[-·•*]\s*/,'')).join('\n')+'\n':''}`).join('\n');
+  return `아래는 제가 준비하는 강연의 현재 뼈대와, 그 뒤에 새로 떠오른 생각입니다. 새 생각을 뼈대에 어떻게 더할지 정리해 주세요. 대본은 쓰지 마세요.
+
+${head}
+현재 배정 합계: ${allocated(l)}분
+
+요청 사항:
+1. 기존 요지는 그대로 둡니다. 새 생각이 기존 요지에 들어가면 그 요지의 제목을 한 글자도 바꾸지 말고 그대로 쓰고, 그 아래 "메모:"에 새로 추가할 줄만 써 주세요. 이미 있는 메모와 한 줄 요지는 다시 쓰지 마세요.
+2. 새 생각이 기존 요지에 맞지 않으면 새 요지를 만들고, 그 재료를 말하는 데 걸릴 만큼만 시간을 잡아 주세요.
+3. 제 생각에 없는 내용을 보태지 마세요.
+4. 시간 합이 총 시간을 넘기거나 순서를 바꾸는 게 좋다면 "## 제안"에 글로만 적어 주세요. 비어 있는 시간을 채울 질문도 거기에 적어 주세요.
+
+${SKELETON_FORMAT}
+
+---
+현재 뼈대:
+
+${curr}
+---
+새로 떠오른 생각${freshLabel}:
+
+${fresh||'(새로 적은 생각이 없습니다)'}`;
+}
+/* 2단계 채우기: 뼈대가 선 뒤, 메모와 생각 모으기의 재료로 배정 시간까지 대본을 채움 */
+const allScratch=l=>scratchBatches(l).filter(Boolean).join('\n\n');
+function fillPrompt(l,only){
+  const topics=only?[only]:l.topics;
+  const cpm=l.cpm||280;
+  const curr=topics.map((t,i)=>{const idx=l.topics.indexOf(t)+1;const ex=t.cards.filter(c=>c.text.trim());const free=/클로드가 채워도 됨/.test(t.memo);
+    return `## ${t.title||'(제목 없음)'} (${t.minutes}분${free?', 이 요지는 자유롭게 채워도 됨':''})\n${t.summary?'> '+t.summary+'\n':''}${t.memo.trim()?'메모:\n'+t.memo.trim().split('\n').map(x=>'- '+x.replace(/^[-·•*]\s*/,'')).join('\n')+'\n':''}${ex.length?'\n'+ex.map((c,k)=>`[기존 ${k+1}] ${c.text.trim()}`).join('\n\n')+'\n':'\n(아직 쓴 토막 없음)\n'}`;}).join('\n');
+  return `아래는 제가 준비하는 강연의 뼈대와, 제가 직접 쓴 대본 토막, 그리고 제가 떠오르는 대로 적어 둔 생각 전체입니다. ${only?'"'+(only.title||'이 요지')+'" 요지의':'요지마다'} 대본을 배정 시간에 맞게 채워 주세요.
+
+강연 제목: ${l.title||'(미정)'}
+청중: ${l.audience||'(미정)'}
+총 시간: ${l.totalMinutes}분. 말하는 속도는 1분에 약 ${cpm}자입니다.
+
+규칙:
+1. 제가 쓴 토막([기존 1], [기존 2]...)은 한 글자도 고치지 말고 다시 쓰지도 마세요. 답에서는 그 자리에 "[기존 1]"처럼 표시만 쓰고, 그 앞뒤나 사이에 이어지는 새 토막을 넣어 주세요. 제 토막의 말투를 따라 써 주세요.
+2. 새 토막의 재료는 그 요지의 메모와 아래 "제 생각" 안에서만 가져오세요. 재료가 있는 만큼 배정 시간(1분 약 ${cpm}자)까지 채우고, 재료가 바닥나면 거기서 멈추세요. 그 경우 그 요지의 마지막 줄에 "(재료 부족, 약 N분)"이라고 모자라는 시간을 적어 주세요. 지어내서 채우지 마세요.
+3. 도입의 인사, 요지 사이의 이음말, 마무리의 정리처럼 상투적인 부분은 재료가 없어도 써도 됩니다. 그런 토막은 맨 앞에 "(보충)"이라고 표시해 주세요.
+4. 메모에 "클로드가 채워도 됨"이라고 적힌 요지는 재료 밖의 내용을 넣어도 됩니다.
+5. 한 토막은 ${l.cardChars||200}자 안팎, 실제로 말하듯 구어체로. 토막 사이는 빈 줄로 나눕니다. 한 줄 요지와 메모는 다시 쓰지 마세요.
+
+답은 아래 형식만 지켜서, 앞뒤 설명 없이 마크다운으로 써 주세요.
+
+## 요지 제목 (15분)
+(보충) 도입 인사 토막...
+
+[기존 1]
+
+새 토막...
+
+[기존 2]
+
+새 토막...
+(재료 부족, 약 3분)
+
+---
+뼈대와 제가 쓴 토막:
+
+${curr}
+---
+제 생각 (생각 모으기 전체):
+
+${allScratch(l)||'(없음)'}`;
+}
+function audiencePrompt(l){
+  return `아래는 제가 준비하는 강연의 요지와 대본입니다. 청중의 입장에서 읽고, 강연을 더 구체적으로 만들 수 있도록 질문과 지적을 해 주세요.
+
+강연 제목: ${l.title||'(미정)'}
+청중: ${l.audience||'(미정, 일반 청중으로 가정)'}
+총 시간: ${l.totalMinutes}분
+
+요청 사항:
+1. 이 청중이 듣다가 궁금해할 질문 5~8개. 어느 요지에서 생기는 질문인지 요지 제목을 괄호로 앞에 붙여 주세요.
+2. 질의응답 시간에 나올 법한 질문 3개.
+3. 설명이 빠졌거나 사례가 없어 추상적으로 들리는 곳. 요지 제목과 이유를 짧게.
+4. 요지마다 어울릴 만한 사례나 비유의 방향 1~2개. 방향만 적고 내용을 쓰지 마세요.
+5. 답이나 대본을 쓰지 마세요. 질문과 지적만 해 주세요. 제 말투와 생각은 그대로 두는 것이 목적입니다.
+
+답은 아래 형식으로, 앞뒤 설명 없이 써 주세요.
+
+## 청중의 질문
+- (요지 제목) 질문
+## 질의응답 예상 질문
+- 질문
+## 빠지거나 추상적인 곳
+- (요지 제목) 이유
+## 사례와 비유의 방향
+- (요지 제목) 방향
+
+---
+강연 내용:
+
+${toMarkdown(l,true)}`;
+}
+function parseStructure(text){
+  const lines=String(text||'').replace(/\r/g,'').split('\n');
+  const out={title:'',topics:[],notes:[]};let t=null,mode='',para=[];
+  const flush=()=>{if(t&&para.length){const s=para.join('\n').trim();if(s&&!/^\(대본 없음\)$/.test(s)){const m=s.match(/^\(재료 부족[^)]*\)$/);if(m)t.short.push(s);else t.cards.push(s);}}para=[];};
+  for(const raw of lines){
+    const line=raw.replace(/\s+$/,'');
+    const h=line.match(/^##\s+(.+)$/);
+    if(h){flush();let title=h[1].trim();let minutes=0;const m=title.match(/[(（]([^()（）]*)[)）]\s*$/);if(m){const mm=m[1].match(/(\d+)\s*분/);if(mm){minutes=+mm[1];title=title.slice(0,m.index).trim();}}title=title.replace(/^\d+[.)]\s*/,'').replace(/\*\*/g,'').trim();
+      t={title,minutes,summary:'',memo:'',cards:[],short:[],note:/^(제안|시간 조정 제안|조정 제안|타임라인)$/.test(title)||(!minutes&&/(청중|질문|제안|빠지|빠진|보충|사례|비유|피드백|지적)/.test(title))};out.topics.push(t);mode='';continue;}
+    const h1=line.match(/^#\s+(.+)$/);if(h1){if(!t)out.title=h1[1].replace(/\*\*/g,'').trim();continue;}
+    if(!t)continue;
+    if(line.startsWith('|')||/^(-{3,}|\*{3,})$/.test(line.trim()))continue;
+    const ref=line.trim().match(/^\[기존\s*(\d+)\]$/);if(ref){flush();mode='';t.cards.push({ref:+ref[1]});continue;}
+    if(/^>\s?/.test(line)){t.summary=(t.summary?t.summary+' ':'')+line.replace(/^>\s?/,'').trim();mode='';continue;}
+    if(/^\*{0,2}메모\*{0,2}\s*[:：]/.test(line.trim())){flush();mode='memo';const rest=line.trim().replace(/^\*{0,2}메모\*{0,2}\s*[:：]\s*/,'');if(rest)t.memo+=rest.replace(/^[-*•·]\s*/,'· ')+'\n';continue;}
+    if(mode==='memo'){if(!line.trim()){mode='';continue;}t.memo+=line.trim().replace(/^[-*•·]\s*/,'· ')+'\n';continue;}
+    if(/^\(재료 부족[^)]*\)\s*$/.test(line.trim())){flush();t.short.push(line.trim());continue;}
+    if(!line.trim()){flush();continue;}
+    para.push(line.trim());
+  }
+  flush();
+  out.topics.forEach(x=>x.memo=x.memo.trim());
+  out.notes=out.topics.filter(x=>x.note).map(x=>({title:x.title,text:[x.summary,x.memo,...x.cards.filter(c=>typeof c==='string')].filter(Boolean).join('\n')}));
+  out.topics=out.topics.filter(x=>!x.note);
+  return out;
+}
+const normTitle=s=>String(s||'').toLowerCase().replace(/^\d+[.)]\s*/,'').replace(/[\s\p{P}\p{S}]/gu,'');
+const memoLines=m=>(m||'').split('\n').map(x=>x.trim()).filter(Boolean);
+function planImport(l,parsed){
+  const plan={adds:[],news:[],notes:parsed.notes,title:(!l.title.trim()&&parsed.title)?parsed.title:''};
+  for(const p of parsed.topics){
+    const key=normTitle(p.title);
+    const ex=key?l.topics.find(t=>normTitle(t.title)===key):null;
+    if(ex){
+      const have=new Set(memoLines(ex.memo).map(x=>x.replace(/^[·\-•*]\s*/,'')));
+      const newMemo=memoLines(p.memo).filter(x=>!have.has(x.replace(/^[·\-•*]\s*/,'')));
+      const newCards=p.cards.filter(c=>typeof c==='string');
+      plan.adds.push({topic:ex,p,cards:p.cards,newCards,refs:p.cards.some(c=>typeof c==='object'),fillSummary:!ex.summary.trim()&&!!p.summary,newMemo,short:p.short});
+    }else plan.news.push(p);
+  }
+  return plan;
+}
+function applyImport(l,plan){
+  if(plan.title)l.title=plan.title;
+  if(plan.notes.length){const block=plan.notes.map(n=>`› [${n.title}]\n`+n.text.split('\n').map(x=>x.trim()).filter(Boolean).map(x=>'› '+x).join('\n')).join('\n\n');l.scratch=(l.scratch||'').replace(/\s+$/,'')+`\n\n── ${stampNow()} 클로드 제안 ──\n${block}\n\n`;}
+  l.topics=l.topics.filter(t=>t.title.trim()||t.summary.trim()||t.memo.trim()||t.cards.some(c=>c.text.trim()));
+  let first=null;
+  for(const a of plan.adds){const t=a.topic;if(!l.topics.includes(t))continue;
+    if(a.fillSummary)t.summary=a.p.summary;
+    if(a.newMemo.length)t.memo=[...memoLines(t.memo),...a.newMemo].join('\n');
+    if(a.short.length)t.memo=[...memoLines(t.memo),...a.short.map(x=>'· '+x)].join('\n');
+    const existing=t.cards.filter(c=>c.text.trim());
+    if(a.refs){const used=new Set();const seq=[];for(const x of a.cards){if(typeof x==='object'){const c=existing[x.ref-1];if(c&&!used.has(c)){seq.push(c);used.add(c);}}else seq.push({id:uid(),text:x,draft:true});}existing.forEach(c=>{if(!used.has(c))seq.push(c);});t.cards=seq;}
+    else{t.cards=existing;a.newCards.forEach(x=>t.cards.push({id:uid(),text:x,draft:true}));}
+    if(!t.cards.length)t.cards.push(newCard());first=first||t;}
+  for(const p of plan.news){const t=newTopic();t.title=p.title;t.minutes=p.minutes||5;t.summary=p.summary;t.memo=[...memoLines(p.memo),...p.short.map(x=>'· '+x)].join('\n');t.cards=p.cards.filter(c=>typeof c==='string').map(x=>({id:uid(),text:x,draft:true}));if(!t.cards.length)t.cards=[newCard()];l.topics.push(t);first=first||t;}
+  return first;
+}
+function openImport(){
+  const l=cur();if(!l)return;
+  const bg=document.createElement('div');bg.className='modal-bg';
+  bg.innerHTML=`<div class="modal"><h2>클로드 답 가져오기</h2>
+    <p class="muted small" style="margin:0 0 8px">뼈대 정리, 대본 채우기, 청중 눈으로 보기의 답을 모두 여기에 붙여 넣습니다. 기존 요지와 제목이 같으면 그 요지에 메모와 카드를 더하고, 처음 보는 제목이면 새 요지를 만들고, 질문과 제안은 생각 모으기로 보냅니다. 있는 것을 지우거나 바꾸지는 않습니다.</p>
+    <textarea id="importText" placeholder="## 요지 제목 (15분)&#10;> 한 줄 요지&#10;메모:&#10;- 키워드&#10;&#10;대본 토막..."></textarea>
+    <div class="prev" id="importPrev"><span class="muted">붙여 넣으면 무엇이 들어오는지 여기에 보입니다.</span></div>
+    <div class="acts"><button data-m="cancel">취소</button><button class="primary" data-m="apply" id="importApply" disabled>가져오기</button></div></div>`;
+  document.body.appendChild(bg);
+  const ta=bg.querySelector('#importText');ta.focus();
+  let plan=null;
+  const preview=()=>{
+    const parsed=parseStructure(ta.value);const pv=bg.querySelector('#importPrev');const btn=bg.querySelector('#importApply');
+    if(!parsed.topics.length&&!parsed.notes.length){pv.innerHTML=`<span class="muted">"## 요지 제목 (분)"이나 "## 청중의 질문" 같은 제목 줄을 찾지 못했습니다. 클로드의 답 전체를 붙여 넣어 보세요.</span>`;btn.disabled=true;plan=null;return;}
+    plan=planImport(l,parsed);const items=[];
+    if(plan.title)items.push(`강연 제목을 "${esc(plan.title)}"로 정합니다.`);
+    plan.adds.forEach(a=>{const parts=[];if(a.newCards.length)parts.push(`카드 ${a.newCards.length}장 추가${a.refs?' (내 카드 사이에 배치)':''}`);if(a.newMemo.length)parts.push(`메모 ${a.newMemo.length}줄 추가`);if(a.fillSummary)parts.push('한 줄 요지 채움');if(a.short.length)parts.push(`<span style="color:var(--warn)">${esc(a.short.join(', '))}</span>`);items.push(`<b>${esc(a.topic.title)}</b>: ${parts.join(', ')||'바뀌는 것 없음'}`);});
+    plan.news.forEach(p=>{const n=p.cards.filter(c=>typeof c==='string').length;items.push(`새 요지 <b>${esc(p.title)}</b> (${p.minutes||5}분): ${n?`카드 ${n}장`:'뼈대만'}${memoLines(p.memo).length?`, 메모 ${memoLines(p.memo).length}줄`:''}${p.minutes?'':' · 시간이 없어 5분으로 둡니다'}`);});
+    const addMin=plan.news.reduce((a,p)=>a+(p.minutes||5),0);const after=allocated(l)+addMin;
+    if(addMin)items.push(`배정 합계 ${allocated(l)}분 → ${after}분 (총 ${l.totalMinutes}분)${after>l.totalMinutes?' <span style="color:var(--bad)">초과, 가져온 뒤 조정이 필요합니다</span>':''}`);
+    plan.notes.forEach(n=>{const cnt=n.text.split('\n').filter(x=>x.trim()).length;items.push(`생각 모으기에 추가: <b>${esc(n.title)}</b> ${cnt}줄`);});
+    const any=plan.adds.some(a=>a.newCards.length||a.newMemo.length||a.fillSummary||a.short.length)||plan.news.length||plan.title||plan.notes.length;
+    pv.innerHTML='<ul style="margin:0;padding-left:18px">'+items.map(x=>`<li>${x}</li>`).join('')+'</ul>';btn.disabled=!any;
+  };
+  ta.addEventListener('input',preview);
+  bg.addEventListener('click',e=>{
+    if(e.target===bg){bg.remove();return;}
+    const b=e.target.closest('[data-m]');if(!b)return;
+    if(b.dataset.m==='cancel'){bg.remove();return;}
+    if(!plan)return;const first=applyImport(l,plan);save(true);bg.remove();
+    if(first){ui.pane='topic';ui.topicId=first.id;renderEditor();toast(plan.notes.length?'가져왔습니다. 클로드가 쓴 카드에는 "클로드 초안" 표시가, 제안은 생각 모으기에 들어갔습니다.':'가져왔습니다. 클로드가 쓴 카드에는 "클로드 초안" 표시가 붙어 있습니다.');}
+    else{ui.pane='scratch';renderEditor();toast('제안을 생각 모으기 아래에 넣었습니다.');const ta=document.querySelector('[data-lf=scratch]');if(ta){ta.scrollTop=ta.scrollHeight;}}
+  });
+}
+
+/* ---------- backup to a chosen file ---------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('lecture.handles',1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function hGet(k){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('h','readonly').objectStore('h').get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error);});}
+async function hSet(k,v){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('h','readwrite').objectStore('h').put(v,k);t.onsuccess=()=>res();t.onerror=()=>rej(t.error);});}
+async function saveJsonBackup(l,chooseNew){
+  const name=safeName(l.title)+'.lecture.json';const text=JSON.stringify(l,null,2);
+  if(typeof window.showSaveFilePicker!=='function'){download(name,text,'application/json');toast('다운로드 폴더에 저장했습니다. 이 브라우저는 저장 위치 지정을 지원하지 않습니다.');return;}
+  try{
+    let h=chooseNew?null:await hGet(l.id).catch(()=>null);
+    if(h){let perm='denied';try{perm=await h.queryPermission({mode:'readwrite'});if(perm!=='granted')perm=await h.requestPermission({mode:'readwrite'});}catch(e){}if(perm!=='granted')h=null;}
+    if(!h){h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'lecture 백업 (JSON)',accept:{'application/json':['.json']}}]});await hSet(l.id,h).catch(()=>{});}
+    const w=await h.createWritable();await w.write(text);await w.close();
+    toast(`"${h.name}"에 저장했습니다.`);
+  }catch(e){
+    if(e&&e.name==='AbortError')return;
+    download(name,text,'application/json');toast('저장 창을 열 수 없어 다운로드 폴더에 저장했습니다.');
+  }
+}
+
+/* ---------- markdown & prompt ---------- */
+function toMarkdown(l,withMemo){
+  const out=[];out.push(`# ${l.title||'제목 없음'}`,'');
+  const meta=[`총 ${l.totalMinutes}분`];if(l.date)meta.push(l.date);if(l.startTime)meta.push(`${l.startTime} 시작`);if(l.place)meta.push(l.place);if(l.audience)meta.push(`청중: ${l.audience}`);
+  out.push(meta.join(' · '),'','## 타임라인','','| 시작 | 배정 | 요지 | 한 줄 요지 |','|---|---|---|---|');
+  l.topics.forEach((t,i)=>{const s=clockAt(l,topicStart(l,i));out.push(`| ${s||`+${topicStart(l,i)}분`} | ${t.minutes}분 | ${t.title||'(제목 없음)'} | ${t.summary||''} |`);});
+  out.push('');
+  l.topics.forEach((t,i)=>{const s=clockAt(l,topicStart(l,i));out.push(`## ${i+1}. ${t.title||'(제목 없음)'} (${t.minutes}분${s?', '+s:''})`,'');if(t.summary)out.push(`> ${t.summary}`,'');if(withMemo&&t.memo.trim())out.push('메모:',t.memo.trim().split('\n').map(x=>'  '+x).join('\n'),'');const cs=t.cards.filter(c=>c.text.trim());if(!cs.length)out.push('(대본 없음)','');cs.forEach(c=>out.push(c.text.trim(),''));});
+  return out.join('\n');
+}
+function slidePrompt(l){
+  return `아래는 제가 할 강연의 요지와 대본입니다. 이 내용으로 발표 슬라이드를 파워포인트(.pptx) 파일로 만들어 주세요.
+
+요청 사항:
+1. 맨 앞에 제목 슬라이드, 맨 뒤에 질의응답 슬라이드를 넣어 주세요.
+2. "##"로 시작하는 요지 하나가 하나의 섹션입니다. 요지가 시작될 때마다 요지 제목과 한 줄 요지가 적힌 섹션 표지 슬라이드를 넣고, 배정 시간을 작게 표시해 주세요.
+3. 대본의 문단 하나를 슬라이드 하나의 기준으로 삼되, 내용에 따라 합치거나 나누어도 됩니다.
+4. 슬라이드 본문은 키워드와 짧은 문장 중심으로 간결하게 쓰고, 대본 전문은 해당 슬라이드의 발표자 노트에 넣어 주세요.
+5. 디자인은 글자가 잘 읽히는 단정한 스타일, 16:9 비율로 만들어 주세요. 한글 글꼴이 깨지지 않게 해 주세요.
+6. 가능하면 같은 내용의 PDF도 함께 만들어 주세요.
+7. "메모:" 항목은 슬라이드에 넣지 말고 참고만 해 주세요.
+
+---
+
+${toMarkdown(l,true)}`;
+}
+
+/* ---------- print ---------- */
+function doPrint(kind){
+  const l=cur();if(!l)return;
+  if(kind==='a6'){
+    pageStyle.textContent='@page{size:148mm 105mm;margin:8mm}';
+    let g=0;const cards=[];
+    cards.push(`<div class="pcard title"><h1>${esc(l.title)||'제목 없음'}</h1><p>총 ${l.totalMinutes}분 · 요지 ${l.topics.length}개${l.date?' · '+esc(l.date):''}${l.place?' · '+esc(l.place):''}</p></div>`);
+    l.topics.forEach((t,i)=>{
+      const cs=t.cards.filter(c=>c.text.trim());const s=clockAt(l,topicStart(l,i));
+      cards.push(`<div class="pcard cover"><div class="k">요지 ${i+1} / ${l.topics.length} · ${t.minutes}분${s?' · '+s+' 시작':''}</div><h2>${esc(t.title)||'제목 없는 요지'}</h2>${t.summary?`<p>${esc(t.summary)}</p>`:''}${t.memo.trim()?`<div class="m">${esc(t.memo.trim())}</div>`:''}<div class="pf"><span></span><span>${++g}</span></div></div>`);
+      cs.forEach((c,k)=>{cards.push(`<div class="pcard"><div class="ph"><span>${i+1}. ${esc(t.title)||'제목 없는 요지'}</span><span>${k+1} / ${cs.length} · 약 ${fmtDur(estMin(l,c.text))}</span></div><div class="pb">${esc(c.text.trim())}</div><div class="pf"><span></span><span>${++g}</span></div></div>`);});
+    });
+    printRoot.className='a6';printRoot.innerHTML=cards.join('');
+  }else{
+    pageStyle.textContent='@page{size:A4 portrait;margin:18mm 20mm}';
+    const meta=[`총 ${l.totalMinutes}분`];if(l.date)meta.push(esc(l.date));if(l.startTime)meta.push(`${esc(l.startTime)} 시작`);if(l.place)meta.push(esc(l.place));if(l.audience)meta.push(`청중: ${esc(l.audience)}`);
+    const rows=l.topics.map((t,i)=>{const s=clockAt(l,topicStart(l,i));return`<tr><td class="n">${s||'+'+topicStart(l,i)+'분'}</td><td class="n">${t.minutes}분</td><td>${esc(t.title)||'(제목 없음)'}</td><td>${esc(t.summary)}</td></tr>`;}).join('');
+    const end=clockAt(l,allocated(l));
+    const secs=l.topics.map((t,i)=>{const s=clockAt(l,topicStart(l,i));const cs=t.cards.filter(c=>c.text.trim());return`<div class="sec"><div class="lt">${s?`<div><b>${s}</b></div>`:`<div>+${topicStart(l,i)}분</div>`}<div>${t.minutes}분</div><div>요지 ${i+1}</div></div><div class="rt"><h2>${esc(t.title)||'(제목 없음)'}</h2>${t.summary?`<p class="sum">${esc(t.summary)}</p>`:''}${ui.a4memo&&t.memo.trim()?`<div class="memo">${esc(t.memo.trim())}</div>`:''}${cs.length?cs.map(c=>`<p>${esc(c.text.trim())}</p>`).join(''):'<p class="none">(대본 없음)</p>'}</div></div>`;}).join('');
+    printRoot.className='a4';printRoot.innerHTML=`<h1>${esc(l.title)||'제목 없음'}</h1><div class="meta">${meta.join(' · ')}</div><h3>타임라인</h3><table><thead><tr><th style="text-align:right">시작</th><th style="text-align:right">배정</th><th>요지</th><th>한 줄 요지</th></tr></thead><tbody>${rows}${end?`<tr><td class="n">${end}</td><td></td><td colspan="2">종료 예정</td></tr>`:''}</tbody></table>${secs}`;
+  }
+  setTimeout(()=>window.print(),50);
+}
+window.addEventListener('afterprint',()=>{printRoot.innerHTML='';printRoot.className='';pageStyle.textContent='';});
+
+/* ---------- presentation ---------- */
+function buildSlides(l){
+  const s=[{type:'title'}];
+  l.topics.forEach((t,ti)=>{s.push({type:'cover',ti});const cs=t.cards.filter(c=>c.text.trim());cs.forEach((c,ci)=>s.push({type:'card',ti,ci,n:cs.length,text:c.text.trim()}));});
+  s.push({type:'end'});return s;
+}
+function startPresent(){
+  const l=cur();if(!l)return;
+  pres={l,slides:buildSlides(l),idx:0,startedAt:null,spent:{},enter:null,ti:null,scale:1,paused:false,pauseAt:null};
+  presentEl.hidden=false;presentEl.className=ui.prTheme==='light'?'light':'';
+  document.addEventListener('keydown',presKey);
+  pres.timer=setInterval(drawTimers,500);
+  drawSlide();
+}
+function stopPresent(){
+  if(!pres)return;clearInterval(pres.timer);document.removeEventListener('keydown',presKey);presentEl.hidden=true;presentEl.innerHTML='';pres=null;
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+}
+function presNow(){return pres.paused?pres.pauseAt:Date.now();}
+function presGo(i){
+  if(!pres)return;i=Math.max(0,Math.min(pres.slides.length-1,i));
+  const sl=pres.slides[i];const now=presNow();
+  if(pres.startedAt==null&&sl.type!=='title')pres.startedAt=now;
+  const nti=sl.ti??null;
+  if(nti!==pres.ti){if(pres.ti!=null&&pres.enter!=null)pres.spent[pres.ti]=(pres.spent[pres.ti]||0)+(now-pres.enter);pres.ti=nti;pres.enter=nti==null?null:now;}
+  pres.idx=i;drawSlide();
+}
+function presKey(e){
+  if(!pres)return;const k=e.key;
+  if(k==='Escape'){e.preventDefault();stopPresent();return;}
+  if(k==='ArrowRight'||k===' '||k==='ArrowDown'||k==='PageDown'||k==='Enter'){e.preventDefault();presGo(pres.idx+1);}
+  else if(k==='ArrowLeft'||k==='ArrowUp'||k==='PageUp'||k==='Backspace'){e.preventDefault();presGo(pres.idx-1);}
+  else if(k==='Home'){presGo(0);}else if(k==='End'){presGo(pres.slides.length-1);}
+  else if(k==='+'||k==='='){pres.scale=Math.min(2,pres.scale+0.1);presentEl.style.setProperty('--ps',pres.scale);}
+  else if(k==='-'||k==='_'){pres.scale=Math.max(0.6,pres.scale-0.1);presentEl.style.setProperty('--ps',pres.scale);}
+  else if(k==='f'||k==='F'){toggleFs();}
+  else if(k==='t'||k==='T'){ui.prTheme=ui.prTheme==='dark'?'light':'dark';presentEl.className=ui.prTheme==='light'?'light':'';}
+  else if(k==='p'||k==='P'){togglePause();}
+  else if(/^[1-9]$/.test(k)){const n=+k-1;const i=pres.slides.findIndex(s=>s.type==='cover'&&s.ti===n);if(i>=0)presGo(i);}
+}
+function toggleFs(){if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});else document.documentElement.requestFullscreen().catch(()=>toast('전체 화면을 열 수 없습니다. 브라우저의 전체 화면 기능을 써 주세요.'));}
+function togglePause(){if(!pres)return;if(pres.paused){const d=Date.now()-pres.pauseAt;if(pres.startedAt!=null)pres.startedAt+=d;if(pres.enter!=null)pres.enter+=d;pres.paused=false;}else{pres.paused=true;pres.pauseAt=Date.now();}drawTimers();}
+function drawSlide(){
+  const {l,slides,idx}=pres;const sl=slides[idx];let main='',top='';
+  const t=sl.ti!=null?l.topics[sl.ti]:null;
+  if(sl.type==='title'){main=`<div class="pr-cover"><div class="k">강연</div><h2>${esc(l.title)||'제목 없음'}</h2><p>총 ${l.totalMinutes}분${l.startTime?' · '+esc(l.startTime)+' 시작':''}</p><p style="margin-top:28px;font-size:calc(15px * var(--ps))">→ 또는 스페이스로 시작 · <kbd>F</kbd> 전체 화면 · <kbd>T</kbd> 밝은 화면 · <kbd>+</kbd><kbd>-</kbd> 글자 크기 · <kbd>P</kbd> 일시정지 · 숫자 키로 요지 이동 · <kbd>Esc</kbd> 종료</p></div>`;top='시작 전';}
+  else if(sl.type==='cover'){main=`<div class="pr-cover"><div class="k">요지 ${sl.ti+1} / ${l.topics.length} · ${t.minutes}분</div><h2>${esc(t.title)||'제목 없는 요지'}</h2>${t.summary?`<p>${esc(t.summary)}</p>`:''}${t.memo.trim()?`<div class="pr-memo">${esc(t.memo.trim())}</div>`:''}</div>`;top=`요지 ${sl.ti+1} 시작`;}
+  else if(sl.type==='card'){main=`<div class="pr-text">${esc(sl.text)}</div>`;top=`${sl.ti+1}. ${esc(t.title)||'제목 없는 요지'} · ${sl.ci+1} / ${sl.n}`;}
+  else{main=`<div class="pr-cover"><h2>끝</h2><p>질의응답 · <kbd>Esc</kbd>로 나가기</p></div>`;top='끝';}
+  const next=slides[idx+1];let nx='';
+  if(next){if(next.type==='cover')nx='다음 요지: '+(l.topics[next.ti].title||'제목 없는 요지');else if(next.type==='card')nx='다음: '+next.text.replace(/\s+/g,' ');else nx='다음: 끝';}
+  const bar=l.topics.map((tp,i)=>`<div style="flex:${+tp.minutes||1};background:${col(i)}" class="${sl.ti===i?'cur':sl.ti!=null&&i<sl.ti?'done':''}"></div>`).join('');
+  presentEl.innerHTML=`<div class="pr-top"><span class="where">${top}</span><span class="tm" id="prTm"></span><span class="tools"><button data-p="fs">전체 화면</button><button data-p="theme">밝기</button><button data-p="pause">일시정지</button><button data-p="exit">나가기</button></span></div>
+    <div class="pr-main">${main}</div><div class="pr-next">${esc(nx)}</div><div class="pr-bar">${bar}</div>`;
+  drawTimers();
+}
+presentEl.addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b){return;}const a=b.dataset.p;if(a==='exit')stopPresent();else if(a==='fs')toggleFs();else if(a==='pause')togglePause();else if(a==='theme'){ui.prTheme=ui.prTheme==='dark'?'light':'dark';presentEl.className=ui.prTheme==='light'?'light':'';}});
+presentEl.addEventListener('click',e=>{if(!pres||e.target.closest('[data-p]'))return;const r=presentEl.getBoundingClientRect();if(e.clientY<r.top+70)return;presGo(pres.idx+(e.clientX<r.left+r.width*0.25?-1:1));});
+function drawTimers(){
+  if(!pres)return;const el=document.getElementById('prTm');if(!el)return;const {l}=pres;const now=presNow();
+  const elapsed=pres.startedAt==null?0:now-pres.startedAt;
+  let parts=[`경과 ${fmtClock(elapsed)} / ${l.totalMinutes}분`];
+  if(pres.ti!=null){const t=l.topics[pres.ti];const used=(pres.spent[pres.ti]||0)+(pres.enter!=null?now-pres.enter:0);const rem=t.minutes*60000-used;parts.push(rem>=0?`이 요지 남음 ${fmtClock(rem)}`:`<span class="late">이 요지 ${fmtClock(-rem)} 초과</span>`);
+    const planned=topicStart(l,pres.ti)*60000;const diff=elapsed-used-planned;if(Math.abs(diff)>=60000)parts.push(diff>0?`<span class="late">예정보다 ${Math.round(diff/60000)}분 늦음</span>`:`예정보다 ${Math.round(-diff/60000)}분 빠름`);}
+  if(pres.paused)parts.push('일시정지');
+  el.innerHTML=parts.map(p=>`<span>${p}</span>`).join('');
+}
+
+render();
+</script>
+</body>
+</html>
