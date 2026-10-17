@@ -178,7 +178,7 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .sheet{position:fixed;inset:0;z-index:50;background:rgba(40,30,20,.35);display:flex;align-items:flex-end;justify-content:center}
 .sheet[hidden]{display:none}
 .sheet .card{
-  width:100%;max-width:var(--w);max-height:92vh;display:flex;flex-direction:column;
+  width:100%;max-width:var(--w);max-height:92vh;max-height:92dvh;display:flex;flex-direction:column;
   background:var(--paper);border-radius:10px 10px 0 0;box-shadow:0 -6px 30px rgba(0,0,0,.15);
   padding:1rem 1.1rem calc(1rem + env(safe-area-inset-bottom));
 }
@@ -200,6 +200,12 @@ ol.did li .dur{flex:none;font-size:.78rem;color:var(--seal);margin-left:auto;pad
 .sheet .body .nt{padding-left:.4em}
 .sheet .body .none{color:var(--ink-faint);font-size:.9rem;padding:.5rem 0 0}
 .sheet .foot{border-top:1px solid var(--rule);padding-top:.7rem;margin-top:.7rem}
+.sheet .card{height:auto}
+.sheet.editing .card{height:92vh;height:92dvh}
+.sheet.editing .body,.sheet.editing .stat{display:none !important}
+.sheet.editing .foot{flex:1;min-height:0;display:flex;flex-direction:column;border-top:none;margin-top:0;padding-top:0}
+.sheet.editing #shTa{flex:1;min-height:0;height:auto !important;overflow-y:auto;resize:none;font-size:1rem;line-height:1.8}
+.sheet.editing .row{flex:none}
 .sheet .addline{display:flex;gap:.6rem;align-items:center}
 .sheet .addline input{flex:1;min-width:0;background:none;border:none;border-bottom:1px solid var(--rule);padding:.45rem 0}
 .sheet .addline input::placeholder{color:var(--ink-faint)}
@@ -1387,7 +1393,7 @@ async function copyJjok(){
 /* ══════════ 일 페이지 ══════════ */
 function openSheet(id){ sheet = {id}; sheetEdit = false; renderSheet(); }
 function openSheetRow(row){ sheet = {row, ro:true}; sheetEdit = false; renderSheet(); }
-function closeSheet(){ sheet = null; sheetEdit = false; $('#sheet').hidden = true; }
+function closeSheet(){ sheet = null; sheetEdit = false; $('#sheet').hidden = true; $('#sheet').classList.remove('editing'); }
 function sheetData(){
   if(!sheet) return null;
   if(sheet.ro) return sheet.row;
@@ -1398,6 +1404,7 @@ function renderSheet(){
   const d = sheetData();
   if(!d){ closeSheet(); return; }
   const el = $('#sheet'); el.hidden = false;
+  el.classList.toggle('editing', !!sheetEdit && !sheet.ro);
   $('#shTtl').innerHTML = kindTag(d.kind) + (d.url
     ? `<a href="${esc(d.url)}"${/^https?:/i.test(d.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(d.text)}</a>`
     : esc(d.text));
@@ -1449,7 +1456,7 @@ function renderSheet(){
     if(!$('#shTa')){
       foot.innerHTML = `<textarea id="shTa"></textarea>
         <div class="row"><button id="shEdCancel">그만두기</button><button class="go" id="shEdGo">저장</button></div>`;
-      const ta = $('#shTa'); ta.value = d.note || ''; grow(ta); ta.addEventListener('input', () => grow(ta)); ta.focus();
+      const ta = $('#shTa'); ta.value = d.note || ''; ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;   // 칸 안에서 스크롤한다
       $('#shEdCancel').onclick = () => { sheetEdit = false; editBase = null; renderSheet(); };
       $('#shEdGo').onclick = () => {
         const t = byId(sheet.id);
