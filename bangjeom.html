@@ -492,6 +492,8 @@ ol.did li .kind{font-size:.68rem}
     <p style="margin-top:.4rem">체크한 항목은 바로 사라지고, 다 체크하면 블록이 "고정 블록 3/3" 한 줄로 줄어듭니다. 그 줄을 누르면 잠깐 펼쳐져 체크를 풀거나 고칠 수 있습니다. 자정이 지나면 다시 다 보입니다.</p>
     <label class="row"><input type="checkbox" id="sAutoPip"> 시작하면 작은 창 띄우기</label>
     <p style="margin-top:.4rem">「시작」을 누르면 지금 할 일을 보여주는 작은 창이 다른 앱 위에 뜹니다. 크롬·엣지에서는 버튼이 든 창, 사파리에서는 글자만 든 창입니다. 아이폰처럼 좁은 화면에서는 자동으로 띄우지 않습니다.</p>
+    <label class="row"><input type="checkbox" id="sAutoKind"> 쓰기·읽기는 늘 점 찍기</label>
+    <p style="margin-top:.4rem">훑다가 쓰기·읽기 항목에 이르면 묻지 않고 바로 점을 찍고 다음으로 넘어갑니다. 그래서 사슬에 언제나 쓰기·읽기가 들어 있습니다. 끄면 다른 일처럼 묻습니다.</p>
     <label class="row"><input type="checkbox" id="sNoRescan"> 끝낸 뒤 다시 훑지 않기</label>
     <p style="margin-top:.4rem">켜면 「끝냈다」「조금 했다」 뒤에 바로 사슬의 다음 점으로 넘어가고, 사슬이 다 비었을 때 맨 위부터 훑습니다. 끄면 포스터의 원래 방식대로 일을 끝낼 때마다 그 자리 다음부터 다시 훑습니다.</p>
     <label class="row"><input type="checkbox" id="sDaily"> 자정에 점 모두 지우기</label>
@@ -788,6 +790,19 @@ function startState(t){
   return {txt:`${hm} 시작 · ${left}분 남음`, dis:true, over:false};
 }
 
+// 쓰기·읽기 항목은 묻지 않고 점을 찍는다. 훑기 후보가 쓰기·읽기인 동안 차례로 찍고 넘어간다
+function autoDotKinds(){
+  if(cfg.autoKind === false) return false;
+  let changed = false, ci;
+  while((ci = candidateInfo()) && KINDS[ci.t.kind]){
+    S.chain.push(ci.t.id);
+    if(ci.due) askedDue.add(ci.t.id);
+    else S.cursor = ci.t.id;
+    changed = true;
+  }
+  return changed;
+}
+
 function answer(yes){
   const ci = candidateInfo(); if(!ci) return;
   const c = ci.t;
@@ -807,8 +822,6 @@ function finish(taskId, reentryText){
   t.done = true; t.doneAt = now(); t.startedAt = null;
   S.chain = S.chain.filter(id => id !== taskId);
   S.cursor = taskId;                       // 방금 한 자리 다음부터 다시 훑는다
-  afterDueChain(t);                        // 마감 사슬이었으면 그 규칙이 앞선다
-  stayOnChain();
   if(reentryText && reentryText.trim()){
     const q = splitDue(reentryText);
     const r = splitLink(q.text);
@@ -816,6 +829,9 @@ function finish(taskId, reentryText){
     if(q.due || t.due) nt.due = q.due || t.due;
     S.tasks.push(nt);
   }
+  // 다시 적은 항목이 끝에 붙은 뒤에 커서를 정해야, 그 항목이 바로 훑기 대상으로 올라오지 않는다
+  afterDueChain(t);                        // 마감 사슬이었으면 그 규칙이 앞선다
+  stayOnChain();
   if(wasRoot){ S.laps.push(now()); S.laps = S.laps.slice(-300); lapFlash = true; }
   const top = benchmark();
   if(top && top.urgent) S.cursor = S.tasks[S.tasks.length - 1].id;   // 긴급한 일이 다음이면 바로 그것으로
@@ -848,11 +864,14 @@ function drop(taskId){
   const i = idxOf(taskId); if(i < 0) return;
   askedDue.delete(taskId);
   const t = S.tasks[i];
+  const wasActive = S.chain.includes(taskId);          // 사슬에 있던 일인가, 훑기 중의 후보인가
   if(S.cursor === taskId) S.cursor = i > 0 ? S.tasks[i-1].id : null;
   S.tasks.splice(i,1);
   S.chain = S.chain.filter(id => id !== taskId);
-  afterDueChain(t);
-  stayOnChain();
+  if(wasActive){                                       // 「이제 필요 없다」: 사슬의 다음 점으로
+    afterDueChain(t);
+    stayOnChain();
+  }                                                    // 훑기 중의 「이 일은 버린다」: 커서는 그대로, 다음 항목부터 계속 훑는다
   commit();
 }
 
@@ -1104,6 +1123,7 @@ function renderStage(){
     return;
   }
 
+  if(autoDotKinds()){ commit(); return; }   // 찍은 것이 있으면 다시 그린다 (다음에는 찍을 것이 없다)
   const ci = candidateInfo();
   const c = ci ? ci.t : null;
 
@@ -1847,6 +1867,8 @@ $('#sHideDone').checked = !!cfg.hideDone;
 $('#sHideDone').addEventListener('change', e => { cfg.hideDone = e.target.checked; saveCfg(); render(); });
 $('#sAutoPip').checked = cfg.autoPip !== false;
 $('#sAutoPip').addEventListener('change', e => { cfg.autoPip = e.target.checked; saveCfg(); });
+$('#sAutoKind').checked = cfg.autoKind !== false;
+$('#sAutoKind').addEventListener('change', e => { cfg.autoKind = e.target.checked; saveCfg(); render(); });
 $('#sNoRescan').checked = cfg.noRescan !== false;
 $('#sNoRescan').addEventListener('change', e => { cfg.noRescan = e.target.checked; saveCfg(); });
 $('#sDaily').checked = cfg.dailyReset !== false;
