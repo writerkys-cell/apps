@@ -331,6 +331,11 @@ div.strip.inc:hover{background:rgba(155,59,50,.035)}
 .pr-when .pick{display:flex;gap:8px;align-items:center}
 .pr-when input[type=date]{background:#f8f5ec;border:1px solid var(--line);border-radius:2px;padding:6px 8px;font-size:14px}
 .prform{border-top-color:var(--gold)}
+#prayNew .prform{margin:-6px 0 26px}
+.day .mp .sep{color:var(--faint)}
+.day .mp button.prnew{color:var(--gold);border-bottom-color:var(--gold)}
+.calhead .mid-btns{display:inline-flex;gap:12px}
+.calhead .mid button#calPray{color:var(--gold);border-bottom-color:var(--gold)}
 .cell .c.pray{color:var(--gold)}
 .ag .tag.pr{color:var(--gold)}
 .ag .prd{display:block;font-size:13.5px;color:var(--ink-soft);white-space:pre-wrap}
@@ -416,6 +421,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
   <!-- 오늘 -->
   <section data-v="today">
     <div class="day"><span class="d" id="dayD"></span><span class="w" id="dayW"></span><span class="mp" id="dayMp"></span></div>
+    <div id="prayNew"></div>
     <div class="agenda" id="agenda"></div>
     <div class="pray" id="prayHost" hidden></div>
     <div class="strip inc" id="stripJ" role="button" tabindex="0" title="프로젝트 보기" hidden></div>
@@ -741,7 +747,7 @@ function renderToday(){
   $('dayW').textContent=WD[d.getDay()]+'요일';
   const e=MP.entries[k], w=e?countWords(e.text):0;
   const at=(w&&e.updatedAt)?(()=>{ const t=new Date(e.updatedAt); return pad(t.getHours())+':'+pad(t.getMinutes())+'까지'; })():'';
-  $('dayMp').innerHTML = `<button onclick="go('morning')">${w?'일지 · '+w+'단어 · '+at+' · 이어 적기':'일지 기록'}</button>`;
+  $('dayMp').innerHTML = `<button onclick="go('morning')">${w?'일지 · '+w+'단어 · '+at+' · 이어 적기':'일지 기록'}</button><span class="sep"> · </span><button class="prnew" onclick="openPrayToday()">기도 적기</button>`;
   renderAgenda();
   renderPrayers();
 
@@ -1370,14 +1376,14 @@ function renderCal(){
   host.innerHTML=`
   <div class="calhead">
     <button class="arrow" id="calPrev" aria-label="지난달">←</button>
-    <div class="mid"><h2>${y}년 ${m+1}월</h2><button id="calToday">오늘</button></div>
+    <div class="mid"><h2>${y}년 ${m+1}월</h2><span class="mid-btns"><button id="calToday">오늘</button><button id="calPray">오늘의 기도</button></span></div>
     <button class="arrow" id="calNext" aria-label="다음 달">→</button>
   </div>
   <div class="grid">${g}</div>
   ${calTableMissing&&mrOn()?`<p class="calmsg">Supabase에 일정 표가 없어 일정이 이 기기에만 저장됩니다. <button class="linkish" onclick="go('set')">설정</button>에서 일정 표 SQL을 한 번 실행하세요.</p>`:''}
   ${!mrOn()?`<p class="calmsg">미래 프로젝트를 잇지 않아 일정이 이 기기에만 저장됩니다. <button class="linkish" onclick="go('set')">설정</button></p>`:''}
   <div class="dd">
-    <div class="dd-head"><h3>${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일${calSel===today?' · 오늘':''}</h3><span class="dd-btns"><button class="btn" id="calDiary">일기 쓰기</button><button class="btn" id="calPray">기도 적기</button><button class="btn" id="calNew">이 날에 일정 적기</button></span></div>
+    <div class="dd-head"><h3>${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일${calSel===today?' · 오늘':''}</h3><span class="dd-btns"><button class="btn" id="calDiary">일기 쓰기</button><button class="btn" id="calNew">이 날에 일정 적기</button></span></div>
     ${rows?`<ul class="ag dd-list">${rows}</ul>`:'<p class="empty">이 날에 적힌 일정이 없습니다.</p>'}
     <div id="calForm"></div>
   </div>`;
@@ -1385,7 +1391,7 @@ function renderCal(){
   $('calNext').onclick=()=>{ calMonth=new Date(y,m+1,1); calEdit=null; renderCal(); };
   $('calToday').onclick=()=>{ calSel=today; calMonth=null; calEdit=null; renderCal(); };
   $('calNew').onclick=()=>{ calEdit='new'; calDraft=null; renderCal(); };
-  $('calPray').onclick=()=>{ calEdit='pray'; renderCal(); };
+  $('calPray').onclick=()=>{ calSel=today; calMonth=null; calEdit='pray'; renderCal(); };   /* 기도는 오늘의 일 — 오늘 칸에서 연다 */
   $('calDiary').onclick=()=>openDiary(calSel);
   host.querySelector('.grid').onclick=ev=>{ const c=ev.target.closest('.cell'); if(!c) return; calSel=c.dataset.k; calEdit=null;
     const d=parseKey(calSel); if(d.getMonth()!==m||d.getFullYear()!==y) calMonth=null; renderCal(); };
@@ -1398,7 +1404,7 @@ function renderCal(){
     if(pd){ const r=PR.rows[pd.dataset.prDel]; if(r&&confirm('이 기도의 기록을 지울까요?')){ r.deleted=true; touchPr(r); renderCal(); toast('지웠습니다'); } return; }
     const li=ev.target.closest('[data-edit]'); if(li){ calEdit=li.dataset.edit; renderCal(); }
   };
-  if(calEdit==='pray') renderPrayForm(); else if(calEdit) renderForm();
+  if(calEdit==='pray') renderPrayForm($('calForm'),()=>{ calEdit=null; renderCal(); }); else if(calEdit) renderForm();
 }
 function renderForm(){
   const isNew=calEdit==='new', e=isNew?Object.assign({title:'',date:calSel,time:'',place:'',memo:'',repeat:'none',until:''},calDraft?{title:calDraft.title,memo:calDraft.memo}:{}):CAL.events[calEdit];
@@ -1609,27 +1615,32 @@ $('prayHost').addEventListener('click',e=>{
   if(act==='del'){ if(!confirm('이 기도를 지울까요?')) return; r.deleted=true; touchPr(r); prOpen=null; if(document.activeElement) document.activeElement.blur(); renderPrayers(); toast('지웠습니다'); }
 });
 
-/* 달력 — 기도 적기(오늘 적은 것으로) */
-function renderPrayForm(){
-  const box=$('calForm'); if(!box) return;
+/* 기도 적기 — 달력 머리의 ‘오늘의 기도’와 오늘 화면의 ‘기도 적기’가 같이 쓴다. 적은 날은 늘 오늘, 보낼 날도 오늘에서 센다.
+   box 안에서만 찾는다(두 화면에 폼이 함께 있어도 섞이지 않게). done(sent)는 닫을 때 부른다. */
+function renderPrayForm(box,done){
+  if(!box) return;
+  const q=sel=>box.querySelector(sel);
   box.innerHTML=`<div class="evform prform">
     <p class="from">오늘 일어난 일의 가장 바람직한 해결을 적어 미래의 한 날로 보냅니다. 그날이 오기 전에는 어디에도 보이지 않습니다.</p>
-    <div class="field"><label for="pfEv">오늘 일어난 일 (짧게, 비워도 됩니다. 기사·글의 주소를 붙여 넣으면 그날 눌러 볼 수 있습니다)</label><input id="pfEv"></div>
-    <div class="field"><label for="pfTx">가장 바람직한 해결</label><textarea id="pfTx"></textarea></div>
-    ${prWhenHTML('pn')}
-    <div class="btnrow"><button class="btn" id="pfCancelPr">취소</button></div></div>`;
-  setTimeout(()=>{ $('pfTx').focus(); box.scrollIntoView({block:'center'}); },30);
-  $('pfCancelPr').onclick=()=>{ calEdit=null; renderCal(); };
-  box.querySelector('.pr-when').onclick=e=>{
+    <div class="field"><label>오늘 일어난 일 (짧게, 비워도 됩니다. 기사·글의 주소를 붙여 넣으면 그날 눌러 볼 수 있습니다)</label><input class="pf-ev"></div>
+    <div class="field"><label>가장 바람직한 해결</label><textarea class="pf-tx"></textarea></div>
+    ${prWhenHTML('pn').replace('id="pnDate"','class="pn-date"')}
+    <div class="btnrow"><button class="btn pf-cancel">취소</button></div></div>`;
+  setTimeout(()=>{ q('.pf-tx').focus(); box.scrollIntoView({block:'center'}); },30);
+  q('.pf-cancel').onclick=()=>done(false);
+  q('.pr-when').onclick=e=>{
     const w=e.target.closest('[data-pn-when]'); if(!w) return;
-    const text=$('pfTx').value.trim(); if(!text){ toast('바라는 해결을 적어 주세요'); $('pfTx').focus(); return; }
-    const v=w.dataset.pnWhen, date=prWhen(v==='pick'?$('pnDate').value:v);
+    const text=q('.pf-tx').value.trim(); if(!text){ toast('바라는 해결을 적어 주세요'); q('.pf-tx').focus(); return; }
+    const v=w.dataset.pnWhen, date=prWhen(v==='pick'?q('.pn-date').value:v);
     if(!date){ toast('내일 뒤의 날짜를 골라 주세요'); return; }
-    const now=new Date().toISOString();
-    touchPr({id:'y'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), text, event:$('pfEv').value.trim(), asked:dayKey(), date, createdAt:now, state:'open', history:[]});
-    calEdit=null; renderCal(); prSentToast(v,date);
+    touchPr({id:'y'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), text, event:q('.pf-ev').value.trim(), asked:dayKey(), date, createdAt:new Date().toISOString(), state:'open', history:[]});
+    if(document.activeElement) document.activeElement.blur();
+    done(true); prSentToast(v,date);
   };
 }
+/* 오늘 화면 — 일지 줄 옆 ‘기도 적기’ */
+function openPrayToday(){ const box=$('prayNew'); if(!box) return; if(box.innerHTML){ box.innerHTML=''; return; } renderPrayForm(box,()=>{ box.innerHTML=''; }); }
+window.openPrayToday=openPrayToday;
 
 /* ═════════ 받은편지함 — 아이폰 단축어·적바림이 올린 것을 그날 일지 끝에 옮겨 붙인다 ═════════
    2026년 10월 12일까지는 ‘메모’ 탭(일정·할 일·글·조사로 옮기기)이었다. 탭과 화면은 없애고 표(memo_notes)와 올리고 받는 코드는 남겼다.
