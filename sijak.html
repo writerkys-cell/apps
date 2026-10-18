@@ -312,6 +312,30 @@ div.strip.inc:hover{background:rgba(155,59,50,.035)}
 .rform .hint{font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;line-height:1.7}
 .ref .foot a{color:var(--seal);border-bottom:1px solid var(--seal)}
 
+/* ── 기도 (2026년 10월 18일) ── */
+.pray{margin:0 0 26px}
+.pray[hidden]{display:none}
+.pr-title{font-size:13px;letter-spacing:.2em;color:var(--gold);margin:0 0 8px}
+.pr-title span{letter-spacing:0;color:var(--ink-soft);margin-left:4px}
+.pr{border-left:3px solid var(--gold);background:var(--paper-2);padding:12px 16px 12px;margin-bottom:10px}
+.pr-h{font-size:12.5px;color:var(--ink-soft);letter-spacing:.02em}
+.pr-ev{font-size:14px;color:var(--ink-soft);margin-top:4px;white-space:pre-wrap}
+.pr-t{font-size:17px;line-height:1.75;margin-top:4px;white-space:pre-wrap;word-break:break-word}
+.pr-acts{display:flex;gap:18px;margin-top:8px}
+.pr-acts button{font-size:14px;color:var(--ink);border-bottom:1px solid var(--ink-soft)}
+.pr-form{margin-top:10px}
+.pr-form .field textarea,.prform .field textarea,.prform .field input{width:100%;background:#f8f5ec;border:1px solid var(--line);border-radius:2px;padding:8px 10px;font-size:15px;line-height:1.7}
+.pr-form .field textarea,.prform .field textarea{min-height:70px;resize:vertical}
+.pr-when{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px}
+.pr-when .lab{font-size:13px;color:var(--ink-soft);margin-right:2px;flex-basis:100%}
+.pr-when .pick{display:flex;gap:8px;align-items:center}
+.pr-when input[type=date]{background:#f8f5ec;border:1px solid var(--line);border-radius:2px;padding:6px 8px;font-size:14px}
+.prform{border-top-color:var(--gold)}
+.cell .c.pray{color:var(--gold)}
+.ag .tag.pr{color:var(--gold)}
+.ag .prd{display:block;font-size:13.5px;color:var(--ink-soft);white-space:pre-wrap}
+.ag .prdel{font-size:12px;color:var(--faint);border-bottom:1px dotted var(--faint);margin-left:6px}
+
 /* ── 프로젝트 (2026년 10월 15일) ── */
 .pj{border-top:1px solid var(--line);padding:18px 2px 14px}
 .pj:last-of-type{border-bottom:1px solid var(--line)}
@@ -391,6 +415,7 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
   <section data-v="today">
     <div class="day"><span class="d" id="dayD"></span><span class="w" id="dayW"></span><span class="mp" id="dayMp"></span></div>
     <div class="agenda" id="agenda"></div>
+    <div class="pray" id="prayHost" hidden></div>
     <div class="strip inc" id="stripJ" role="button" tabindex="0" title="프로젝트 보기" hidden></div>
     <div class="strip" id="stripT"></div>
     <div class="pair" id="pairW"><button class="tri" data-pair="W" aria-controls="stripA" aria-expanded="false" aria-label="원고 펼치기"></button>
@@ -659,7 +684,7 @@ async function refreshToday(force){
   if(!force && Date.now()-lastLoad<4000) { renderToday(); return; }
   loading=true; setDot('today','busy','불러오는 중');
   const k=dayKey();
-  await Promise.all([loadWrite(k),loadRead(k),loadReads(false),loadTodo(k),loadRun(false),pullCal(),pullInc(),pullMemo(),pullProj()]);
+  await Promise.all([loadWrite(k),loadRead(k),loadReads(false),loadTodo(k),loadRun(false),pullCal(),pullInc(),pullMemo(),pullProj(),pullPr()]);
   foldMemos(); computeProj();
   lastLoad=Date.now(); loading=false;
   const errs=[Werr,Rerr,Terr,RNerr==='table'?'':RNerr].filter(x=>x&&x!=='setup');
@@ -706,6 +731,7 @@ function renderToday(){
   const at=(w&&e.updatedAt)?(()=>{ const t=new Date(e.updatedAt); return pad(t.getHours())+':'+pad(t.getMinutes())+'까지'; })():'';
   $('dayMp').innerHTML = `<button onclick="go('morning')">${w?'일지 · '+w+'단어 · '+at+' · 이어 적기':'일지 기록'}</button>`;
   renderAgenda();
+  renderPrayers();
 
   /* 글쓰기 */
   const sw=$('stripW'); sw.href=linkFor('write'); $('tteoLink').href=linkFor('tteo'); $('typeLink').href=linkFor('typewriter');
@@ -1301,7 +1327,8 @@ function itemsOn(k,withDaily){
   const list=liveEvents().filter(e=>(withDaily||e.repeat!=='daily')&&occursOn(e,k)).map(e=>({ev:e,time:e.time||'',title:e.title}));
   list.sort(byTime);
   const dues=((T&&T.deadlines)||[]).filter(i=>i.deadline===k).map(i=>({due:true,time:'',title:i.title}));
-  return dues.concat(list);
+  const prs=answeredOn(k).map(r=>({pray:r,time:'',title:'해결 · '+String(r.result||'').split('\n')[0]}));   /* 기도는 해결한 날에만 기록으로 */
+  return dues.concat(prs,list);
 }
 function renderCal(){
   const host=$('calHost'), today=dayKey();
@@ -1314,7 +1341,7 @@ function renderCal(){
     const d=new Date(y,m,1-first+i), k=keyOf(d), its=itemsOn(k,false);
     const cls=['cell']; if(d.getMonth()!==m) cls.push('out'); if(k===today) cls.push('today'); if(k===calSel) cls.push('sel');
     if(d.getDay()===0) cls.push('sun'); if(d.getDay()===6) cls.push('sat');
-    const shown=its.slice(0,3).map(o=>`<span class="c${o.due?' due':''}">${o.time?esc(o.time)+' ':''}${esc(o.title)}</span>`).join('')
+    const shown=its.slice(0,3).map(o=>`<span class="c${o.due?' due':o.pray?' pray':''}">${o.time?esc(o.time)+' ':''}${esc(o.title)}</span>`).join('')
       + (its.length>3?`<span class="c more">+${its.length-3}</span>`:'');
     g+=`<div class="${cls.join(' ')}" role="button" tabindex="0" data-k="${k}" aria-label="${d.getMonth()+1}월 ${d.getDate()}일${its.length?', 일정 '+its.length+'개':''}"><span class="n">${d.getDate()}</span><span class="ct">${shown}</span></div>`;
   }
@@ -1322,6 +1349,8 @@ function renderCal(){
   const dayItems=itemsOn(calSel,true);
   const rows=dayItems.map(o=>{
     if(o.due) return `<li class="go"><a class="row" href="${esc(linkFor('todo'))}" target="sijak_todo" rel="opener"><span></span><span class="when due">마감</span><span class="what">${esc(o.title)}</span></a></li>`;
+    if(o.pray){ const r=o.pray, n=(r.history||[]).length;
+      return `<li><span></span><span class="when">기도</span><span class="what"><span class="tag pr">해결</span>${esc(r.result||'')}<span class="prd">바란 것 · ${esc(r.text)}${r.event?'\n일어난 일 · '+esc(r.event):''}\n${kLabelY(prAsked(r))}에 적음${n?' · 다시 기도 '+n+'번':''}<button class="prdel" data-pr-del="${esc(r.id)}">지우기</button></span></span></li>`; }
     const e=o.ev, daily=e.repeat==='daily', rp=repeatText(e);
     const box=daily?`<button class="ck${isDone(e,calSel)?' on':''}" data-ck="${esc(e.id)}"${calSel>today?' disabled':''} aria-label="${esc(e.title)} 마침"></button>`:'<span></span>';
     return `<li class="go" data-edit="${esc(e.id)}">${box}<span class="when">${esc(e.time||'메모')}</span><span class="what">${rp?`<span class="tag rp">${rp}</span>`:''}${esc(e.title)}${e.place?`<span class="pl"> · ${esc(e.place)}</span>`:''}${e.memo?`<span class="memo">${esc(e.memo)}</span>`:''}</span></li>`;
@@ -1336,7 +1365,7 @@ function renderCal(){
   ${calTableMissing&&mrOn()?`<p class="calmsg">Supabase에 일정 표가 없어 일정이 이 기기에만 저장됩니다. <button class="linkish" onclick="go('set')">설정</button>에서 일정 표 SQL을 한 번 실행하세요.</p>`:''}
   ${!mrOn()?`<p class="calmsg">미래 프로젝트를 잇지 않아 일정이 이 기기에만 저장됩니다. <button class="linkish" onclick="go('set')">설정</button></p>`:''}
   <div class="dd">
-    <div class="dd-head"><h3>${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일${calSel===today?' · 오늘':''}</h3><span class="dd-btns"><button class="btn" id="calDiary">일기 쓰기</button><button class="btn" id="calNew">이 날에 일정 적기</button></span></div>
+    <div class="dd-head"><h3>${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일${calSel===today?' · 오늘':''}</h3><span class="dd-btns"><button class="btn" id="calDiary">일기 쓰기</button><button class="btn" id="calPray">기도 적기</button><button class="btn" id="calNew">이 날에 일정 적기</button></span></div>
     ${rows?`<ul class="ag dd-list">${rows}</ul>`:'<p class="empty">이 날에 적힌 일정이 없습니다.</p>'}
     <div id="calForm"></div>
   </div>`;
@@ -1344,6 +1373,7 @@ function renderCal(){
   $('calNext').onclick=()=>{ calMonth=new Date(y,m+1,1); calEdit=null; renderCal(); };
   $('calToday').onclick=()=>{ calSel=today; calMonth=null; calEdit=null; renderCal(); };
   $('calNew').onclick=()=>{ calEdit='new'; calDraft=null; renderCal(); };
+  $('calPray').onclick=()=>{ calEdit='pray'; renderCal(); };
   $('calDiary').onclick=()=>openDiary(calSel);
   host.querySelector('.grid').onclick=ev=>{ const c=ev.target.closest('.cell'); if(!c) return; calSel=c.dataset.k; calEdit=null;
     const d=parseKey(calSel); if(d.getMonth()!==m||d.getFullYear()!==y) calMonth=null; renderCal(); };
@@ -1352,9 +1382,11 @@ function renderCal(){
   if(list) list.onclick=ev=>{
     const ck=ev.target.closest('[data-ck]');
     if(ck){ ev.stopPropagation(); toggleDone(ck.dataset.ck, calSel); renderCal(); return; }
+    const pd=ev.target.closest('[data-pr-del]');
+    if(pd){ const r=PR.rows[pd.dataset.prDel]; if(r&&confirm('이 기도의 기록을 지울까요?')){ r.deleted=true; touchPr(r); renderCal(); toast('지웠습니다'); } return; }
     const li=ev.target.closest('[data-edit]'); if(li){ calEdit=li.dataset.edit; renderCal(); }
   };
-  if(calEdit) renderForm();
+  if(calEdit==='pray') renderPrayForm(); else if(calEdit) renderForm();
 }
 function renderForm(){
   const isNew=calEdit==='new', e=isNew?Object.assign({title:'',date:calSel,time:'',place:'',memo:'',repeat:'none',until:''},calDraft?{title:calDraft.title,memo:calDraft.memo}:{}):CAL.events[calEdit];
@@ -1418,6 +1450,174 @@ document.addEventListener('keydown',ev=>{
   if(ev.key==='ArrowLeft') $('calPrev')&&$('calPrev').click();
   if(ev.key==='ArrowRight') $('calNext')&&$('calNext').click();
 });
+
+/* ═════════ 기도 — 오늘 일어난 일의 가장 바람직한 해결을 미래의 어느 날로 보내고 잊는다(2026년 10월 18일) ═════════
+   기도 하나 = prayers 한 줄(미래 프로젝트, 시작의 표). 일정 표와 따로 둔다: 아침 브리핑이 일정 표를 통째로 읽으므로,
+   같은 표에 두면 열리기 전의 기도가 브리핑에 나올 수 있다. 되풀이·체크·시각 정렬 규칙과도 엉키지 않는다.
+   data: { id, text(바라는 해결), event?(일어난 일), asked(적은 날), date(열리는 날), createdAt,
+           state:'open'|'answered', history:[{on, from, to, text?}], answeredOn?, result?, answeredAt?,
+           updatedAt, device, deleted? }
+   - 열리는 날 전에는 어디에도 보이지 않는다(달력·오늘·리뷰). 잊는 것이 이 장치의 일이다.
+   - 열린 날(새벽 4시 기준)부터 처리할 때까지 오늘 화면의 ‘기도’에 남는다.
+   - 해결: 결과를 적으면 해결한 날의 달력에 기록으로 남는다(처음 적은 날·바란 해결·다시 기도한 횟수·결과).
+   - 다시 기도: 같은 줄의 열리는 날을 미루고 history에 쌓는다. 해결책을 고쳐 쓰면 이전 문장도 history에 남는다.
+   - 아이폰 단축어는 한 줄을 넣기만 한다(메모 단축어와 같은 방식). asked가 없으면 createdAt의 날로 본다. 시각이 '+09:00' 꼴이어도 받을 때 고른다. */
+const PR_KEY='sijak.pray';
+let PR=Object.assign({rows:{}, dirty:{}, since:''}, lsGet(PR_KEY,{}));
+if(!PR.rows) PR.rows={}; if(!PR.dirty) PR.dirty={};
+let prTableMissing=false, prPushT=null, prPushing=false;
+let prOpen=null;   /* 오늘 화면에서 펼친 것: {id, mode:'done'|'again'} */
+function prPersist(){ lsSet(PR_KEY,PR); }
+function prAsked(r){ return r.asked||dayKey(Date.parse(r.createdAt)||Date.now()); }
+function livePrayers(){ return Object.values(PR.rows).filter(r=>r&&r.id&&!r.deleted&&String(r.text||'').trim()); }
+function duePrayers(){ const k=dayKey(); return livePrayers().filter(r=>r.state!=='answered'&&r.date&&r.date<=k).sort((a,b)=>a.date.localeCompare(b.date)||(a.createdAt||'').localeCompare(b.createdAt||'')); }
+function answeredOn(k){ return livePrayers().filter(r=>r.state==='answered'&&r.answeredOn===k); }
+function touchPr(r){
+  r.updatedAt=new Date().toISOString(); r.device=myDevice();
+  PR.rows[r.id]=r; PR.dirty[r.id]=1; prPersist();
+  clearTimeout(prPushT); prPushT=setTimeout(pushPr,700);
+}
+async function pushPr(){
+  if(!mrOn()||prPushing) return;
+  const ids=Object.keys(PR.dirty); if(!ids.length) return;
+  prPushing=true; setDot('pray','busy','기도 올리는 중');
+  try{
+    for(let i=0;i<ids.length;i+=100){
+      const part=ids.slice(i,i+100), sent={};
+      part.forEach(id=>sent[id]=PR.rows[id].updatedAt);
+      await upsert(cfg.mr,'prayers',part.map(id=>({id, data:PR.rows[id], updated_at:PR.rows[id].updatedAt||new Date().toISOString()})));
+      part.forEach(id=>{ if(PR.rows[id]&&PR.rows[id].updatedAt===sent[id]) delete PR.dirty[id]; });
+      prPersist();
+    }
+    prTableMissing=false; setDot('pray','ok','');
+  }catch(er){
+    prTableMissing=missingTable(er);
+    setDot('pray','err', prTableMissing?'Supabase에 기도 표가 없습니다 · 설정에서 SQL을 실행하세요':'기도를 올리지 못했습니다 · '+er.message);
+  }
+  prPushing=false;
+  if(Object.keys(PR.dirty).length && !prTableMissing){ clearTimeout(prPushT); prPushT=setTimeout(pushPr,15000); }
+}
+/* 더 나중에 고친 쪽이 이긴다. 이 기기에서 아직 못 올린 기도는 덮지 않는다. */
+async function pullPr(){
+  if(!mrOn()) return false;
+  try{
+    let q='prayers?select=id,data,updated_at&order=updated_at.asc';
+    if(PR.since) q+='&updated_at=gte.'+enc(new Date(Date.parse(PR.since)-10*60000).toISOString());
+    const iso=v=>{ const t=Date.parse(v); return isNaN(t)?'':new Date(t).toISOString(); };
+    let off=0, max=PR.since||'', changed=false;
+    for(;;){
+      const rows=await rest(cfg.mr,q+'&limit=500&offset='+off);
+      (rows||[]).forEach(r=>{
+        if(r.updated_at>max) max=r.updated_at;
+        const rem=r.data; if(!rem||!rem.id||PR.dirty[r.id]) return;
+        rem.updatedAt=iso(rem.updatedAt)||iso(r.updated_at);
+        rem.createdAt=iso(rem.createdAt)||rem.updatedAt;
+        if(!rem.state) rem.state='open';
+        const loc=PR.rows[r.id];
+        if(!loc||(rem.updatedAt||'')>(loc.updatedAt||'')){ PR.rows[r.id]=rem; changed=true; }
+      });
+      if(!rows||rows.length<500) break; off+=500;
+    }
+    PR.since=max; prPersist(); prTableMissing=false;
+    if(Object.keys(PR.dirty).length) pushPr(); else setDot('pray','ok','');
+    return changed;
+  }catch(er){
+    prTableMissing=missingTable(er);
+    if(prTableMissing && !livePrayers().length) setDot('pray','','');
+    else setDot('pray','err', prTableMissing?'Supabase에 기도 표가 없습니다 · 설정에서 SQL을 실행하세요':'기도를 받지 못했습니다');
+    return false;
+  }
+}
+const PR_SQL=`create table if not exists prayers (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
+alter table prayers enable row level security;
+drop policy if exists "pray open" on prayers;
+create policy "pray open" on prayers for all using (true) with check (true);`;
+
+/* 보낼 날 고르기 — 일주일·한 달·석 달 뒤, 잊을 만할 때(2~8주 사이 아무 날), 날짜 고르기 */
+function prWhen(v){
+  const k=dayKey();
+  if(v==='7') return addDays(k,7);
+  if(v==='30') return addDays(k,30);
+  if(v==='90') return addDays(k,90);
+  if(v==='rand') return addDays(k,14+Math.floor(Math.random()*43));
+  return /^\d{4}-\d{2}-\d{2}$/.test(v)&&v>k?v:null;
+}
+function prWhenHTML(prefix){
+  return `<div class="pr-when"><span class="lab">언제 열까요</span>
+    <button class="btn" data-${prefix}-when="7">일주일 뒤</button><button class="btn" data-${prefix}-when="30">한 달 뒤</button><button class="btn" data-${prefix}-when="90">석 달 뒤</button><button class="btn" data-${prefix}-when="rand" title="2주에서 8주 사이 아무 날">잊을 만할 때</button>
+    <span class="pick"><input type="date" id="${prefix}Date" min="${addDays(dayKey(),1)}"><button class="btn" data-${prefix}-when="pick">이 날로</button></span></div>`;
+}
+function prSentToast(v,date){ toast(v==='rand'?'보냈습니다 · 이제 잊으세요':kLabel(date)+'로 보냈습니다 · 이제 잊으세요'); }
+
+/* 오늘 화면 — 열린 기도. 열린 날부터 처리할 때까지 남는다 */
+function prAgo(r){ const n=daysBetween(r.date,dayKey()); return n===0?'오늘 열림':n+'일 전에 열림'; }
+function renderPrayers(){
+  const host=$('prayHost'); if(!host) return;
+  if(host.contains(document.activeElement)) return;   /* 적는 중이면 다시 그리지 않는다(30초마다 오늘을 다시 그림) */
+  const due=duePrayers();
+  host.hidden=!due.length; if(!due.length){ host.innerHTML=''; prOpen=null; return; }
+  host.innerHTML=`<div class="pr-title">기도 <span>${due.length}</span></div>`+due.map(r=>{
+    const again=(r.history||[]).length, o=prOpen&&prOpen.id===r.id?prOpen.mode:'';
+    let h=`<div class="pr" data-pr="${esc(r.id)}">
+      <div class="pr-h">${kLabelY(prAsked(r))}에 적음 · ${prAgo(r)}${again?' · 다시 기도 '+again+'번':''}</div>
+      ${r.event?`<div class="pr-ev">${esc(r.event)}</div>`:''}
+      <div class="pr-t">${esc(r.text)}</div>`;
+    if(o==='done') h+=`<div class="pr-form"><div class="field"><label for="prRes">어떻게 풀렸나요</label><textarea id="prRes"></textarea></div>
+      <div class="btnrow"><button class="btn solid" data-pr-act="saveDone">해결로 적기</button><button class="btn" data-pr-act="close">그만두기</button></div></div>`;
+    else if(o==='again') h+=`<div class="pr-form"><div class="field"><label for="prAgainT">바라는 해결 (고쳐 써도 됩니다. 이전 문장은 남습니다)</label><textarea id="prAgainT">${esc(r.text)}</textarea></div>
+      ${prWhenHTML('pa')}
+      <div class="btnrow"><button class="btn" data-pr-act="close">그만두기</button><button class="btn warn" data-pr-act="del">기도 지우기</button></div></div>`;
+    else h+=`<div class="pr-acts"><button data-pr-act="done">해결</button><button data-pr-act="again">다시 기도</button></div>`;
+    return h+'</div>';
+  }).join('');
+  const f=host.querySelector('.pr-form textarea'); if(f) setTimeout(()=>{ f.focus(); f.setSelectionRange(f.value.length,f.value.length); },30);
+}
+$('prayHost').addEventListener('click',e=>{
+  const card=e.target.closest('[data-pr]'), r=card&&PR.rows[card.dataset.pr]; if(!r) return;
+  const a=e.target.closest('[data-pr-act]'), w=e.target.closest('[data-pa-when]');
+  const k=dayKey();
+  if(w){
+    const v=w.dataset.paWhen, date=prWhen(v==='pick'?($('paDate')&&$('paDate').value):v);
+    if(!date){ toast('내일 뒤의 날짜를 골라 주세요'); return; }
+    const t=($('prAgainT')&&$('prAgainT').value.trim())||r.text, hi={on:k, from:r.date, to:date};
+    if(t!==r.text){ hi.text=r.text; r.text=t; }
+    r.history=(r.history||[]).concat([hi]); r.date=date; touchPr(r);
+    prOpen=null; if(document.activeElement) document.activeElement.blur(); renderPrayers(); prSentToast(v,date); return;
+  }
+  if(!a) return;
+  const act=a.dataset.prAct;
+  if(act==='done'||act==='again'){ prOpen={id:r.id, mode:act}; if(document.activeElement) document.activeElement.blur(); renderPrayers(); return; }
+  if(act==='close'){ prOpen=null; if(document.activeElement) document.activeElement.blur(); renderPrayers(); return; }
+  if(act==='saveDone'){
+    const res=($('prRes')&&$('prRes').value.trim())||'';
+    if(!res){ toast('어떻게 풀렸는지 한 줄 적어 주세요'); $('prRes').focus(); return; }
+    Object.assign(r,{state:'answered', answeredOn:k, result:res, answeredAt:new Date().toISOString()}); touchPr(r);
+    prOpen=null; if(document.activeElement) document.activeElement.blur(); renderPrayers(); toast('해결로 적었습니다 · 오늘 달력에 남습니다'); return;
+  }
+  if(act==='del'){ if(!confirm('이 기도를 지울까요?')) return; r.deleted=true; touchPr(r); prOpen=null; if(document.activeElement) document.activeElement.blur(); renderPrayers(); toast('지웠습니다'); }
+});
+
+/* 달력 — 기도 적기(오늘 적은 것으로) */
+function renderPrayForm(){
+  const box=$('calForm'); if(!box) return;
+  box.innerHTML=`<div class="evform prform">
+    <p class="from">오늘 일어난 일의 가장 바람직한 해결을 적어 미래의 한 날로 보냅니다. 그날이 오기 전에는 어디에도 보이지 않습니다.</p>
+    <div class="field"><label for="pfEv">오늘 일어난 일 (짧게, 비워도 됩니다)</label><input id="pfEv"></div>
+    <div class="field"><label for="pfTx">가장 바람직한 해결</label><textarea id="pfTx"></textarea></div>
+    ${prWhenHTML('pn')}
+    <div class="btnrow"><button class="btn" id="pfCancelPr">취소</button></div></div>`;
+  setTimeout(()=>{ $('pfTx').focus(); box.scrollIntoView({block:'center'}); },30);
+  $('pfCancelPr').onclick=()=>{ calEdit=null; renderCal(); };
+  box.querySelector('.pr-when').onclick=e=>{
+    const w=e.target.closest('[data-pn-when]'); if(!w) return;
+    const text=$('pfTx').value.trim(); if(!text){ toast('바라는 해결을 적어 주세요'); $('pfTx').focus(); return; }
+    const v=w.dataset.pnWhen, date=prWhen(v==='pick'?$('pnDate').value:v);
+    if(!date){ toast('내일 뒤의 날짜를 골라 주세요'); return; }
+    const now=new Date().toISOString();
+    touchPr({id:'y'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), text, event:$('pfEv').value.trim(), asked:dayKey(), date, createdAt:now, state:'open', history:[]});
+    calEdit=null; renderCal(); prSentToast(v,date);
+  };
+}
 
 /* ═════════ 받은편지함 — 아이폰 단축어·적바림이 올린 것을 그날 일지 끝에 옮겨 붙인다 ═════════
    2026년 10월 12일까지는 ‘메모’ 탭(일정·할 일·글·조사로 옮기기)이었다. 탭과 화면은 없애고 표(memo_notes)와 올리고 받는 코드는 남겼다.
@@ -1722,7 +1922,7 @@ function renderSet(){
   <div class="field"><label>키</label><input id="btKey" type="password" value="${esc(cfg.bt.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
 
   <h3>미래 프로젝트</h3>
-  <p class="note">서가의 독서 기록과 미래의 마감(달력에 보임)을 읽어 오고, 일지·달력 일정·수입·메모·레퍼런스·프로젝트를 이곳의 mp_entries·cal_events·income_log·memo_notes·ref_links·proj_plans 표에 적습니다.</p>
+  <p class="note">서가의 독서 기록과 미래의 마감(달력에 보임)을 읽어 오고, 일지·달력 일정·기도·수입·메모·레퍼런스·프로젝트를 이곳의 mp_entries·cal_events·prayers·income_log·memo_notes·ref_links·proj_plans 표에 적습니다.</p>
   <div class="field"><label>프로젝트 주소</label><input id="mrUrl" value="${esc(cfg.mr.url)}" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   <div class="field"><label>키</label><input id="mrKey" type="password" value="${esc(cfg.mr.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
   ${autoNote?`<p class="note">${esc(autoNote)}</p>`:''}
@@ -1745,6 +1945,13 @@ function renderSet(){
   <pre class="sql">${esc(CAL_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copyCalSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">일정 ${liveEvents().length}개가 있고, ${Object.keys(CAL.dirty).length?Object.keys(CAL.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
+
+  <h3>기도 표</h3>
+  <p class="note">달력의 ‘기도 적기’와 아이폰 단축어가 적는 기도를 담습니다. 일정 표와 따로 두어 아침 브리핑이 읽지 않습니다. 열리는 날 전에는 시작 어디에도 보이지 않고, 그날부터 오늘 화면의 ‘기도’에 남으며, 해결하면 그날 달력에 기록됩니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <pre class="sql">${esc(PR_SQL)}</pre>
+  <div class="btnrow"><button class="btn" id="copyPrSql">SQL 복사</button></div>
+  <p class="note" style="margin-top:10px">기도 ${livePrayers().filter(r=>r.state!=='answered').length}개가 기다리고, ${livePrayers().filter(r=>r.state==='answered').length}개가 해결되었고, ${Object.keys(PR.dirty).length?Object.keys(PR.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
+  <p class="note">아이폰 단축어로 넣을 때: <code>${esc((cfg.mr.url||'https://(미래 프로젝트).supabase.co').replace(/\/$/,''))}/rest/v1/prayers</code>에 POST. 헤더 <code>apikey</code>·<code>Authorization: Bearer 키</code>·<code>Prefer: return=minimal</code>. 본문 JSON — <code>id</code>(예: y + 날짜시각 + 난수), <code>data</code>(사전: <code>id</code> 같은 값, <code>text</code> 바라는 해결, <code>event</code> 일어난 일(선택), <code>date</code> 열리는 날 <code>yyyy-MM-dd</code>, <code>createdAt</code> 지금, <code>state</code>=<code>open</code>, <code>device</code>=<code>아이폰</code>).</p>
 
   <h3>메모 표</h3>
   <p class="note">아이폰의 단축어와 적바림이 적는 받은편지함입니다. 들어온 것은 시작이 열릴 때 그날 일지 끝에 적은 시각과 함께 옮겨 붙입니다(메모 탭은 2026년 10월 12일에 없앴습니다). 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
@@ -1832,6 +2039,7 @@ function renderSet(){
   $('savePGoal').onclick=()=>{ const v=parseInt(String($('pGoal').value).replace(/[^\d]/g,''),10); if(!(v>0&&v<=2000)){ toast('기준선을 쪽 단위 숫자로 적으세요'); return; } touchIncConf({readGoal:v}); toast('쪽수 기준선을 '+v+'쪽으로 두었습니다'); renderSet(); renderPgStrip(); };
   $('impInc').onclick=()=>$('impIncFile').click();
   $('impIncFile').onchange=async ev=>{ const fs=[...ev.target.files]; ev.target.value=''; if(fs.length) await importIncCSV(fs); };
+  $('copyPrSql').onclick=()=>navigator.clipboard.writeText(PR_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyMemoSql').onclick=()=>navigator.clipboard.writeText(MEMO_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyPjSql').onclick=()=>navigator.clipboard.writeText(PJ_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyRefSql').onclick=()=>navigator.clipboard.writeText(REF_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
@@ -1852,7 +2060,7 @@ async function probe(){
   const out=[]; const p=$('probe'); p.textContent='확인하는 중…';
   if(btOn()){ try{ await rest(cfg.bt,'botaegi_sessions?select=id&limit=1'); out.push('✓ 보태기 기록을 읽을 수 있습니다'); }catch(e){ out.push('✕ 보태기: '+e.message); } } else out.push('· 보태기 프로젝트가 비어 있습니다');
   if(mrOn()){
-    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','일지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['ref_links','레퍼런스 표'],['proj_plans','프로젝트 표'],['run_log','달리기 표']]){
+    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','일지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['ref_links','레퍼런스 표'],['proj_plans','프로젝트 표'],['prayers','기도 표'],['run_log','달리기 표']]){
       try{ await rest(cfg.mr,t+'?select=id&limit=1'); out.push('✓ '+n+'을(를) 읽을 수 있습니다'); }
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
@@ -1860,7 +2068,7 @@ async function probe(){
   if(bjOn()){ try{ const r=await rest(bjProj(),'bangjeom?select=id&id=eq.'+enc(bjList())); out.push(r&&r.length?'✓ 방점 목록 ‘'+bjList()+'’을 읽을 수 있습니다':'✕ 방점: 표는 있는데 ‘'+bjList()+'’ 목록이 없습니다 · 방점 설정의 목록 이름을 확인하세요'); }
     catch(e){ out.push('✕ 방점: '+(missingTable(e)?'표가 없습니다':e.message)); } } else out.push('· 방점을 읽을 연결이 없습니다');
   p.textContent=out.join('\n');
-  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); await pullRef(); pushRef(); PJ.since=''; await pullProj(); pushProj(); refreshToday(true);
+  lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); await pullRef(); pushRef(); PJ.since=''; await pullProj(); pushProj(); PR.since=''; await pullPr(); pushPr(); refreshToday(true);
 }
 
 /* ═════════ 수입 — 달마다의 합계로 최근 12개월 한 달 평균을 본다 ═════════
@@ -2792,7 +3000,7 @@ function go(v){
   if(v==='morning'){ mpLoadEditor(); if(!isTouch) setTimeout(()=>{ editor.focus(); editor.setSelectionRange(editor.value.length,editor.value.length); },30); }
   if(v==='close'){ agoN=Math.max(agoN,1); anchorDay=parseKey(dayKey()).getDate(); renderClose(); }
   if(v==='cal'){ renderCal();
-    Promise.all([pullCal(), (!T&&mrOn())?loadTodo(dayKey()):null]).then(([c])=>{ if(view==='cal'&&calEdit==null) renderCal(); });
+    Promise.all([pullCal(), pullPr(), (!T&&mrOn())?loadTodo(dayKey()):null]).then(([c])=>{ if(view==='cal'&&calEdit==null) renderCal(); });
   }
   if(v==='inc'){ renderInc(); pullInc().then(c=>{ if(c&&view==='inc'&&!$('incHost').contains(document.activeElement)) renderInc(); }); }
   if(v==='adv') openAdv();
@@ -2839,7 +3047,7 @@ async function onBack(){
   if(view==='dist') openDist();
   if(view==='proj') openProj();
   if(view!=='today'){ await pullMemo(); foldMemos(); if(Object.keys(MEMO.dirty).length) pushMemo(); }
-  if(view==='cal'){ const c=await pullCal(); if(!T&&mrOn()) await loadTodo(dayKey()); if(calEdit==null) renderCal(); }
+  if(view==='cal'){ await Promise.all([pullCal(),pullPr()]); if(!T&&mrOn()) await loadTodo(dayKey()); if(calEdit==null) renderCal(); }
 }
 document.addEventListener('visibilitychange',onBack);
 window.addEventListener('focus',onBack);
@@ -2863,6 +3071,7 @@ setInterval(()=>{
   if(Object.keys(MEMO.dirty).length) pushMemo();
   if(REF.dirty) pushRef(); else refPullRender();
   if(Object.keys(PJ.dirty).length) pushProj();
+  if(Object.keys(PR.dirty).length) pushPr();
   if(view==='morning' && document.activeElement!==editor) mpLoadEditor();
   if(!mpTableMissing) setDot('mp', mrOn()?'ok':'', '');
   refreshToday(true);
