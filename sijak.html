@@ -545,7 +545,8 @@ function myDevice(){
 /* ─────────── 설정 ─────────── */
 const CFG_KEY='sijak.cfg';
 const DEF_LINKS={ write:'./botaegi.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./bangjeom.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'', jeok:'./jeokbarim.html', research:'https://claude.ai/new' };
-let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, bj:{url:'',key:'',list:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
+let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, bj:{url:'',key:'',list:''}, ics:{on:false,bucket:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
+if(!cfg.ics) cfg.ics={on:false,bucket:''};   /* 2026년 10월 19일: 애플 캘린더 구독(ICS) */
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
 cfg.bj = Object.assign({url:'',key:'',list:''}, cfg.bj||{});
 if(cfg.links.todo==='./mirae.html'){ cfg.links.todo=DEF_LINKS.todo; lsSet(CFG_KEY,cfg); } /* 2026년 10월 10일: 할 일 앱이 미래에서 방점으로 */
@@ -1217,7 +1218,7 @@ async function pushCal(){
       part.forEach(id=>{ if(CAL.events[id]&&CAL.events[id].updatedAt===sent[id]) delete CAL.dirty[id]; });
       calPersist();
     }
-    calTableMissing=false; setDot('cal','ok','');
+    calTableMissing=false; setDot('cal','ok',''); queueIcs();
   }catch(er){
     calTableMissing=missingTable(er);
     setDot('cal','err', calTableMissing?'Supabase에 일정 표가 없습니다 · 설정에서 SQL을 실행하세요':'일정을 올리지 못했습니다 · '+er.message);
@@ -1245,6 +1246,7 @@ async function pullCal(){
     }
     CAL.since=max; calPersist(); calTableMissing=false;
     if(Object.keys(CAL.dirty).length) pushCal(); else setDot('cal','ok','');
+    if(changed) queueIcs();   /* 다른 기기가 고친 일정도 이 기기가 구독을 켜 두었으면 캘린더 파일에 반영 */
     return changed;
   }catch(er){
     calTableMissing=missingTable(er);
@@ -1252,6 +1254,76 @@ async function pullCal(){
     else setDot('cal','err', calTableMissing?'Supabase에 일정 표가 없습니다 · 설정에서 SQL을 실행하세요':'일정을 받지 못했습니다');
     return false;
   }
+}
+
+/* ═════════ 애플 캘린더 구독 — 일정을 ICS 파일로 만들어 Supabase Storage의 공개 버킷에 올린다(한 방향, 2026년 10월 19일) ═════════
+   파일 이름은 미래 프로젝트의 주소·키에서 만든 해시라 모든 기기가 같은 파일에 쓴다. 되풀이는 RRULE, 끝나는 날은 UNTIL.
+   시간 있는 일정은 1시간짜리(떠다니는 지역 시각), 없는 일정은 종일. 매일 일정의 체크(done)·기도(prayers)는 옮기지 않는다. */
+let icsT=null, icsBusy=false, icsAgain=false, icsLast={at:'',err:''};
+function hash53(str,seed){ let h1=0xdeadbeef^seed, h2=0x41c6ce57^seed; for(let i=0;i<str.length;i++){ const c=str.charCodeAt(i); h1=Math.imul(h1^c,2654435761); h2=Math.imul(h2^c,1597334677); } h1=Math.imul(h1^(h1>>>16),2246822507); h1^=Math.imul(h2^(h2>>>13),3266489909); h2=Math.imul(h2^(h2>>>16),2246822507); h2^=Math.imul(h1^(h1>>>13),3266489909); return 4294967296*(2097151&h2)+(h1>>>0); }
+function icsOn(){ return mrOn() && !!(cfg.ics&&cfg.ics.on); }
+function icsBucket(){ return (cfg.ics&&cfg.ics.bucket||'').trim()||'sijak'; }
+function icsPath(){ const s=cfg.mr.url.replace(/\/+$/,'')+'|'+cfg.mr.key; return 'sijak-'+hash53(s,1).toString(36)+hash53(s,2).toString(36)+'.ics'; }
+function icsUrl(){ return cfg.mr.url.replace(/\/+$/,'')+'/storage/v1/object/public/'+enc(icsBucket())+'/'+icsPath(); }
+function icsWebcal(){ return icsUrl().replace(/^https?:\/\//,'webcal://'); }
+function icsSql(){ const b=icsBucket().replace(/'/g,"''"); return `insert into storage.buckets (id, name, public) values ('${b}', '${b}', true)
+  on conflict (id) do update set public = true;
+drop policy if exists "sijak ics" on storage.objects;
+create policy "sijak ics" on storage.objects for all
+  using (bucket_id = '${b}') with check (bucket_id = '${b}');`; }
+function icsEsc(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n'); }
+/* 한 줄은 75바이트까지. 글자 가운데를 자르지 않고, 이어지는 줄은 빈칸 하나로 시작한다 */
+function icsFold(line){
+  const out=[]; let cur='', n=0;
+  for(const ch of line){ const c=ch.codePointAt(0), b=c<0x80?1:c<0x800?2:c<0x10000?3:4; if(n+b>75){ out.push(cur); cur=' '+ch; n=1+b; } else { cur+=ch; n+=b; } }
+  out.push(cur); return out.join('\r\n');
+}
+function icsStamp(iso){ let d=iso?new Date(iso):new Date(); if(isNaN(d)) d=new Date(); return d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+pad(d.getUTCMinutes())+pad(d.getUTCSeconds())+'Z'; }
+function icsText(events){
+  const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//sijak//시작//KO','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:시작','X-WR-TIMEZONE:Asia/Seoul','REFRESH-INTERVAL;VALUE=DURATION:PT15M','X-PUBLISHED-TTL:PT15M'];
+  const evs=(events||liveEvents()).filter(e=>e&&!e.deleted&&e.title&&/^\d{4}-\d{2}-\d{2}$/.test(e.date||'')).sort((a,b)=>a.date.localeCompare(b.date)||byTime(a,b));
+  evs.forEach(e=>{
+    const r=e.repeat||'none', until=(r!=='none'&&/^\d{4}-\d{2}-\d{2}$/.test(e.until||''))?e.until:'';
+    if(until && until<e.date) return;   /* 시작하기 전에 끝난 되풀이 — 달력에도 안 보인다 */
+    const d=e.date.replace(/-/g,''), tm=/^\d{1,2}:\d{2}$/.test(e.time||'')?e.time.split(':').map(Number):null;
+    L.push('BEGIN:VEVENT','UID:'+e.id+'@sijak','DTSTAMP:'+icsStamp(e.updatedAt),'LAST-MODIFIED:'+icsStamp(e.updatedAt));
+    if(tm) L.push('DTSTART:'+d+'T'+pad(tm[0])+pad(tm[1])+'00','DURATION:PT1H');
+    else L.push('DTSTART;VALUE=DATE:'+d,'DTEND;VALUE=DATE:'+addDays(e.date,1).replace(/-/g,''));
+    if(r!=='none'){ let rr='RRULE:FREQ='+(r==='daily'?'DAILY':r==='weekly'?'WEEKLY':'MONTHLY'); if(until) rr+=';UNTIL='+until.replace(/-/g,'')+(tm?'T235959':''); L.push(rr); }
+    L.push('SUMMARY:'+icsEsc(e.title));
+    if(e.place) L.push('LOCATION:'+icsEsc(e.place));
+    if(e.memo) L.push('DESCRIPTION:'+icsEsc(e.memo));
+    L.push('END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  return L.map(icsFold).join('\r\n')+'\r\n';
+}
+function icsErrText(er){ const m=er&&er.message||''; if(/Bucket not found/i.test(m)) return '버킷이 없습니다 · 설정의 SQL을 실행하세요'; if(/row-level security|violates|Unauthorized|not allowed/i.test(m)) return '올릴 권한이 없습니다 · 설정의 SQL을 실행하세요'; return m||'올리지 못했습니다'; }
+async function uploadIcs(body){
+  const r=await fetch(cfg.mr.url.replace(/\/+$/,'')+'/storage/v1/object/'+enc(icsBucket())+'/'+icsPath(),{method:'POST', body,
+    headers:{apikey:cfg.mr.key, Authorization:'Bearer '+cfg.mr.key, 'Content-Type':'text/calendar; charset=utf-8', 'x-upsert':'true', 'cache-control':'max-age=60'}});
+  if(!r.ok){ let m=''; try{ const j=await r.json(); m=j.message||j.error||''; }catch(e){} throw new Error(m||('HTTP '+r.status)); }
+}
+function queueIcs(){ if(!icsOn()) return; clearTimeout(icsT); icsT=setTimeout(pushIcs,1500); }
+/* 올리는 동안 또 바뀌면 끝나고 한 번 더. 설정 화면이 열려 있으면 상태 줄을 바꾼다 */
+async function pushIcs(){
+  if(!icsOn()) return false;
+  if(icsBusy){ icsAgain=true; return false; }
+  icsBusy=true; clearTimeout(icsT); setDot('ics','busy','캘린더 파일 올리는 중');
+  let ok=false;
+  try{ await uploadIcs(icsText()); icsLast={at:new Date().toISOString(),err:''}; setDot('ics','ok',''); ok=true; }
+  catch(er){ icsLast={at:icsLast.at,err:icsErrText(er)}; setDot('ics','err','캘린더 파일을 올리지 못했습니다 · '+icsLast.err); }
+  icsBusy=false;
+  if(icsAgain){ icsAgain=false; queueIcs(); }
+  const el=$('icsState'); if(el) el.innerHTML=icsStateHtml();
+  return ok;
+}
+function icsStateHtml(){
+  if(!cfg.ics.on) return '구독이 꺼져 있습니다. 켜면 일정 '+liveEvents().length+'개를 올리고 구독 주소를 보여 줍니다.';
+  if(!mrOn()) return '미래 프로젝트를 먼저 이어야 합니다.';
+  const when=icsLast.at?new Date(icsLast.at):null;
+  return `구독 주소 · <span style="word-break:break-all">${esc(icsWebcal())}</span><br>`+
+    (icsLast.err?`<span class="err">✕ ${esc(icsLast.err)}</span>`:when?`✓ ${when.getHours()}:${pad(when.getMinutes())}에 일정 ${liveEvents().length}개를 올렸습니다`:'아직 이 기기에서 올리지 않았습니다');
 }
 
 /* 되풀이 계산 */
@@ -1969,6 +2041,16 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="copyCalSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">일정 ${liveEvents().length}개가 있고, ${Object.keys(CAL.dirty).length?Object.keys(CAL.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
 
+  <h3>애플 캘린더 구독</h3>
+  <p class="note">달력의 일정을 캘린더 파일(ICS)로 만들어 미래 프로젝트의 Storage에 올립니다. 애플 캘린더가 그 주소를 구독하면 시작의 일정이 맥·아이폰의 캘린더에 보입니다. 한 방향입니다. 애플 캘린더에서 고친 것은 시작으로 오지 않고, 매일 일정의 체크와 기도는 옮겨지지 않습니다. 시간 있는 일정은 1시간짜리로, 시간 없는 일정은 종일로 보입니다.</p>
+  <p class="note">처음 한 번, 미래 프로젝트의 SQL Editor에서 실행하세요. 공개 버킷 하나와 올릴 권한을 만듭니다. 파일 이름은 연결 정보에서 만들어 모든 기기가 같은 파일에 올리니, 일정을 적는 기기마다 구독을 켜 두세요.</p>
+  <pre class="sql">${esc(icsSql())}</pre>
+  <div class="btnrow"><button class="btn" id="copyIcsSql">SQL 복사</button></div>
+  <div class="field"><label>버킷 이름 (비우면 sijak)</label><input id="icsBucket" value="${esc(cfg.ics.bucket||'')}" placeholder="sijak" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+  <div class="btnrow"><button class="btn solid" id="icsToggle">${cfg.ics.on?'구독 끄기':'구독 켜고 올리기'}</button>${cfg.ics.on?'<button class="btn" id="icsNow">지금 올리기</button><button class="btn" id="icsCopy">구독 주소 복사</button>':''}</div>
+  <p class="note" id="icsState" style="margin-top:10px">${icsStateHtml()}</p>
+  ${cfg.ics.on&&mrOn()?`<p class="note">맥의 캘린더에서 ‘파일 › 새로운 캘린더 구독’에 주소를 붙여 넣고, 위치를 iCloud로 두면 아이폰·아이패드에도 함께 보입니다. 자동 새로 고침은 15분이 알맞습니다. <a href="${esc(icsWebcal())}">이 링크</a>를 누르면 캘린더 앱이 바로 구독을 묻습니다. 끄면 빈 파일을 올려 캘린더에서도 일정이 사라집니다.</p>`:''}
+
   <h3>기도 표</h3>
   <p class="note">달력의 ‘기도 적기’와 아이폰 단축어가 적는 기도를 담습니다. 일정 표와 따로 두어 아침 브리핑이 읽지 않습니다. 열리는 날 전에는 시작 어디에도 보이지 않고, 그날부터 오늘 화면의 ‘기도’에 남으며, 해결하면 그날 달력에 기록됩니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
   <pre class="sql">${esc(PR_SQL)}</pre>
@@ -2067,6 +2149,19 @@ function renderSet(){
   $('copyPjSql').onclick=()=>navigator.clipboard.writeText(PJ_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyRefSql').onclick=()=>navigator.clipboard.writeText(REF_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyCalSql').onclick=()=>navigator.clipboard.writeText(CAL_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
+  $('copyIcsSql').onclick=()=>{ cfg.ics.bucket=$('icsBucket').value.trim(); saveCfg(); navigator.clipboard.writeText(icsSql()).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다')); };
+  $('icsToggle').onclick=async()=>{
+    const b=$('icsBucket').value.trim();
+    if(cfg.ics.on){ /* 끄기: 빈 파일을 올려 캘린더에서도 지운다(못 올려도 끈다) */
+      cfg.ics.bucket=b; if(mrOn()){ try{ await uploadIcs(icsText([])); }catch(e){} }
+      cfg.ics.on=false; saveCfg(); icsLast={at:'',err:''}; setDot('ics','',''); toast('구독을 껐습니다'); renderSet(); return;
+    }
+    if(!mrOn()){ toast('미래 프로젝트를 먼저 이으세요'); return; }
+    cfg.ics={on:true,bucket:b}; saveCfg();
+    const ok=await pushIcs(); toast(ok?'올렸습니다 · 구독 주소를 캘린더에 넣으세요':'올리지 못했습니다 · '+icsLast.err); renderSet();
+  };
+  if($('icsNow')) $('icsNow').onclick=async()=>{ cfg.ics.bucket=$('icsBucket').value.trim(); saveCfg(); const ok=await pushIcs(); toast(ok?'올렸습니다':'올리지 못했습니다 · '+icsLast.err); renderSet(); };
+  if($('icsCopy')) $('icsCopy').onclick=()=>copyPlain(icsWebcal()).then(ok=>toast(ok?'구독 주소를 복사했습니다':'복사하지 못했습니다'));
   $('saveLinks').onclick=()=>{ cfg.links={write:$('lkW').value.trim()||DEF_LINKS.write, writePhone:$('lkWP').value.trim()||DEF_LINKS.writePhone, tteo:$('lkD').value.trim()||DEF_LINKS.tteo, typewriter:$('lkY').value.trim()||DEF_LINKS.typewriter, read:$('lkR').value.trim()||DEF_LINKS.read, todo:$('lkT').value.trim()||DEF_LINKS.todo, run:$('lkE').value.trim()||DEF_LINKS.run, jeok:$('lkM').value.trim()||DEF_LINKS.jeok, research:$('lkQ').value.trim()||DEF_LINKS.research, diary:$('lkJ').value.trim()}; saveCfg(); toast('저장했습니다'); };
   $('expRef').onclick=refExport;
   $('impRef').onclick=()=>$('impRefFile').click();
@@ -2092,6 +2187,7 @@ async function probe(){
     catch(e){ out.push('✕ 방점: '+(missingTable(e)?'표가 없습니다':e.message)); } } else out.push('· 방점을 읽을 연결이 없습니다');
   p.textContent=out.join('\n');
   lastLoad=0; await pullMP(true); queuePush(); CAL.since=''; await pullCal(); pushCal(); INC.since=''; await pullInc(); pushInc(); MEMO.since=''; await pullMemo(); pushMemo(); await pullRef(); pushRef(); PJ.since=''; await pullProj(); pushProj(); PR.since=''; await pullPr(); pushPr(); refreshToday(true);
+  if(icsOn()){ const ok=await pushIcs(); p.textContent+='\n'+(ok?'✓ 캘린더 파일을 올렸습니다':'✕ 캘린더 파일: '+icsLast.err); }
 }
 
 /* ═════════ 수입 — 달마다의 합계로 최근 12개월 한 달 평균을 본다 ═════════
