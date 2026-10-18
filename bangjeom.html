@@ -463,6 +463,7 @@ ol.did li .kind{font-size:.68rem}
     <div class="kinds" id="kindPick">
       <button data-kind="write">쓰기</button>
       <button data-kind="read">읽기</button>
+      <button data-kind="rest">쉬는일</button>
     </div>
     <input type="date" id="taskDue" title="기한">
     <button id="taskAdd">더하기</button>
@@ -498,6 +499,8 @@ ol.did li .kind{font-size:.68rem}
     <p style="margin-top:.4rem">체크한 항목은 바로 사라지고, 다 체크하면 블록이 "고정 블록 3/3" 한 줄로 줄어듭니다. 그 줄을 누르면 잠깐 펼쳐져 체크를 풀거나 고칠 수 있습니다. 자정이 지나면 다시 다 보입니다.</p>
     <label class="row"><input type="checkbox" id="sAutoPip"> 시작하면 작은 창 띄우기</label>
     <p style="margin-top:.4rem">「시작」을 누르면 지금 할 일을 보여주는 작은 창이 다른 앱 위에 뜹니다. 크롬·엣지에서는 버튼이 든 창, 사파리에서는 글자만 든 창입니다. 아이폰처럼 좁은 화면에서는 자동으로 띄우지 않습니다.</p>
+    <label class="row"><input type="checkbox" id="sNoShortcut"> 단축어 실행하지 않기</label>
+    <p style="margin-top:.4rem">켜면 「시작」「끝냈다」「조금 했다」「할일 무효」에서 단축어를 부르지 않습니다. 쉬는 일로 휴식을 대신할 때 씁니다.</p>
     <label class="row"><input type="checkbox" id="sAutoKind"> 쓰기·읽기는 늘 점 찍기</label>
     <p style="margin-top:.4rem">훑다가 쓰기·읽기 항목에 이르면 묻지 않고 바로 점을 찍고 다음으로 넘어갑니다. 그래서 사슬에 언제나 쓰기·읽기가 들어 있습니다. 끄면 다른 일처럼 묻습니다.</p>
     <label class="row"><input type="checkbox" id="sNoRescan"> 끝낸 뒤 다시 훑지 않기</label>
@@ -512,6 +515,7 @@ ol.did li .kind{font-size:.68rem}
     <h2>링크</h2>
     <p>할 일 뒤에 링크를 띄어 적으면 링크는 떼어 두고 제목만 남습니다. 실행 화면에서 제목을 누르면 그 링크가 열립니다. 고정 블록도 같습니다. 글자를 누르면 열립니다.</p>
     <p>things:///show?id=… · x-devonthink-item://… · shortcuts://run-shortcut?name=… · x-scrivener-item:///… 처럼 앱이 받는 주소면 무엇이든 됩니다.</p>
+    <p>「쉬는일」 태그를 붙인 할 일(설거지, 청소, 산책 같은 것)은 훑기와 사슬에서 빠지고, 보통 할 일을 마칠 때마다 그중 하나가 무작위로 뜹니다. 「끝냈다」는 완료, 「조금 했다」는 목록 끝으로 보내고, 마치면 단축어 없이 사슬로 돌아갑니다. 매듭에는 남고 쪽글로는 가지 않습니다.</p>
     <p>기한은 제목 끝에 <b>@10/21</b> <b>@2026-10-21</b> <b>@내일</b> <b>@3d</b>처럼 적거나 목록의 날짜 칸으로 넣습니다. 기한이 오늘이거나 지난 항목은 훑을 때 먼저 묻고, 7일 안인 항목이 그다음입니다. 목록 순서 자체는 바뀌지 않습니다.</p>
   </section>
 
@@ -695,11 +699,15 @@ const toggleLine = (note, i) => (note || '').split('\n').map((l, k) => {
 }).join('\n');
 const tsLine = () => { const d = new Date(); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 시작`; };
 // 단축어 실행: 이름과 입력 글자를 넘긴다. 앱 안의 동작은 그대로 이어진다
-const runShortcut = (name, input) =>
+const runShortcut = (name, input) => {
+  if(cfg.noShortcut) return;                        // 설정에서 단축어를 끄면 아무것도 부르지 않는다
   location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(name)
     + '&input=text&text=' + encodeURIComponent(String(input));
+};
 // 종류 태그: 보여주기만 한다. 버튼 동작에는 관여하지 않는다
-const KINDS = {write:'쓰기', read:'읽기'};
+const KINDS = {write:'쓰기', read:'읽기', rest:'쉬는일'};
+const isRest = t => !!t && t.kind === 'rest';     // 쉬는일: 훑기·사슬에서 빠지고, 일을 마친 뒤 무작위로 하나 뽑힌다
+const isWorkKind = k => k === 'write' || k === 'read';
 const kindTag = k => KINDS[k] ? `<span class="kind">${KINDS[k]}</span>` : '';
 let pickKind = '';                        // 목록 입력칸 옆에서 켜 둔 종류
 // 기한(due): "YYYY-MM-DD" 문자열. 없으면 키 자체를 두지 않는다
@@ -752,7 +760,7 @@ const linkTag = url => url ? `<a class="lnk" href="${esc(url)}"${/^https?:/i.tes
 function ensureChain(){
   S.chain = S.chain.filter(id => { const t = byId(id); return t && !t.done; });
   if(S.chain.length) return;
-  const root = S.tasks.find(t => !t.done);
+  const root = S.tasks.find(t => !t.done && !isRest(t));
   if(!root){ S.cursor = null; return; }
   S.chain = [root.id];
   S.cursor = root.id;
@@ -764,7 +772,7 @@ let askedDue = new Set();
 function candidateInfo(){
   // 마감 사슬이 남아 있는 동안은 훑지 않는다. 그걸 다 끝내야 그날의 선택이 시작된다
   if(S.chain.some(id => { const x = byId(id); return x && x.autoDue; })) return null;
-  const open = t => !t.done && !S.chain.includes(t.id) && !askedDue.has(t.id);
+  const open = t => !t.done && !isRest(t) && !S.chain.includes(t.id) && !askedDue.has(t.id);
   for(const tier of [n => n <= 0, n => n <= 7]){
     const c = S.tasks.find(t => open(t) && t.due && tier(dueDays(t)));
     if(c) return {t:c, due:true};
@@ -800,7 +808,7 @@ function startState(t){
 function autoDotKinds(){
   if(cfg.autoKind === false) return false;
   let changed = false, ci;
-  while((ci = candidateInfo()) && KINDS[ci.t.kind]){
+  while((ci = candidateInfo()) && isWorkKind(ci.t.kind)){
     S.chain.push(ci.t.id);
     if(ci.due) askedDue.add(ci.t.id);
     else S.cursor = ci.t.id;
@@ -842,8 +850,29 @@ function finish(taskId, reentryText){
   const top = benchmark();
   if(top && top.urgent) S.cursor = S.tasks[S.tasks.length - 1].id;   // 긴급한 일이 다음이면 바로 그것으로
   (S.outbox = S.outbox || []).push(jjokOf({ms:Date.parse(t.doneAt), text:t.text, note:t.note, kind:t.kind}));
+  pickRest();
   commit();
   flushOutbox();
+}
+
+/* ══════════ 쉬는 일 ══════════ */
+// 보통 할 일을 마치면 쉬는일 중 하나를 무작위로 뽑아 사슬보다 먼저 보여준다. 없으면 건너뛴다
+function pickRest(){
+  const pool = S.tasks.filter(t => !t.done && isRest(t));
+  S.rest = pool.length ? pool[Math.floor(Math.random() * pool.length)].id : null;
+}
+function restNow(){
+  if(!S.rest) return null;
+  const t = byId(S.rest);
+  if(!t || t.done || !isRest(t)){ S.rest = null; return null; }
+  return t;
+}
+// 쉬는일을 마치면 단축어 없이 사슬로 돌아간다
+function endRest(how){
+  const t = restNow(); S.rest = null;
+  if(t && how === 'done'){ t.done = true; t.doneAt = now(); }     // 매듭에는 남고 쪽글로는 가지 않는다
+  else if(t && how === 'part'){ moveEnd(t.id); return; }          // 목록 끝으로 (moveEnd가 commit한다)
+  commit();
 }
 
 // 포스터의 유일한 우선순위 조작: 급해진 것은 점을 지우고 끝으로 옮긴다
@@ -1002,7 +1031,7 @@ function rollFixed(){
 // 이 사슬을 다 끝내야 그날의 훑기가 목록 맨 위부터 시작된다
 function seedDueChain(){
   const due = S.tasks
-    .filter(t => !t.done && t.due && dueDays(t) <= 1 && !S.chain.includes(t.id))
+    .filter(t => !t.done && !isRest(t) && t.due && dueDays(t) <= 1 && !S.chain.includes(t.id))
     .sort((a, b) => dueDays(b) - dueDays(a));          // 먼 것부터 넣어 가까운 것이 맨 위에 오게
   if(!due.length) return;
   due.forEach(t => t.autoDue = true);
@@ -1115,6 +1144,8 @@ function renderFixed(){
     || `<li><span style="color:var(--ink-faint);font-size:.9rem">협상 없이 그냥 하는 일만 여기에.</span></li>`;
 }
 
+const trailOf = () => S.chain.map((id,i) =>
+    (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text)) + (byId(id).autoDue ? '<i class="ad">마감</i>' : '')).join('');
 function renderStage(){
   const box = $('#stage');
   ensureChain();
@@ -1126,6 +1157,30 @@ function renderStage(){
   if(!S.tasks.some(t => !t.done)){
     box.innerHTML = lap + `<div class="empty"><strong>목록이 비어 있습니다</strong>
       지금 마음에 걸리는 일 예닐곱 개로 시작하세요.<br>한꺼번에 채우면 오래 못 씁니다.</div>`;
+    return;
+  }
+
+  // ── 쉬는 일: 방금 일을 마쳤으면 쉬는일 하나가 먼저 뜬다
+  const rt = restNow();
+  if(rt){
+    const rtitle = rt.url
+      ? `<a class="txt" href="${esc(rt.url)}"${/^https?:/i.test(rt.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(rt.text)}</a>`
+      : `<span class="txt">${esc(rt.text)}</span>`;
+    box.innerHTML = lap + `
+      <div class="chainbar" style="text-align:center">${trailOf()}</div>
+      <div class="now">
+        <span class="lab">쉬는 일${kindTag('rest')}</span>
+        <div>${rtitle}</div>
+        <div class="dueline">머리를 쉬게 하는 일입니다. 마치면 사슬로 돌아갑니다.</div>
+      </div>
+      <div class="acts">
+        <button class="done" id="restDone">끝냈다</button>
+        <button id="restPart">조금 했다</button>
+      </div>
+      <div class="skiprow"><button class="skip" id="restSkip">지금은 쉬지 않는다</button></div>`;
+    $('#restDone').onclick = () => endRest('done');
+    $('#restPart').onclick = () => endRest('part');
+    $('#restSkip').onclick = () => endRest('skip');
     return;
   }
 
@@ -1161,8 +1216,9 @@ function renderStage(){
   const a = benchmark();
   if(!a){ box.innerHTML = lap + `<div class="empty">끝났습니다.</div>`; return; }
 
-  const trail = S.chain.map((id,i) =>
-    (i ? ' › ' : '') + (i === S.chain.length-1 ? `<em>${esc(byId(id).text)}</em>` : esc(byId(id).text)) + (byId(id).autoDue ? '<i class="ad">마감</i>' : '')).join('');
+
+
+  const trail = trailOf();
 
   const title = a.url
     ? `<a class="txt" href="${esc(a.url)}"${/^https?:/i.test(a.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(a.text)}</a>`
@@ -1351,9 +1407,9 @@ function wireEditor(){
 function jjokItems(){
   const since = Date.now() - 14 * 86400000;
   const rows = [];
-  S.tasks.filter(t => t.done && t.doneAt).forEach(t =>
+  S.tasks.filter(t => t.done && t.doneAt && !isRest(t)).forEach(t =>
     rows.push({at:t.doneAt, text:t.text, note:t.note, kind:t.kind}));
-  S.log.forEach(e => e.items.forEach(i => i.at && rows.push({at:i.at, text:i.text, note:i.note, kind:i.kind})));
+  S.log.forEach(e => e.items.forEach(i => i.at && !isRest(i) && rows.push({at:i.at, text:i.text, note:i.note, kind:i.kind})));
   return rows
     .map(r => ({...r, ms:Date.parse(r.at)}))
     .filter(r => r.ms >= since)
@@ -1825,6 +1881,7 @@ const urgentFrom = (inp, kind, due) => {
   const v = inp.value;
   if(!v.trim()){ toast('먼저 할 일을 적으세요'); inp.focus(); return; }
   inp.value = '';
+  if(kind === 'rest'){ addTask(v, kind, due); toast('쉬는 일은 목록 끝에 넣었습니다'); return; }
   const busy = addUrgent(v, kind, due);
   toast(busy ? '지금 일을 마치면 바로 이어집니다' : '지금 할 일로 올렸습니다');
 };
@@ -1874,6 +1931,8 @@ $('#sHideDone').checked = !!cfg.hideDone;
 $('#sHideDone').addEventListener('change', e => { cfg.hideDone = e.target.checked; saveCfg(); render(); });
 $('#sAutoPip').checked = cfg.autoPip !== false;
 $('#sAutoPip').addEventListener('change', e => { cfg.autoPip = e.target.checked; saveCfg(); });
+$('#sNoShortcut').checked = !!cfg.noShortcut;
+$('#sNoShortcut').addEventListener('change', e => { cfg.noShortcut = e.target.checked; saveCfg(); });
 $('#sAutoKind').checked = cfg.autoKind !== false;
 $('#sAutoKind').addEventListener('change', e => { cfg.autoKind = e.target.checked; saveCfg(); render(); });
 $('#sNoRescan').checked = cfg.noRescan !== false;
