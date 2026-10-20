@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="주머니">
+<meta name="theme-color" content="#f4efe3">
+<title>방점 주머니</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%23f2ead9'/><path d='M46 70q44-40 88 0v46q-44 40-88 0z' fill='none' stroke='%239b2c25' stroke-width='12' stroke-linejoin='round'/><circle cx='90' cy='96' r='12' fill='%239b2c25'/></svg>">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' fill='%23f2ead9'/><path d='M46 70q44-40 88 0v46q-44 40-88 0z' fill='none' stroke='%239b2c25' stroke-width='12' stroke-linejoin='round'/><circle cx='90' cy='96' r='12' fill='%239b2c25'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* 방점 주머니 — 방점의 목록을 읽어 펼쳐 놓는 아이폰용 메뉴판. 상태는 고치지 않고 요청만 남긴다 */
+:root{
+  --paper:#f4efe3;--paper-2:#efe8d8;--ink:#2b2622;--ink-soft:#5e554c;--ink-faint:#9a8f82;
+  --rule:#d9cfbd;--seal:#9b2c25;--seal-soft:#c8655e;--seal-wash:#f3dcd8;--w:38rem;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:"Gowun Batang",serif;font-size:17px;line-height:1.6;-webkit-text-size-adjust:100%}
+button,input{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none;padding:0}
+[hidden]{display:none !important}
+.wrap{max-width:var(--w);margin:0 auto;padding:calc(.9rem + env(safe-area-inset-top)) 1rem calc(4rem + env(safe-area-inset-bottom))}
+header{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.9rem}
+header h1{font-size:1.25rem;font-weight:700;margin:0;letter-spacing:.04em}
+header h1 b{color:var(--seal);font-weight:700}
+header .st{margin-left:auto;font-size:.75rem;color:var(--ink-faint);letter-spacing:.06em}
+header .st.err{color:var(--seal)}
+.hint{font-size:.82rem;color:var(--ink-faint);margin:0 0 1rem;line-height:1.6}
+
+/* ── 항목 ── */
+.it{border-bottom:1px dotted var(--rule);padding:.65rem 0}
+.it.now{border:1px solid var(--ink);border-left:4px solid var(--seal);border-radius:2px;padding:.75rem .85rem;margin-bottom:.9rem;background:#fbf8f1}
+.it.dim{opacity:.5}
+.it .top{display:flex;align-items:baseline;gap:.5rem}
+.it .ttl{flex:1;min-width:0;font-size:1.08rem;line-height:1.5;cursor:pointer}
+.it.now .ttl{font-size:1.25rem}
+.it .ttl a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--seal-wash)}
+.it .ttl a::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.3em;vertical-align:.25em}
+.it.dim .ttl{text-decoration:line-through;text-decoration-color:var(--seal-soft)}
+.tag{display:inline-block;font-size:.68rem;color:var(--seal);border:1px solid var(--seal-soft);border-radius:2px;padding:0 .3rem;margin-right:.35rem;vertical-align:.15em;letter-spacing:.04em;line-height:1.5}
+.tag.fix{color:var(--ink-soft);border-color:var(--rule)}
+.tag.urg{background:var(--seal);color:#fff8f2;border-color:var(--seal)}
+.tag.nowl{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.due{font-size:.72rem;color:var(--ink-faint);white-space:nowrap}
+.due.today{color:var(--seal-soft)}.due.over{color:var(--seal)}
+.chk{width:1.2rem;height:1.2rem;flex:none;border:1px solid var(--ink-faint);border-radius:2px;background:var(--paper);margin-top:.35rem;position:relative}
+.chk.on{background:var(--seal);border-color:var(--seal)}
+.chk.on::after{content:'';position:absolute;left:.35rem;top:.12rem;width:.3rem;height:.6rem;border:solid #fff8f2;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.sent{font-size:.75rem;color:var(--seal);letter-spacing:.06em;margin-top:.25rem}
+
+/* ── 페이지 서식 ── */
+.nt{font-size:.88rem;color:var(--ink-soft);line-height:1.65;padding-left:.6em;margin-top:.2rem}
+.nt .li,.nt .ex,.nt .cb,.nt .ts{display:block}
+.nt .li{padding-left:1.1em;text-indent:-1.1em}
+.nt .li::before{content:'·';display:inline-block;width:1.1em;text-indent:0;color:var(--seal-soft)}
+.nt .ex{font-family:"Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:.95em}
+.nt .cb{padding-left:1.4em;text-indent:-1.4em}
+.nt .cb::before{content:'';display:inline-block;width:.8em;height:.8em;border:1px solid var(--ink-soft);border-radius:2px;margin-right:.6em;vertical-align:-.05em;text-indent:0}
+.nt .cb.on::before{background:var(--seal);border-color:var(--seal)}
+.nt .cb.on{color:var(--ink-faint);text-decoration:line-through}
+.nt .ts{font-size:.78em;color:var(--ink-faint);letter-spacing:.06em;margin:.4em 0 .1em}
+.nt .ts::before{content:'— '}
+.nt a{color:var(--seal);text-decoration:none;border-bottom:1px solid var(--seal-wash);word-break:break-all}
+.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.it.open .clamp{-webkit-line-clamp:none}
+
+/* ── 펼친 항목 ── */
+.more{margin-top:.6rem;display:flex;flex-direction:column;gap:.5rem}
+.addline{display:flex;gap:.5rem;align-items:center}
+.addline input{flex:1;min-width:0;background:none;border:none;border-bottom:1px solid var(--rule);padding:.4rem 0;font-size:1rem}
+.addline input::placeholder{color:var(--ink-faint)}
+.addline button{color:var(--seal);flex:none}
+.acts{display:flex;gap:.5rem}
+.acts button{flex:1;padding:.6rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.95rem}
+.acts .done{background:var(--ink);color:var(--paper)}
+
+/* ── 발 ── */
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--rule);padding:.6rem 1rem calc(.6rem + env(safe-area-inset-bottom))}
+footer .in{max-width:var(--w);margin:0 auto;display:flex;gap:1.4rem;justify-content:center;font-size:.85rem}
+footer button,footer a{color:var(--ink-soft);border-bottom:1px dotted var(--rule);padding-bottom:1px;text-decoration:none}
+.empty{text-align:center;color:var(--ink-soft);padding:2.5rem 0;line-height:1.9}
+.empty strong{display:block;color:var(--ink);font-weight:400;font-size:1.1rem}
+
+/* ── 설정 ── */
+.set label{display:block;font-size:.8rem;color:var(--ink-soft);margin:.9rem 0 .25rem;letter-spacing:.06em}
+.set input{width:100%;background:none;border:none;border-bottom:1px solid var(--rule);padding:.4rem 0}
+.set .btns{display:flex;gap:.6rem;margin-top:1.2rem}
+.set .btns button{flex:1;padding:.6rem 0;border:1px solid var(--ink);border-radius:2px}
+.set .btns .primary{background:var(--ink);color:var(--paper)}
+.set p{font-size:.85rem;color:var(--ink-soft);line-height:1.7}
+.toast{position:fixed;left:50%;bottom:calc(4rem + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:.55rem 1rem;border-radius:2px;font-size:.88rem;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>방<b>점</b> 주머니</h1><span class="st" id="st">읽는 중</span></header>
+  <p class="hint" id="hint">손이 비었을 때 하나만 집으세요. 누르면 페이지가 펼쳐지고, 끝내면 방점에 전해집니다.</p>
+  <div id="list"></div>
+  <div class="set" id="set" hidden>
+    <p>방점 설정에 넣어 둔 Supabase 주소와 anon 키, 목록 이름을 그대로 넣습니다. 이 앱은 목록을 읽기만 하고, 「끝냈다」·체크·한 줄은 요청으로 남겨 방점이 처리합니다.</p>
+    <label for="sUrl">프로젝트 URL</label><input id="sUrl" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="sKey">anon 키</label><input id="sKey" type="password" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <label for="sList">목록 이름</label><input id="sList" placeholder="bangjeom" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="btns"><button id="setCancel">그만두기</button><button class="primary" id="setSave">저장하고 읽기</button></div>
+  </div>
+</div>
+<footer><div class="in">
+  <button id="btnShuffle">다시 섞기</button>
+  <a id="btnMain" href="bangjeom.html">방점에서 열기</a>
+  <button id="btnSet">설정</button>
+</div></footer>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const localDate = (d = new Date()) => d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+let toastTimer;
+const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200); };
+const LS = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
+
+/* ── 설정 ── */
+let cfg = Object.assign({url:'', key:'', list:'bangjeom'}, JSON.parse(LS.get('jm.cfg') || '{}'));
+const saveCfg = () => LS.set('jm.cfg', JSON.stringify(cfg));
+
+/* ── 페이지 서식 (방점과 같은 규칙, 읽기 전용) ── */
+const KINDS = {write:'쓰기', read:'읽기', rest:'쉬는일'};
+const linkify = h => h.replace(/([a-z][a-z0-9+.-]*:\/\/[^\s<]+)/gi, u => `<a href="${u}"${/^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''}>${u}</a>`);
+const TS_RE = /^\d{1,2}\/\d{1,2} \d{2}:\d{2} (시작|끝 · \d+분)$/;
+const fmtNote = note => (note || '').split('\n').map(l => {
+  const cb = l.match(/^\s*\[([ xX]?)\]\s*(.*)$/);
+  if(cb) return `<span class="cb ${cb[1].trim() ? 'on' : ''}">${linkify(esc(cb[2]))}</span>`;
+  const m = l.match(/^\s*-\s*(.*)$/);
+  if(m) return `<span class="li">${linkify(esc(m[1]))}</span>`;
+  const t = l.trim(); if(!t) return '';
+  if(TS_RE.test(t)) return `<span class="ts">${esc(t)}</span>`;
+  return `<span class="ex">${linkify(esc(t))}</span>`;
+}).join('');
+const dueDays = t => { if(!t || !t.due) return null; const d = new Date(t.due + 'T00:00:00'), n = new Date(); n.setHours(0,0,0,0); return Math.round((d - n) / 86400000); };
+const dueTag = t => { const n = dueDays(t); if(n === null) return ''; const lab = n === 0 ? '오늘' : n < 0 ? `${-n}일 지남` : `~${+t.due.slice(5,7)}/${+t.due.slice(8,10)}`; return `<span class="due ${n < 0 ? 'over' : n === 0 ? 'today' : ''}">${lab}</span>`; };
+const titleOf = (text, url) => url
+  ? `<a href="${esc(url)}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ''}>${esc(text)}</a>` : esc(text);
+
+/* ── 데이터 ── */
+let sb = null, S = null, chan = null;
+let order = {};                                   // 섞은 순서. 열 때마다 새로 섞고, 갱신으로는 흔들지 않는다
+let openId = null;                                // 펼쳐 둔 항목
+let pending = JSON.parse(LS.get('jm.pending') || '{}');   // 보낸 요청. 방점이 처리한 게 보이면 지운다
+const savePending = () => LS.set('jm.pending', JSON.stringify(pending));
+const setSt = (txt, err) => { const e = $('#st'); e.textContent = txt; e.classList.toggle('err', !!err); };
+
+async function client(){
+  if(window.__sb) return window.__sb;             // 시험용 갈아끼우기
+  if(!cfg.url || !cfg.key) return null;
+  if(sb) return sb;
+  const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+  sb = createClient(cfg.url, cfg.key, {realtime:{params:{eventsPerSecond:2}}});
+  return sb;
+}
+async function load(reshuffle){
+  const c = await client();
+  if(!c){ setSt('설정 필요', true); $('#list').innerHTML = `<div class="empty"><strong>먼저 설정을 넣어 주세요</strong>아래 「설정」에서 방점과 같은 주소와 키를 넣습니다.</div>`; return; }
+  setSt('읽는 중');
+  try{
+    const { data, error } = await c.from('bangjeom').select('data,updated_at').eq('id', cfg.list).maybeSingle();
+    if(error) throw error;
+    if(!data || !data.data){ setSt('목록 없음', true); return; }
+    S = data.data;
+    resolvePending();
+    if(reshuffle || !Object.keys(order).length) order = {};
+    setSt('읽음 ' + new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'}));
+    render();
+    watch(c);
+  }catch(e){ console.warn(e); setSt('읽지 못함', true); toast('읽지 못했습니다. 주소와 키를 확인하세요'); }
+}
+function watch(c){
+  if(chan || !c.channel) return;
+  chan = c.channel('jumeoni-' + cfg.list)
+    .on('postgres_changes', {event:'*', schema:'public', table:'bangjeom', filter:'id=eq.' + cfg.list}, p => {
+      if(p.new && p.new.data){ S = p.new.data; resolvePending(); render(); }
+    }).subscribe();
+}
+// 보낸 요청이 방점에 반영됐는지 본다
+function resolvePending(){
+  if(!S) return;
+  const byId = id => (S.tasks || []).find(t => t.id === id);
+  Object.entries(pending).forEach(([k, p]) => {
+    let ok = false;
+    if(p.kind === 'done'){ const t = byId(p.target); ok = !t || t.done; }
+    else if(p.kind === 'fixed'){ const f = (S.fixed || []).find(x => x.id === p.target || x.text === p.target); ok = !f || f.done || localDate() !== p.day; }
+    else if(p.kind === 'line'){ const t = byId(p.target); ok = !t || (t.note || '').includes(p.text); }
+    if(ok) delete pending[k];
+  });
+  savePending();
+}
+async function act(kind, target, text){
+  const c = await client(); if(!c){ toast('설정이 없습니다'); return false; }
+  try{
+    const { error } = await c.from('bangjeom_act').insert({list:cfg.list, kind, target, text:text || null, device:'주머니'});
+    if(error) throw error;
+    pending[kind + ':' + target + ':' + (text || '')] = {kind, target, text:text || '', at:Date.now(), day:localDate()};
+    savePending();
+    return true;
+  }catch(e){ console.warn(e); toast('보내지 못했습니다. 표가 있는지 확인하세요'); return false; }
+}
+const isPending = (kind, target) => Object.values(pending).some(p => p.kind === kind && p.target === target);
+
+/* ── 그리기 ── */
+const key = id => (order[id] ??= Math.random());
+function render(){
+  if(!S){ return; }
+  const today = localDate();
+  const tasks = S.tasks || [], fixed = S.fixed || [];
+  const chain = S.chain || [];
+  const nowId = chain.length ? chain[chain.length - 1] : null;
+  const now = tasks.find(t => t.id === nowId && !t.done);
+  const live = tasks.filter(t => !t.done && t.id !== nowId).sort((a,b) => key(a.id) - key(b.id));
+  const fixLive = fixed.filter(f => !f.done).sort((a,b) => key(f_id(a)) - key(f_id(b)));
+  const doneToday = tasks.filter(t => t.done && t.doneAt && localDate(new Date(t.doneAt)) === today);
+  const fixDone = fixed.filter(f => f.done);
+
+  const items = [];
+  if(now) items.push(taskItem(now, true));
+  // 고정 블록과 할 일을 섞어 놓는다
+  const mixed = [...live.map(t => ({k:key(t.id), h:taskItem(t, false)})), ...fixLive.map(f => ({k:key(f_id(f)), h:fixedItem(f, false)}))]
+    .sort((a,b) => a.k - b.k).map(x => x.h);
+  items.push(...mixed);
+  const done = [...doneToday.map(t => taskItem(t, false, true)), ...fixDone.map(f => fixedItem(f, true))];
+  if(done.length) items.push(`<p class="hint" style="margin-top:1.4rem">오늘 한 것 ${done.length}</p>`, ...done);
+
+  $('#list').innerHTML = items.length ? items.join('') : `<div class="empty"><strong>집을 것이 없습니다</strong>방점의 목록이 비어 있습니다.</div>`;
+
+  // 펼치기 · 접기
+  document.querySelectorAll('.it[data-id] .ttl').forEach(el => el.onclick = e => {
+    if(e.target.closest('a')) return;              // 링크는 그대로 열린다
+    const id = el.closest('.it').dataset.id;
+    openId = openId === id ? null : id; render();
+  });
+  document.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.done, t = tasks.find(x => x.id === id);
+    if(!t || !confirm(`「${t.text}」\n\n끝냈다고 방점에 전합니까?`)) return;
+    if(await act('done', id)){ toast('방점에 전했습니다'); openId = null; render(); }
+  });
+  document.querySelectorAll('[data-fix]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.fix;
+    if(isPending('fixed', id)) return;
+    if(await act('fixed', id)){ toast('체크를 전했습니다'); render(); }
+  });
+  document.querySelectorAll('[data-line]').forEach(inp => {
+    const id = inp.dataset.line;
+    const send = async () => {
+      const v = inp.value.trim(); if(!v) return;
+      inp.value = '';
+      if(await act('line', id, v)){ toast('페이지에 전했습니다'); render(); }
+    };
+    let composing = false;
+    inp.addEventListener('compositionstart', () => composing = true);
+    inp.addEventListener('compositionend', () => composing = false);
+    inp.addEventListener('keydown', e => { if(e.key !== 'Enter') return; e.preventDefault(); if(composing || e.isComposing || e.keyCode === 229) setTimeout(send, 0); else send(); });
+    inp.nextElementSibling.onclick = send;
+    if(openId === id) inp.focus();
+  });
+}
+const f_id = f => f.id || f.text;
+function taskItem(t, isNow, dim){
+  const open = openId === t.id;
+  const sentDone = isPending('done', t.id);
+  const tags = (isNow ? '<span class="tag nowl">지금 할 일</span>' : '') + (t.urgent ? '<span class="tag urg">긴급</span>' : '') + (KINDS[t.kind] ? `<span class="tag">${KINDS[t.kind]}</span>` : '');
+  const note = t.note ? `<div class="nt ${open ? '' : 'clamp'}">${fmtNote(t.note)}</div>` : '';
+  const sent = sentDone ? `<div class="sent">끝냄 보냄 · 방점이 받으면 사라집니다</div>` : '';
+  const more = open && !dim && !sentDone ? `<div class="more">
+      <div class="addline"><input data-line="${t.id}" placeholder="페이지에 한 줄 적기" enterkeyhint="done"><button>보내기</button></div>
+      <div class="acts"><button class="done" data-done="${t.id}">끝냈다</button></div>
+    </div>` : '';
+  return `<article class="it ${isNow ? 'now' : ''} ${dim || sentDone ? 'dim' : ''} ${open ? 'open' : ''}" data-id="${t.id}">
+    <div class="top"><div class="ttl">${tags}${titleOf(t.text, t.url)}</div>${dueTag(t)}</div>${note}${sent}${more}</article>`;
+}
+function fixedItem(f, dim){
+  const id = f_id(f), on = f.done || isPending('fixed', id);
+  return `<article class="it ${dim ? 'dim' : ''}"><div class="top">
+    <button class="chk ${on ? 'on' : ''}" data-fix="${id}" aria-label="했음"></button>
+    <div class="ttl" style="cursor:default"><span class="tag fix">고정</span>${titleOf(f.text, f.url)}</div></div>
+    ${!f.done && isPending('fixed', id) ? '<div class="sent">체크 보냄</div>' : ''}</article>`;
+}
+
+/* ── 발 · 설정 ── */
+$('#btnShuffle').onclick = () => { order = {}; openId = null; render(); toast('섞었습니다'); };
+$('#btnSet').onclick = () => { $('#sUrl').value = cfg.url; $('#sKey').value = cfg.key; $('#sList').value = cfg.list; $('#set').hidden = false; $('#list').hidden = true; $('#hint').hidden = true; };
+$('#setCancel').onclick = () => { $('#set').hidden = true; $('#list').hidden = false; $('#hint').hidden = false; };
+$('#setSave').onclick = () => {
+  cfg = {url:$('#sUrl').value.trim(), key:$('#sKey').value.trim(), list:$('#sList').value.trim() || 'bangjeom'};
+  saveCfg(); sb = null; chan = null;
+  $('#set').hidden = true; $('#list').hidden = false; $('#hint').hidden = false;
+  load(true);
+};
+document.addEventListener('visibilitychange', () => { if(!document.hidden) load(true); });   // 열 때마다 다시 섞는다
+load(true);
+</script>
+</body>
+</html>

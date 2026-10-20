@@ -536,6 +536,7 @@ ol.did li .kind{font-size:.68rem}
     </div>
     <div class="note" id="syncNote"></div>
     <p style="margin-top:.7rem">단축어로 할 일을 넣을 수도 있습니다. 같은 프로젝트의 <b>bangjeom_todo</b> 표에 줄을 넣으면 방점이 열릴 때와 연결돼 있는 동안 바로 목록 끝에 붙입니다. 단축어는 「URL 내용 가져오기」 하나로 됩니다. 방식 POST, 주소 <code>프로젝트URL/rest/v1/bangjeom_todo</code>, 머리글 <code>apikey</code>와 <code>Authorization: Bearer</code>에 anon 키, <code>Content-Type: application/json</code>, 본문 <code>{"list":"목록 이름","text":"제목 링크"}</code>. 공유 시트에서 받은 글을 본문에 넣으면 메일이나 웹페이지를 그대로 할 일로 보낼 수 있습니다.</p>
+    <p style="margin-top:.7rem"><b>방점 주머니</b>(jumeoni.html)는 같은 주소와 키로 목록을 읽어 보여주는 아이폰용 앱입니다. 거기서 누른 「끝냈다」, 고정 블록 체크, 페이지 한 줄은 <b>bangjeom_act</b> 표에 요청으로 남고, 방점이 열릴 때와 연결돼 있는 동안 바로 받아 처리합니다.</p>
     <p style="margin-top:.7rem">끝낸 일은 같은 프로젝트의 <b>bangjeom_inbox</b> 표에도 한 줄씩 보냅니다. 앞에 <b>#완료</b> 태그가 붙고, 메모는 그 아래 자식 줄로 들어갑니다. 쪽글에 같은 주소와 키를 넣어 두면 쪽글이 그날 노트에 가져갑니다. 못 보낸 것은 다음에 연결될 때 다시 보냅니다.</p>
     <p style="margin-top:.7rem">어느 쪽이 최신인지는 기기 시계가 아니라 서버 문서의 판번호로 가립니다. 기기끼리 시각이 어긋나도 판정이 뒤집히지 않습니다. 양쪽에 서로 다른 변경이 있으면 어느 쪽을 살릴지 묻고, 버리는 쪽은 백업에 남겨 「직전으로 되돌리기」로 살릴 수 있습니다.</p>
   </section>
@@ -590,7 +591,27 @@ create policy "anon read"  on bangjeom_todo for select using (true);
 create policy "anon write" on bangjeom_todo for insert with check (true);
 create policy "anon edit"  on bangjeom_todo for update using (true) with check (true);
 
-alter publication supabase_realtime add table bangjeom_todo;</pre>
+alter publication supabase_realtime add table bangjeom_todo;
+
+-- 주머니 앱이 남기는 요청 (끝냈다 · 고정 블록 체크 · 페이지 한 줄)
+create table if not exists bangjeom_act (
+  id uuid primary key default gen_random_uuid(),
+  list text not null default 'bangjeom',
+  kind text not null,
+  target text not null,
+  text text,
+  device text,
+  created_at timestamptz not null default now(),
+  taken_at timestamptz
+);
+
+alter table bangjeom_act enable row level security;
+
+create policy "anon read"  on bangjeom_act for select using (true);
+create policy "anon write" on bangjeom_act for insert with check (true);
+create policy "anon edit"  on bangjeom_act for update using (true) with check (true);
+
+alter publication supabase_realtime add table bangjeom_act;</pre>
     <div class="btns"><button id="btnSql">복사하기</button></div>
   </section>
 
@@ -2007,6 +2028,33 @@ async function pullTodo(){
   }catch(e){ /* 표가 없으면 조용히 */ }
 }
 
+// 주머니 앱이 남긴 요청(bangjeom_act)을 읽어 제 규칙대로 처리한다. 먼저 차지한 뒤 적용하므로 두 기기가 겹쳐도 한 번만
+async function pullActs(){
+  if(!sb) return;
+  try{
+    const { data, error } = await sb.from('bangjeom_act')
+      .update({taken_at:now(), device:cfg.device})
+      .eq('list', cfg.list).is('taken_at', null)
+      .select();
+    if(error || !data || !data.length) return;
+    data.sort((a,b) => String(a.created_at).localeCompare(String(b.created_at)));
+    let n = 0;
+    data.forEach(r => {
+      if(r.kind === 'done'){
+        const t = byId(r.target);
+        if(t && !t.done){ finish(t.id, null); n++; }            // 매듭·쪽글·쉬는일 뽑기까지 평소대로
+      }else if(r.kind === 'fixed'){
+        const f = S.fixed.find(x => x.id === r.target || x.text === r.target);
+        if(f && !f.done){ f.done = true; n++; }
+      }else if(r.kind === 'line'){
+        const t = byId(r.target);
+        if(t && r.text && String(r.text).trim()){ t.note = appendLine(t.note, String(r.text).trim()); n++; }
+      }
+    });
+    if(n){ commit(); toast(`주머니에서 ${n}개를 받았습니다`); }
+  }catch(e){ /* 표가 없으면 조용히 */ }
+}
+
 async function connect(silent){
   if(!cfg.url || !cfg.key){ if(!silent) $('#syncNote').textContent = '주소와 키를 넣어주세요.'; return; }
   setSync('busy','잇는 중');
@@ -2016,6 +2064,7 @@ async function connect(silent){
     await pull(true);
     flushOutbox();
     pullTodo();
+    pullActs();
     if(chan) sb.removeChannel(chan);
     chan = sb.channel('bangjeom-' + cfg.list)
       .on('postgres_changes',
@@ -2024,6 +2073,9 @@ async function connect(silent){
       .on('postgres_changes',
         {event:'INSERT', schema:'public', table:'bangjeom_todo'},
         () => pullTodo())
+      .on('postgres_changes',
+        {event:'INSERT', schema:'public', table:'bangjeom_act'},
+        () => pullActs())
       .subscribe(st => {
         if(st === 'SUBSCRIBED') setSync('on', okLabel());
         if(st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') setSync('err','끊김');
@@ -2149,7 +2201,7 @@ $('#btnPush').onclick = () => sb ? push(true).then(() => toast('올렸습니다'
 $('#btnRestore').onclick = restore;
 
 // 아이폰에서 앱을 다시 열 때 최신 상태를 당겨오고, 날짜가 넘어갔는지도 본다
-document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); if(sb){ pull(true); pullTodo(); } } });
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ render(); if(sb){ pull(true); pullTodo(); pullActs(); } } });
 window.addEventListener('focus', () => { render(); if(sb) pull(true); });
 
 /* ══════════ 시작 ══════════ */
