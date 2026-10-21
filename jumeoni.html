@@ -230,16 +230,19 @@ function render(){
   const tasks = S.tasks || [], fixed = S.fixed || [];
   const chain = S.chain || [];
   const nowId = chain.length ? chain[chain.length - 1] : null;     // 방점의 지금 할 일: 태그로만 보인다
-  // 고른 일이 끝났거나 사라졌으면 칸을 비운다
-  const picked = pick ? tasks.find(t => t.id === pick.id && !t.done) : null;
+  // 고른 일이 끝났거나(체크됐거나) 사라졌으면 칸을 비운다
+  const pickedTask = pick && pick.kind !== 'fixed' ? tasks.find(t => t.id === pick.id && !t.done) : null;
+  const pickedFixed = pick && pick.kind === 'fixed' ? fixed.find(f => f_id(f) === pick.id && !f.done && !isPending('fixed', f_id(f))) : null;
+  const picked = pickedTask || pickedFixed;
   if(pick && !picked){ pick = null; savePick(); }
-  const live = tasks.filter(t => !t.done && t.id !== (picked && picked.id)).sort((a,b) => key(a.id) - key(b.id));
-  const fixLive = fixed.filter(f => !f.done).sort((a,b) => key(f_id(a)) - key(f_id(b)));
+  const live = tasks.filter(t => !t.done && t !== pickedTask).sort((a,b) => key(a.id) - key(b.id));
+  const fixLive = fixed.filter(f => !f.done && f !== pickedFixed).sort((a,b) => key(f_id(a)) - key(f_id(b)));
   const doneToday = tasks.filter(t => t.done && t.doneAt && localDate(new Date(t.doneAt)) === today);
   const fixDone = fixed.filter(f => f.done);
 
   const items = [];
-  if(picked) items.push(taskItem(picked, true));
+  if(pickedTask) items.push(taskItem(pickedTask, true));
+  if(pickedFixed) items.push(fixedItem(pickedFixed, false, true));
   // 고정 블록과 할 일을 섞어 놓는다
   const mixed = [...live.map(t => ({k:key(t.id), h:taskItem(t, false)})), ...fixLive.map(f => ({k:key(f_id(f)), h:fixedItem(f, false)}))]
     .sort((a,b) => a.k - b.k).map(x => x.h);
@@ -255,6 +258,10 @@ function render(){
     const id = el.closest('.it').dataset.id;
     openId = openId === id ? null : id; render();
   });
+  document.querySelectorAll('[data-pickfix]').forEach(b => b.onclick = () => {
+    pick = {id:b.dataset.pickfix, kind:'fixed', at:Date.now()}; savePick(); openId = null; render();
+    window.scrollTo(0, 0); toast('지금 할 일로 올렸습니다');
+  });
   document.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => {
     const id = b.dataset.done, t = tasks.find(x => x.id === id);
     if(!t || !confirm(`「${t.text}」\n\n끝냈다고 방점에 전합니까?`)) return;
@@ -268,7 +275,7 @@ function render(){
   document.querySelectorAll('[data-fix]').forEach(b => b.onclick = async () => {
     const id = b.dataset.fix;
     if(isPending('fixed', id)) return;
-    if(await act('fixed', id)){ toast('체크를 전했습니다'); render(); }
+    if(await act('fixed', id)){ toast('체크를 전했습니다'); if(pick && pick.kind === 'fixed' && pick.id === id){ pick = null; savePick(); } render(); }
   });
   document.querySelectorAll('[data-line]').forEach(inp => {
     const id = inp.dataset.line;
@@ -303,12 +310,19 @@ function taskItem(t, isPick, dim){
   return `<article class="it ${isPick ? 'pick' : ''} ${dim || sentDone ? 'dim' : ''} ${open ? 'open' : ''}" data-id="${t.id}">
     ${lab}<div class="top"><div class="ttl">${tags}${titleOf(t.text, t.url)}</div>${dueTag(t)}</div>${note}${sent}${more}</article>`;
 }
-function fixedItem(f, dim){
+function fixedItem(f, dim, isPick){
   const id = f_id(f), on = f.done || isPending('fixed', id);
-  return `<article class="it ${dim ? 'dim' : ''}"><div class="top">
+  const open = isPick || openId === 'fx:' + id;
+  const lab = isPick ? `<div class="lab">주머니에서 고른 일<span>${ago(pick.at)}</span></div>` : '';
+  const more = open && !dim && !on ? `<div class="more"><div class="acts">
+      <button class="done" data-fix="${id}">했다</button>${isPick
+        ? `<button class="clear" data-unpick="1">비우기</button>`
+        : `<button class="pickb" data-pickfix="${id}">지금 할 일로</button>`}</div></div>` : '';
+  return `<article class="it ${isPick ? 'pick' : ''} ${dim ? 'dim' : ''} ${open ? 'open' : ''}" data-id="fx:${id}">
+    ${lab}<div class="top">
     <button class="chk ${on ? 'on' : ''}" data-fix="${id}" aria-label="했음"></button>
-    <div class="ttl" style="cursor:default"><span class="tag fix">고정</span>${titleOf(f.text, f.url)}</div></div>
-    ${!f.done && isPending('fixed', id) ? '<div class="sent">체크 보냄</div>' : ''}</article>`;
+    <div class="ttl"><span class="tag fix">고정</span>${titleOf(f.text, f.url)}</div></div>
+    ${!f.done && isPending('fixed', id) ? '<div class="sent">체크 보냄</div>' : ''}${more}</article>`;
 }
 
 /* ── 발 · 설정 ── */
