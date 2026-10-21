@@ -46,6 +46,13 @@ header .st.err{color:var(--seal)}
 .tag.fix{color:var(--ink-soft);border-color:var(--rule)}
 .tag.urg{background:var(--seal);color:#fff8f2;border-color:var(--seal)}
 .tag.nowl{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tag.bj{color:var(--ink-faint);border-color:var(--rule)}
+.it.pick{border:1px solid var(--ink);border-left:4px solid var(--seal);border-radius:2px;padding:.75rem .85rem;margin-bottom:1rem;background:#fbf8f1}
+.it.pick .ttl{font-size:1.25rem}
+.it.pick .lab{font-size:.72rem;color:var(--ink-soft);letter-spacing:.14em;margin-bottom:.3rem;display:flex;justify-content:space-between}
+.it.pick .lab span{color:var(--ink-faint);letter-spacing:.03em}
+.acts .pickb{border-color:var(--seal);color:var(--seal)}
+.acts .clear{border-color:var(--rule);color:var(--ink-soft)}
 .due{font-size:.72rem;color:var(--ink-faint);white-space:nowrap}
 .due.today{color:var(--seal-soft)}.due.over{color:var(--seal)}
 .chk{width:1.2rem;height:1.2rem;flex:none;border:1px solid var(--ink-faint);border-radius:2px;background:var(--paper);margin-top:.35rem;position:relative}
@@ -100,7 +107,7 @@ footer button,footer a{color:var(--ink-soft);border-bottom:1px dotted var(--rule
 <body>
 <div class="wrap">
   <header><h1>방<b>점</b> 주머니</h1><span class="st" id="st">읽는 중</span></header>
-  <p class="hint" id="hint">손이 비었을 때 하나만 집으세요. 누르면 페이지가 펼쳐지고, 끝내면 방점에 전해집니다.</p>
+  <p class="hint" id="hint">손이 비었을 때 하나만 집으세요. 누르면 페이지가 펼쳐지고, 「지금 할 일로」 올려 두었다가 끝내면 방점에 전해집니다.</p>
   <div id="list"></div>
   <div class="set" id="set" hidden>
     <p>방점 설정에 넣어 둔 Supabase 주소와 anon 키, 목록 이름을 그대로 넣습니다. 이 앱은 목록을 읽기만 하고, 「끝냈다」·체크·한 줄은 요청으로 남겨 방점이 처리합니다.</p>
@@ -153,6 +160,9 @@ let sb = null, S = null, chan = null;
 let order = {};                                   // 섞은 순서. 열 때마다 새로 섞고, 갱신으로는 흔들지 않는다
 let openId = null;                                // 펼쳐 둔 항목
 let pending = JSON.parse(LS.get('jm.pending') || '{}');   // 보낸 요청. 방점이 처리한 게 보이면 지운다
+let pick = JSON.parse(LS.get('jm.pick') || 'null');        // 주머니에서 고른 일 {id, at}. 이 기기에만 있고 방점과는 무관하다
+const savePick = () => LS.set('jm.pick', JSON.stringify(pick));
+const ago = ms => { const d = Math.floor((Date.now() - ms) / 86400000); return d <= 0 ? '오늘 고름' : d === 1 ? '어제 고름' : `${d}일 전에 고름`; };
 const savePending = () => LS.set('jm.pending', JSON.stringify(pending));
 const setSt = (txt, err) => { const e = $('#st'); e.textContent = txt; e.classList.toggle('err', !!err); };
 
@@ -219,15 +229,17 @@ function render(){
   const today = localDate();
   const tasks = S.tasks || [], fixed = S.fixed || [];
   const chain = S.chain || [];
-  const nowId = chain.length ? chain[chain.length - 1] : null;
-  const now = tasks.find(t => t.id === nowId && !t.done);
-  const live = tasks.filter(t => !t.done && t.id !== nowId).sort((a,b) => key(a.id) - key(b.id));
+  const nowId = chain.length ? chain[chain.length - 1] : null;     // 방점의 지금 할 일: 태그로만 보인다
+  // 고른 일이 끝났거나 사라졌으면 칸을 비운다
+  const picked = pick ? tasks.find(t => t.id === pick.id && !t.done) : null;
+  if(pick && !picked){ pick = null; savePick(); }
+  const live = tasks.filter(t => !t.done && t.id !== (picked && picked.id)).sort((a,b) => key(a.id) - key(b.id));
   const fixLive = fixed.filter(f => !f.done).sort((a,b) => key(f_id(a)) - key(f_id(b)));
   const doneToday = tasks.filter(t => t.done && t.doneAt && localDate(new Date(t.doneAt)) === today);
   const fixDone = fixed.filter(f => f.done);
 
   const items = [];
-  if(now) items.push(taskItem(now, true));
+  if(picked) items.push(taskItem(picked, true));
   // 고정 블록과 할 일을 섞어 놓는다
   const mixed = [...live.map(t => ({k:key(t.id), h:taskItem(t, false)})), ...fixLive.map(f => ({k:key(f_id(f)), h:fixedItem(f, false)}))]
     .sort((a,b) => a.k - b.k).map(x => x.h);
@@ -246,8 +258,13 @@ function render(){
   document.querySelectorAll('[data-done]').forEach(b => b.onclick = async () => {
     const id = b.dataset.done, t = tasks.find(x => x.id === id);
     if(!t || !confirm(`「${t.text}」\n\n끝냈다고 방점에 전합니까?`)) return;
-    if(await act('done', id)){ toast('방점에 전했습니다'); openId = null; render(); }
+    if(await act('done', id)){ toast('방점에 전했습니다'); openId = null; if(pick && pick.id === id){ pick = null; savePick(); } render(); }
   });
+  document.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => {
+    pick = {id:b.dataset.pick, at:Date.now()}; savePick(); openId = null; render();
+    window.scrollTo(0, 0); toast('지금 할 일로 올렸습니다');
+  });
+  document.querySelectorAll('[data-unpick]').forEach(b => b.onclick = () => { pick = null; savePick(); openId = null; render(); toast('비웠습니다'); });
   document.querySelectorAll('[data-fix]').forEach(b => b.onclick = async () => {
     const id = b.dataset.fix;
     if(isPending('fixed', id)) return;
@@ -265,22 +282,26 @@ function render(){
     inp.addEventListener('compositionend', () => composing = false);
     inp.addEventListener('keydown', e => { if(e.key !== 'Enter') return; e.preventDefault(); if(composing || e.isComposing || e.keyCode === 229) setTimeout(send, 0); else send(); });
     inp.nextElementSibling.onclick = send;
-    if(openId === id) inp.focus();
+    if(openId === id && !(pick && pick.id === id)) inp.focus();
   });
 }
 const f_id = f => f.id || f.text;
-function taskItem(t, isNow, dim){
-  const open = openId === t.id;
+function taskItem(t, isPick, dim){
+  const open = isPick || openId === t.id;                 // 고른 일은 늘 펼쳐져 있다
   const sentDone = isPending('done', t.id);
-  const tags = (isNow ? '<span class="tag nowl">지금 할 일</span>' : '') + (t.urgent ? '<span class="tag urg">긴급</span>' : '') + (KINDS[t.kind] ? `<span class="tag">${KINDS[t.kind]}</span>` : '');
+  const isBjNow = (S.chain || []).length && (S.chain[S.chain.length - 1] === t.id);
+  const tags = (isBjNow ? '<span class="tag bj">방점 지금</span>' : '') + (t.urgent ? '<span class="tag urg">긴급</span>' : '') + (KINDS[t.kind] ? `<span class="tag">${KINDS[t.kind]}</span>` : '');
+  const lab = isPick ? `<div class="lab">주머니에서 고른 일<span>${ago(pick.at)}</span></div>` : '';
   const note = t.note ? `<div class="nt ${open ? '' : 'clamp'}">${fmtNote(t.note)}</div>` : '';
   const sent = sentDone ? `<div class="sent">끝냄 보냄 · 방점이 받으면 사라집니다</div>` : '';
   const more = open && !dim && !sentDone ? `<div class="more">
       <div class="addline"><input data-line="${t.id}" placeholder="페이지에 한 줄 적기" enterkeyhint="done"><button>보내기</button></div>
-      <div class="acts"><button class="done" data-done="${t.id}">끝냈다</button></div>
+      <div class="acts"><button class="done" data-done="${t.id}">끝냈다</button>${isPick
+        ? `<button class="clear" data-unpick="1">비우기</button>`
+        : `<button class="pickb" data-pick="${t.id}">지금 할 일로</button>`}</div>
     </div>` : '';
-  return `<article class="it ${isNow ? 'now' : ''} ${dim || sentDone ? 'dim' : ''} ${open ? 'open' : ''}" data-id="${t.id}">
-    <div class="top"><div class="ttl">${tags}${titleOf(t.text, t.url)}</div>${dueTag(t)}</div>${note}${sent}${more}</article>`;
+  return `<article class="it ${isPick ? 'pick' : ''} ${dim || sentDone ? 'dim' : ''} ${open ? 'open' : ''}" data-id="${t.id}">
+    ${lab}<div class="top"><div class="ttl">${tags}${titleOf(t.text, t.url)}</div>${dueTag(t)}</div>${note}${sent}${more}</article>`;
 }
 function fixedItem(f, dim){
   const id = f_id(f), on = f.done || isPending('fixed', id);
