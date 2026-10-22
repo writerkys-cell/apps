@@ -780,6 +780,19 @@ const runShortcut = (name, input) => {
 const KINDS = {write:'쓰기', read:'읽기', rest:'쉬는일'};
 const isRest = t => !!t && t.kind === 'rest';     // 쉬는일: 훑기·사슬에서 빠지고, 일을 마친 뒤 무작위로 하나 뽑힌다
 const isWorkKind = k => k === 'write' || k === 'read';
+// 쓰기·읽기 항목은 링크를 따로 적지 않으면 보태기·서가로 간다. 종류를 바꾸면 그쪽 링크로 따라 바뀐다
+const KIND_URL = {write:'https://writerkys-cell.github.io/apps/botaegi.html', read:'https://writerkys-cell.github.io/apps/seoga#read'};
+const KIND_URLS = Object.values(KIND_URL);
+function fillKindUrls(){
+  let changed = false;
+  const fix = t => {
+    const u = KIND_URL[t.kind];
+    if(u && (!t.url || (KIND_URLS.includes(t.url) && t.url !== u))){ t.url = u; changed = true; }
+  };
+  S.tasks.forEach(t => { if(!t.done) fix(t); });
+  S.fixed.forEach(fix);
+  return changed;
+}
 const kindTag = k => KINDS[k] ? `<span class="kind">${KINDS[k]}</span>` : '';
 let pickKind = '';                        // 목록 입력칸 옆에서 켜 둔 종류
 // 기한(due): "YYYY-MM-DD" 문자열. 없으면 키 자체를 두지 않는다
@@ -1206,7 +1219,7 @@ let gateWas = null;                       // 직전 그리기의 문 상태. 닫
 let stageMode = '';                       // 실행 화면이 무엇을 보이고 있나: scan · exec · rest · empty
 function render(){
   fixedPeek = false;
-  if(ensureFixedIds()) LS.set('bangjeom.state', JSON.stringify(S));
+  if(ensureFixedIds() | fillKindUrls()) LS.set('bangjeom.state', JSON.stringify(S));
   if(rollFixed()){                          // 자정을 넘겼으면 그 사실만 이 기기에 저장한다
     LS.set('bangjeom.state', JSON.stringify(S));
   }
