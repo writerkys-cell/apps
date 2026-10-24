@@ -274,6 +274,8 @@ ol.list li.act .body{font-weight:700}
 ol.list li .del{color:var(--ink-faint);font-size:.85rem;padding:.45rem .35rem;visibility:hidden;flex:none}
 ol.list li .mv{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
 ol.list li .ed{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
+ol.list li .up{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
+ol.list li .up:hover{color:var(--seal)}
 ol.list li.tired .body{color:var(--seal)}
 ol.list li.tired .lost{color:var(--seal);font-weight:700}
 ol.list li.tired .ed{visibility:visible;color:var(--seal)}
@@ -294,9 +296,10 @@ ol.list li .lost{
 }
 ol.list li:hover .del,ol.list li:focus-within .del,
 ol.list li:hover .mv,ol.list li:focus-within .mv,
+ol.list li:hover .up,ol.list li:focus-within .up,
 ol.list li:hover .ed,ol.list li:focus-within .ed{visibility:visible}
 @media (hover:none){
-  ol.list li .del,ol.list li .mv,ol.list li .ed,.fixed li button.x{visibility:visible}
+  ol.list li .del,ol.list li .mv,ol.list li .up,ol.list li .ed,.fixed li button.x{visibility:visible}
 }
 
 /* ── 뿌리 한 바퀴 ── */
@@ -1061,6 +1064,26 @@ function addUrgent(text, kind, due){
 }
 const urgTag = t => t && t.urgent ? '<span class="kind urg">긴급</span>' : '';
 
+// 목록에 있던 일을 긴급으로: 메모·링크·기한은 그대로 두고 점만 사슬 맨 위로 옮긴다.
+// 진행 중인 일이 있으면 그 바로 아래에 끼워 두고, 없으면 지금 할 일로 올린다. 훑기는 건너뛴다
+function raiseUrgent(id){
+  const t = byId(id);
+  if(!t || t.done || isRest(t)) return null;
+  t.urgent = true;
+  ensureChain();
+  const top = benchmark();
+  if(top && top.id === t.id){ commit(); return false; }    // 이미 지금 할 일이다
+  S.chain = S.chain.filter(x => x !== t.id);
+  const cur = benchmark();
+  const busy = !!(cur && cur.startedAt);
+  if(busy) S.chain.splice(S.chain.length - 1, 0, t.id);
+  else S.chain.push(t.id);
+  if(!busy) S.cursor = S.tasks[S.tasks.length - 1].id;    // 훑기를 건너뛰고 바로 실행 화면
+  reentryOpen = null; lapFlash = false;
+  commit();
+  return busy;
+}
+
 function resetChain(){ S.chain = []; S.cursor = null; askedDue = new Set(); commit(); }
 
 // 하루의 매듭: 끝낸 항목을 날짜별로 갈무리하고 목록에서 걷어낸다
@@ -1477,12 +1500,13 @@ function renderList(){
     const tired = showLost && t.lost >= TIRED;
     const lost = showLost ? `<span class="lost" title="${t.lost}번 밀렸습니다">${t.lost}</span>` : '';
     const mv = t.done ? '' : `<button class="mv" data-end="${t.id}">끝으로</button>`;
+    const up = t.done || isRest(t) || t.id === act ? '' : `<button class="up" data-urg="${t.id}">긴급으로</button>`;
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">${tired ? '고쳐 적기' : '고치기'}</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${tired?'tired':''} ${behindGate(t)?'behind':''}">
       <span class="gutter">${dot}</span>
       <span class="body">${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${linkTag(t.url)}${t.done ? '' : dueTag(t)}${t.note
         ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${fmtNote(t.note)}</span>` : ''}</span>
-      ${lost}${ed}${mv}
+      ${lost}${ed}${up}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>` + (editOpen === t.id ? editorHtml(t, tired) : '');
   }).join('') + foldRow || `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`;
@@ -1948,6 +1972,12 @@ document.addEventListener('click', e => {
   if(go){ openGateToday(); return; }
   const m = e.target.closest('[data-end]');
   if(m){ moveEnd(m.dataset.end); return; }
+  const u = e.target.closest('[data-urg]');
+  if(u){
+    const busy = raiseUrgent(u.dataset.urg);
+    if(busy !== null) toast(busy ? '지금 일을 마치면 바로 이어집니다' : '지금 할 일로 올렸습니다');
+    return;
+  }
   const ar = e.target.closest('[data-arc]');
   if(ar){ openArchived(+ar.dataset.arc); return; }
   const kr = e.target.closest('[data-knot]');
