@@ -167,7 +167,9 @@ kbd{font:inherit;font-size:11px;border:1px solid var(--line2);border-radius:4px;
   html,body{margin:0;padding:0;height:auto;background:#fff;color:#000}
 }
 /* A6 가로는 148×105mm. Safari는 @page를 무시하고 자기 기본 여백(약 12.7mm)을 쓰기도 하므로, 그 안(약 122×79mm)에도 들어가게 카드를 120×78mm로 잡는다. 1mm라도 넘치면 카드마다 빈 장이 끼어든다. */
-.a6 .pcard{width:120mm;height:78mm;margin:0 auto;overflow:hidden;display:flex;flex-direction:column;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;font-size:12.5pt;line-height:1.55;color:#000}
+/* --fs: 넘치는 카드만 인쇄 직전에 fitA6Cards()가 1 → 0.72까지 줄이는 글자 배율 */
+.a6 .pcard{--fs:1;width:120mm;height:78mm;margin:0 auto;overflow:hidden;display:flex;flex-direction:column;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;font-size:calc(12.5pt * var(--fs));line-height:1.55;color:#000}
+#print-root.measuring{display:block;position:absolute;left:-10000px;top:0;width:148mm}
 .a6 .pcard:last-child{page-break-after:auto;break-after:auto}
 .a6 .ph{display:flex;justify-content:space-between;font-size:8.5pt;color:#666;border-bottom:.5pt solid #999;padding-bottom:1.5mm;margin-bottom:3mm}
 .a6 .pb{flex:1;white-space:pre-wrap;word-break:keep-all;overflow:hidden}
@@ -175,14 +177,14 @@ kbd{font:inherit;font-size:11px;border:1px solid var(--line2);border-radius:4px;
 .a6 .pf .m{white-space:pre-wrap;max-width:85%;font-size:8.5pt;color:#555}
 .a6 .cover{justify-content:center;text-align:center}
 .a6 .cover .k{font-size:9pt;color:#666;letter-spacing:.06em;margin-bottom:3mm}
-.a6 .cover h2{font-size:19pt;font-weight:600;margin:0 0 3mm;line-height:1.3;word-break:keep-all}
-.a6 .cover p{font-size:12pt;color:#333;margin:0;line-height:1.45}
-.a6 .cover .m{font-size:9pt;color:#555;white-space:pre-wrap;margin-top:5mm;text-align:left}
+.a6 .cover h2{font-size:calc(19pt * var(--fs));font-weight:600;margin:0 0 3mm;line-height:1.3;word-break:keep-all}
+.a6 .cover p{font-size:calc(12pt * var(--fs));color:#333;margin:0;line-height:1.45}
+.a6 .cover .m{font-size:calc(9pt * var(--fs));color:#555;white-space:pre-wrap;margin-top:5mm;text-align:left}
 .a6 .cover .pf{position:absolute;left:0;right:0;bottom:0}
 .a6 .pcard.cover{position:relative}
 .a6 .title{justify-content:center;text-align:center}
-.a6 .title h1{font-size:22pt;font-weight:600;margin:0 0 4mm;line-height:1.3;word-break:keep-all}
-.a6 .title p{margin:0;font-size:10pt;color:#555}
+.a6 .title h1{font-size:calc(22pt * var(--fs));font-weight:600;margin:0 0 4mm;line-height:1.3;word-break:keep-all}
+.a6 .title p{margin:0;font-size:calc(10pt * var(--fs));color:#555}
 .a4{font-size:11pt;line-height:1.75;color:#000}
 .a4 h1{font-size:20pt;font-weight:600;margin:0 0 2mm;line-height:1.3}
 .a4 .meta{color:#555;font-size:10pt;margin-bottom:8mm}
@@ -343,6 +345,9 @@ function renderEditor(){
         <label><span>A4에 메모 포함</span><input type="checkbox" data-act="a4memo" ${ui.a4memo?'checked':''} style="width:auto"></label>
         <div class="sep"></div>
         <div class="muted small" style="padding:4px 10px">인쇄 창에서 PDF로 저장을 고르면 PDF가 됩니다. 색 띠가 안 보이면 "배경 그래픽"을 켜 주세요.</div>
+        <div class="sep"></div>
+        <button data-act="phone">아이폰에서 보기</button>
+        <div class="muted small" style="padding:0 10px 6px">종이 카드 대신 아이폰으로 보는 화면입니다. 아이폰에서 같은 계정으로 로그인하면 이 강연이 그대로 받아집니다.</div>
       </div></details>
       <details class="menu"><summary>내보내기 ▾</summary><div>
         <button data-act="copyPrompt">슬라이드 프롬프트 복사</button>
@@ -482,6 +487,7 @@ app.addEventListener('click',e=>{
     case 'present':closeMenus();startPresent();break;
     case 'printA6':closeMenus();doPrint('a6');break;
     case 'printA4':closeMenus();doPrint('a4');break;
+    case 'phone':closeMenus();window.open('lecture-phone.html','_blank');break;
     case 'a4memo':ui.a4memo=b.checked;break;
     case 'copyPrompt':closeMenus();copyText(slidePrompt(l)).then(ok=>toast(ok?'슬라이드 프롬프트를 복사했습니다. 클로드에 붙여 넣으세요.':'복사하지 못했습니다.'));break;
     case 'copyMd':closeMenus();copyText(toMarkdown(l,true)).then(ok=>toast(ok?'마크다운을 복사했습니다.':'복사하지 못했습니다.'));break;
@@ -800,6 +806,7 @@ function doPrint(kind){
       cs.forEach((c,k)=>{cards.push(`<div class="pcard"><div class="ph"><span>${i+1}. ${esc(t.title)||'제목 없는 요지'}</span><span>${k+1} / ${cs.length} · 약 ${fmtDur(estMin(l,c.text))}</span></div><div class="pb">${esc(c.text.trim())}</div><div class="pf"><span></span><span>${++g}</span></div></div>`);});
     });
     printRoot.className='a6';printRoot.innerHTML=cards.join('');
+    fitA6Cards();
   }else{
     pageStyle.textContent='@page{size:A4 portrait;margin:18mm 20mm}';
     const meta=[`총 ${l.totalMinutes}분`];if(l.date)meta.push(esc(l.date));if(l.startTime)meta.push(`${esc(l.startTime)} 시작`);if(l.place)meta.push(esc(l.place));if(l.audience)meta.push(`청중: ${esc(l.audience)}`);
@@ -809,6 +816,43 @@ function doPrint(kind){
     printRoot.className='a4';printRoot.innerHTML=`<h1>${esc(l.title)||'제목 없음'}</h1><div class="meta">${meta.join(' · ')}</div><h3>타임라인</h3><table><thead><tr><th style="text-align:right">시작</th><th style="text-align:right">배정</th><th>요지</th><th>한 줄 요지</th></tr></thead><tbody>${rows}${end?`<tr><td class="n">${end}</td><td></td><td colspan="2">종료 예정</td></tr>`:''}</tbody></table>${secs}`;
   }
   setTimeout(()=>window.print(),50);
+}
+/* 넘치는 카드 처리: 본문이 카드에 안 들어가면 글자 배율을 0.04씩 0.72(약 9pt)까지 줄이고,
+   그래도 안 들어가는 대본 카드는 자연스러운 경계(빈 줄 > 문장 끝 > 띄어쓰기)에서 둘로 나눠 "이어서" 카드를 만든다.
+   화면에서 재지만 카드 크기(mm)와 글자(pt)가 모두 절대 단위라 인쇄와 같은 배치가 된다. */
+function fitA6Cards(){
+  const MIN=0.72,STEP=0.04,SLACK=2;
+  const contentH=el=>{const r=document.createRange();r.selectNodeContents(el);return r.getBoundingClientRect().height;};
+  const fits=el=>contentH(el)<=el.clientHeight-SLACK;
+  printRoot.classList.add('measuring');
+  const queue=[...printRoot.querySelectorAll('.pcard')];
+  let guard=0;
+  while(queue.length&&guard++<2000){
+    const card=queue.shift();const pb=card.querySelector('.pb');const box=pb||card;
+    let f=1;card.style.setProperty('--fs',f);
+    while(!fits(box)&&f-STEP>=MIN-1e-9){f=+(f-STEP).toFixed(2);card.style.setProperty('--fs',f);}
+    if(fits(box)||!pb)continue;
+    const text=pb.textContent;const cut=splitPoint(text);
+    if(cut<=0||cut>=text.length)continue;
+    const next=card.cloneNode(true);
+    pb.textContent=text.slice(0,cut).replace(/\s+$/,'');
+    next.querySelector('.pb').textContent=text.slice(cut).replace(/^\s+/,'');
+    const hs=next.querySelectorAll('.ph span');if(hs[1]&&!/이어서$/.test(hs[1].textContent))hs[1].textContent+=' · 이어서';
+    card.after(next);
+    queue.unshift(card,next);
+  }
+  let n=0;printRoot.querySelectorAll('.pcard .pf span:last-child').forEach(s=>{s.textContent=++n;});
+  printRoot.classList.remove('measuring');
+}
+function splitPoint(text){
+  const mid=text.length/2,win=text.length*0.3;
+  const pats=[/\n\s*\n/g,/\n/g,/[.!?。]\s+/g,/\s+/g];
+  for(const re of pats){
+    let best=-1,m;
+    while((m=re.exec(text))){const at=m.index+m[0].length;if(Math.abs(at-mid)<=win&&(best<0||Math.abs(at-mid)<Math.abs(best-mid)))best=at;}
+    if(best>0&&best<text.length)return best;
+  }
+  return Math.floor(mid);
 }
 window.addEventListener('afterprint',()=>{printRoot.innerHTML='';printRoot.className='';pageStyle.textContent='';});
 

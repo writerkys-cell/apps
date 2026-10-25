@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="강연">
+<meta name="theme-color" content="#141412">
+<title>강연 · 아이폰</title>
+<style>
+/* lecture.html 로 쓴 강연 대본을 아이폰에서 한 장씩 넘겨 보는 페이지.
+   같은 수파베이스 계정으로 로그인하면 맥북에서 쓴 대본을 그대로 받는다. 여기서는 고치지 않고 보기만 한다. */
+:root{
+  --bg:#141412; --panel:#1f1f1c; --ink:#f3f1ea; --ink2:#c9c7bf; --muted:#8f8c83; --line:#2a2a27; --line2:#3a3a37;
+  --accent:#a9a2ff; --late:#f09595; --ps:1;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+}
+body.light{
+  --bg:#faf9f5; --panel:#ffffff; --ink:#1f1f1d; --ink2:#5f5e5a; --muted:#8a8984; --line:#e2e0d8; --line2:#c9c7bf;
+  --accent:#534ab7; --late:#a32d2d;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overscroll-behavior:none}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;font-size:16px;line-height:1.5;-webkit-user-select:none;user-select:none;-webkit-text-size-adjust:100%;touch-action:manipulation}
+button{font:inherit;color:inherit;background:transparent;border:1px solid var(--line2);border-radius:10px;padding:10px 14px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#141412}
+body.light button.primary{color:#fff}
+button.ghost{border-color:transparent;color:var(--muted)}
+button:disabled{opacity:.5}
+input{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:12px 14px;width:100%;-webkit-user-select:text;user-select:text}
+input::placeholder{color:var(--muted)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.hidden{display:none !important}
+
+/* ---------- home ---------- */
+#home{min-height:100%;padding:calc(var(--sat) + 18px) 18px calc(var(--sab) + 28px);max-width:640px;margin:0 auto}
+#home h1{font-size:22px;font-weight:600;margin:0 0 4px}
+#home .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.box h3{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--ink2)}
+.form{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>button{flex:1}
+.stat{font-size:13px;color:var(--muted);min-height:18px;margin-top:8px;word-break:keep-all}
+.stat.err{color:var(--late)}
+.list{display:flex;flex-direction:column;gap:10px}
+.lec{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+.lec:active{border-color:var(--accent)}
+.lec .t{font-size:18px;font-weight:600;line-height:1.35;word-break:keep-all}
+.lec .m{font-size:13px;color:var(--muted);margin-top:6px}
+.resume{border-color:var(--accent)}
+.resume .t{color:var(--accent)}
+.empty{text-align:center;color:var(--muted);padding:40px 10px;word-break:keep-all}
+.filelabel{display:block;text-align:center}
+.filelabel input{display:none}
+.foot{margin-top:26px;font-size:12px;color:var(--muted);line-height:1.6;word-break:keep-all}
+
+/* ---------- present ---------- */
+#present{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);z-index:100}
+#present[hidden]{display:none}
+.pr-top{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:calc(var(--sat) + 8px) 14px 8px;font-size:13px;color:var(--muted);border-bottom:1px solid var(--line)}
+.pr-top .where{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-top button{padding:6px 10px;font-size:13px;border-radius:8px}
+.pr-tm{display:flex;gap:14px;padding:6px 14px 0;font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.pr-tm .late{color:var(--late)}
+.pr-tm .paused{color:var(--accent)}
+.pr-main{flex:1;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.pr-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;padding:18px 22px}
+.pr-scroll>*{margin:auto 0}
+.pr-text{white-space:pre-wrap;line-height:1.62;font-size:calc(24px * var(--ps));word-break:keep-all;overflow-wrap:anywhere}
+.pr-cover{text-align:center;padding:10px 0}
+.pr-cover .k{font-size:calc(14px * var(--ps));color:var(--muted);margin-bottom:12px;letter-spacing:.04em}
+.pr-cover h2{font-size:calc(30px * var(--ps));font-weight:600;margin:0 0 14px;line-height:1.3;word-break:keep-all}
+.pr-cover p{font-size:calc(18px * var(--ps));color:var(--ink2);margin:0;line-height:1.5;word-break:keep-all}
+.pr-memo{margin-top:22px;font-size:calc(15px * var(--ps));color:var(--muted);white-space:pre-wrap;text-align:left;border-left:2px solid var(--line2);padding-left:12px;word-break:keep-all}
+.pr-hint{font-size:calc(14px * var(--ps));color:var(--muted);margin-top:26px;line-height:1.7}
+.pr-more{position:absolute;left:0;right:0;bottom:0;height:40px;pointer-events:none;background:linear-gradient(to bottom,transparent,var(--bg));opacity:0;transition:opacity .2s}
+.pr-main.more .pr-more{opacity:1}
+.pr-next{padding:8px 14px;font-size:13px;color:var(--muted);border-top:1px solid var(--line);line-height:1.45;word-break:keep-all}
+.pr-next span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pr-bar{display:flex;gap:2px;padding:0 14px 8px}
+.pr-bar div{height:5px;opacity:.3;border-radius:2px}
+.pr-bar div.cur{opacity:1}
+.pr-bar div.done{opacity:.65}
+.pr-ctl{display:flex;gap:6px;padding:0 10px calc(var(--sab) + 10px);justify-content:space-between}
+.pr-ctl button{flex:1;padding:9px 4px;font-size:13px;border-radius:9px;white-space:nowrap}
+.pr-ctl button.on{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- sheets ---------- */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-end}
+.sheet{width:100%;max-height:75vh;overflow-y:auto;background:var(--panel);border-radius:18px 18px 0 0;padding:16px 16px calc(var(--sab) + 18px)}
+.sheet h3{margin:0 0 12px;font-size:15px;font-weight:600}
+.sheet .item{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 4px}
+.sheet .item:last-child{border-bottom:0}
+.sheet .item .n{width:22px;height:22px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#141412;align-self:center}
+.sheet .item .tt{flex:1;word-break:keep-all}
+.sheet .item .mm{font-size:12px;color:var(--muted);white-space:nowrap}
+.sheet .item.cur .tt{color:var(--accent)}
+.sheet .btns{display:flex;gap:8px;margin-top:8px}
+.sheet .btns button{flex:1;padding:13px}
+.sheet p{margin:0 0 14px;color:var(--ink2);word-break:keep-all}
+
+#toast{position:fixed;left:50%;bottom:calc(var(--sab) + 70px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;white-space:nowrap}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="home"></div>
+<div id="present" hidden></div>
+<div id="toast"></div>
+<script>
+/* ---------- 저장소 ---------- */
+const STORE_KEY='lecture.v1';            /* lecture.html 과 같은 키. 같은 주소에서 열면 자료를 함께 쓴다 */
+const SESS_KEY='lecture.session';
+const UI_KEY='lecture.phone.ui';
+const PRES_KEY='lecture.phone.pres';
+const COLORS=['#7F77DD','#5DCAA5','#F0997B','#85B7EB','#FAC775','#ED93B1','#97C459','#B4B2A9'];
+const col=i=>COLORS[i%COLORS.length];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtClock=ms=>{const s=Math.max(0,Math.floor(ms/1000));const m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0');};
+const topicStart=(l,i)=>{let s=0;for(let k=0;k<i;k++)s+=(+l.topics[k].minutes||0);return s;};
+const totalPlanned=l=>l.topics.reduce((a,t)=>a+(+t.minutes||0),0);
+function loadJSON(k,d){try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}}
+function saveJSON(k,v){try{if(v==null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+let db=loadJSON(STORE_KEY,null);if(!db||!Array.isArray(db.lectures))db={lectures:[],deleted:[]};db.deleted=db.deleted||[];
+let sess=loadJSON(SESS_KEY,null);
+let ui=Object.assign({theme:'dark',scale:1},loadJSON(UI_KEY,{}));
+const saveDb=()=>saveJSON(STORE_KEY,db);
+const saveUi=()=>saveJSON(UI_KEY,ui);
+function applyTheme(){document.body.classList.toggle('light',ui.theme==='light');document.documentElement.style.setProperty('--ps',ui.scale);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=ui.theme==='light'?'#faf9f5':'#141412';}
+applyTheme();
+const homeEl=document.getElementById('home'),presentEl=document.getElementById('present');
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800);}
+
+/* ---------- 수파베이스 (읽기 전용) ---------- */
+const SB_URL='https://bmuslkayijcgosmgvnah.supabase.co';
+const SB_KEY='sb_publishable_sEHvPL_9_RHCZK4Fpw3zoA_VM7j9pyt';
+const sync={busy:false,lastPull:0,msg:'',err:false};
+function setSess(x){sess=x;saveJSON(SESS_KEY,x);}
+function jwtExp(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000;}catch(e){return 0;}}
+async function sbFetch(path,opt={}){
+  let r;try{r=await fetch(SB_URL+path,{...opt,headers:{apikey:SB_KEY,'Content-Type':'application/json',...(opt.headers||{})}});}
+  catch(e){throw new Error('인터넷에 연결되지 않았습니다. 받아 둔 강연은 그대로 볼 수 있습니다.');}
+  const text=await r.text();let j=null;try{j=text?JSON.parse(text):null;}catch(e){}
+  if(!r.ok){let msg=(j&&(j.msg||j.message||j.error_description||j.error))||text||String(r.status);
+    if(/Invalid login credentials/i.test(msg))msg='이메일 또는 비밀번호가 맞지 않습니다.';
+    else if(/Email not confirmed/i.test(msg))msg='이메일 확인이 아직입니다. 받은 메일의 링크를 누른 뒤 다시 로그인하세요.';
+    else if(/rate limit/i.test(msg))msg='요청이 너무 잦습니다. 잠시 뒤 다시 하세요.';
+    const e=new Error(msg);e.status=r.status;throw e;}
+  return j;
+}
+async function sbSignIn(email,password){const j=await sbFetch('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});setSess({access_token:j.access_token,refresh_token:j.refresh_token,user:j.user.id,email});}
+async function sbToken(){
+  if(!sess)return null;
+  if(jwtExp(sess.access_token)-Date.now()<60000){
+    let j;try{j=await sbFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:sess.refresh_token})});}
+    catch(e){if(e.status===400||e.status===401){setSess(null);setSyncMsg('로그인이 풀렸습니다. 다시 로그인하세요.',true);renderHome();}throw e;}
+    setSess({...sess,access_token:j.access_token,refresh_token:j.refresh_token||sess.refresh_token});
+  }
+  return sess.access_token;
+}
+function setSyncMsg(m,err){sync.msg=m;sync.err=!!err;const e=document.getElementById('syncstat');if(e){e.textContent=m;e.classList.toggle('err',!!err);}}
+async function pullLectures(force){
+  if(!sess||sync.busy)return;if(!force&&Date.now()-sync.lastPull<10000)return;
+  sync.busy=true;setSyncMsg('받는 중…');
+  try{
+    const tok=await sbToken();
+    const rows=await sbFetch('/rest/v1/lectures?select=id,data,updated_at,deleted',{headers:{Authorization:'Bearer '+tok}});
+    sync.lastPull=Date.now();let n=0;
+    for(const r of rows){
+      const i=db.lectures.findIndex(x=>x.id===r.id);
+      if(r.deleted){if(i>=0){db.lectures.splice(i,1);n++;}continue;}
+      if(!r.data||!Array.isArray(r.data.topics))continue;
+      if(i<0){db.lectures.push(r.data);n++;}
+      else if(r.updated_at>(db.lectures[i].updatedAt||0)){db.lectures[i]=r.data;n++;}
+    }
+    saveDb();
+    const d=new Date();setSyncMsg(`받음 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}${n?` · ${n}편 새로 받음`:''}`);
+    renderHome();
+  }catch(e){setSyncMsg(e.message||String(e),true);}
+  finally{sync.busy=false;}
+}
+
+/* ---------- 홈 ---------- */
+function lecMeta(l){const p=[];if(l.date)p.push(l.date);if(l.place)p.push(l.place);p.push(`${l.totalMinutes||totalPlanned(l)}분 · 요지 ${l.topics.length}`);return p.join(' · ');}
+function renderHome(){
+  if(pres)return;
+  const ls=[...db.lectures].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  const saved=loadJSON(PRES_KEY,null);const savedL=saved&&Date.now()-saved.savedAt<4*3600000?db.lectures.find(l=>l.id===saved.lid):null;
+  let syncBox;
+  if(sess)syncBox=`<div class="box"><div class="row"><button class="primary" data-act="pull">새로 받기</button><button class="ghost" data-act="out">로그아웃</button></div><div class="stat ${sync.err?'err':''}" id="syncstat">${esc(sync.msg)||esc(sess.email)}</div></div>`;
+  else syncBox=`<div class="box"><h3>맥북의 강연 받기</h3><form class="form" id="loginForm"><input type="email" name="email" placeholder="이메일" autocomplete="username" inputmode="email" autocapitalize="off"><input type="password" name="pw" placeholder="비밀번호" autocomplete="current-password"><button class="primary" type="submit">로그인</button></form><div class="stat ${sync.err?'err':''}" id="syncstat">${esc(sync.msg)||'맥북의 강연 앱에서 동기화에 쓰는 이메일과 비밀번호입니다. 한 번 로그인하면 계속 유지됩니다.'}</div></div>`;
+  homeEl.innerHTML=`<h1>강연</h1><div class="sub">강연을 고르면 바로 발표 화면이 됩니다.</div>
+    ${savedL?`<button class="lec resume" data-resume="1"><div class="t">이어서 보기 · ${esc(savedL.title)||'제목 없음'}</div><div class="m">${saved.idx+1}번째 장에서 멈췄습니다 · ${new Date(saved.savedAt).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})}</div></button>`:''}
+    <div class="list">${ls.map(l=>`<button class="lec" data-open="${l.id}"><div class="t">${esc(l.title)||'제목 없음'}</div><div class="m">${esc(lecMeta(l))}</div></button>`).join('')||`<div class="empty">아직 받은 강연이 없습니다.<br>로그인해서 맥북의 강연을 받거나, 강연 파일(.lecture.json)을 열어 주세요.</div>`}</div>
+    <div style="height:18px"></div>
+    ${syncBox}
+    <label class="filelabel"><button class="ghost" type="button" onclick="this.parentNode.querySelector('input').click()">강연 파일(.lecture.json) 열기</button><input type="file" accept=".json,application/json" id="fileIn"></label>
+    <div class="foot">발표 화면에서는 오른쪽을 두드리거나 왼쪽으로 쓸면 다음 장, 왼쪽을 두드리면 앞 장입니다. 두 손가락으로 벌리면 글자가 커집니다. 보는 동안 화면이 꺼지지 않습니다.<br>사파리의 공유 단추에서 '홈 화면에 추가'를 누르면 앱처럼 열립니다.</div>`;
+  const f=document.getElementById('loginForm');if(f)f.addEventListener('submit',onLogin);
+  const fi=document.getElementById('fileIn');if(fi)fi.addEventListener('change',onFile);
+}
+async function onLogin(e){
+  e.preventDefault();const f=e.target;const email=f.email.value.trim(),pw=f.pw.value;
+  if(!email||!pw){setSyncMsg('이메일과 비밀번호를 넣으세요.',true);return;}
+  const b=f.querySelector('button');b.disabled=true;setSyncMsg('로그인 중…');
+  try{await sbSignIn(email,pw);sync.msg='';renderHome();await pullLectures(true);}
+  catch(err){setSyncMsg(err.message||String(err),true);b.disabled=false;}
+}
+function onFile(e){
+  const file=e.target.files[0];if(!file)return;const rd=new FileReader();
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);const arr=Array.isArray(d.lectures)?d.lectures:[d];let n=0;
+    for(const x of arr){if(!x||!Array.isArray(x.topics))continue;const i=db.lectures.findIndex(l=>l.id===x.id);if(i>=0)db.lectures[i]=x;else db.lectures.push(x);n++;}
+    saveDb();renderHome();toast(n?`${n}편을 열었습니다.`:'강연 파일이 아닙니다.');}catch(err){toast('강연 파일을 읽지 못했습니다.');}};
+  rd.readAsText(file);e.target.value='';
+}
+homeEl.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act],[data-open],[data-resume]');if(!b)return;
+  if(b.dataset.open){startPresent(db.lectures.find(l=>l.id===b.dataset.open));return;}
+  if(b.dataset.resume){const s=loadJSON(PRES_KEY,null);const l=s&&db.lectures.find(x=>x.id===s.lid);if(l)startPresent(l,s);return;}
+  if(b.dataset.act==='pull'){await pullLectures(true);}
+  else if(b.dataset.act==='out'){setSess(null);sync.msg='';renderHome();}
+});
+
+/* ---------- 발표 ---------- */
+let pres=null,wakeLock=null;
+function buildSlides(l){
+  const s=[{type:'title'}];
+  l.topics.forEach((t,ti)=>{s.push({type:'cover',ti});const cs=(t.cards||[]).filter(c=>(c.text||'').trim());cs.forEach((c,ci)=>s.push({type:'card',ti,ci,n:cs.length,text:c.text.trim()}));});
+  s.push({type:'end'});return s;
+}
+function startPresent(l,saved){
+  if(!l)return;
+  pres={l,slides:buildSlides(l),idx:0,startedAt:null,spent:{},enter:null,ti:null,paused:false,pauseAt:null};
+  if(saved){Object.assign(pres,{idx:Math.min(saved.idx||0,pres.slides.length-1),startedAt:saved.startedAt,spent:saved.spent||{},enter:saved.enter,ti:saved.ti,paused:!!saved.paused,pauseAt:saved.pauseAt});}
+  presentEl.hidden=false;
+  presentEl.innerHTML=`<div class="pr-top"><span class="where"></span><button data-p="exit">나가기</button></div>
+    <div class="pr-tm" id="prTm"></div>
+    <div class="pr-main"><div class="pr-scroll" id="prScroll"></div><div class="pr-more"></div></div>
+    <div class="pr-next" id="prNext"></div><div class="pr-bar" id="prBar"></div>
+    <div class="pr-ctl"><button data-p="toc">요지</button><button data-p="pause" id="prPause">일시정지</button><button data-p="smaller">글자−</button><button data-p="bigger">글자+</button><button data-p="theme">${ui.theme==='light'?'어둡게':'밝게'}</button></div>`;
+  pres.timer=setInterval(drawTimers,500);
+  document.addEventListener('keydown',presKey);
+  bindTouch(presentEl.querySelector('.pr-main'));
+  requestWake();
+  drawSlide();
+}
+function stopPresent(){
+  if(!pres)return;clearInterval(pres.timer);document.removeEventListener('keydown',presKey);
+  presentEl.hidden=true;presentEl.innerHTML='';pres=null;saveJSON(PRES_KEY,null);releaseWake();renderHome();
+}
+function savePres(){if(!pres)return;const {l,idx,startedAt,spent,enter,ti,paused,pauseAt}=pres;saveJSON(PRES_KEY,{lid:l.id,idx,startedAt,spent,enter,ti,paused,pauseAt,savedAt:Date.now()});}
+function presNow(){return pres.paused?pres.pauseAt:Date.now();}
+function presGo(i){
+  if(!pres)return;i=Math.max(0,Math.min(pres.slides.length-1,i));
+  const sl=pres.slides[i];const now=presNow();
+  if(pres.startedAt==null&&sl.type!=='title')pres.startedAt=now;
+  const nti=sl.ti??null;
+  if(nti!==pres.ti){if(pres.ti!=null&&pres.enter!=null)pres.spent[pres.ti]=(pres.spent[pres.ti]||0)+(now-pres.enter);pres.ti=nti;pres.enter=nti==null?null:now;}
+  pres.idx=i;drawSlide();savePres();
+}
+function togglePause(){if(!pres)return;if(pres.paused){const d=Date.now()-pres.pauseAt;if(pres.startedAt!=null)pres.startedAt+=d;if(pres.enter!=null)pres.enter+=d;pres.paused=false;pres.pauseAt=null;}else{pres.paused=true;pres.pauseAt=Date.now();}
+  const b=document.getElementById('prPause');if(b){b.textContent=pres.paused?'다시 시작':'일시정지';b.classList.toggle('on',pres.paused);}drawTimers();savePres();}
+function setScale(s){ui.scale=Math.round(Math.max(0.6,Math.min(2.2,s))*100)/100;document.documentElement.style.setProperty('--ps',ui.scale);saveUi();checkMore();}
+function presKey(e){
+  if(!pres)return;const k=e.key;
+  if(k==='Escape'){askExit();}
+  else if(k==='ArrowRight'||k===' '||k==='ArrowDown'||k==='Enter'){e.preventDefault();presGo(pres.idx+1);}
+  else if(k==='ArrowLeft'||k==='ArrowUp'||k==='Backspace'){e.preventDefault();presGo(pres.idx-1);}
+  else if(k==='+'||k==='=')setScale(ui.scale+0.1);else if(k==='-'||k==='_')setScale(ui.scale-0.1);
+  else if(k==='p'||k==='P')togglePause();
+}
+function drawSlide(){
+  const {l,slides,idx}=pres;const sl=slides[idx];let main='',top='';
+  const t=sl.ti!=null?l.topics[sl.ti]:null;
+  if(sl.type==='title'){main=`<div class="pr-cover"><div class="k">강연</div><h2>${esc(l.title)||'제목 없음'}</h2><p>총 ${l.totalMinutes||totalPlanned(l)}분${l.startTime?' · '+esc(l.startTime)+' 시작':''}${l.place?'<br>'+esc(l.place):''}</p><div class="pr-hint">오른쪽을 두드리면 시작합니다.<br>첫 장으로 넘어갈 때부터 시간을 잽니다.</div></div>`;top='시작 전';}
+  else if(sl.type==='cover'){main=`<div class="pr-cover"><div class="k">요지 ${sl.ti+1} / ${l.topics.length} · ${t.minutes}분</div><h2>${esc(t.title)||'제목 없는 요지'}</h2>${t.summary?`<p>${esc(t.summary)}</p>`:''}${(t.memo||'').trim()?`<div class="pr-memo">${esc(t.memo.trim())}</div>`:''}</div>`;top=`요지 ${sl.ti+1} 시작`;}
+  else if(sl.type==='card'){main=`<div class="pr-text">${esc(sl.text)}</div>`;top=`${sl.ti+1}. ${esc(t.title)||'제목 없는 요지'} · ${sl.ci+1} / ${sl.n}`;}
+  else{main=`<div class="pr-cover"><h2>끝</h2><p>질의응답</p><div class="pr-hint">위의 '나가기'로 마칩니다.</div></div>`;top='끝';}
+  const next=slides[idx+1];let nx='';
+  if(next){if(next.type==='cover')nx='다음 요지: '+(l.topics[next.ti].title||'제목 없는 요지');else if(next.type==='card')nx='다음: '+next.text.replace(/\s+/g,' ');else nx='다음: 끝';}
+  presentEl.querySelector('.where').textContent=top;
+  const sc=document.getElementById('prScroll');sc.innerHTML=main;sc.scrollTop=0;
+  document.getElementById('prNext').innerHTML=`<span>${esc(nx)}</span>`;
+  document.getElementById('prBar').innerHTML=l.topics.map((tp,i)=>`<div style="flex:${+tp.minutes||1};background:${col(i)}" class="${sl.ti===i?'cur':sl.ti!=null&&i<sl.ti?'done':''}"></div>`).join('');
+  drawTimers();checkMore();
+}
+function checkMore(){const sc=document.getElementById('prScroll');if(!sc)return;requestAnimationFrame(()=>{sc.parentElement.classList.toggle('more',sc.scrollHeight>sc.clientHeight+4&&sc.scrollTop+sc.clientHeight<sc.scrollHeight-4);});}
+function drawTimers(){
+  if(!pres)return;const el=document.getElementById('prTm');if(!el)return;const {l}=pres;const now=presNow();
+  const elapsed=pres.startedAt==null?0:now-pres.startedAt;
+  const parts=[`경과 ${fmtClock(elapsed)} / ${l.totalMinutes||totalPlanned(l)}분`];
+  if(pres.ti!=null){const t=l.topics[pres.ti];const used=(pres.spent[pres.ti]||0)+(pres.enter!=null?now-pres.enter:0);const rem=t.minutes*60000-used;
+    parts.push(rem>=0?`이 요지 남음 ${fmtClock(rem)}`:`<span class="late">이 요지 ${fmtClock(-rem)} 초과</span>`);
+    const planned=topicStart(l,pres.ti)*60000;const diff=elapsed-used-planned;
+    if(Math.abs(diff)>=60000)parts.push(diff>0?`<span class="late">예정보다 ${Math.round(diff/60000)}분 늦음</span>`:`예정보다 ${Math.round(-diff/60000)}분 빠름`);}
+  if(pres.paused)parts.push('<span class="paused">일시정지</span>');
+  el.innerHTML=parts.map(p=>`<span>${p}</span>`).join('');
+}
+presentEl.addEventListener('click',e=>{
+  const b=e.target.closest('[data-p]');if(!b||!pres)return;const a=b.dataset.p;
+  if(a==='exit')askExit();else if(a==='pause')togglePause();else if(a==='bigger')setScale(ui.scale+0.1);else if(a==='smaller')setScale(ui.scale-0.1);
+  else if(a==='theme'){ui.theme=ui.theme==='light'?'dark':'light';saveUi();applyTheme();b.textContent=ui.theme==='light'?'어둡게':'밝게';}
+  else if(a==='toc')showToc();
+});
+
+/* 손가락: 두드리기(오른쪽 다음·왼쪽 앞), 옆으로 쓸기, 두 손가락 벌리기 */
+function bindTouch(el){
+  let t0=null,pinch=null,moved=false;
+  el.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){pinch={d:dist(e.touches),s:ui.scale};t0=null;return;}
+    const t=e.touches[0];t0={x:t.clientX,y:t.clientY,at:Date.now()};moved=false;
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    if(pinch&&e.touches.length===2){e.preventDefault();setScale(pinch.s*dist(e.touches)/pinch.d);return;}
+    if(t0){const t=e.touches[0];if(Math.abs(t.clientX-t0.x)>10||Math.abs(t.clientY-t0.y)>10)moved=true;}
+  },{passive:false});
+  el.addEventListener('touchend',e=>{
+    if(pinch){if(e.touches.length===0)pinch=null;return;}
+    if(!t0)return;const t=e.changedTouches[0];const dx=t.clientX-t0.x,dy=t.clientY-t0.y,dt=Date.now()-t0.at;t0=null;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.3){presGo(pres.idx+(dx<0?1:-1));return;}
+    if(!moved&&dt<400){const w=el.getBoundingClientRect().width;presGo(pres.idx+(t.clientX<w*0.3?-1:1));}
+  },{passive:true});
+  el.addEventListener('touchcancel',()=>{t0=null;pinch=null;},{passive:true});
+  el.addEventListener('scroll',checkMore,true);
+  /* 마우스로 볼 때(맥북에서 시험) */
+  el.addEventListener('click',e=>{if(e.pointerType==='touch'||('ontouchstart' in window))return;const w=el.getBoundingClientRect().width;presGo(pres.idx+(e.clientX<w*0.3?-1:1));});
+}
+const dist=ts=>Math.hypot(ts[0].clientX-ts[1].clientX,ts[0].clientY-ts[1].clientY);
+
+/* 시트: 요지 목록, 나가기 확인 */
+function sheet(html){const bg=document.createElement('div');bg.className='sheet-bg';bg.innerHTML=`<div class="sheet">${html}</div>`;bg.addEventListener('click',e=>{if(e.target===bg)bg.remove();});document.body.appendChild(bg);return bg;}
+function showToc(){
+  const {l,slides}=pres;
+  const items=l.topics.map((t,i)=>`<button class="item ${pres.ti===i?'cur':''}" data-ti="${i}"><span class="n" style="background:${col(i)}">${i+1}</span><span class="tt">${esc(t.title)||'제목 없는 요지'}</span><span class="mm">${topicStart(l,i)}분 · ${t.minutes}분</span></button>`).join('');
+  const bg=sheet(`<h3>요지로 건너뛰기</h3>${items}<button class="item" data-ti="end"><span class="n" style="background:var(--line2)">끝</span><span class="tt">끝</span></button>`);
+  bg.addEventListener('click',e=>{const b=e.target.closest('[data-ti]');if(!b)return;const v=b.dataset.ti;const i=v==='end'?slides.length-1:slides.findIndex(s=>s.type==='cover'&&s.ti===+v);if(i>=0)presGo(i);bg.remove();});
+}
+function askExit(){
+  const bg=sheet(`<h3>강연을 끝낼까요?</h3><p>끝내면 시간 기록이 지워집니다. 잠깐 나갔다 와도 '이어서 보기'로 돌아올 수 있으니, 강연 중이라면 그냥 홈 단추를 누르세요.</p><div class="btns"><button data-x="stay">계속 보기</button><button class="primary" data-x="exit">끝내기</button></div>`);
+  bg.addEventListener('click',e=>{const b=e.target.closest('[data-x]');if(!b)return;bg.remove();if(b.dataset.x==='exit')stopPresent();});
+}
+
+/* 화면 꺼짐 막기 */
+async function requestWake(){try{if('wakeLock' in navigator){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null;});}}catch(e){wakeLock=null;}}
+function releaseWake(){try{if(wakeLock)wakeLock.release();}catch(e){}wakeLock=null;}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){if(pres){requestWake();drawTimers();}else pullLectures(false);}
+});
+
+/* 오프라인에서도 열리게 (같은 폴더의 sw.js 가 있을 때만) */
+if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+renderHome();
+if(sess)pullLectures(true);
+</script>
+</body>
+</html>
