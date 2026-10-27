@@ -7,7 +7,7 @@
 <style>
 :root{
   --hanji:#efe9dc; --meok:#23201c; --meok-2:#6b6259; --meok-3:#9a9084;
-  --seon:#d6cdba; --inju:#a8322d; --jongi:#fcfcfa;
+  --seon:#d6cdba; --inju:#a8322d; --jongi:#fcfcfa; --jjok:#2b5c8a;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -65,6 +65,17 @@ select{width:100%;margin-top:.7rem;font-size:.9rem;color:var(--meok);background:
 #phoneNote span{flex:1}
 #phoneNote small{display:block;margin-top:.2rem;font-size:.7rem;color:var(--meok-2)}
 #phoneNote button{font-size:.78rem;padding:.25rem .6rem;border:1px solid var(--inju);border-radius:2px;background:var(--jongi);color:var(--inju);cursor:pointer}
+/* 의견 — 아이폰에서 문단에 붙인 쪽지. 쪽빛. 본문은 바뀌지 않았다 */
+#noteBox{margin-top:.5rem;padding:.45rem .6rem;border:1px solid var(--jjok);border-radius:2px;font-size:.78rem;color:var(--jjok)}
+#noteBox[hidden]{display:none}
+#noteBox .nhead{display:flex;align-items:center;gap:.5rem}
+#noteBox .nhead span{flex:1}
+#noteBox button{font-size:.78rem;padding:.25rem .6rem;border:1px solid var(--jjok);border-radius:2px;background:var(--jongi);color:var(--jjok);cursor:pointer}
+#noteBox .nlist{margin:.45rem 0 0;padding:0;list-style:none}
+#noteBox .nlist li{margin:.3rem 0;padding-left:.6rem;border-left:2px solid var(--jjok);line-height:1.6;white-space:pre-wrap}
+#noteBox .nlist li b{font-weight:normal;color:var(--meok-2)}
+#noteBox .nlist li small{display:block;font-size:.7rem;color:var(--meok-3)}
+#noteBox[data-open="0"] .nlist{display:none}
 .modes{display:flex;margin-top:.8rem;border:1px solid var(--seon);border-radius:2px;overflow:hidden}
 .modes button{flex:1;font-size:.82rem;padding:.35rem 0;border:0;background:var(--jongi);color:var(--meok-2);cursor:pointer}
 .modes button + button{border-left:1px solid var(--seon)}
@@ -146,6 +157,7 @@ select{width:100%;margin-top:.7rem;font-size:.9rem;color:var(--meok);background:
   <div id="actAmt" hidden><div class="abar"><i class="fill"></i></div><span id="actNum"></span></div>
   <div id="wkActs" hidden><button id="nextBtn">다음 원고</button><button id="actBtn" hidden>막 완성</button></div>
   <div id="phoneNote" hidden><span>고친 글이 있습니다 · 스크리브너에 아직 없음<small>스크리브너에서 쓰고 보내지 않은 글이 있으면 먼저 보낸 뒤, 복사해서 ⌘A, ⌘V</small></span><button id="phoneCopy">복사</button></div>
+  <div id="noteBox" hidden data-open="0"><div class="nhead"><span id="noteHead"></span><button id="noteToggle">펼치기</button><button id="noteCopy">복사</button></div><ul class="nlist" id="noteList"></ul></div>
   <div class="modes"><button id="mTimed" class="on">시간별</button><button id="mRoutine">루틴</button></div>
 
   <div id="clock">--:--</div>
@@ -155,10 +167,7 @@ select{width:100%;margin-top:.7rem;font-size:.9rem;color:var(--meok);background:
 
   <div id="focusBox">
     <div class="row">
-      <select id="mins" aria-label="몰입 시간">
-        <option value="5">5분</option><option value="10">10분</option><option value="15">15분</option>
-        <option value="25">25분</option><option value="50">50분</option>
-      </select>
+      <select id="mins" aria-label="몰입 시간"></select>
     </div>
     <div class="btns"><button id="fGo" class="main">몰입 시작</button></div>
   </div>
@@ -176,7 +185,7 @@ select{width:100%;margin-top:.7rem;font-size:.9rem;color:var(--meok);background:
     <div class="btns"><button id="pSend" class="main" disabled>보내기</button><button id="pDone">원고 완성</button></div>
   </div>
   <div id="pageBox" hidden>
-    <p class="lab">책을 몇 쪽까지 고쳤나요</p>
+    <p class="lab" id="pgLab">책을 몇 쪽까지 고쳤나요</p>
     <div class="pgRow"><input id="pg" type="number" inputmode="numeric" min="0"><span id="pgTot"></span><button id="pgGo">적기</button></div>
     <div id="pgInfo"></div>
   </div>
@@ -292,9 +301,30 @@ function iRun(){
 var CONF = { focusMin:15, restMin:15, dayStart:4, focus1Cut:"몰입1", rest1Cut:"휴식", stopCut:"중단",
              ty1Cut:"오전타이핑1", ty2Cut:"오전타이핑2", tyStopCut:"타이핑중단", tyResCut:"타이핑재개", tyDoneCut:"타이핑완료" };
 var UNITS = [];          /* 고른 작품의 원고 목록(개정이면 맨 앞에 '책 고치기') */
+var NOTES = [], noteOpen = false;   /* 아이폰에서 온 의견(botaegi_notes) — 읽기만 한다. 마침은 보태기에서 */
 var WORKS = [];          /* 보태기가 올린 작품 목록(끝나지 않은 것) — 막, 쪽수 */
 var WORK = null;         /* 고른 작품 — 이 창은 기억하지 못하니 열 때마다 한 번 고른다 */
 var OLDCOL = false;      /* 원고 표에 work_id 칸이 아직 없다 */
+/* 몰입 시간 — 고르지 않으면 보태기 설정의 기본 시간. 고른 시간은 그 몰입 한 번에만 쓰고,
+   시작하면 다시 기본으로 돌아간다. 설정을 다시 읽어도 고른 값은 덮어쓰지 않는다 */
+var PICK = null;
+var MINS_SET = [5,10,15,25,50];
+function defMin(){ var n = parseInt(CONF.focusMin, 10); return n >= 1 && n <= 180 ? n : 15; }
+var minsSig = "";
+function drawMins(){
+  var sel = $("mins"), d = defMin(), run = mine() && NOW.phase === "focus" ? NOW.mins : null;
+  if(PICK === d) PICK = null;   /* 기본이 고른 값과 같아졌으면 기본으로 */
+  var extra = run && run !== d && MINS_SET.indexOf(run) < 0 ? run : null;
+  var sig = d + "|" + extra;
+  if(sig !== minsSig){
+    minsSig = sig; sel.innerHTML = "";
+    var list = [[ "", d + "분 · 기본" ]];
+    MINS_SET.forEach(function(n){ if(n !== d) list.push([ String(n), n + "분" ]); });
+    if(extra) list.push([ String(extra), extra + "분" ]);
+    list.forEach(function(x){ var o = document.createElement("option"); o.value = x[0]; o.textContent = x[1]; sel.appendChild(o); });
+  }
+  sel.value = run ? (run === d ? "" : String(run)) : (PICK ? String(PICK) : "");
+}
 var NOW = null;          /* 지금 도는 것 {src, ms_id, ms_title, type, phase, start, ends_at, rest_ends, used, cap, kind, paused_at} */
 var PENDING = [];        /* 아직 올리지 못한 기록 */
 var ONLINE = false;
@@ -330,6 +360,15 @@ function isBook(u){ return !!u && u.book; }
 function bookOn(w){ return !!(w && w.kind === "개정" && !w.legacy && !((w.chapters || []).length)); }
 /* 개정 작품의 원고 — 보태기가 올린 개정 원고 목록(합친 장 원고 포함). 곁에서 막 만든 원고는 만들 때 고른 것 */
 function isRevW(w){ return !!(w && w.kind === "개정" && !w.legacy); }
+/* 개정 회차가 열린 작품 — 보태기가 rev_no·pages_total·pages_from·pages_now를 올린다. 완성한 작품의 개정도 여기 든다 */
+function hasRev(w){ return !!(w && !w.legacy && w.rev_no); }
+function revLabel(w){ return hasRev(w) ? "개정 " + w.rev_no + "차" : "개정"; }
+function pgFrom(w){ return (w && w.pages_from) || 0; }
+/* "개정 2차 · 143 / 312쪽 (46%)" — 진행은 시작 쪽부터 센다 */
+function pagesText(w){
+  var pn = (w && w.pages_now) || 0, pt = (w && w.pages_total) || 0, f = pgFrom(w), span = pt > f ? pt - f : 0;
+  return revLabel(w) + " · " + pn + (pt ? " / " + pt + "쪽" + (span ? " (" + Math.round((pn - f) / span * 100) + "%)" : "") : "쪽") + (f ? " · " + f + "쪽부터" : "");
+}
 function isRevU(w, u){
   if(!isRevW(w) || !u || isBook(u)) return false;
   if((w.rev_ms || []).indexOf(u.id) > -1 || isMergedCh(w, u)) return true;
@@ -345,6 +384,29 @@ function bookUnit(w){
   return { id:"book:" + w.id, book:true, title:"책 고치기", text:"", work_id:w.id, work_title:w.title, work_kind:"개정" };
 }
 /* 고른 작품의 원고만 읽는다 — 표에 work_id 칸이 없으면 작품 이름으로 거른다 */
+/* 의견 — 표가 없으면 빈 목록 */
+function fetchNotes(){
+  return sb("botaegi_notes?select=*&order=updated_at.asc").then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
+}
+function notesOf(u){ return u ? NOTES.filter(function(n){ return n.ms_id === u.id; }) : []; }
+function noteLabel(n){ return n.para == null ? "원고 전체" : (n.para + 1) + "문단"; }
+function whenTxt(t){ var d = new Date(t); return (d.getMonth()+1) + "월 " + d.getDate() + "일 " + z2(d.getHours()) + ":" + z2(d.getMinutes()); }
+function renderNotes(u){
+  var ns = notesOf(u), box = $("noteBox");
+  box.hidden = !ns.length;
+  if(!ns.length) return;
+  $("noteHead").textContent = "아이폰에서 온 의견 " + ns.length + "개 · 스크리브너에서 고친 뒤 보태기 교열 탭에서 마침";
+  $("noteToggle").textContent = noteOpen ? "접기" : "펼치기";
+  box.dataset.open = noteOpen ? "1" : "0";
+  var ul = $("noteList"); ul.innerHTML = "";
+  ns.forEach(function(n){
+    var li = document.createElement("li");
+    var b = document.createElement("b"); b.textContent = noteLabel(n) + " · "; li.appendChild(b);
+    li.appendChild(document.createTextNode(n.body || ""));
+    var sm = document.createElement("small"); sm.textContent = whenTxt(Date.parse(n.updated_at) || Date.now()); li.appendChild(sm);
+    ul.appendChild(li);
+  });
+}
 function fetchRows(w){
   if(!w) return Promise.resolve([]);
   function byTitle(){
@@ -379,7 +441,7 @@ function loadAll(){
       if(WORK && !workById(WORK)) WORK = null;
       if(!WORK && WORKS.length === 1) WORK = WORKS[0].id;
       var wk = WORK;
-      return fetchRows(curWork()).then(function(rows){ return { wk:wk, rows:rows }; });
+      return fetchRows(curWork()).then(function(rows){ return fetchNotes().then(function(ns){ NOTES = ns; return { wk:wk, rows:rows }; }); });
     });
   }).then(function(res){
     if(res.wk !== WORK) return;   /* 읽는 사이에 다른 작품을 골랐다 */
@@ -481,7 +543,8 @@ function freeToStart(){ return !mine() && !busyElsewhere(); }
 function startFocus(){
   var u = curUnit();
   if(!u || !freeToStart()) return;
-  var mins = parseInt($("mins").value, 10), now = Date.now();
+  var mins = PICK || defMin(), now = Date.now();
+  PICK = null;   /* 고른 시간은 이번 한 번만 */
   NOW = { src:"scriv", owner:ME, ms_id:u.id, ms_title:unitName(u), work_id:u.work_id || WORK, type:"focus", phase:"focus", start:now,
           ends_at: now + mins*60000, rest_ends: now + mins*60000 + (CONF.restMin||15)*60000, mins:mins };
   putNow();
@@ -589,22 +652,20 @@ function renderWorks(){
   if(!WORK){ var o = document.createElement("option"); o.value = ""; o.textContent = WORKS.length ? "작품을 고르세요" : (ONLINE ? "작품이 없습니다" : "작품을 불러오지 못했습니다"); ws.appendChild(o); }
   WORKS.forEach(function(w){
     var o = document.createElement("option"); o.value = w.id;
-    o.textContent = w.title + (w.kind ? " · " + w.kind : "");
+    o.textContent = w.title + (w.kind ? " · " + w.kind : "") + (w.done && hasRev(w) ? " · " + revLabel(w) : "");
     ws.appendChild(o);
   });
   ws.value = WORK || "";
   ws.disabled = running;
 }
 function unitLabel(u){
-  if(isBook(u)){ var w = curWork(); return "책 고치기 · " + ((w && w.pages_now) || 0) + (w && w.pages_total ? " / " + w.pages_total + "쪽" : "쪽"); }
-  return u.title + revTag(curWork(), u) + (u.phone_at ? " · 고친 글" : "") + (u.unit_done || u.done_req ? " · 완성" : "");
+  if(isBook(u)){ var w = curWork(); return "책 고치기 · " + (hasRev(w) ? w.rev_no + "차 · " : "") + ((w && w.pages_now) || 0) + (w && w.pages_total ? " / " + w.pages_total + "쪽" : "쪽"); }
+  var nn = notesOf(u).length;
+  return u.title + revTag(curWork(), u) + (u.phone_at ? " · 고친 글" : "") + (nn ? " · 의견 " + nn : "") + (u.unit_done || u.done_req ? " · 완성" : "");
 }
 function whoText(u, w){
   if(!u) return "";
-  if(isBook(u)){
-    var pn = (w && w.pages_now) || 0, pt = w && w.pages_total;
-    return "개정 · 책 고치기 · " + pn + (pt ? " / " + pt + "쪽 (" + Math.round(pn / pt * 100) + "%)" : "쪽");
-  }
+  if(isBook(u)) return pagesText(w) + " · 책 고치기";
   if(chsOf(w)){
     var ch = chOf(w, u);
     if(!ch) return "장을 정하는 중" + (u.unit_done || u.done_req ? " · 완성한 원고" : "");
@@ -657,7 +718,7 @@ function render(){
   }
   if(keep) sel.value = keep;
   sel.disabled = !!(NOW && NOW.src === "scriv") || !UNITS.length;
-  $("mins").value = String(CONF.focusMin || 15);
+  drawMins();
 
   var u = curUnit();
   var running = NOW && NOW.src === "scriv";
@@ -665,7 +726,7 @@ function render(){
                                                                : "보태기에서 '" + NOW.ms_title + "' 몰입 중") : whoText(u, w);
   /* 다음 원고 · 막 완성 — 도는 동안에는 감춘다 */
   var wa = $("wkActs");
-  wa.hidden = !w || w.legacy || running || w.kind === "청탁";
+  wa.hidden = !w || w.legacy || running || w.kind === "청탁" || !!w.done;
   /* 막 완성은 없다 — 장 완성은 보태기에서 */
   $("actBtn").hidden = true;
   /* 다음 원고 — 장이 있으면 고른 원고의 장(합치지 않은 장)에, 합친 단편에는 없다 */
@@ -675,11 +736,12 @@ function render(){
   $("actBtn").textContent = actArmed ? "한 번 더 누르면 " + openAct(w) + "막 완성" : "막 완성";
   $("actBtn").classList.toggle("armed", !!actArmed);
   /* 개정의 책 고치기 — 원고 보내기 대신 쪽수 */
-  var bk = isBook(u), rw = isRevW(w) && !!u;
+  var bk = isBook(u), rw = hasRev(w) && !!u;
   $("sendBox").hidden = bk; $("pageBox").hidden = !(bk || rw);
-  if(bk || rw){ $("pgTot").textContent = w && w.pages_total ? "/ " + w.pages_total + "쪽" : "쪽"; if(document.activeElement !== $("pg")) $("pg").value = ""; $("pg").placeholder = String((w && w.pages_now) || 0); renderPg(); }
+  if(bk || rw){ $("pgLab").textContent = pagesText(w) + " · 몇 쪽까지 고쳤나요"; $("pgTot").textContent = w && w.pages_total ? "/ " + w.pages_total + "쪽" : "쪽"; if(document.activeElement !== $("pg")) $("pg").value = ""; $("pg").placeholder = String((w && w.pages_now) || 0); renderPg(); }
 
   $("phoneNote").hidden = !(u && u.phone_at);
+  renderNotes(u);
   /* 루틴(타이핑) · 시간별(몰입) — 어느 원고에서든 고른다. 도는 동안은 바꿀 수 없다 */
   if(running) MODE = NOW.type === "focus" ? "timed" : "routine";
   $("mRoutine").classList.toggle("on", MODE === "routine");
@@ -771,8 +833,8 @@ function renderAmt(){
   box.classList.toggle("book", isBook(u) || (isRevU(w, u) && !isMergedCh(w, u)));   /* 쪽수 막대와 개정 원고는 80~90% 띠 없이 */
   if(isBook(u)){
     /* 책 고치기 — 쪽수 막대 */
-    var pn = (w && w.pages_now) || 0, pt = (w && w.pages_total) || 0, rb = pt ? pn / pt : 0;
-    box.querySelector(".fill").style.width = Math.min(100, rb * 100).toFixed(1) + "%";
+    var pn = (w && w.pages_now) || 0, pt = (w && w.pages_total) || 0, f0 = pgFrom(w), rb = pt > f0 ? (pn - f0) / (pt - f0) : 0;
+    box.querySelector(".fill").style.width = Math.max(0, Math.min(100, rb * 100)).toFixed(1) + "%";
     box.classList.remove("near"); box.classList.remove("peek");
     $("amtNum").textContent = pt ? Math.round(rb * 100) + "%" : pn + "쪽";
     box.title = pn + (pt ? " / " + pt : "") + "쪽";
@@ -973,11 +1035,11 @@ function renderRestBox(){
     $("rSendDone").hidden = true;
     return;
   }
-  var rw = isRevW(w) && !!u, rpv = rw ? pageVal($("rPg").value, w) : { p:null };
+  var rw = hasRev(w) && !!u, rpv = rw ? pageVal($("rPg").value, w) : { p:null };
   $("rPgRow").hidden = !rw;
   if(rw){ $("rPgTot").textContent = w.pages_total ? "/ " + w.pages_total + "쪽" : "쪽"; $("rPg").placeholder = String(w.pages_now || 0); }
   $("rSend").textContent = sendArm === "r:" + (u && u.id) ? "한 번 더 누르면 보내기" : (rw && !t && rpv.p != null ? "쪽수 적기" : "보내기"); $("rSendDone").textContent = "보내고 완성";
-  $("rbLab").textContent = u ? "'" + u.title + "'에 이번 몰입의 원고 보내기" + (rw ? " · 책을 몇 쪽까지 고쳤나요" : "") : "원고 보내기";
+  $("rbLab").textContent = u ? "'" + u.title + "'에 이번 몰입의 원고 보내기" + (rw ? " · " + revLabel(w) + " 몇 쪽까지 고쳤나요" : "") : "원고 보내기";
   info.classList.remove("warn");
   if(!u){ info.textContent = ""; }
   else if(!t){ info.textContent = "지금 " + fmt(clen(u.text)) + "자"; }
@@ -990,7 +1052,7 @@ function renderRestBox(){
 function restSend(alsoDone){
   var u = restUnit();
   if(isBook(u)){ restPages(); return; }
-  var t = tighten($("rPaste").value), w = curWork(), rpv = isRevW(w) ? pageVal($("rPg").value, w) : { p:null };
+  var t = tighten($("rPaste").value), w = curWork(), rpv = hasRev(w) ? pageVal($("rPg").value, w) : { p:null };
   if(rpv.err) return;
   if(u && !t && rpv.p != null){ restPages(); return; }   /* 개정 — 쪽수만 적기 */
   if(!u || !t) return;
@@ -1027,7 +1089,7 @@ function renderAfter(){
   }
   $("afLab").textContent = "고친 원고를 하나씩 골라 붙여 넣고 보내세요.";
   /* 개정 작품 — 원고 보내기와 함께 쪽수도 적는다 */
-  var wr = curWork(), rwA = isRevW(wr);
+  var wr = curWork(), rwA = hasRev(wr);
   $("aPgRow").hidden = !rwA;
   if(rwA){
     $("aPgTot").textContent = wr.pages_total ? "/ " + wr.pages_total + "쪽" : "쪽";
@@ -1136,6 +1198,7 @@ function pageVal(v, w){
   var p = parseInt(v.replace(/[^0-9]/g, ""), 10);
   if(!(p >= 0)) return { p:null, err:"쪽수를 숫자로 적어 주세요" };
   if(w && w.pages_total && p > w.pages_total) return { p:p, err:"전체 쪽수(" + w.pages_total + ")보다 큽니다" };
+  if(w && pgFrom(w) && p < pgFrom(w)) return { p:p, err:"시작 쪽(" + pgFrom(w) + ")보다 작습니다" };
   return { p:p };
 }
 function pageDelta(p, w){
@@ -1268,6 +1331,13 @@ $("paste").addEventListener("input", function(){ sendArm = null; clearTimeout(se
 $("pSend").onclick = function(){ doSend(); };
 $("pDone").onclick = doDone;
 $("phoneCopy").onclick = copyPhone;
+$("noteToggle").onclick = function(){ noteOpen = !noteOpen; renderNotes(curUnit()); };
+$("noteCopy").onclick = function(){
+  var u = curUnit(), ns = notesOf(u); if(!ns.length) return;
+  copyText(ns.map(function(n){ return "[" + noteLabel(n) + "] " + (n.body || ""); }).join("\n\n")).then(function(ok){
+    toast(ok ? "의견 " + ns.length + "개를 복사했습니다 · 스크리브너 문서 노트에 붙이세요" : "복사하지 못했습니다", 3500);
+  });
+};
 $("rPaste").addEventListener("input", function(){ sendArm = null; clearTimeout(sendArmT); renderRestBox(); });
 $("rSend").onclick = function(){ restSend(false); };
 $("rSendDone").onclick = function(){ restSend(true); };
@@ -1279,7 +1349,7 @@ $("aSendDone").onclick = function(){ afterSend(true); };
 $("aClose").onclick = closeAfter;
 $("mRoutine").onclick = function(){ if(!mine()){ MODE = "routine"; render(); } };
 $("mTimed").onclick = function(){ if(!mine()){ MODE = "timed"; render(); } };
-$("mins").onchange = function(){ CONF.focusMin = parseInt(this.value, 10); };
+$("mins").onchange = function(){ PICK = this.value ? parseInt(this.value, 10) : null; };
 
 $("net").onclick = function(){ this.textContent = "연결 중…"; LASTERR = ""; loadAll().then(loadToday); };
 loadAll().then(loadToday);

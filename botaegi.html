@@ -22,6 +22,7 @@
   --meok-3:#9a9084;
   --seon:#d6cdba;
   --inju:#a8322d;
+  --jjok:#2b5c8a;
   --sheet:#f7f3ea;
   --jongi:#fcfcfa;
   --ui:'Gowun Dodum',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;
@@ -250,6 +251,16 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .prev .pil{color:var(--inju);font-size:.8em;margin:0 .1em}
 .prev .del.pil{color:#c3bcb0}
 .strip .grow.rv{color:var(--inju)}
+/* 의견 — 아이폰에서 문단에 붙인 쪽지. 쪽빛. 본문은 바뀌지 않았으니 인주색 자국과 다르다 */
+.strip .grow.nt{color:var(--jjok)}
+.prev .para.nt::before,.prev .gap.nt::before{content:"";position:absolute;left:-12px;top:.3em;bottom:.3em;width:2px;background:var(--jjok)}
+.prev .note{position:relative;font-family:var(--ui);font-size:.78rem;line-height:1.7;color:var(--jjok);margin:.25em 0 .55em;padding-left:.8em;border-left:2px solid var(--jjok);text-indent:0;white-space:pre-wrap;text-align:left}
+.prev .note .nlab{color:var(--meok-3)}
+.prev .note .nwhen{color:var(--meok-3);margin-left:.6rem;white-space:nowrap}
+.prev .note button,.prev .nbar button{background:none;border:0;padding:0;margin-left:.7rem;font-family:var(--ui);font-size:.75rem;color:var(--meok-2);border-bottom:1px solid var(--seon);cursor:pointer}
+.prev .note button:hover,.prev .nbar button:hover{color:var(--jjok);border-bottom-color:var(--jjok)}
+.prev .nbar{font-family:var(--ui);font-size:.75rem;color:var(--jjok);margin:.6em 0 .2em;text-indent:0;text-align:left}
+.ms .badge.nt{color:var(--jjok);border-color:var(--jjok)}
 .prev .para.fresh{animation:fresh 2.6s ease-out}
 @keyframes fresh{from{background:rgba(168,50,45,.16)}to{background:transparent}}
 @media (prefers-reduced-motion:reduce){.prev .para.fresh{animation:none}}
@@ -845,7 +856,7 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="sburl">수파베이스 주소</label><input type="text" id="sburl" spellcheck="false"></div>
       <div class="row"><label for="sbkey">열쇠</label><input type="text" id="sbkey" spellcheck="false"></div>
       <p class="note">'모두 올리기'는 모든 원고를 다시 올리고, 완성한 작품의 원고는 아이폰 목록에서 내립니다. 표에 칸을 더해야 할 때는 아래 SQL을 참고하세요.</p>
-      <p class="note">원고를 보내거나 되돌릴 때마다 최신 원고를 올립니다. 원고마다 한 줄만 두고 덮어쓰므로 쌓이지 않습니다. 아이폰에서 손본 것은 왼쪽 표시창에 자국으로 나타나고, '손본 대로 원고에 넣기'를 누르면 원고가 됩니다. 아이폰이 옛 원고를 보고 고친 것은 받지 않습니다. 비워두면 올리지 않습니다.</p>
+      <p class="note">원고를 보내거나 되돌릴 때마다 최신 원고를 올립니다. 원고마다 한 줄만 두고 덮어쓰므로 쌓이지 않습니다. 아이폰에서 손본 것은 왼쪽 표시창에 자국으로 나타나고, '손본 대로 원고에 넣기'를 누르면 원고가 됩니다. 아이폰이 옛 원고를 보고 고친 것은 받지 않습니다. 비워두면 올리지 않습니다. 아이폰에서 문단에 붙인 <b>의견</b>은 본문을 바꾸지 않고 교열 탭에 쪽빛으로 보이며, '마침'을 누르면 지워집니다(표 <code>botaegi_notes</code>가 필요합니다).</p>
       <div class="bak"><button id="sbPull">지금 가져오기</button><button id="sbPush">모두 올리기</button><button id="sbSql">표 만드는 SQL 복사</button></div>
       <p class="note" id="sbState"></p>
 
@@ -1058,6 +1069,8 @@ function fresh(){
     lastEditId:null,   /* 되돌리기를 가진 단 하나의 원고 */
     draft:"",
     sel:null,
+    notes:[],        /* 아이폰에서 온 의견 — 수파베이스 botaegi_notes의 사본 */
+    noteDrops:[],    /* 마쳤지만 아직 지우지 못한 의견 id */
     lineMode:true,
     smart:true,
     focusMin:15,
@@ -1186,6 +1199,8 @@ function load(){
   if(!d.log || typeof d.log !== "object") d.log = { sess:[], edits:[] };
   if(!Array.isArray(d.log.sess)) d.log.sess = [];
   if(!Array.isArray(d.log.edits)) d.log.edits = [];
+  if(!Array.isArray(d.notes)) d.notes = [];
+  if(!Array.isArray(d.noteDrops)) d.noteDrops = [];
   if(!d.logSince) d.logSince = Date.now();
   d.mss.forEach(function(m){
     if(typeof m.text !== "string") m.text = "";
@@ -1549,9 +1564,28 @@ function renderPrev(keepScroll){
     }
     var marks = hasReview(m) ? markedLines(list.join("\n"), m.review) : null;
     /* 아이폰에서 고친 부분은 인주색으로 — 받기 전의 글을 틀로 삼아 더하고 지운 자리를 보여준다 */
-    if(!marks && m.phoneAt && m.phoneBase != null){
+    /* 받기 전 글이 비어 있었으면(아이폰에서 처음 붙여 넣은 원고) 견줄 틀이 없다 — 자국 없이 그대로 보인다 */
+    if(!marks && m.phoneAt && m.phoneBase != null && normal(m.phoneBase)){
       list = trimBlank(String(m.phoneBase).split("\n"));
       marks = markedLines(list.join("\n"), lines(m).join("\n"));
+    }
+    /* 아이폰에서 온 의견 — 문단 아래에 쪽빛으로. 자리를 못 찾은 것과 원고 전체 의견은 원고 머리에 */
+    var nts = notesOf(m), ntBy = {}, ntTop = [], ntLost = {};
+    nts.forEach(function(n){
+      var p = notePlace(n, list);
+      if(p == null || p < 0){ if(p === -1) ntLost[n.id] = true; ntTop.push(n); }
+      else (ntBy[p] = ntBy[p] || []).push(n);
+    });
+    if(nts.length){
+      var nb = document.createElement("p"); nb.className = "nbar";
+      nb.appendChild(document.createTextNode(lab + " · 아이폰에서 온 의견 " + nts.length + "개"));
+      var ca = document.createElement("button"); ca.type = "button"; ca.textContent = "의견 모두 복사"; ca.title = "스크리브너 문서 노트에 붙이기 좋게";
+      ca.onclick = function(){ copyThen(notesText(m), function(){ toast("'" + m.title + "'의 의견 " + nts.length + "개를 복사했습니다"); }); };
+      var da = document.createElement("button"); da.type = "button"; da.textContent = "모두 마침";
+      da.onclick = function(){ notesDoneAll(m); };
+      nb.appendChild(ca); nb.appendChild(da);
+      elPrev.appendChild(nb);
+      ntTop.forEach(function(n){ elPrev.appendChild(noteEl(m, n, !!ntLost[n.id], null)); });
     }
     if(!list.length){
       var e0 = document.createElement("p"); e0.className = "gap"; e0.textContent = "\u200b"; list = [];
@@ -1574,6 +1608,10 @@ function renderPrev(keepScroll){
         p.insertBefore(unumEl(m, lab), p.firstChild);
       }
       elPrev.appendChild(p);
+      if(ntBy[i]){
+        p.classList.add("nt");
+        ntBy[i].forEach(function(n){ elPrev.appendChild(noteEl(m, n, false, i)); });
+      }
     });
   });
   if(keepScroll) elPrev.scrollTop = st;
@@ -1601,8 +1639,10 @@ function renderStrip(){
   elSelInfo.innerHTML = "";
   elSelInfo.classList.remove("sel");
   var fn = us.filter(finished).length, pn = us.filter(function(m){ return m.phoneAt; }).length;
+  var nn = us.reduce(function(a, m){ return a + notesOf(m).length; }, 0);
   elSelInfo.classList.toggle("rv", !!pn);
-  elSelInfo.textContent = "원고 " + us.length + "개" + (fn ? " · 완성 " + fn : "") + (pn ? " · 고친 원고 " + pn + "개" : "");
+  elSelInfo.classList.toggle("nt", !pn && !!nn);
+  elSelInfo.textContent = "원고 " + us.length + "개" + (fn ? " · 완성 " + fn : "") + (pn ? " · 고친 원고 " + pn + "개" : "") + (nn ? " · 의견 " + nn + "개" : "");
   /* 되돌리기 — 가장 최근에 바뀐 원고 하나 */
   var m = msById(S.lastEditId);
   if(m && m.redo){
@@ -2191,15 +2231,25 @@ var SQL = [
 "  id text primary key, data jsonb, updated_at timestamptz default now()",
 ");",
 "",
+"-- 4. 의견 — 아이폰에서 원고의 문단에 붙인 쪽지. 본문은 바꾸지 않는다. 보태기에서 마치면 줄을 지운다",
+"create table if not exists botaegi_notes (",
+"  id text primary key, ms_id text not null, para int, anchor text,",
+"  body text not null default '', src text,",
+"  created_at timestamptz default now(), updated_at timestamptz default now()",
+");",
+"",
 "alter table botaegi_ms enable row level security;",
 "alter table botaegi_sessions enable row level security;",
 "alter table botaegi_kv enable row level security;",
+"alter table botaegi_notes enable row level security;",
 "drop policy if exists botaegi_all on botaegi_ms;",
 "create policy botaegi_all on botaegi_ms for all to anon using (true) with check (true);",
 "drop policy if exists botaegi_all on botaegi_sessions;",
 "create policy botaegi_all on botaegi_sessions for all to anon using (true) with check (true);",
 "drop policy if exists botaegi_all on botaegi_kv;",
-"create policy botaegi_all on botaegi_kv for all to anon using (true) with check (true);"
+"create policy botaegi_all on botaegi_kv for all to anon using (true) with check (true);",
+"drop policy if exists botaegi_all on botaegi_notes;",
+"create policy botaegi_all on botaegi_notes for all to anon using (true) with check (true);"
 ].join("\n");
 
 function cloudOn(){ return !!(S.sbUrl && S.sbKey); }
@@ -2332,13 +2382,91 @@ function flush(){
 }
 function normal(t){ return trimBlank(String(t).replace(/\r/g, "").split("\n")).join("\n"); }
 
+/* ---------- 의견 — 아이폰에서 문단에 붙인 쪽지 (botaegi_notes) ----------
+   본문은 바꾸지 않는다. 보태기는 읽어서 교열 탭에 쪽빛으로 보여주고, '마침'을 누르면 줄을 지우고 기록에 남긴다.
+   para는 문단 번호(0부터, 원고 전체면 null), anchor는 그 문단의 앞 글자 — 본문이 바뀌면 앞 글자로 자리를 다시 찾는다 */
+var notesSig = "", notesTable = true;
+function pullNotes(){
+  if(!cloudOn()) return Promise.resolve();
+  /* 마쳤는데 아직 지우지 못한 것부터 */
+  var drop = S.noteDrops.length
+    ? sb("botaegi_notes?id=in.(" + S.noteDrops.map(encodeURIComponent).join(",") + ")", { method:"DELETE", headers:{ "Prefer":"return=minimal" } })
+        .then(function(r){ if(r.ok){ S.noteDrops = []; save(); } }, function(){})
+    : Promise.resolve();
+  return drop.then(function(){ return sb("botaegi_notes?select=*&order=updated_at.asc"); }).then(function(r){
+    if(r.status === 404 || r.status === 400){ notesTable = false; return null; }
+    if(!r.ok) throw new Error(r.status + "");
+    notesTable = true;
+    return r.json();
+  }).then(function(rows){
+    if(!rows) return;
+    var list = rows.filter(function(x){ return msById(x.ms_id) && S.noteDrops.indexOf(x.id) < 0; }).map(function(x){
+      return { id:x.id, ms:x.ms_id, para:x.para == null ? null : x.para, anchor:x.anchor || "", body:x.body || "",
+               at:Date.parse(x.updated_at) || Date.now(), src:x.src || "phone" };
+    });
+    var sig = JSON.stringify(list);
+    if(sig === notesSig) return;
+    notesSig = sig; S.notes = list; save();
+    renderWrite(true); renderList();
+  }).catch(function(){});
+}
+function notesOf(m){ return m ? S.notes.filter(function(n){ return n.ms === m.id; }) : []; }
+/* 의견이 붙은 문단 — 그 자리의 앞 글자가 맞으면 그대로, 아니면 앞 글자로 찾고, 못 찾으면 -1(자리를 잃음). 원고 전체는 null */
+function notePlace(n, ls){
+  if(n.para == null) return null;
+  var a = n.anchor || "";
+  if(!a) return n.para < ls.length ? n.para : -1;
+  function fits(l){ l = (l || "").trim(); return !!l && (l.slice(0, a.length) === a || a.slice(0, l.length) === l); }
+  if(n.para < ls.length && fits(ls[n.para])) return n.para;
+  for(var i = 0; i < ls.length; i++) if(fits(ls[i])) return i;
+  return -1;
+}
+function noteLabel(n){ return n.para == null ? "원고 전체" : (n.para + 1) + "문단"; }
+function notesText(m){ return notesOf(m).map(function(n){ return "[" + noteLabel(n) + "] " + n.body; }).join("\n\n"); }
+/* 마침 — 처리했으니 지운다. 수파베이스 줄을 지우고(못 지우면 다음 가져오기 때), 변경 기록에 남긴다 */
+function noteDone(n, quiet){
+  S.notes = S.notes.filter(function(x){ return x.id !== n.id; });
+  var m = msById(n.ms), L = m ? len(m.text) : 0;
+  S.log.edits.push({ t:Date.now(), ms:n.ms, b:L, a:L, how:"note", note:n.body });
+  S.noteDrops.push(n.id); notesSig = ""; save();
+  if(cloudOn()) sb("botaegi_notes?id=eq." + encodeURIComponent(n.id), { method:"DELETE", headers:{ "Prefer":"return=minimal" } })
+    .then(function(r){ if(r.ok){ S.noteDrops = S.noteDrops.filter(function(x){ return x !== n.id; }); save(); } }, function(){});
+  if(!quiet){ renderWrite(true); renderList(); toast("의견을 마쳤습니다"); }
+}
+function notesDoneAll(m){
+  var ns = notesOf(m);
+  if(!ns.length || !confirm("'" + m.title + "'의 의견 " + ns.length + "개를 모두 마칩니다. 아이폰에서도 사라집니다.")) return;
+  ns.forEach(function(n){ noteDone(n, true); });
+  renderWrite(true); renderList(); toast("의견 " + ns.length + "개를 마쳤습니다");
+}
+function noteEl(m, n, isLost, li){
+  var d = document.createElement("p"); d.className = "note" + (isLost ? " lost" : "");
+  var lb = document.createElement("span"); lb.className = "nlab";
+  lb.textContent = isLost ? "자리를 잃은 의견 · " : n.para == null ? "원고 전체 · " : "";
+  if(lb.textContent) d.appendChild(lb);
+  d.appendChild(document.createTextNode(n.body));
+  var w = document.createElement("span"); w.className = "nwhen"; w.textContent = whenText(n.at); d.appendChild(w);
+  var dn = document.createElement("button"); dn.type = "button"; dn.textContent = "마침"; dn.title = "처리했습니다 · 지우고 기록에 남깁니다";
+  dn.onclick = function(){ noteDone(n); };
+  d.appendChild(dn);
+  if(li != null && openUnit(m)){
+    var go = document.createElement("button"); go.type = "button"; go.textContent = "교열에서 열기"; go.title = "이 문단에 교열 칸을 엽니다";
+    go.onclick = function(){ gyOpen({ id:m.id, li:li, off:0 }); };
+    d.appendChild(go);
+  }
+  var cp = document.createElement("button"); cp.type = "button"; cp.textContent = "복사";
+  cp.onclick = function(){ copyThen(n.body, function(){ toast("의견을 복사했습니다"); }); };
+  d.appendChild(cp);
+  return d;
+}
+
 var pulling = false;
 function cloudPull(loud){
   if(!cloudOn() || pulling){ return Promise.resolve(); }
   pulling = true;
   return flush().then(applyReqs).then(function(){
     shareConf(); shareDays(); shareWorks(); shareSess(); shareNow();
-    return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo()]);
+    return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo(), pullNotes()]);
   }).then(function(){
     return sb(TABLE + "?select=id,review,review_at,review_base,done_req,review_src");
   }).then(function(r){
@@ -3647,6 +3775,8 @@ function renderList(){
     }
     var gap = document.createElement("span"); gap.className = "gap"; top.appendChild(gap);
     if(m.doneAt && !isRevMs(m)){ var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "한 편"; top.appendChild(bd); }
+    var nn = notesOf(m).length;
+    if(nn){ var bn = document.createElement("span"); bn.className = "badge nt"; bn.textContent = "의견 " + nn; bn.title = "아이폰에서 온 의견 · 교열 탭에서 봅니다"; top.appendChild(bn); }
     if(finished(m)){ /* 완성은 제목 색으로 */ }
     else if(handed(m)){ var bs = document.createElement("span"); bs.className = "badge sc"; bs.textContent = m.scrivLink ? "스크리브너" : "넘기는 중"; top.appendChild(bs); }
     box.appendChild(top);
@@ -4099,6 +4229,8 @@ function renderAnaSum(rg){
     html += kv("스크리브너에서 쓴 것", signed(byPhone) + "자", "아이폰으로 받은 글");
     if(byGy) html += kv("교열에서 고친 것", signed(byGy) + "자");
     if(byUndo) html += kv("되돌리기·다시 하기", signed(byUndo) + "자");
+    var nd = ed.filter(function(x){ return x.how === "note"; }).length;
+    if(nd) html += kv("아이폰에서 온 의견", nd + "개 마침");
     html += kv("몰입 밖에서 늘어난 글자", signed(outside) + "자");
   }
 
@@ -4533,11 +4665,11 @@ $("#csvSess").addEventListener("click", function(){
   saveCsv("몰입", rows);
 });
 $("#csvEdit").addEventListener("click", function(){
-  var how = { first:"처음 보냄", whole:"전체 바꿈", part:"문단 바꿈", phone:"아이폰에서 받아 넣음", undo:"되돌리기", redo:"다시 하기", write:"쓰기", gyo:"교열에서 고침" };
-  var rows = [["원고","시각","하루(4시 기준)","전","후","증감","방식"]];
+  var how = { first:"처음 보냄", whole:"전체 바꿈", part:"문단 바꿈", phone:"아이폰에서 받아 넣음", undo:"되돌리기", redo:"다시 하기", write:"쓰기", gyo:"교열에서 고침", note:"아이폰 의견 마침" };
+  var rows = [["원고","시각","하루(4시 기준)","전","후","증감","방식","의견"]];
   S.log.edits.forEach(function(x){
     var m = msById(x.ms);
-    rows.push([m ? m.title : "지운 원고", csvDate(x.t), dayKey(x.t), x.b, x.a, x.a - x.b, how[x.how] || x.how]);
+    rows.push([m ? m.title : "지운 원고", csvDate(x.t), dayKey(x.t), x.b, x.a, x.a - x.b, how[x.how] || x.how, x.note || ""]);
   });
   saveCsv("변경", rows);
 });

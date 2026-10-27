@@ -21,6 +21,7 @@
   --meok-3:#9a9084;
   --seon:#d6cdba;
   --inju:#a8322d;
+  --jjok:#2b5c8a;
   --jongi:#fcfcfa;
   --ui:'Gowun Dodum',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;
   --top:env(safe-area-inset-top);
@@ -77,6 +78,26 @@ main{height:var(--vvh,100%);padding-top:calc(var(--top) + 3.1rem);overflow:hidde
 .acth:first-of-type{margin-top:.2rem}
 .wsel + .card,.acth + .card{border-top:1px solid var(--seon)}
 
+/* 의견 — 본문을 바꾸지 않고 문단에 붙이는 쪽지. 쪽빛. 인주색은 본문이 바뀐 자국에만 */
+#read{background:var(--jongi)}
+#readPad{padding:1.4rem 1.2rem calc(var(--bot) + 6rem);font-family:'Gowun Batang',serif;font-size:var(--fz,17px);line-height:var(--lh,1.95);color:var(--meok)}
+.rp{margin:0 0 0 -.7rem;padding:0 0 0 .7rem;border-left:2px solid transparent;white-space:pre-wrap;word-break:break-all;-webkit-user-select:none;user-select:none}
+.rp.has{border-left-color:var(--jjok)}
+.rp.pick,.rp:active{background:rgba(43,92,138,.07)}
+.nt{font-family:var(--ui);font-size:.82rem;line-height:1.7;color:var(--jjok);margin:.35rem 0 .7rem -.7rem;padding:0 0 0 .7rem;border-left:2px solid var(--jjok);white-space:pre-wrap;word-break:break-word}
+.nt .when{display:block;font-size:.7rem;color:var(--meok-3);margin-top:.1rem}
+.nt.lost::before{content:"자리를 잃은 의견 · ";color:var(--meok-3)}
+.ntbox{margin:.4rem 0 .9rem -.7rem;padding:0 0 0 .7rem;border-left:2px solid var(--jjok)}
+.ntbox textarea{display:block;width:100%;min-height:4.6rem;border:1px solid var(--seon);border-radius:2px;background:var(--hanji);padding:.5rem .6rem;font-family:var(--ui);font-size:16px;line-height:1.6;color:var(--meok);resize:none}
+.ntbox textarea:focus{outline:none;border-color:var(--jjok)}
+.ntbtns{display:flex;gap:1.2rem;margin-top:.45rem;font-family:var(--ui);font-size:.85rem}
+.ntbtns button{color:var(--meok-2);border-bottom:1px solid var(--seon);padding-bottom:1px}
+.ntbtns button.main{color:var(--jjok);border-bottom-color:var(--jjok)}
+.ntbtns button:active{color:var(--jjok)}
+.whole{font-family:var(--ui);font-size:.8rem;color:var(--jjok);margin:0 0 1rem;border-bottom:1px solid var(--jjok);padding-bottom:1px}
+.hint{font-family:var(--ui);font-size:.75rem;color:var(--meok-3);margin:0 0 .8rem;line-height:1.7}
+.card .nmark{color:var(--jjok)}
+#modeBtn.on{color:var(--jjok)}
 #edit{background:var(--jongi)}
 #paper{
   display:block;width:100%;min-height:100%;
@@ -131,12 +152,16 @@ pre{
   <span class="ttl" id="title">보태기</span>
   <span id="cnt"></span>
   <span id="state"></span>
+  <button class="act" id="modeBtn" hidden>고치기</button>
   <button class="act" id="doneBtn" hidden>원고 완성</button>
   <button class="act" id="gear">설정</button>
 </header>
 
 <main>
   <section id="list" class="view on"><div class="pad" id="listPad"></div></section>
+
+  <!-- 의견 모드(기본) — 본문은 읽기만, 문단을 누르면 쪽빛 의견을 붙인다 -->
+  <section id="read" class="view"><div id="readPad"></div></section>
 
   <section id="edit" class="view">
     <textarea id="paper" spellcheck="false" autocorrect="off" autocapitalize="sentences"></textarea>
@@ -156,6 +181,7 @@ pre{
     <div class="fld"><span>줄 간격</span><input type="number" id="lh" min="1.2" max="3" step="0.05"><span class="u">배</span></div>
     <p class="note">보이는 그대로가 보태기 원고가 됩니다. 엔터 한 번은 새 문단, 빈 줄은 빈 줄입니다. 스크리브너에서 쓴 글을 통째로 붙여 넣어도 문단이 그대로 맞습니다.</p>
     <p class="note">맥에서 원고를 새로 보내면, 그 전 원고를 보고 손본 것은 버려집니다. 목록을 다시 불러와 새 원고에서 손보세요.</p>
+    <p class="note">원고를 열면 <b>의견</b> 모드입니다. 문단을 누르면 그 문단에 의견을 붙입니다. 의견은 본문을 바꾸지 않고 쪽빛으로 보태기 교열 탭과 곁에 보입니다. 머리줄의 '고치기'를 누르면 예전처럼 본문을 직접 고칩니다. 의견은 맥에서 '마침'을 누르면 사라집니다.</p>
 
   </div></section>
 </main>
@@ -168,6 +194,7 @@ pre{
 
 var KEY = "botaegi-phone-v1";
 var TABLE = "botaegi_ms";
+var NOTES = "botaegi_notes";   /* 의견 — 원고 줄과 따로 둔다. 본문 고치기와 서로 덮지 않는다 */
 var CHS = {};   /* 작품마다 장 목록 {id, no, name, done, part, ms:[원고 id]} */
 var PARTS = {};  /* 작품마다 부 {id, no, name} — 장의 part가 부 id */
 var REVS = {};   /* 개정 작품마다 개정 원고 id(합친 장 원고 포함). 나머지는 새 글 */
@@ -181,7 +208,7 @@ function chOfRow(r){
 /* 주소와 열쇠는 파일에 넣지 않는다(깃허브 페이지는 누구나 볼 수 있다). 설정에서 넣으면 이 기기에만 저장된다 */
 
 var S = load();
-function fresh(){ return { url:"", key:"", rows:[], drafts:{}, fz:17, lh:1.95, work:null, works:[] }; }
+function fresh(){ return { url:"", key:"", rows:[], drafts:{}, notes:{}, fz:17, lh:1.95, work:null, works:[] }; }
 function load(){
   var d = fresh();
   try{
@@ -193,6 +220,7 @@ function load(){
   }catch(e){}
   if(!Array.isArray(d.rows)) d.rows = [];
   if(!d.drafts || typeof d.drafts !== "object") d.drafts = {};
+  if(!d.notes || typeof d.notes !== "object") d.notes = {};
   if(!Array.isArray(d.works)) d.works = [];
   return d;
 }
@@ -201,29 +229,38 @@ function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} 
 var $ = function(s){ return document.querySelector(s); };
 var elList=$("#listPad"), elPaper=$("#paper"), elTitle=$("#title"),
     elBack=$("#back"), elGear=$("#gear"), elState=$("#state"), elToast=$("#toast"),
-    elCnt=$("#cnt");
+    elCnt=$("#cnt"), elRead=$("#readPad"), elMode=$("#modeBtn");
 var openId = null, saveT = null, pushT = null;
+var nc = null;          /* 쓰는 중인 의견 {para, id, text} — para가 null이면 원고 전체 */
+var notesOk = true;     /* 수파베이스에 의견 표가 있나 */
 
-function toast(m){
+function toast(m, ms){
   elToast.textContent = m;
   elToast.classList.add("on");
   clearTimeout(toast.t);
-  toast.t = setTimeout(function(){ elToast.classList.remove("on"); }, 1600);
+  toast.t = setTimeout(function(){ elToast.classList.remove("on"); }, ms || 1600);
 }
 function state(t, warn){
   elState.textContent = t || "";
   elState.classList.toggle("warn", !!warn);
 }
 function show(v){
-  ["list","edit","setup"].forEach(function(x){
+  ["list","read","edit","setup"].forEach(function(x){
     document.getElementById(x).classList.toggle("on", x===v);
   });
   elBack.hidden = (v === "list");
   elGear.hidden = (v !== "list");
-  document.getElementById("doneBtn").hidden = (v !== "edit");
+  var inMs = (v === "edit" || v === "read");
+  document.getElementById("doneBtn").hidden = !inMs;
+  /* 의견 모드에서는 '고치기'로, 고치기 모드에서는 '의견'으로 건너간다 */
+  elMode.hidden = !inMs;
+  elMode.textContent = v === "read" ? "고치기" : "의견";
+  elMode.classList.toggle("on", v === "edit");
   doneArmed = null;
-  if(v === "edit") renderDone();
+  if(inMs) renderDone();
 }
+function reading(){ return document.getElementById("read").classList.contains("on"); }
+function editing(){ return document.getElementById("edit").classList.contains("on"); }
 function mae(n){ return (n/200).toFixed(1); }
 function curRow(){
   return S.rows.filter(function(x){ return x.id===openId; })[0] || null;
@@ -231,7 +268,7 @@ function curRow(){
 function renderCnt(){
   var r = curRow();
   if(!r){ elCnt.textContent = ""; return; }
-  var n = paperGet().replace(/\n/g, "").length;
+  var n = (editing() ? paperGet() : bodyOf(r)).replace(/\n/g, "").length;
   var base = r.piece || 0;
   elCnt.textContent = mae(n) + "매" + (base ? " · " + Math.round(n/base*100) + "%" : "");
 }
@@ -309,8 +346,14 @@ function pull(){
         var sv = r.review_at ? Date.parse(r.review_at) : 0;
         if(d.sent && sv >= d.at) delete S.drafts[id];
       });
-      save(); renderList(); state("");
+      save();
+      /* 의견은 본문과 따로 — 맥이 원고를 새로 올려도 버리지 않는다 */
+      return pullNotes().then(function(){ return gone; });
+    })
+    .then(function(gone){
+      renderList(); state(notesOk ? "" : "의견 표 없음", !notesOk);
       if(gone) toast("맥에서 원고가 바뀌어 손본 것 " + gone + "편을 버렸습니다");
+      if(openId && reading()) renderRead();
       return pushAll();
     })
     .catch(function(e){
@@ -385,7 +428,160 @@ function pushAll(){
   var ids = Object.keys(S.drafts).filter(function(id){ return !S.drafts[id].sent; });
   return ids.reduce(function(chain, id){
     return chain.then(function(){ return pushOne(id); });
-  }, Promise.resolve());
+  }, Promise.resolve()).then(pushNotes);
+}
+
+/* ---------- 의견 — 본문을 바꾸지 않고 문단에 붙이는 쪽지 ----------
+   botaegi_notes 표에 한 줄씩. para는 문단 번호(0부터, 원고 전체면 null), anchor는 그 문단의 앞 글자.
+   본문이 바뀌어도 anchor로 자리를 다시 찾는다. 맥에서 '마침'을 누르면 줄이 지워지고 여기서도 사라진다 */
+function nid(){ return "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function anchorOf(line){ return String(line || "").trim().slice(0, 24); }
+function notesOf(id){
+  return Object.keys(S.notes).map(function(k){ return S.notes[k]; })
+    .filter(function(n){ return n.ms_id === id && !n.del; })
+    .sort(function(a, b){ return ((a.para == null ? -1 : a.para) - (b.para == null ? -1 : b.para)) || (a.at - b.at); });
+}
+/* 의견이 붙은 문단 — 그 자리의 앞 글자가 맞으면 그대로, 아니면 앞 글자로 찾고, 못 찾으면 -1(자리를 잃음). 원고 전체는 null */
+function placeOf(n, ls){
+  if(n.para == null) return null;
+  var a = n.anchor || "";
+  if(!a) return n.para < ls.length ? n.para : -1;
+  function fits(l){ l = (l || "").trim(); return !!l && (l.slice(0, a.length) === a || a.slice(0, l.length) === l); }
+  if(n.para < ls.length && fits(ls[n.para])) return n.para;
+  for(var i = 0; i < ls.length; i++) if(fits(ls[i])) return i;
+  return -1;
+}
+function noNotesTable(){
+  if(!notesOk) return;
+  notesOk = false; state("의견 표 없음", true);
+  toast("수파베이스에 의견 표가 없습니다 · 보태기 설정의 '표 만드는 SQL 복사'로 만들어 주세요", 4000);
+}
+function pullNotes(){
+  if(!ready()) return Promise.resolve();
+  return api(NOTES + "?select=*&order=updated_at.asc").then(function(r){
+    if(r.status === 404 || r.status === 400){ noNotesTable(); return null; }
+    if(!r.ok) throw new Error(r.status + "");
+    return r.json();
+  }).then(function(rows){
+    if(!rows) return;
+    notesOk = true;
+    var next = {};
+    rows.forEach(function(x){
+      next[x.id] = { id:x.id, ms_id:x.ms_id, para:x.para == null ? null : x.para, anchor:x.anchor || "", body:x.body || "",
+                     at:Date.parse(x.updated_at) || Date.now(), sent:true };
+    });
+    /* 아직 올리지 못한 것은 그대로 둔다. 올린 것이 서버에 없으면 맥에서 마친 것이다 */
+    Object.keys(S.notes).forEach(function(k){ var n = S.notes[k]; if(!n.sent || n.del) next[k] = n; });
+    S.notes = next; save();
+  }).catch(function(){});
+}
+function pushNotes(){
+  if(!ready()) return Promise.resolve();
+  var ids = Object.keys(S.notes).filter(function(k){ return !S.notes[k].sent; });
+  return ids.reduce(function(chain, id){ return chain.then(function(){ return pushNote(id); }); }, Promise.resolve());
+}
+function pushNote(id){
+  var n = S.notes[id];
+  if(!n || !ready()) return Promise.resolve();
+  var p = n.del
+    ? api(NOTES + "?id=eq." + encodeURIComponent(id), { method:"DELETE", headers:{ "Prefer":"return=minimal" } })
+    : api(NOTES, { method:"POST", headers:{ "Prefer":"resolution=merge-duplicates,return=minimal" },
+        body: JSON.stringify({ id:id, ms_id:n.ms_id, para:n.para, anchor:n.anchor || null, body:n.body, src:"phone",
+                               updated_at:new Date(n.at).toISOString() }) });
+  return p.then(function(r){
+    if(r.status === 404 || r.status === 400){ noNotesTable(); return; }
+    if(!r.ok) throw new Error(r.status + "");
+    if(n.del) delete S.notes[id]; else n.sent = true;
+    save(); if(notesOk) state("");
+    if(openId && reading()) renderRead();
+  }).catch(function(){ state("저장 대기", true); });
+}
+/* 의견 모드 화면 — 문단마다 한 줄, 의견은 그 아래 쪽빛으로 */
+function renderRead(){
+  var r = curRow(); if(!r) return;
+  var st = elRead.parentNode.scrollTop;
+  elRead.innerHTML = "";
+  var ls = bodyOf(r).split("\n"); if(ls.length === 1 && !ls[0]) ls = [];
+  var byLine = {}, top = [], lost = {};
+  notesOf(r.id).forEach(function(n){
+    var p = placeOf(n, ls);
+    if(p == null || p < 0){ if(p === -1) lost[n.id] = true; top.push(n); }
+    else (byLine[p] = byLine[p] || []).push(n);
+  });
+  var hint = document.createElement("p"); hint.className = "hint";
+  hint.textContent = ls.length ? "문단을 누르면 그 문단에 의견을 붙입니다 · 본문은 바뀌지 않습니다" : "아직 원고가 없습니다 · 머리줄의 '고치기'로 붙여 넣으세요";
+  elRead.appendChild(hint);
+  var wb = document.createElement("button"); wb.type = "button"; wb.className = "whole"; wb.textContent = "원고 전체에 의견";
+  wb.onclick = function(){ openNote(null, null); };
+  elRead.appendChild(wb);
+  if(nc && nc.para === null && !nc.id) elRead.appendChild(noteBox());
+  top.forEach(function(n){ elRead.appendChild(noteEl(n, lost[n.id])); });
+  ls.forEach(function(line, i){
+    var p = document.createElement("div");
+    p.className = "rp" + (byLine[i] ? " has" : "") + (nc && nc.para === i && !nc.id ? " pick" : "");
+    p.textContent = line || "\u200b"; p.dataset.i = i;
+    p.onclick = function(){ openNote(i, null); };
+    elRead.appendChild(p);
+    (byLine[i] || []).forEach(function(n){ elRead.appendChild(noteEl(n, false)); });
+    if(nc && nc.para === i && !nc.id) elRead.appendChild(noteBox());
+  });
+  elRead.parentNode.scrollTop = st;
+}
+function noteEl(n, isLost){
+  if(nc && nc.id === n.id) return noteBox();
+  var d = document.createElement("div"); d.className = "nt" + (isLost ? " lost" : "");
+  d.appendChild(document.createTextNode(n.body));
+  var w = document.createElement("span"); w.className = "when";
+  w.textContent = stamp(n.at) + (n.sent ? "" : " · 올리기 전");
+  d.appendChild(w);
+  d.onclick = function(){ openNote(n.para, n.id); };
+  return d;
+}
+function noteBox(){
+  var box = document.createElement("div"); box.className = "ntbox";
+  var ta = document.createElement("textarea");
+  ta.value = nc.text || "";
+  ta.placeholder = nc.para === null ? "이 원고 전체에 대한 의견" : "이 문단에 대한 의견";
+  ta.addEventListener("input", function(){ nc.text = ta.value; ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight, 0) + "px"; });
+  var row = document.createElement("div"); row.className = "ntbtns";
+  function b(label, fn, main){ var x = document.createElement("button"); x.type = "button"; x.textContent = label; if(main) x.className = "main"; x.onclick = fn; row.appendChild(x); }
+  b(nc.id ? "바꾸기" : "붙이기", function(){ saveNote(); }, true);
+  if(nc.id) b("지우기", function(){ dropNote(nc.id); });
+  b("그만", function(){ nc = null; renderRead(); });
+  box.appendChild(ta); box.appendChild(row);
+  setTimeout(function(){
+    try{ ta.focus(); }catch(e){}
+    ta.style.height = "auto"; ta.style.height = Math.max(ta.scrollHeight, 0) + "px";
+    try{ box.scrollIntoView({ block:"center", behavior:"smooth" }); }catch(e){}
+  }, 0);
+  return box;
+}
+function openNote(para, id){
+  if(nc && nc.para === para && nc.id === (id || null)) return;   /* 이미 그 자리에 칸이 열려 있다 */
+  if(nc && nc.text && nc.text.trim()) saveNote(true);            /* 쓰던 것은 버리지 않는다 */
+  var n = id ? S.notes[id] : null;
+  nc = { para: n ? n.para : para, id: id || null, text: n ? n.body : "" };
+  renderRead();
+}
+function saveNote(quiet){
+  if(!nc) return;
+  var r = curRow(), t = (nc.text || "").trim();
+  if(!r){ nc = null; return; }
+  if(!t){ if(nc.id) dropNote(nc.id); else { nc = null; renderRead(); } return; }
+  var ls = bodyOf(r).split("\n");
+  var id = nc.id || nid(), old = nc.id ? S.notes[nc.id] : null;
+  S.notes[id] = { id:id, ms_id:r.id, para:nc.para,
+                  anchor: nc.para == null ? "" : (old ? (old.anchor || "") : anchorOf(ls[nc.para])),
+                  body:t, at:Date.now(), sent:false };
+  nc = null; save(); renderRead(); renderDone();
+  if(!quiet) toast(old ? "의견을 바꿨습니다" : "의견을 붙였습니다");
+  pushNote(id);
+}
+function dropNote(id){
+  var n = S.notes[id]; nc = null;
+  if(n){ if(n.sent) { n.del = true; n.sent = false; } else delete S.notes[id]; }
+  save(); renderRead(); toast("의견을 지웠습니다");
+  pushNote(id);
 }
 
 /* ---------- 화면 ---------- */
@@ -466,6 +662,12 @@ function renderList(){
       m.className = "sub mark"; m.textContent = " · 손봄";
       sub.appendChild(m);
     }
+    var nn = notesOf(r.id).length;
+    if(nn){
+      var k = document.createElement("span");
+      k.className = "sub nmark"; k.textContent = " · 의견 " + nn;
+      sub.appendChild(k);
+    }
     b.onclick = function(){ openVersion(r.id); };
     elList.appendChild(b);
   });
@@ -510,13 +712,29 @@ document.getElementById("doneBtn").addEventListener("click", function(){
 function openVersion(id){
   var r = S.rows.filter(function(x){ return x.id===id; })[0];
   if(!r) return;
-  openId = id;
+  openId = id; nc = null;
   elTitle.textContent = r.title;
-  paperSet(bodyOf(r));
+  /* 기본은 의견 모드 — 본문은 읽기만. '고치기'를 눌러야 본문을 바꾼다 */
+  show("read");
+  renderRead();
   renderCnt();
-  show("edit");
-  elPaper.scrollTop = 0;
+  elRead.parentNode.scrollTop = 0;
 }
+/* 의견 ↔ 고치기 */
+elMode.addEventListener("click", function(){
+  var r = curRow(); if(!r) return;
+  if(reading()){
+    if(nc && nc.text && nc.text.trim()) saveNote(true); else nc = null;
+    paperSet(bodyOf(r));
+    show("edit"); renderCnt(); elPaper.scrollTop = 0;
+    toast("본문을 직접 고칩니다 · 보태기의 원고가 바뀝니다", 2600);
+  }else{
+    clearTimeout(saveT); clearTimeout(pushT);
+    stash(); pushOne(openId);
+    show("read"); renderRead(); renderCnt();
+    toast("의견 모드 · 문단을 누르면 의견을 붙입니다", 2600);
+  }
+});
 
 function stash(){
   if(!openId) return;
@@ -540,15 +758,19 @@ elPaper.addEventListener("input", function(){
 });
 
 elBack.addEventListener("click", function(){
-  if(document.getElementById("edit").classList.contains("on")){
+  if(editing()){
     clearTimeout(saveT); clearTimeout(pushT);
     stash();
     pushOne(openId);
+  }else if(reading()){
+    if(nc && nc.text && nc.text.trim()) saveNote(true);
+    nc = null;
   }
   openId = null;
   elCnt.textContent = "";
   renderList();
   show("list");
+  pull();   /* 목록으로 돌아오면 새로 읽는다 — 맥에서 마친 의견은 사라지고, 새 원고가 보인다 */
 });
 
 elGear.addEventListener("click", function(){
@@ -587,10 +809,11 @@ document.addEventListener("visibilitychange", function(){
     if(openId){ pushAll(); }
     else pull();
   }else{
+    if(nc && nc.text && nc.text.trim()) saveNote(true);
     stash(); pushAll();
   }
 });
-window.addEventListener("pagehide", function(){ stash(); });
+window.addEventListener("pagehide", function(){ if(nc && nc.text && nc.text.trim()) saveNote(true); stash(); });
 
 /* 시작 */
 applyLook();
