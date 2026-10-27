@@ -87,6 +87,8 @@ main{height:var(--vvh,100%);padding-top:calc(var(--top) + 3.1rem);overflow:hidde
 .nt{font-family:var(--ui);font-size:.82rem;line-height:1.7;color:var(--jjok);margin:.35rem 0 .7rem -.7rem;padding:0 0 0 .7rem;border-left:2px solid var(--jjok);white-space:pre-wrap;word-break:break-word}
 .nt .when{display:block;font-size:.7rem;color:var(--meok-3);margin-top:.1rem}
 .nt.lost::before{content:"자리를 잃은 의견 · ";color:var(--meok-3)}
+.nt.wait::before{content:"원고를 기다리는 의견 · ";color:var(--meok-3)}
+.hint.warn{color:var(--jjok)}
 .ntbox{margin:.4rem 0 .9rem -.7rem;padding:0 0 0 .7rem;border-left:2px solid var(--jjok)}
 .ntbox textarea{display:block;width:100%;min-height:4.6rem;border:1px solid var(--seon);border-radius:2px;background:var(--hanji);padding:.5rem .6rem;font-family:var(--ui);font-size:16px;line-height:1.6;color:var(--meok);resize:none}
 .ntbox textarea:focus{outline:none;border-color:var(--jjok)}
@@ -508,28 +510,33 @@ function renderRead(){
     if(p == null || p < 0){ if(p === -1) lost[n.id] = true; top.push(n); }
     else (byLine[p] = byLine[p] || []).push(n);
   });
-  var hint = document.createElement("p"); hint.className = "hint";
-  hint.textContent = ls.length ? "문단을 누르면 그 문단에 의견을 붙입니다 · 본문은 바뀌지 않습니다" : "아직 원고가 없습니다 · 머리줄의 '고치기'로 붙여 넣으세요";
+  /* 곁이 보냈지만 보태기가 아직 받지 않은 글을 보고 있나 — 보태기가 받은 뒤에 의견이 자리를 찾는다 */
+  var pending = !S.drafts[r.id] && reviewFits(r) && r.review !== r.text;
+  var waiting = !ls.length && top.length > 0;   /* 본문이 비어 의견이 기다린다 */
+  var hint = document.createElement("p"); hint.className = "hint" + (pending || waiting ? " warn" : "");
+  hint.textContent = pending ? "보태기가 아직 받지 않은 글입니다 · 보태기가 받은 뒤에 의견이 자리를 찾습니다 · 문단을 누르면 그 문단에 의견을 붙입니다"
+    : waiting ? "원고가 비어 있습니다 · 원고가 오면 의견이 자리를 찾습니다"
+    : ls.length ? "문단을 누르면 그 문단에 의견을 붙입니다 · 본문은 바뀌지 않습니다" : "아직 원고가 없습니다 · 머리줄의 '고치기'로 붙여 넣으세요";
   elRead.appendChild(hint);
   var wb = document.createElement("button"); wb.type = "button"; wb.className = "whole"; wb.textContent = "원고 전체에 의견";
   wb.onclick = function(){ openNote(null, null); };
   elRead.appendChild(wb);
   if(nc && nc.para === null && !nc.id) elRead.appendChild(noteBox());
-  top.forEach(function(n){ elRead.appendChild(noteEl(n, lost[n.id])); });
+  top.forEach(function(n){ elRead.appendChild(noteEl(n, lost[n.id] ? (waiting ? "wait" : "lost") : "")); });
   ls.forEach(function(line, i){
     var p = document.createElement("div");
     p.className = "rp" + (byLine[i] ? " has" : "") + (nc && nc.para === i && !nc.id ? " pick" : "");
     p.textContent = line || "\u200b"; p.dataset.i = i;
     p.onclick = function(){ openNote(i, null); };
     elRead.appendChild(p);
-    (byLine[i] || []).forEach(function(n){ elRead.appendChild(noteEl(n, false)); });
+    (byLine[i] || []).forEach(function(n){ elRead.appendChild(noteEl(n, "")); });
     if(nc && nc.para === i && !nc.id) elRead.appendChild(noteBox());
   });
   elRead.parentNode.scrollTop = st;
 }
-function noteEl(n, isLost){
+function noteEl(n, kind){   /* kind: "" · "lost"(자리를 잃음) · "wait"(원고가 비어 기다림) */
   if(nc && nc.id === n.id) return noteBox();
-  var d = document.createElement("div"); d.className = "nt" + (isLost ? " lost" : "");
+  var d = document.createElement("div"); d.className = "nt" + (kind ? " " + kind : "");
   d.appendChild(document.createTextNode(n.body));
   var w = document.createElement("span"); w.className = "when";
   w.textContent = stamp(n.at) + (n.sent ? "" : " · 올리기 전");

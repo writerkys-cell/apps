@@ -1570,7 +1570,7 @@ function renderPrev(keepScroll){
       marks = markedLines(list.join("\n"), lines(m).join("\n"));
     }
     /* 아이폰에서 온 의견 — 문단 아래에 쪽빛으로. 자리를 못 찾은 것과 원고 전체 의견은 원고 머리에 */
-    var nts = notesOf(m), ntBy = {}, ntTop = [], ntLost = {};
+    var nts = notesOf(m), ntBy = {}, ntTop = [], ntLost = {}, ntWait = !list.length;   /* 본문이 비면 잃은 게 아니라 기다리는 것 */
     nts.forEach(function(n){
       var p = notePlace(n, list);
       if(p == null || p < 0){ if(p === -1) ntLost[n.id] = true; ntTop.push(n); }
@@ -1585,7 +1585,7 @@ function renderPrev(keepScroll){
       da.onclick = function(){ notesDoneAll(m); };
       nb.appendChild(ca); nb.appendChild(da);
       elPrev.appendChild(nb);
-      ntTop.forEach(function(n){ elPrev.appendChild(noteEl(m, n, !!ntLost[n.id], null)); });
+      ntTop.forEach(function(n){ elPrev.appendChild(noteEl(m, n, ntLost[n.id] ? (ntWait ? "wait" : "lost") : "", null)); });
     }
     if(!list.length){
       var e0 = document.createElement("p"); e0.className = "gap"; e0.textContent = "\u200b"; list = [];
@@ -1610,7 +1610,7 @@ function renderPrev(keepScroll){
       elPrev.appendChild(p);
       if(ntBy[i]){
         p.classList.add("nt");
-        ntBy[i].forEach(function(n){ elPrev.appendChild(noteEl(m, n, false, i)); });
+        ntBy[i].forEach(function(n){ elPrev.appendChild(noteEl(m, n, "", i)); });
       }
     });
   });
@@ -2439,10 +2439,10 @@ function notesDoneAll(m){
   ns.forEach(function(n){ noteDone(n, true); });
   renderWrite(true); renderList(); toast("의견 " + ns.length + "개를 마쳤습니다");
 }
-function noteEl(m, n, isLost, li){
-  var d = document.createElement("p"); d.className = "note" + (isLost ? " lost" : "");
+function noteEl(m, n, kind, li){   /* kind: "" · "lost"(자리를 잃음) · "wait"(원고가 비어 기다림) */
+  var d = document.createElement("p"); d.className = "note" + (kind ? " " + kind : "");
   var lb = document.createElement("span"); lb.className = "nlab";
-  lb.textContent = isLost ? "자리를 잃은 의견 · " : n.para == null ? "원고 전체 · " : "";
+  lb.textContent = kind === "wait" ? "원고를 기다리는 의견 · " : kind === "lost" ? "자리를 잃은 의견 · " : n.para == null ? "원고 전체 · " : "";
   if(lb.textContent) d.appendChild(lb);
   d.appendChild(document.createTextNode(n.body));
   var w = document.createElement("span"); w.className = "nwhen"; w.textContent = whenText(n.at); d.appendChild(w);
@@ -2490,10 +2490,12 @@ function cloudPull(loud){
         if(m.review){ m.review = null; changed = true; }
         return;
       }
-      if(m.dirty) return;   /* 곧 새 원고가 올라가며 자국은 비워진다 */
+      /* 빈 원고에 곁(스크리브너)에서 온 글은 때가 맞지 않아도 받는다 — 잃을 글이 없고, 아이폰이 그 글에 의견을 붙였을 수 있다 */
+      var blank = row.review_src === "scriv" && !normal(m.text) && normal(row.review);
+      if(m.dirty && !blank) return;   /* 곧 새 원고가 올라가며 자국은 비워진다 */
       var base = row.review_base ? Date.parse(row.review_base) : 0;
       var mine = m.syncAt ? Date.parse(m.syncAt) : -1;
-      if(base !== mine){ stale++; staleMs = m; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
+      if(base !== mine && !blank){ stale++; staleMs = m; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
       var rv = normal(row.review);
       var fromPhone = row.review_src === "phone";
       /* 곁(스크리브너)에서 온 글이면 스크리브너가 다시 최신 — 아이폰 수정 표시를 지운다 */
