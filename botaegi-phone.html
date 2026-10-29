@@ -345,6 +345,8 @@ function pull(){
         if(!r){ if(whole) delete S.drafts[id]; return; }
         /* 맥에서 원고를 새로 보냈으면 옛 원고를 보고 손본 것은 버린다 */
         if(!same(d.base, r.updated_at)){ delete S.drafts[id]; if(!d.sent) gone++; return; }
+        /* 본문이 있는 원고를 빈 글로 고친 것은 뜻한 일이 아니다 — 버린다(예전 앱이 남긴 것) */
+        if(!String(d.text || "").trim() && String(r.text || "").trim()){ delete S.drafts[id]; return; }
         var sv = r.review_at ? Date.parse(r.review_at) : 0;
         if(d.sent && sv >= d.at) delete S.drafts[id];
       });
@@ -396,6 +398,9 @@ function loadWorks(){
 function pushOne(id){
   var d = S.drafts[id];
   if(!d || !ready()) return Promise.resolve();
+  /* 본문이 있는 원고에 빈 글은 올리지 않는다 — 맥의 본문이 사라진다 */
+  var row0 = S.rows.filter(function(x){ return x.id===id; })[0];
+  if(!String(d.text || "").trim() && row0 && String(row0.text || "").trim()){ delete S.drafts[id]; save(); if(openId === id && reading()) renderRead(); return Promise.resolve(); }
   var at = new Date(d.at).toISOString();
   /* 맥의 원고가 그대로일 때만 쓴다 */
   return api(TABLE + "?id=eq." + encodeURIComponent(id) + "&updated_at=eq." + encodeURIComponent(new Date(Date.parse(d.base)).toISOString()), {
@@ -744,7 +749,9 @@ elMode.addEventListener("click", function(){
 });
 
 function stash(){
-  if(!openId) return;
+  /* 고치기 모드일 때만 — 의견 모드에서는 고치기 칸이 비어 있거나 다른 원고의 글이 남아 있다.
+     그것을 고친 글로 저장하면 빈 글이 맥으로 올라가 본문이 사라진다(2026-10-29에 실제로 겪음) */
+  if(!openId || !editing()) return;
   var r = S.rows.filter(function(x){ return x.id===openId; })[0];
   if(!r) return;
   var t = paperGet();

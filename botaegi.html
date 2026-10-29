@@ -2473,7 +2473,7 @@ function cloudPull(loud){
     if(!r.ok) throw new Error(r.status + "");
     return r.json();
   }).then(function(rows){
-    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, changed = false;
+    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, emptyN = 0, emptyMs = null, changed = false;
     rows.forEach(function(row){
       var m = S.mss.filter(function(x){ return x.id === row.id; })[0];
       if(!m) return;
@@ -2498,6 +2498,8 @@ function cloudPull(loud){
       if(base !== mine && !blank){ stale++; staleMs = m; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
       var rv = normal(row.review);
       var fromPhone = row.review_src === "phone";
+      /* 아이폰에서 온 빈 글로 본문을 비우지는 않는다 — 의견 모드의 빈 고치기 칸이 올라온 것이지 뜻한 일이 아니다 */
+      if(fromPhone && !rv && normal(m.text)){ emptyN++; emptyMs = m; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
       /* 곁(스크리브너)에서 온 글이면 스크리브너가 다시 최신 — 아이폰 수정 표시를 지운다 */
       if(!fromPhone && row.review_src === "scriv" && m.phoneAt){ m.phoneAt = null; m.phoneBase = null; m.dirty = true; changed = true; }
       if(rv === m.text){ if(m.review){ m.review = null; changed = true; } if(m.dirty) cloudClearReview(m.id); return; }
@@ -2511,7 +2513,8 @@ function cloudPull(loud){
     }
     pulling = false;
     if(changed){ save(); renderHead(); renderWrite(true); renderList(); flush(); }
-    if(stale) lostNote(staleMs);
+    if(emptyN) toast("'" + emptyMs.title + "'에 아이폰에서 빈 글이 왔지만 본문을 비우지 않았습니다", 5000);
+    else if(stale) lostNote(staleMs);
     else if(back || doneN) toast((back ? "원고 " + back + "개를 받았습니다" + (phoneN ? " (아이폰에서 고친 것 " + phoneN + "개)" : "") : "") + (back && doneN ? " · " : "") + (doneN ? "원고 " + doneN + "개를 완성으로 표시했습니다" : ""));
     else if(got) toast("아이폰에서 손본 자국을 가져왔습니다");
     else if(loud) toast("새로 손본 것이 없습니다");
