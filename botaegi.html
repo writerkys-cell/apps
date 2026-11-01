@@ -2102,7 +2102,7 @@ function daysObj(){
   return { dayStart:S.dayStart, since:S.advSince, first:first, adv:o };
 }
 function shareDays(){
-  if(!cloudOn()) return;
+  if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
   var c = JSON.stringify(daysObj());
   if(c === daysSent) return;
   sb("botaegi_kv", { method:"POST", headers:{ "Prefer":"resolution=merge-duplicates,return=minimal" },
@@ -2112,7 +2112,7 @@ function shareDays(){
 function queueDays(){ clearTimeout(daysT); daysT = setTimeout(shareDays, 3000); }
 var confSent = "";
 function shareConf(){
-  if(!cloudOn()) return;
+  if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
   var c = JSON.stringify(confObj());
   if(c === confSent) return;
   sb("botaegi_kv", { method:"POST", headers:{ "Prefer":"resolution=merge-duplicates,return=minimal" },
@@ -2135,7 +2135,7 @@ function macNow(){
 }
 var nowSent = "";
 function shareNow(){
-  if(!cloudOn()) return;
+  if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 '지금'을 건드리지 않는다 */
   var d = macNow();
   if(!d && S.remoteNow) return;   /* 곁이 쓰는 '지금'을 지우지 않는다 */
   var j = JSON.stringify(d);
@@ -2398,7 +2398,28 @@ function lostNote(m){
   toast("'" + m.title + "'에 아이폰에서 손본 것이 있었지만, 맥의 원고가 바뀌어 버렸습니다", 5000);
 }
 function sameAt(a, b){ return !!a && !!b && Date.parse(a) === Date.parse(b); }
+/* 자리표 — 쓸 원고가 없을 때 보태기가 스스로 만든 '이름 없는 작품'의 손대지 않은 원고.
+   올리지 않는다. 이 파일을 처음 여는 브라우저마다 빈 '이름 없는 작품 · 1' 줄을 수파베이스에 남기던 일(2026-11-01)을 막는다 */
+function stubMs(m){ var w = workOf(m); return !!w && w.title === "이름 없는 작품" && !w.kind && !m.text && !m.editedAt && !m.scrivAt && !m.finishedAt && !(m.focusMs > 0); }
+function stubWork(w){ return !!w && w.title === "이름 없는 작품" && !w.kind && !w.finishedAt && allOf(w).every(stubMs); }
+/* 구름과 아직 말을 섞은 적 없는 저장소 — 자리표뿐이다. 설정·하루·작품 목록·지금을 올리지 않는다(빈 값으로 진짜 것을 덮지 않게) */
+function virgin(){ return !S.mss.some(function(m){ return m.syncAt || m.text; }) && S.works.every(stubWork); }
+/* 진짜 작품이 생기면 손대지 않은 자리표는 지운다 — 구름의 줄도 내린다 */
+function dropStubs(keepId){
+  var n = 0;
+  S.works.slice().forEach(function(w){
+    if(w.id === keepId || !stubWork(w)) return;
+    var us = allOf(w);
+    if(us.some(function(m){ return (S.sess && S.sess.id === m.id) || (S.typ && S.typ.id === m.id); })) return;
+    us.forEach(function(m){ cloudDrop(m.id); });
+    S.mss = S.mss.filter(function(m){ return m.workId !== w.id; });
+    S.works = S.works.filter(function(x){ return x.id !== w.id; });
+    n++;
+  });
+  return n;
+}
 function cloudPush(m){
+  if(stubMs(m)) return Promise.resolve(false);   /* 자리표는 올리지 않는다 — 글이 생기면 그때 */
   if(!workActive(workOf(m))){ m.dirty = false; return Promise.resolve(true); }   /* 끝난 작품은 아이폰에서 내린다(개정 회차가 열려 있으면 둔다) */
   if(m.folded){ m.dirty = false; return Promise.resolve(true); }   /* 합쳐서 접어 둔 조각은 올리지 않는다 */
   m.dirty = true;
@@ -2475,7 +2496,7 @@ function worksObj(){
   });
 }
 function shareWorks(){
-  if(!cloudOn()) return;
+  if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
   var c = JSON.stringify(worksObj());
   if(c === worksSent) return;
   sb("botaegi_kv", { method:"POST", headers:{ "Prefer":"resolution=merge-duplicates,return=minimal" },
@@ -2487,6 +2508,19 @@ function cloudTitle(m){
   sb(TABLE + "?id=eq." + encodeURIComponent(m.id), {
     method: "PATCH", headers: { "Prefer": "return=minimal" },
     body: JSON.stringify({ title: m.title })
+  }).catch(function(){});
+}
+/* 다른 브라우저가 남긴 빈 '이름 없는 작품 · 1' 줄을 내린다(본문이 있으면 둔다) */
+var orphansDone = {};
+function dropOrphanStubs(ids){
+  ids = (ids || []).filter(function(id){ return !orphansDone[id]; }).slice(0, 50);
+  if(!ids.length || !cloudOn()) return;
+  sb(TABLE + "?select=id,text&id=in.(" + ids.map(encodeURIComponent).join(",") + ")")
+  .then(function(r){ return r.ok ? r.json() : []; })
+  .then(function(rows){
+    var k = 0;
+    rows.forEach(function(row){ orphansDone[row.id] = true; if(!normal(row.text || "")){ cloudDrop(row.id); k++; } });
+    if(k) toast("다른 브라우저가 남긴 빈 '이름 없는 작품' " + k + "줄을 아이폰 목록에서 내렸습니다", 5000);
   }).catch(function(){});
 }
 function cloudDrop(id){
@@ -2504,7 +2538,7 @@ function cloudClearReview(id){
 }
 function flush(){
   shareWorks();   /* 장의 원고 목록이 바뀌었을 수 있다 — 같으면 보내지 않는다 */
-  var todo = S.mss.filter(function(m){ return m.dirty; });
+  var todo = S.mss.filter(function(m){ return m.dirty && !stubMs(m); });
   return todo.reduce(function(chain, m){
     return chain.then(function(){ return cloudPush(m); });
   }, Promise.resolve());
@@ -2606,19 +2640,21 @@ var pulling = false;
 function cloudPull(loud){
   if(!cloudOn() || pulling){ return Promise.resolve(); }
   pulling = true;
-  return flush().then(applyReqs).then(function(){
+  var fresh0 = virgin();   /* 자리표뿐인 저장소(처음 여는 브라우저) — 받기만 하고 곁의 요청도 건드리지 않는다 */
+  return flush().then(function(){ return fresh0 ? null : applyReqs(); }).then(function(){
     shareConf(); shareDays(); shareWorks(); shareSess(); shareNow();
     return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo(), pullNotes()]);
   }).then(function(){
-    return sb(TABLE + "?select=id,review,review_at,review_base,done_req,review_src");
+    return sb(TABLE + "?select=id,title,work_title,review,review_at,review_base,done_req,review_src");
   }).then(function(r){
     if(!r.ok) throw new Error(r.status + "");
     return r.json();
   }).then(function(rows){
-    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, emptyN = 0, emptyMs = null, autoN = 0, changed = false;
+    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, emptyN = 0, emptyMs = null, autoN = 0, changed = false, orphans = [];
     rows.forEach(function(row){
       var m = S.mss.filter(function(x){ return x.id === row.id; })[0];
-      if(!m) return;
+      /* 맥이 모르는 '이름 없는 작품' 줄 — 다른 브라우저가 남긴 자리표. 본문이 비었으면 내린다 */
+      if(!m){ if(row.work_title === "이름 없는 작품" || row.title === "이름 없는 작품 · 1") orphans.push(row.id); return; }
       if(m.folded){ cloudDrop(m.id); return; }   /* 합쳐서 접어 둔 조각 — 줄이 남아 있으면 내린다 */
       takeReview(m, row);
       /* 아이폰에서 누른 '원고 완성' — 함께 온 글을 먼저 받은 뒤에 표시한다 */
@@ -2656,6 +2692,7 @@ function cloudPull(loud){
       back++; changed = true;
     }
     pulling = false;
+    dropOrphanStubs(orphans);
     if(changed){ save(); renderHead(); renderWrite(true); renderList(); flush(); }
     if(emptyN) toast("'" + emptyMs.title + "'에 아이폰에서 빈 글이 왔지만 본문을 비우지 않았습니다", 5000);
     else if(stale) lostNote(staleMs);
@@ -3287,6 +3324,7 @@ function newMsFlow(after){
         if(v.revCh.trim()){ var c2 = newChapter(v.revCh.trim()); c2.order = 1; w.chapters.push(c2); }
       }
       S.works.push(w);
+      dropStubs(w.id);   /* 손대지 않은 '이름 없는 작품' 자리표는 지운다 */
       if(isRevision(w) && !w.chapters.length){
         save(); shareWorks(); renderHead(); renderList();
         toast("'" + w.title + "'을 원고 없이 만들었습니다 · 쪽수 적기, 또는 '새 장'으로 원고를 시작합니다");
@@ -5474,7 +5512,7 @@ $("#sbPush").addEventListener("click", function(){
   });
   save();
   flush().then(function(){
-    var left = S.mss.filter(function(m){ return m.dirty; }).length;
+    var left = S.mss.filter(function(m){ return m.dirty && !stubMs(m); }).length;
     if(off && !left){ toast("올렸습니다 · 끝난 작품과 합친 조각의 원고 " + off + "개는 내렸습니다", 3500); return; }
     toast(left ? left + "편을 올리지 못했습니다" : "모두 올렸습니다");
   });
