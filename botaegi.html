@@ -2394,8 +2394,9 @@ function sb(path, opt){
 function sbNote(t){ var e = document.getElementById("sbState"); if(e) e.textContent = t || ""; }
 
 /* 원고 한 편을 통째로 덮어쓴다 — 손본 자국도 함께 비운다 */
-function lostNote(m){
-  toast("'" + m.title + "'에 아이폰에서 손본 것이 있었지만, 맥의 원고가 바뀌어 버렸습니다", 5000);
+function lostNote(m, src){
+  if(src === "scriv") toast("'" + m.title + "'에 곁(스크리브너)에서 보낸 글이 있었지만, 맥의 원고와 때가 맞지 않아 받지 못했습니다. 맥에서 그 원고를 한 글자라도 고쳐 올린 뒤 다시 보내 주세요", 7000);
+  else toast("'" + m.title + "'에 아이폰에서 손본 것이 있었지만, 맥의 원고가 바뀌어 버렸습니다", 5000);
 }
 function sameAt(a, b){ return !!a && !!b && Date.parse(a) === Date.parse(b); }
 /* 자리표 — 쓸 원고가 없을 때 보태기가 스스로 만든 '이름 없는 작품'의 손대지 않은 원고.
@@ -2425,15 +2426,15 @@ function cloudPush(m){
   m.dirty = true;
   if(!cloudOn()) return Promise.resolve(false);
   var at = new Date(m.editedAt || m.createdAt || Date.now()).toISOString();
-  var lost = false;
+  var lost = false, lostSrc = null;
   /* 덮어쓰기 전에, 보지 못한 채 사라질 손본 글이 있는지 본다 */
-  return sb(TABLE + "?select=review,review_at&id=eq." + encodeURIComponent(m.id))
+  return sb(TABLE + "?select=review,review_at,review_src&id=eq." + encodeURIComponent(m.id))
   .then(function(r){ return r.ok ? r.json() : []; })
   .then(function(rows){
     var row = rows && rows[0];
     if(row && row.review != null && normal(row.review) !== m.text){
       var seen = m.seenReviewAt === "seen" || sameAt(row.review_at, m.seenReviewAt);
-      if(!seen) lost = true;
+      if(!seen){ lost = true; lostSrc = row.review_src; }
     }
   }, function(){})
   .then(function(){ return sb(TABLE, {
@@ -2455,7 +2456,7 @@ function cloudPush(m){
     }
     if(!r.ok) throw new Error(r.status + "");
     m.dirty = false; m.syncAt = at; m.seenReviewAt = null; save();
-    if(lost) lostNote(m);
+    if(lost) lostNote(m, lostSrc);
     return true;
   }); }).catch(function(){ save(); return false; });
 }
@@ -2650,7 +2651,17 @@ function cloudPull(loud){
     if(!r.ok) throw new Error(r.status + "");
     return r.json();
   }).then(function(rows){
-    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, emptyN = 0, emptyMs = null, autoN = 0, changed = false, orphans = [];
+    /* 손본 글이 붙은 줄은 구름의 본문도 읽는다 — 올린 때가 어긋나도 본문이 맥과 같으면 잃을 글이 없어 받기 위해(2026-11-02) */
+    var need = rows.filter(function(row){ return row.review != null; }).map(function(row){ return row.id; });
+    if(!need.length) return rows;
+    return sb(TABLE + "?select=id,text&id=in.(" + need.map(encodeURIComponent).join(",") + ")")
+      .then(function(r){ return r.ok ? r.json() : []; }, function(){ return []; })
+      .then(function(ts){
+        (ts || []).forEach(function(t){ var row = rows.filter(function(x){ return x.id === t.id; })[0]; if(row) row.text = t.text; });
+        return rows;
+      });
+  }).then(function(rows){
+    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, staleSrc = null, emptyN = 0, emptyMs = null, autoN = 0, changed = false, orphans = [];
     rows.forEach(function(row){
       var m = S.mss.filter(function(x){ return x.id === row.id; })[0];
       /* 맥이 모르는 '이름 없는 작품' 줄 — 다른 브라우저가 남긴 자리표. 본문이 비었으면 내린다 */
@@ -2670,10 +2681,13 @@ function cloudPull(loud){
       }
       /* 빈 원고에 곁(스크리브너)에서 온 글은 때가 맞지 않아도 받는다 — 잃을 글이 없고, 아이폰이 그 글에 의견을 붙였을 수 있다 */
       var blank = row.review_src === "scriv" && !normal(m.text) && normal(row.review);
-      if(m.dirty && !blank) return;   /* 곧 새 원고가 올라가며 자국은 비워진다 */
+      /* 구름의 본문이 맥의 본문과 같으면 — 곁은 바로 그 글을 보고 고쳐 보낸 것이라, 올린 때가 어긋나도(다른 창이 올렸거나 기억이 어긋난 경우) 잃을 글이 없다 */
+      var same = row.review_src === "scriv" && row.text != null && normal(row.text) === normal(m.text) && !!normal(row.review);
+      var safe = blank || same;
+      if(m.dirty && !safe) return;   /* 곧 새 원고가 올라가며 자국은 비워진다 */
       var base = row.review_base ? Date.parse(row.review_base) : 0;
       var mine = m.syncAt ? Date.parse(m.syncAt) : -1;
-      if(base !== mine && !blank){ stale++; staleMs = m; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
+      if(base !== mine && !safe){ stale++; staleMs = m; staleSrc = row.review_src; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
       var rv = normal(row.review);
       var fromPhone = row.review_src === "phone";
       /* 아이폰에서 온 빈 글로 본문을 비우지는 않는다 — 의견 모드의 빈 고치기 칸이 올라온 것이지 뜻한 일이 아니다 */
@@ -2695,7 +2709,7 @@ function cloudPull(loud){
     dropOrphanStubs(orphans);
     if(changed){ save(); renderHead(); renderWrite(true); renderList(); flush(); }
     if(emptyN) toast("'" + emptyMs.title + "'에 아이폰에서 빈 글이 왔지만 본문을 비우지 않았습니다", 5000);
-    else if(stale) lostNote(staleMs);
+    else if(stale) lostNote(staleMs, staleSrc);
     else if(back || doneN) toast((back ? "원고 " + back + "개를 받았습니다" + (phoneN ? " (아이폰에서 고친 것 " + phoneN + "개)" : "") : "") + (back && doneN ? " · " : "") + (doneN ? "원고 " + doneN + "개를 완성으로 표시했습니다" : "") + (autoN ? " · 고친 문단의 의견 " + autoN + "개를 마쳤습니다" : ""), autoN ? 5000 : undefined);
     else if(got) toast("아이폰에서 손본 자국을 가져왔습니다");
     else if(loud) toast("새로 손본 것이 없습니다");
