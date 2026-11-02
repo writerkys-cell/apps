@@ -98,6 +98,13 @@ body.solo .top{padding-bottom:14px}
 .draw .drawbtns{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:16px}
 .draw .drawbtns .ghost{margin-top:0}
 .jar{margin:0 0 30px}
+.cfind{margin:0 0 30px}
+.cfind>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
+.cfind .lines{margin-top:14px}
+.cfind .cfw{display:block;text-align:left;padding:4px 0 0;font-size:13.5px;text-decoration:none;color:var(--ink-soft);line-height:1.7}
+.cfind .cfw b{color:var(--ink);font-weight:500}
+.cfind .cfw .place{margin:0 2px}
+.lines li.hi{background:var(--paper-2);margin:0 -8px;padding-left:10px;padding-right:10px;border-radius:var(--radius)}
 .jar>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
 .jar textarea{resize:none;line-height:1.55}
 .jar .lines{margin-top:14px}
@@ -140,6 +147,7 @@ input:focus,textarea:focus{outline:none;border-bottom-color:var(--seal)}
 .sugg button{font-size:13.5px;border:1px solid var(--line);background:var(--paper);padding:4px 11px;border-radius:var(--radius)}
 .sugg .lead{font-size:12.5px;color:var(--ink-soft);align-self:center;margin-right:2px}
 .search{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.search .linkish{white-space:nowrap;flex:none}
 
 /* 자리 목차 */
 .shelfrow{display:grid;grid-template-columns:1fr 90px auto;gap:14px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -283,7 +291,7 @@ const CAT={
 let S=load();
 let orderSig=JSON.stringify(S.order);
 const RKEY='seoga.read.v1';
-let R=loadR(), finishFor=null, askFor=null, holdId=null, reviewFor=null;
+let R=loadR(), finishFor=null, askFor=null, holdId=null, reviewFor=null, scanAsk=null; /* scanAsk: 내보내기 전 스캔 확인 시트 {id, after:'bin'|'hold'|'out'|'none', reason} */
 /* 주소 끝 #read: 읽기 탭으로 연다(시작의 독서 칸). #solo: 탭 줄 없이 읽기 화면 하나만(홈 화면 '읽기' 아이콘). */
 let SOLO=location.hash==='#solo';
 let view=(SOLO||location.hash==='#read'||R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
@@ -487,8 +495,9 @@ function render(reset){
   if(cmp) document.body.insertAdjacentHTML('beforeend',compareHTML());
   if(editId){ document.body.insertAdjacentHTML('beforeend',editHTML()); bindEdit(); }
   if(holdId&&!editId&&!cmp){ document.body.insertAdjacentHTML('beforeend',holdHTML()); const t=document.getElementById('h-reason'); if(t) t.focus(); }
+  if(scanAsk&&!editId&&!cmp&&!holdId) document.body.insertAdjacentHTML('beforeend',scanSheetHTML());
   document.querySelectorAll('.pagebar').forEach(p=>p.remove());
-  if(pageFor&&!cmp&&!editId&&!holdId){
+  if(pageFor&&!cmp&&!editId&&!holdId&&!scanAsk){
     document.body.insertAdjacentHTML('beforeend',pageBarHTML());
     const i=document.getElementById('pg');
     if(i){ i.focus(); i.select(); i.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); savePage(); } }); }
@@ -548,6 +557,42 @@ function addJar(){
   const id=uid(); R.reads.push({id,kind:'mark',bookId:JAR,title:'밑줄들',page:0,text:t,date:today(),at:now,updated:now}); jarLast=id;
   saveR(); toast('밑줄들에 적었습니다'); render();
 }
+/* 코멘트 찾기: 내가 쓴 글(코멘트·스캔한 코멘트·한 줄)만 찾는다. 『밑줄들』은 빼고, 책 글자(제목·지은이)도 보지 않는다. 결과는 코멘트가 주인이고 그 아래 책·자리·쪽 한 줄. 누르면 목록에서 그 책이 펼쳐져 그 기록이 표시된다. */
+let cq='', cShown=20, hiMark=null;
+function cfHits(k){ if(!k) return [];
+  return R.reads.filter(x=>!x.gone&&x.bookId!==JAR&&((x.kind==='read'&&x.memory)||((x.kind==='mark'||x.kind==='scan')&&x.text)))
+    .filter(x=>((x.kind==='read'?x.memory:x.text)||'').toLowerCase().includes(k))
+    .sort((a,z)=>((z.at||z.start||z.date||'')).localeCompare(a.at||a.start||a.date||'')); }
+function cfPlace(b){ if(!b) return '<span class="place none">책 없음</span>';
+  const t=b.location?esc(b.location):b.discarded?'폐기':b.held?'보류':b.borrowed&&b.returnedAt?'반납':b.borrowed?'빌린 책':'자리 없음';
+  return `<span class="${b.location?'place':'place none'}">${t}</span>`; }
+function cfLI(x,k){ const b=book(x.bookId), read=x.kind==='read';
+  const pg=read?rangeText(x):(x.page?x.page+'쪽':'쪽 없음');
+  return `<li><div class="lt">${hl(read?x.memory:x.text,k)}</div>
+    <button class="linkish cfw" onclick="goMark('${x.bookId}','${x.id}')"><b>${esc(b?b.title:(x.title||''))}</b>${b&&b.author?' · '+esc(b.author):''} · ${cfPlace(b)} · ${pg} · ${mdLabel(x.date)}${read?' · 한 줄':x.kind==='scan'?' · 스캔':''}</button>${x.kind==='scan'?scanWhere(x):''}</li>`; }
+function cfindHTML(){
+  return `<section class="cfind"><label for="cq">코멘트 찾기</label>
+    <input type="text" id="cq" value="${esc(cq)}" placeholder="내가 적은 코멘트와 한 줄에서 찾기" oninput="onCfind(this)" autocomplete="off">
+    <div id="cfbody">${cfindBody()}</div></section>`;
+}
+function cfindBody(){
+  const k=cq.trim().toLowerCase(); if(!k) return '';
+  const h=cfHits(k), part=h.slice(0,cShown);
+  if(!h.length) return `<p class="hint" style="margin:12px 0 0">‘${esc(cq.trim())}’이(가) 든 코멘트가 없습니다.</p>`;
+  return `<p class="hint" style="margin:12px 0 0">${h.length}개를 찾았습니다.</p><ul class="lines">${part.map(x=>cfLI(x,k)).join('')}</ul>
+    ${h.length>part.length?`<div class="rowbtns" style="margin-top:10px"><button class="ghost" onclick="cShown+=20;refreshCfind()">더 보기 · 남은 ${h.length-part.length}개</button></div>`:''}`;
+}
+function onCfind(t){ cq=t.value; cShown=20; refreshCfind(); }
+function refreshCfind(){ const el=document.getElementById('cfbody'); if(el) el.innerHTML=cfindBody(); }
+/* 코멘트에서 책으로: 목록 탭에서 제목으로 검색해 그 책을 펼치고(어느 상태의 책이든 검색에는 나온다) 코멘트·한 줄 목록을 연 채 해당 기록을 표시한다. #solo에는 목록 탭이 없으므로 쪽과 자리만 알려준다. */
+function goMark(bid,rid){
+  const b=book(bid), x=R.reads.find(r=>r.id===rid); if(!b||!x) return;
+  if(SOLO){ toast(b.title+' · '+(b.location||'자리 없음')+(x.page?' · '+x.page+'쪽':'')); return; }
+  view='list'; q=b.title; shown=PAGE; openId=bid; hiMark=rid; cq=''; cShown=20;
+  if(x.kind==='read') linesFor=bid; else marksFor=bid;
+  render(true);
+  requestAnimationFrame(()=>{ const el=document.getElementById('rec-'+rid); if(el) el.scrollIntoView({block:'center'}); });
+}
 function vHome(){
   if(!S.books.length) return `<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>
     <div class="empty" style="border:none;padding-top:10px">
@@ -560,7 +605,7 @@ function vHome(){
       ${more?`<div class="rowbtns"><button class="ghost" onclick="go('list','${more}')">모두 보기</button></div>`:''}
     </section>`;
   const head=`<div class="datehead"><div class="day">${fullDayLabel()}</div><div class="nth">한 해의 ${dayOfYear()}일째</div></div>`;
-  return head + drawHTML() + jarHTML() + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
+  return head + drawHTML() + jarHTML() + cfindHTML() + noticeLine() + judgeCard() + nowReading(n) + todayBest(b)
     + sec(`최근에 받은 증정본${g.length>5?` · ${g.length}권 중 5권`:''}`,'d-gift',g.slice(0,5),false,g.length>5?'gift':'')
     + (u.length?sec(`분류하지 않은 책 ${u.length}권`,'d-none',u.slice(0,5),false,'undecided'):'');
 }
@@ -610,6 +655,7 @@ function noticeLine(){
   if(a) out.push(`<button class="linkish" style="color:var(--seal)" onclick="go('read')">${a.closing?'읽기를 끝냈습니다 · 쪽을 적어주세요':(elsewhere(a)?esc(a.device)+'에서 ':'')+'읽는 중 · '+fmtMin(Math.max(0,(Date.now()-a.startedAt)/60000))+'째'}</button>`);
   if(due.length) out.push(`<button class="linkish" onclick="go('list','bin')">내놓을 책 ${due.length}권</button>`);
   if(rm.length) out.push(`<button class="linkish" onclick="go('list','remove')">목록에서 지울 책 ${rm.length}권</button>`);
+  const sd=scanDueBooks(); if(sd.length) out.push(`<button class="linkish" onclick="go('list','${sd.some(inBin)?'bin':'hold'}')">스캔할 코멘트가 있는 책 ${sd.length}권</button>`);
   return out.length? `<div class="rowbtns" style="margin:-10px 0 22px">${out.join('')}</div>` : '';
 }
 function judgeCard(){
@@ -835,6 +881,7 @@ function rowHTML(b,rank,showState){
   if(b.borrowed) meta.push(`<span${isLate(b)?' style="color:var(--seal)"':''}>${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}${isLate(b)?' · 반납일 지남':''}</span>`);
   if(isRecord(b)&&traceText(b)) meta.push(traceText(b));
   if(b.held&&b.heldReason) meta.push(esc(b.heldReason));
+  if(scanDueText(b)) meta.push(scanDueText(b));
   return `<div class="row${cls}" data-id="${b.id}" onclick="toggle('${b.id}')">
     <div class="rank">${rank?rank:`<span class="tagdot ${dot}" style="margin:0"></span>`}</div>
     <div><div class="title">${esc(b.title)}${badges(b,rank)}</div>
@@ -855,7 +902,7 @@ function linesBtn(b){ const n=memLines(b.id).length; return n?`<button onclick="
 function linesBlock(b){ return linesFor===b.id? linesList(b) : ''; }
 function linesList(b){
   const ls=memLines(b.id); if(!ls.length) return '';
-  return `<ul class="lines">${ls.map(x=>`<li><div class="lr">${rangeText(x)} · ${mdLabel(x.date)}</div>
+  return `<ul class="lines">${ls.map(x=>`<li id="rec-${x.id}"${hiMark===x.id?' class="hi"':''}><div class="lr">${rangeText(x)} · ${mdLabel(x.date)}</div>
       <div class="lt">${esc(x.memory)}</div>
       <div class="la"><button class="linkish" onclick="editLine('${x.id}')">고치기</button><button class="linkish" onclick="dropLine('${x.id}')">지우기</button></div></li>`).join('')}</ul>
     <div class="rowbtns" style="margin-top:12px"><button class="ghost" onclick="copyLines('${b.id}')">한 줄을 글로 복사</button></div>`;
@@ -888,7 +935,7 @@ function markHead(x){ return (x.page?x.page+'쪽 · ':'')+(x.kind==='scan'?'스�
 function scanTag(title){ return (title||'').replace(/[^\p{L}\p{N}_-]/gu,''); }
 function scanWhere(x){ if(x.kind!=='scan') return ''; const b=book(x.bookId);
   return `<div class="lr where">애플 메모 ‘${esc(R.settings.scanFolder||'스캔')}’ 폴더 · #${esc(scanTag(b?b.title:x.title))}${x.page?' · '+x.page+'쪽':''}</div>`; }
-function markLI(x,k){ return `<li><div class="lr">${markHead(x)}</div>
+function markLI(x,k){ return `<li id="rec-${x.id}"${hiMark===x.id?' class="hi"':''}><div class="lr">${markHead(x)}</div>
       <div class="lt${x.kind==='scan'&&!x.text?' soft':''}">${x.text?hl(x.text,k):'코멘트 없이 스캔했습니다'}</div>${scanWhere(x)}
       <div class="la"><button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}')">지우기</button></div></li>`; }
 function marksList(b){
@@ -933,12 +980,12 @@ function detailHTML(b){
   if(b.held) return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.heldReason?'<br>'+esc(b.heldReason):''}${b.note?'<br>'+esc(b.note):''}</div>
     ${b.borrowed?`<div class="meta">${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}</div>`:''}
-    <div class="acts"><button onclick="unHold('${b.id}')">${b.borrowed?'다시 빌림':'되살리기'}</button>
+    <div class="acts"><button onclick="unHold('${b.id}')">${b.borrowed?'다시 빌림':'되살리기'}</button>${needScan(b)?`<button onclick="askScan('${b.id}')">코멘트 스캔 ${unscanned(b).length}</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}</div>`;
   if(inBin(b)) return `<div class="detail">
     <div class="meta">폐기 서가에 둔 지 ${daysBetween(b.binAt,today())}일째${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.note?'<br>'+esc(b.note):''}</div>
-    <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>
+    <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>${needScan(b)?`<button onclick="askScan('${b.id}')">코멘트 스캔 ${unscanned(b).length}</button>`:''}
       <button onclick="unBin('${b.id}')">되살리기</button>
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}</div>${linesBlock(b)}${marksBlock(b)}</div>`;
   return `<div class="detail">
@@ -977,8 +1024,9 @@ function toggleGiftOn(id){
   else { b.gift=true; b.received=b.received||today(); toast('증정본으로 표시했습니다 · '+b.received); }
   touch(b); save(); render();
 }
-function toBin(id){
+function toBin(id,force){
   const b=book(id); if(!b||!b.location) return;
+  if(!force&&needScan(b)){ askScan(id,'bin'); return; }
   b.prevLocation=b.location; b.location=binName(); b.binAt=today(); b.keep=false;
   touch(b); removeFromOrder(id); delete skipQ[id]; saveSkip(); save(); openId=null;
   toast('폐기 서가로 · '+b.prevLocation+'에서 꺼내 옮기세요'); render();
@@ -988,9 +1036,11 @@ function unKeep(id){ const b=book(id); b.keep=false; touch(b); save(); toast('�
 function judgeLater(id){ skipQ[id]=new Date().toISOString(); saveSkip(); render(); }
 function saveSkip(){ Object.keys(skipQ).forEach(k=>{ const b=book(k); if(!b||!isWaiting(b)) delete skipQ[k]; }); try{ localStorage.setItem('seoga.skip',JSON.stringify(skipQ)); }catch(e){} }
 function doDiscard(b){ b.discarded=true; b.discardedAt=today(); b.toDiscard=false; b.keep=false; b.binAt=''; b.location=''; touch(b); removeFromOrder(b.id); }
-function outOne(id){ const b=book(id); doDiscard(b); save(); openId=null; toast('내놓았습니다 · 폐기함에 기록이 남습니다'); render(); }
+function outOne(id,force){ const b=book(id); if(!b) return; if(!force&&needScan(b)){ askScan(id,'out'); return; }
+  doDiscard(b); save(); openId=null; toast('내놓았습니다 · 폐기함에 기록이 남습니다'); render(); }
 function outAll(){ const list=dueBooks(); if(!list.length) return;
-  if(!confirm('폐기 서가에 7일 넘게 있는 '+list.length+'권을 내놓은 것으로 적습니다.')) return;
+  const ns=list.filter(needScan).length;
+  if(!confirm('폐기 서가에 7일 넘게 있는 '+list.length+'권을 내놓은 것으로 적습니다.'+(ns?'\n\n그중 '+ns+'권에 스캔하지 않은 코멘트가 있습니다. 스캔하려면 그 책을 하나씩 내놓으세요.':''))) return;
   list.forEach(doDiscard); save(); openId=null; toast(list.length+'권을 내놓았습니다'); render(); }
 function removeAll(){ const list=removables(); if(!list.length) return;
   if(!confirm('자리 없이 순위 밖으로 밀려난 '+list.length+'권을 목록에서 아주 지웁니다. 되돌릴 수 없습니다.')) return;
@@ -1001,6 +1051,58 @@ function unBin(id){
   if(b.category){ S.order[b.category].push(id); save(); if(startCompare(id)){ S.order[b.category]=S.order[b.category].filter(x=>x!==id); return; } }
   toast('되살렸습니다'+(b.location?' · '+b.location+'에 다시 꽂으세요':'')); render();
 }
+/* ── 내보내기 전 스캔 (2026-11-03) ──
+   가진 책의 코멘트는 스캔 없이 적는다. 그 책이 서가를 떠날 때(폐기 서가로, 보류로, 내놓을 때)가 본문을 남길 마지막 기회라
+   스캔하지 않은 코멘트가 있으면 한 번 묻는다. 시트는 쪽별로 '이 쪽 스캔하기'를 두고, 스캔하면 그 쪽의 코멘트가 kind:'scan'이 된다.
+   '나중에'는 그대로 진행하되 줄과 알림에 '스캔할 코멘트 N개'가 남고, '스캔 없이 보낸다'는 book.noScan=true로 더 묻지 않는다.
+   단축어로 나갔다 돌아올 때 화면이 새로 열릴 수 있어 scanAsk는 localStorage('seoga.scanAsk')에도 적어 둔다. */
+function unscanned(b){ return markItems(b.id).filter(x=>x.kind==='mark'&&x.page>0); }
+function needScan(b){ return !!b&&!b.noScan&&!b.borrowed&&unscanned(b).length>0; }
+function saveScanAsk(){ try{ if(scanAsk) localStorage.setItem('seoga.scanAsk',JSON.stringify(scanAsk)); else localStorage.removeItem('seoga.scanAsk'); }catch(e){} }
+function loadScanAsk(){ try{ const a=JSON.parse(localStorage.getItem('seoga.scanAsk')); return a&&book(a.id)?a:null; }catch(e){ return null; } }
+function askScan(id,after,reason){ if(!book(id)) return; scanAsk={id,after:after||'none',reason:reason||''}; holdId=null; saveScanAsk(); render(); }
+function scanSheetHTML(){
+  const b=book(scanAsk.id); if(!b) return '';
+  const ms=markItems(b.id).filter(x=>x.kind==='mark'), todo=ms.filter(x=>x.page>0), nopg=ms.filter(x=>!x.page);
+  const pages=[...new Set(todo.map(x=>x.page))].sort((a,z)=>a-z);
+  const label={bin:'폐기 서가로 옮기기',hold:'보류하기',out:'내놓기',none:'닫기'}[scanAsk.after]||'닫기';
+  const li=pg=>{ const xs=todo.filter(x=>x.page===pg); return `<li><div class="lr">${pg}쪽${xs.length>1?' · 코멘트 '+xs.length+'개':''}</div>
+      <div class="lt">${xs.map(x=>esc(x.text).replace(/\n/g,'<br>')).join('<br>')}</div>
+      <div class="la"><button class="linkish" onclick="scanPage(${pg})">이 쪽 스캔하기</button></div></li>`; };
+  return `<div class="veil"><div class="sheet" style="max-width:560px">
+    <h2 class="sec">${scanAsk.after==='none'?'코멘트 스캔':'내보내기 전에 스캔'}</h2>
+    <p class="ask" style="margin:0 0 6px">${esc(b.title)}</p>
+    ${pages.length?`<p class="note" style="margin:0 0 6px">스캔 없이 적은 코멘트가 ${todo.length}개 있습니다. 책이 서가를 떠나면 본문을 다시 볼 수 없으니, 코멘트한 쪽을 스캔해 두세요. 스캔하면 그 쪽의 코멘트가 스캔한 코멘트가 되어 애플 메모 위치가 붙습니다.</p>
+      <ul class="lines">${pages.map(li).join('')}</ul>`
+     :`<p class="note" style="margin:0 0 6px">스캔할 코멘트가 남지 않았습니다.</p>`}
+    ${nopg.length?`<p class="hint" style="margin:14px 0 0">쪽을 적지 않은 코멘트 ${nopg.length}개는 스캔할 쪽을 몰라 그대로 둡니다.</p>`:''}
+    <div class="rowbtns" style="margin-top:22px">
+      ${pages.length?`<button class="ghost" onclick="scanProceed(false)">${scanAsk.after==='none'?'닫기':'나중에 · 우선 '+label}</button>
+        ${scanAsk.after==='none'?'':`<button class="linkish" onclick="scanProceed(true)">스캔 없이 보낸다</button>`}`
+       :`<button class="primary" onclick="scanProceed(false)">${label}</button>`}
+      ${scanAsk.after==='none'?'':`<button class="linkish" onclick="scanAsk=null;saveScanAsk();render()">그만두기</button>`}</div></div></div>`;
+}
+function scanPage(pg){
+  const b=book(scanAsk.id); if(!b) return; const now=new Date().toISOString();
+  const xs=markItems(b.id).filter(x=>x.kind==='mark'&&x.page===pg); if(!xs.length) return;
+  xs.forEach(x=>{ x.kind='scan'; x.updated=now; }); saveR();
+  toast(pg+'쪽 · 스캔 단축어를 엽니다'); render();
+  runShortcut(R.settings.sc.scan||'스캔',scanTag(b.title)+'|'+pg);
+}
+function scanProceed(noScan){
+  const a=scanAsk; if(!a) return; const b=book(a.id);
+  if(noScan&&b){ b.noScan=true; touch(b); save(); }
+  scanAsk=null; saveScanAsk();
+  if(!b||a.after==='none'){ render(); return; }
+  if(a.after==='bin') toBin(a.id,true);
+  else if(a.after==='hold'){ holdId=a.id; doHold(true,a.reason); }
+  else if(a.after==='out') outOne(a.id,true);
+}
+/* 줄과 알림에 붙는 표시 */
+function scanDueText(b){ return needScan(b)&&(inBin(b)||b.held)?`<span style="color:var(--seal)">스캔할 코멘트 ${unscanned(b).length}개</span>`:''; }
+function scanDueBooks(){ return S.books.filter(b=>!b.discarded&&(inBin(b)||b.held)&&needScan(b)); }
+scanAsk=loadScanAsk();
+
 /* 보류 */
 function startHold(id){ if(!book(id)) return; holdId=id; render(); }
 function holdHTML(){
@@ -1014,10 +1116,11 @@ function holdHTML(){
     <div class="rowbtns"><button class="primary" onclick="doHold()">보류하기</button>
       <button class="linkish" onclick="holdId=null;render()">그만두기</button></div></div></div>`;
 }
-function doHold(){
+function doHold(force,savedReason){
   const b=book(holdId); if(!b){ holdId=null; render(); return; }
-  const t=document.getElementById('h-reason'), reason=t?t.value.trim():'';
+  const t=document.getElementById('h-reason'), reason=t?t.value.trim():(savedReason||'');
   if(R.active&&R.active.bookId===b.id&&!R.active.closing){ toast('읽는 중인 책은 읽기를 끝낸 뒤에 보류할 수 있습니다'); return; }
+  if(!force&&needScan(b)){ askScan(b.id,'hold',reason); return; }
   b.held=true; b.heldAt=today(); b.heldPage=b.page||0; b.heldReason=reason; b.judgedAt=b.judgedAt||today();
   b.prevLocation=b.binAt?(b.prevLocation||''):(b.location||''); b.location=''; b.binAt=''; b.keep=false;
   const lent=borrowedNow(b); if(lent) b.returnedAt=today();
@@ -1445,7 +1548,7 @@ function parallelHTML(){
     <p class="hint">누르면 그 책으로 갈아탑니다. 지금 읽는 책은 2위로 내려갑니다.</p></section>`;
 }
 /* 읽기 첫 화면의 아래쪽: 서가에서는 달력과 통계, 읽기 전용 화면에서는 밑줄 뽑기 */
-function tailHTML(){ if(!SOLO) return statsHTML(); return `<div class="solo-draw">${drawHTML()}${jarHTML()}</div>`; }
+function tailHTML(){ if(!SOLO) return statsHTML(); return `<div class="solo-draw">${drawHTML()}${jarHTML()}${cfindHTML()}</div>`; }
 /* 읽기 전용 화면을 처음 연 기기에 연결 정보가 없으면 여기서 넣는다(설정 탭이 없으므로) */
 function soloSbHTML(){
   if(!SOLO||sbCfg.url) return '';
@@ -1858,7 +1961,7 @@ function sbOff(){
 /* 읽기 전용 화면에서 다른 탭이 필요한 동작(다른 책 고르기, 견주기 끝 등)을 하면 같은 자리에서 원래 서가로 넘어간다. */
 function leaveSolo(){ SOLO=false; document.body.classList.remove('solo');
   try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} }
-function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null;
+function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null; cq=''; cShown=20; hiMark=null;
   if(v==='add'&&!draft.title) draft=blankDraft(draft.location); render(true); }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
 function onSearch(t){
@@ -1873,7 +1976,7 @@ document.addEventListener('input',e=>{
   if(id==='q') jarShown=20;
   onSearch(e.target);
 });
-document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; if(editId){ editId=null; render(); } else if(holdId){ holdId=null; render(); } });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; if(editId){ editId=null; render(); } else if(holdId){ holdId=null; render(); } else if(scanAsk){ scanAsk=null; saveScanAsk(); render(); } });
 window.addEventListener('beforeunload',()=>{ try{ localStorage.setItem(KEY,JSON.stringify({books:S.books,order:S.order,lastLocation:S.lastLocation,orderUpdated:S.orderUpdated,tomb:S.tomb})); }catch(e){} });
 activeSig=JSON.stringify(R.active||null);
 adjustTarget();
