@@ -316,6 +316,17 @@ ol.did li .kind{font-size:.68rem}
 }
 .toast.on{opacity:1}
 
+/* ── 끼워 넣기(#embed): 시작의 할 일 칸 안. 머리·탭·입력칸 없이 오늘 화면만, 페이지는 아래로 펼친다 ── */
+body.embed{background:transparent}
+body.embed .wrap{padding:0 2px 6px;max-width:none}
+body.embed header,body.embed nav,body.embed #todayAdd{display:none}
+body.embed .goals{margin-bottom:.6rem}
+body.embed .now .txt{font-size:1.35rem}
+body.embed .sheet{position:static;background:none;display:block;margin-top:1rem}
+body.embed .sheet .card{max-height:none;height:auto;box-shadow:none;border:1px solid var(--rule);border-radius:4px;padding:.8rem .9rem}
+body.embed .sheet .body{overflow:visible;min-height:0}
+body.embed .sheet.editing .card{height:auto}
+body.embed .sheet.editing #shTa{min-height:12rem;flex:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 @media (max-width:480px){
   body{font-size:16px}
@@ -566,6 +577,24 @@ end $$;</pre>
 <div class="toast" id="toast"></div>
 
 <script type="module">
+/* ══════════ 끼워 넣기 ══════════ */
+// 주소 끝이 #embed면 시작의 할 일 칸 안이다. 높이를 바깥에 알려 칸이 내용만큼 자라게 한다
+const EMBED = location.hash === '#embed' && window.parent !== window;
+if(EMBED) document.body.classList.add('embed');
+function tellHeight(){
+  if(!EMBED) return;
+  // scrollHeight는 iframe 높이보다 작아지지 않으니 내용(.wrap)의 바닥을 잰다. 그래야 페이지를 닫을 때 칸이 다시 줄어든다
+  // 페이지(.sheet)는 .wrap 밖, body 바로 아래에 있으니 둘 중 아래쪽을 잰다
+  let h = 0;
+  for(const el of document.querySelectorAll('.wrap, .sheet:not([hidden])')) h = Math.max(h, el.getBoundingClientRect().bottom + window.scrollY);
+  h = Math.ceil(h) || document.documentElement.scrollHeight;
+  try{ window.parent.postMessage({bj:'height', h}, '*'); }catch(e){}
+}
+if(EMBED && window.ResizeObserver){                       // module 스크립트라 .wrap·.sheet는 이미 있다
+  const ro = new ResizeObserver(tellHeight);
+  for(const el of document.querySelectorAll('.wrap, .sheet')) ro.observe(el);
+}
+
 /* ══════════ 저장소 ══════════ */
 const mem = {};
 const LS = {
@@ -868,8 +897,18 @@ async function repick(force, fresh){
   S.pick = p;
   commit();
 }
-const tick = () => repick(false);
-setInterval(() => { if(!document.hidden) tick(); }, 60*1000);
+// 같은 기기(같은 저장소)에서 창이 둘이면(시작 안의 방점 + 따로 연 방점) 한 창만 시계를 돌린다.
+// 보이는 창이 45초 안에 도장을 찍지 않으면 다른 창이 가져간다. 사용자가 누른 일은 잠금과 상관없이 바로 고른다
+const INST = uid(), LEAD_KEY = 'bangjeom.lead';
+function isLeader(){
+  let l = null; try{ l = JSON.parse(LS.get(LEAD_KEY) || 'null'); }catch(e){}
+  const t = Date.now();
+  if(!l || l.id === INST || t - (l.at || 0) > 45000){ LS.set(LEAD_KEY, JSON.stringify({id:INST, at:t})); return true; }
+  return false;
+}
+const tick = () => { if(!document.hidden && isLeader()) repick(false); };
+setInterval(tick, 60*1000);
+setInterval(() => { if(!document.hidden) isLeader(); }, 20*1000);
 
 /* ══════════ 쉬는 일 ══════════ */
 // 보통 할 일을 마치면 쉬는일 중 하나를 무작위로 뽑아 먼저 보여준다. 없으면 건너뛴다
@@ -885,14 +924,21 @@ function restNow(){
 }
 function endRest(how){
   const t = restNow(); S.rest = null;
-  if(t && how === 'done'){ t.done = true; t.doneAt = now(); }     // 매듭에는 남고 쪽글로는 가지 않는다
-  else if(t && how === 'part'){ moveEnd(t.id); return; }          // 목록 끝으로 (moveEnd가 commit한다)
+  if(t && how === 'done'){ finish(t.id, null); return; }          // 기록만 남기고 항목은 목록 끝으로 (finish가 commit한다)
+  if(t && how === 'part'){ moveEnd(t.id); return; }               // 목록 끝으로 (moveEnd가 commit한다)
+  if(t && how === 'drop'){ drop(t.id); return; }                  // 이제 필요 없다: 목록에서 지운다
   commit();
 }
 
 /* ══════════ 할 일 다루기 ══════════ */
 function finish(taskId, reentryText){
   const t = byId(taskId); if(!t) return;
+  if(isRest(t)){                           // 쉬는일은 되풀이된다: 오늘 한 일에 기록만 남기고 항목은 목록 끝으로
+    S.tasks.push({id:uid(), text:t.text, url:t.url || '', note:t.note || '', kind:'rest', done:true, doneAt:now(), createdAt:t.createdAt || now(), echo:true});
+    if(S.rest === taskId) S.rest = null;
+    moveEnd(taskId);                       // commit까지 한다
+    return;
+  }
   t.done = true; t.doneAt = now();
   if(reentryText && reentryText.trim()){
     const q = splitDue(reentryText);
@@ -921,6 +967,27 @@ function moveEnd(id){
   S.tasks.splice(i,1);
   S.tasks.push(t);
   commit();
+}
+
+// 끝냈는데 더 남았을 때. 매듭 전이면 그 항목의 완료만 푼다. 페이지와 체크는 그대로
+function revive(id){
+  const t = byId(id); if(!t || !t.done) return false;
+  t.done = false; t.doneAt = null;
+  commit();
+  if(!pickTask()) repick(true);
+  return true;
+}
+// 매듭 뒤의 기록에서: 원래 항목은 걷어냈으니 새 할 일을 끝에 만든다. 보관함과 달리 체크를 비우지 않는다
+function reviveRow(d){
+  const k = d.at ? dateOf(d.at) : '';
+  const head = (k ? `${+k.slice(5,7)}/${+k.slice(8,10)}에 ` : '') + '끝냈다가 되살림';
+  const t = {id:uid(), text:d.text, url:d.url || '', kind:d.kind || '', note:appendLine(head, (d.note || '').trim()).trim(),
+             done:false, doneAt:null, createdAt:now()};
+  if(d.due) t.due = d.due;
+  S.tasks.push(t);
+  commit();
+  if(!pickTask()) repick(true);
+  return t;
 }
 
 function drop(taskId){
@@ -1086,6 +1153,7 @@ function render(){
   renderKnot();
   renderArc();
   if(sheet) renderSheet();
+  tellHeight();
 }
 
 // 맨 위 한 줄: 오늘의 글쓰기·독서와 고른 시각
@@ -1116,15 +1184,20 @@ function renderStage(){
         <span class="lab">쉬는 일${kindTag('rest')}</span>
         <div>${title}</div>
         <div class="why">머리를 쉬게 하는 일입니다. 마치면 다음 일이 뜹니다.</div>
-        ${rt.note ? `<div class="memo"><p class="nt clamp">${fmtNote(rt.note)}</p></div>` : ''}
+        ${rt.note ? `<div class="memo"><p id="restMemo" class="nt clamp" title="누르면 페이지가 열립니다">${fmtNote(rt.note)}</p></div>` : ''}
       </div>
       <div class="acts">
+        <button class="page" id="restPage">페이지 열기</button>
         <button id="restPart">조금 했다</button>
         <button class="done" id="restDone">끝냈다</button>
+        <button class="drop" id="restDrop">이제 필요 없다</button>
       </div>
       <div class="skiprow"><button class="skip" id="restSkip">지금은 쉬지 않는다</button></div>`;
+    $('#restPage').onclick = () => openSheet(rt.id);
+    const rm = $('#restMemo'); if(rm) rm.onclick = () => openSheet(rt.id);
     $('#restDone').onclick = () => { closeSheet(); endRest('done'); };
     $('#restPart').onclick = () => { closeSheet(); endRest('part'); };
+    $('#restDrop').onclick = () => { closeSheet(); endRest('drop'); };
     $('#restSkip').onclick = () => { closeSheet(); endRest('skip'); };
     return;
   }
@@ -1205,7 +1278,7 @@ function renderList(){
   if(editOpen && !S.tasks.some(t => t.id === editOpen && !t.done)) editOpen = null;
   $('#listBox').innerHTML = S.tasks.map(t => {
     const dot = t.id === act && !t.done ? '<span class="dot"></span>' : (t.done ? '<span class="ord">✓</span>' : '');
-    const mv = t.done ? '' : `<button class="mv" data-end="${t.id}">끝으로</button>`;
+    const mv = t.done ? (isRest(t) ? '' : `<button class="mv" data-revive="${t.id}">되살리기</button>`) : `<button class="mv" data-end="${t.id}">끝으로</button>`;
     const up = t.done || isRest(t) ? '' : (t.urgent ? `<button class="up" data-unurg="${t.id}">긴급 풀기</button>` : `<button class="up" data-urg="${t.id}">긴급으로</button>`);
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">고치기</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${isRest(t)?'rest':''}">
@@ -1355,9 +1428,17 @@ function renderSheet(){
       };
     }else{
       const dup = isArchived(d);
+      const liveDone = d.id && byId(d.id) && byId(d.id).done;      // 매듭 전의 끝낸 일인가
+      const rv = isRest(d) ? '' : `<button id="shRevive">${liveDone ? '되살리기' : '목록에 되살리기'}</button>`;   // 쉬는일은 목록에 남아 있다
       foot.innerHTML = `<span class="ro">끝낸 기록 · ${when}</span>
-        <div class="acts2"><button id="shArc" ${dup ? 'class="dim"' : ''}>${dup ? '보관함에 있습니다' : '보관하기'}</button><button id="shCopyRo">본문만 복사</button></div>`;
+        <div class="acts2">${rv}<button id="shArc" ${dup ? 'class="dim"' : ''}>${dup ? '보관함에 있습니다' : '보관하기'}</button><button id="shCopyRo">본문만 복사</button></div>`;
       $('#shCopyRo').onclick = () => copyBody(d.note);
+      // 되살리기: 매듭 전이면 그 항목의 완료를 풀고, 매듭 뒤면 페이지를 그대로 옮긴 새 할 일을 끝에 만든다
+      const rvb = $('#shRevive'); if(rvb) rvb.onclick = () => {
+        closeSheet();
+        if(liveDone){ revive(d.id); toast('목록에 되살렸습니다'); }
+        else { reviveRow(d); toast('목록 끝에 되살렸습니다 · 기록은 그대로 남습니다'); }
+      };
       $('#shArc').onclick = () => {
         if(isArchived(d)) return;
         (S.archive = S.archive || []).push({id:uid(), text:d.text, kind:d.kind||'', url:d.url||'', note:d.note||'', at:d.at||now(), savedAt:now()});
@@ -1462,7 +1543,7 @@ function renderKnot(){
   knotRows = [];
   let h = `<div class="day today"><h3>오늘 한 일 <span>${mine.length}</span></h3>`;
   h += mine.length
-    ? `<ol class="did">${mine.map(t => `<li data-knot="${knotRows.push({text:t.text, note:t.note, kind:t.kind, url:t.url, at:t.doneAt}) - 1}"><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${t.note?`<small class="n nt clamp">${fmtNote(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
+    ? `<ol class="did">${mine.map(t => `<li data-knot="${knotRows.push({id:t.id, text:t.text, note:t.note, kind:t.kind, url:t.url, at:t.doneAt, ...(t.due ? {due:t.due} : {})}) - 1}"><span class="t">${t.doneAt?hh(t.doneAt):''}</span><span>${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${t.note?`<small class="n nt clamp">${fmtNote(t.note)}</small>`:''}</span></li>`).join('')}</ol>`
     : `<p class="none">아직 없습니다.</p>`;
   if(doneAll.length) h += `<button class="knotbtn" id="btnKnot">하루를 매듭짓다</button>
     <p class="hint">끝낸 항목 ${doneAll.length}개를 목록에서 걷어내 아래에 남깁니다.</p>`;
@@ -1471,7 +1552,7 @@ function renderKnot(){
   h += S.log.filter(e => e.items.length).slice(0,20).map(e => `
     <div class="day">
       <h3>${e.date.slice(5).replace('-','월 ')}일 <span>${e.items.length}</span></h3>
-      <ol class="did">${e.items.map(i => `<li data-knot="${knotRows.push({text:i.text, note:i.note, kind:i.kind, at:i.at, url:i.url}) - 1}"><span class="t">${i.at?hh(i.at):''}</span><span>${urgTag(i)}${kindTag(i.kind)}${esc(i.text)}${i.note?`<small class="n nt clamp">${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
+      <ol class="did">${e.items.map(i => `<li data-knot="${knotRows.push({text:i.text, note:i.note, kind:i.kind, at:i.at, url:i.url, ...(i.due ? {due:i.due} : {})}) - 1}"><span class="t">${i.at?hh(i.at):''}</span><span>${urgTag(i)}${kindTag(i.kind)}${esc(i.text)}${i.note?`<small class="n nt clamp">${fmtNote(i.note)}</small>`:''}</span></li>`).join('')}</ol>
     </div>`).join('');
 
   if(!mine.length && !doneAll.length && !S.log.length)
@@ -1504,6 +1585,8 @@ document.addEventListener('click', e => {
   if(u){ if(raiseUrgent(u.dataset.urg)) toast('지금 할 일로 올렸습니다'); return; }
   const uu = e.target.closest('[data-unurg]');
   if(uu){ clearUrgent(uu.dataset.unurg); return; }
+  const rv = e.target.closest('[data-revive]');
+  if(rv){ if(revive(rv.dataset.revive)) toast('목록에 되살렸습니다'); return; }
   const ar = e.target.closest('[data-arc]');
   if(ar){ openArchived(+ar.dataset.arc); return; }
   const kr = e.target.closest('[data-knot]');
