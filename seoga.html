@@ -209,6 +209,7 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 .clock-sub{text-align:center;font-size:14.5px;color:var(--ink-soft);min-height:1.7em}
 .clock-sub.done{color:var(--seal)}
 .markbox{margin-top:40px}
+.detail .markbox{margin-top:16px}
 .markbox>label,.scanbox>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
 .markrow{display:flex;gap:10px;align-items:flex-end}
 .markrow .pg{flex:0 0 64px}
@@ -944,6 +945,40 @@ function marksList(b){
     <div class="rowbtns" style="margin-top:12px"><button class="ghost" onclick="copyMarks('${b.id}')">코멘트를 글로 복사</button></div>`;
 }
 function toggleMarks(id){ marksFor=marksFor===id?null:id; if(view==='list') refreshList(); else render(); }
+/* 목록 탭에서 펼친 책에 코멘트 적기(2026-11-03). 읽기 세션 없이 쪽과 코멘트만 남긴다. 읽는 중 화면의 칸과 같은 모양·같은 기록(kind:'mark'|'scan').
+   멈춘 쪽(b.page)과 읽기 기록은 건드리지 않는다. 훑어 읽으며 적는 것은 독서가 아니고, 멈춘 쪽을 바꾸면 병렬독서 판단이 틀어진다. */
+let markAdd=null, markAddPage=0, markAddScan=null, markAddN={marks:0,scans:0};
+function markAddBtn(b){ return `<button onclick="toggleMarkAdd('${b.id}')">${markAdd===b.id?'적기 접기':'코멘트 적기'}</button>`; }
+function markAddScanWanted(b){ return markAddScan===null? !!(b&&borrowedNow(b)) : markAddScan; }
+function markAddBlock(b){
+  if(markAdd!==b.id) return '';
+  const enter="if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();addMarkTo('"+b.id+"')}";
+  return `<div class="markbox" onclick="event.stopPropagation()"><label>코멘트 적기</label>
+      <div class="markrow"><div class="pg"><input type="number" inputmode="numeric" id="ma-page" value="${markAddPage||''}" placeholder="쪽" aria-label="쪽"></div>
+        <div class="tx"><textarea id="ma-text" rows="2" placeholder="이 쪽에 대한 코멘트" aria-label="코멘트" onkeydown="${enter}"></textarea></div></div>
+      <div class="markfoot"><div class="hint" id="ma-n">${markHint(markAddN)}</div>
+        <button class="ghost" style="padding:7px 16px" onclick="addMarkTo('${b.id}')">적기</button></div>
+      <div class="markscan"><button class="toggle${markAddScanWanted(b)?' on':''}" onclick="toggleMarkAddScan('${b.id}')"><span class="box"></span>이 쪽을 스캔한다${borrowedNow(b)?' · 빌린 책':''}</button></div></div>`;
+}
+function focusMarkAdd(){ const t=document.getElementById('ma-text'); if(t) t.focus(); }
+function toggleMarkAdd(id){
+  if(markAdd===id){ markAdd=null; }
+  else { markAdd=id; markAddPage=0; markAddScan=null; markAddN={marks:0,scans:0}; }
+  if(view==='list') refreshList(); else render(); focusMarkAdd();
+}
+function toggleMarkAddScan(id){ markAddScan=!markAddScanWanted(book(id)); if(view==='list') refreshList(); else render(); focusMarkAdd(); }
+function addMarkTo(id){
+  const b=book(id), i=document.getElementById('ma-text'); if(!b||!i) return; const t=i.value.trim();
+  if(!t){ toast('코멘트를 적어주세요'); i.focus(); return; }
+  const page=pageVal('ma-page'), now=new Date().toISOString(), scan=markAddScanWanted(b);
+  R.reads.push({id:uid(),kind:scan?'scan':'mark',bookId:b.id,title:b.title,page,text:t,date:today(),at:now,updated:now});
+  if(scan) markAddN.scans++; else markAddN.marks++;
+  if(page) markAddPage=page; saveR();
+  if(view==='list') refreshList(); else render(); focusMarkAdd();
+  if(!scan){ toast('코멘트를 책에 저장했습니다'); return; }
+  toast('코멘트를 저장했습니다 · 스캔 단축어를 엽니다');
+  runShortcut(R.settings.sc.scan||'스캔',scanTag(b.title)+'|'+(page||''));
+}
 function editMark(rid){
   const x=R.reads.find(r=>r.id===rid); if(!x) return;
   const v=prompt((x.bookId===JAR?'밑줄 고치기':x.kind==='scan'?'스캔한 코멘트 고치기':'코멘트 고치기')+(x.page?' · '+x.page+'쪽':''),x.text||''); if(v===null) return;
@@ -981,13 +1016,13 @@ function detailHTML(b){
     <div class="meta">${stateLabel(b)}${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.heldReason?'<br>'+esc(b.heldReason):''}${b.note?'<br>'+esc(b.note):''}</div>
     ${b.borrowed?`<div class="meta">${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}</div>`:''}
     <div class="acts"><button onclick="unHold('${b.id}')">${b.borrowed?'다시 빌림':'되살리기'}</button>${needScan(b)?`<button onclick="askScan('${b.id}')">코멘트 스캔 ${unscanned(b).length}</button>`:''}
-      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}
-      <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}</div>`;
+      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}${markAddBtn(b)}
+      <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}${markAddBlock(b)}</div>`;
   if(inBin(b)) return `<div class="detail">
     <div class="meta">폐기 서가에 둔 지 ${daysBetween(b.binAt,today())}일째${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>${needScan(b)?`<button onclick="askScan('${b.id}')">코멘트 스캔 ${unscanned(b).length}</button>`:''}
       <button onclick="unBin('${b.id}')">되살리기</button>
-      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}</div>${linesBlock(b)}${marksBlock(b)}</div>`;
+      <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}${markAddBtn(b)}</div>${linesBlock(b)}${marksBlock(b)}${markAddBlock(b)}</div>`;
   return `<div class="detail">
     <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):(b.borrowed?'집에 둔 자리 없음':'가지고 있지 않음')}${b.page?' · '+b.page+'쪽까지':''}${b.borrowed?'<br>'+esc(libText(b))+(b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':'')+(isLate(b)?' · 반납일 지남':''):''}${isRecord(b)&&traceText(b)?'<br>기록 · '+traceText(b):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
@@ -1004,9 +1039,9 @@ function detailHTML(b){
       <button onclick="edit('${b.id}')">고치기</button>
       ${b.location&&!b.borrowed?`<button class="warn" onclick="toBin('${b.id}')">폐기</button>`:''}
       <button class="warn" onclick="startHold('${b.id}')">${borrowedNow(b)?'보류 · 반납':'보류'}</button>
-      ${linesBtn(b)}${marksBtn(b)}
+      ${linesBtn(b)}${marksBtn(b)}${markAddBtn(b)}
       <button class="warn" onclick="del('${b.id}')">${isRemovable(b)?'목록에서 지우기':'지우기'}</button>
-    </div>${linesBlock(b)}${marksBlock(b)}</div>`;
+    </div>${linesBlock(b)}${marksBlock(b)}${markAddBlock(b)}</div>`;
 }
 function toggle(id){ openId=openId===id?null:id; if(view==='list') refreshList(); else render(); }
 function reRank(id){ removeFromOrder(id); if(!startCompare(id)){ save(); toast('견줄 상대가 아직 없습니다'); render(); } }
@@ -1961,7 +1996,7 @@ function sbOff(){
 /* 읽기 전용 화면에서 다른 탭이 필요한 동작(다른 책 고르기, 견주기 끝 등)을 하면 같은 자리에서 원래 서가로 넘어간다. */
 function leaveSolo(){ SOLO=false; document.body.classList.remove('solo');
   try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} }
-function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null; cq=''; cShown=20; hiMark=null;
+function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null; cq=''; cShown=20; hiMark=null; markAdd=null;
   if(v==='add'&&!draft.title) draft=blankDraft(draft.location); render(true); }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
 function onSearch(t){
