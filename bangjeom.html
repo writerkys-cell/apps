@@ -209,10 +209,19 @@ ol.list li .gutter{
 .dot{width:8px;height:8px;border-radius:50%;background:var(--seal);display:block;box-shadow:0 0 0 3px var(--seal-wash)}
 .ord{font-size:.7rem;color:var(--seal-soft);line-height:1}
 ol.list li .body{flex:1;padding:.42rem .3rem .5rem 0;line-height:1.6}
+/* 좁은 화면(아이폰)에서는 단추 다섯이 제목을 짓누르니 단추 줄을 제목 아래로 내린다 */
+@media (max-width:600px){
+  ol.list li{flex-wrap:wrap}
+  ol.list li .body{flex-basis:calc(100% - var(--gut));min-width:0}
+  ol.list li .dn,ol.list li .ed,ol.list li .up,ol.list li .mv,ol.list li .del{margin-left:var(--gut);margin-right:-.3rem;padding-top:0;padding-bottom:.55rem;visibility:visible}   /* 자리를 따로 잡으니 늘 보인다 */
+  ol.list li .ed,ol.list li .up,ol.list li .mv,ol.list li .del{margin-left:.2rem}
+  ol.list li .del{margin-left:auto;margin-right:.2rem}
+}
 ol.list li.done .body{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft);text-decoration-thickness:1px}
 ol.list li.act .body{font-weight:700}
 ol.list li.rest .body{color:var(--ink-soft)}
-ol.list li .del,ol.list li .mv,ol.list li .ed,ol.list li .up{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
+ol.list li .del,ol.list li .mv,ol.list li .ed,ol.list li .up,ol.list li .dn{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
+ol.list li .dn{color:var(--ink)}
 ol.list li .del{padding:.45rem .35rem}
 ol.list li .up:hover{color:var(--seal)}
 ol.list li.editor{display:block;padding:.9rem 0 1.1rem var(--gut);border-bottom:1px solid var(--rule);background:var(--paper-2)}
@@ -228,9 +237,10 @@ ol.list li.editor{display:block;padding:.9rem 0 1.1rem var(--gut);border-bottom:
 ol.list li:hover .del,ol.list li:focus-within .del,
 ol.list li:hover .mv,ol.list li:focus-within .mv,
 ol.list li:hover .up,ol.list li:focus-within .up,
-ol.list li:hover .ed,ol.list li:focus-within .ed{visibility:visible}
+ol.list li:hover .ed,ol.list li:focus-within .ed,
+ol.list li:hover .dn,ol.list li:focus-within .dn{visibility:visible}
 @media (hover:none){
-  ol.list li .del,ol.list li .mv,ol.list li .up,ol.list li .ed{visibility:visible}
+  ol.list li .del,ol.list li .mv,ol.list li .up,ol.list li .ed,ol.list li .dn{visibility:visible}
 }
 .listhead{font-size:.8rem;color:var(--ink-faint);letter-spacing:.04em;margin:0 0 .9rem;line-height:1.6}
 
@@ -975,8 +985,11 @@ function endRest(how){
 }
 
 /* ══════════ 할 일 다루기 ══════════ */
-function finish(taskId, reentryText){
+// quiet: 목록·페이지에서 끝낼 때. 그 일이 지금 할 일(또는 떠 있는 쉬는 일)이 아니면 쉬는 일을 띄우지 않고 다시 고르지도 않는다
+function finish(taskId, reentryText, quiet){
   const t = byId(taskId); if(!t) return;
+  const onStage = (S.pick && S.pick.id === taskId && pickTask()) || S.rest === taskId;
+  const still = quiet && !onStage;
   if(isRest(t)){                           // 쉬는일은 되풀이된다: 오늘 한 일에 기록만 남기고 항목은 목록 끝으로
     S.tasks.push({id:uid(), text:t.text, url:t.url || '', note:t.note || '', kind:'rest', done:true, doneAt:now(), createdAt:t.createdAt || now(), echo:true});
     if(S.rest === taskId) S.rest = null;
@@ -997,10 +1010,11 @@ function finish(taskId, reentryText){
   if(S.rest === taskId) S.rest = null;
   if(!isRest(t)){
     (S.outbox = S.outbox || []).push(jjokOf({ms:Date.parse(t.doneAt), text:t.text, note:t.note, kind:t.kind}));
-    pickRest();
+    if(!still) pickRest();
   }
   commit();
   flushOutbox();
+  if(still) return;                        // 화면의 일이 아니었으니 지금 할 일은 그대로
   repick(true, true);
 }
 
@@ -1358,11 +1372,12 @@ function renderList(){
     const mv = t.done ? (isRest(t) ? '' : `<button class="mv" data-revive="${t.id}">되살리기</button>`) : `<button class="mv" data-end="${t.id}">끝으로</button>`;
     const up = t.done || isRest(t) ? '' : (t.today ? `<button class="up" data-unurg="${t.id}">오늘에서 빼기</button>` : `<button class="up" data-urg="${t.id}">오늘로</button>`);
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">고치기</button>`;
+    const dn = t.done ? '' : `<button class="dn" data-done="${t.id}">끝냈다</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${isRest(t)?'rest':''}">
       <span class="gutter">${dot}</span>
       <span class="body">${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${linkTag(t.url)}${t.done ? '' : dueTag(t)}${t.note
         ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${fmtNote(t.note)}</span>` : ''}</span>
-      ${ed}${up}${mv}
+      ${dn}${ed}${up}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>` + (editOpen === t.id ? editorHtml(t) : '');
   }).join('') || `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`;
@@ -1543,7 +1558,7 @@ function renderSheet(){
   }
   if(!$('#shIn')){
     foot.innerHTML = `<div class="addline"><input id="shIn" placeholder="한 줄 적기 · []로 시작하면 체크박스, -로 시작하면 항목" enterkeyhint="done"><button id="shAdd">더하기</button></div>
-      <div class="tools"><button id="shEdit">전체 고치기</button><button id="shCopy">본문만 복사</button></div>`;
+      <div class="tools"><button id="shEdit">전체 고치기</button><button id="shCopy">본문만 복사</button><button id="shDone">끝냈다</button></div>`;
     const take = wireEnter($('#shIn'), v => {
       const t = byId(sheet.id); if(!t) return;
       t.note = ((t.note || '').trim() ? t.note.replace(/\s+$/, '') + '\n' : '') + v.trim();
@@ -1553,6 +1568,11 @@ function renderSheet(){
     $('#shAdd').onclick = take;
     $('#shEdit').onclick = () => { const t = byId(sheet.id); editBase = t ? (t.note || '') : ''; sheetEdit = true; renderSheet(); };
     $('#shCopy').onclick = () => { const t = byId(sheet.id); if(t) copyBody(t.note); };
+    $('#shDone').onclick = () => {
+      const t = byId(sheet.id); if(!t || t.done) return;
+      closeSheet(); finish(t.id, null, true);
+      toast(isRest(t) ? '오늘 한 일에 남기고 목록 끝으로 보냈습니다' : '끝낸 일로 옮겼습니다');
+    };
   }
 }
 $('#shClose').onclick = closeSheet;
@@ -1658,6 +1678,8 @@ function renderKnot(){
 document.addEventListener('click', e => {
   const m = e.target.closest('[data-end]');
   if(m){ moveEnd(m.dataset.end); return; }
+  const dn = e.target.closest('[data-done]');
+  if(dn){ const t = byId(dn.dataset.done); if(t && !t.done){ finish(t.id, null, true); toast(isRest(t) ? '오늘 한 일에 남기고 목록 끝으로 보냈습니다' : '끝낸 일로 옮겼습니다'); } return; }
   const u = e.target.closest('[data-urg]');
   if(u){ if(raiseToday(u.dataset.urg)) toast('오늘 할 일에 넣었습니다'); return; }
   const uu = e.target.closest('[data-unurg]');
