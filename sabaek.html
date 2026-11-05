@@ -181,6 +181,14 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 #cur b{font-weight:400;color:var(--meok)}
 #cur .ok{color:var(--inju)}
 #cur .piece{color:var(--inju)}
+#cur .goal.cut{color:var(--inju)}
+#cur .cutnote{color:#c5bfb3}
+#cur .arr{
+  background:none;border:0;padding:0 .15rem;margin:0;
+  font-size:1rem;line-height:1;color:var(--meok-3);vertical-align:-1px;
+}
+#cur .arr:hover:enabled{color:var(--inju)}
+#cur .arr:disabled{opacity:.3;cursor:default}
 #send{
   margin-left:auto;background:none;border:1px solid var(--seon);
   padding:.4rem 1.1rem;border-radius:2px;font-size:.85rem;color:var(--meok-2);
@@ -311,7 +319,7 @@ h2:first-child{margin-top:0}
       <h2>분량</h2>
       <div class="row"><label for="step">한 번에 늘리는 분량</label><input type="number" id="step" min="50" max="5000" step="50"><span class="unit">자</span></div>
       <div class="row"><label for="piece">한 편 분량</label><input type="number" id="piece" min="0" max="100000" step="1"><span class="unit">자</span></div>
-      <p class="note">첫 판본의 목표는 늘리는 분량과 같습니다. 그 뒤로는 직전 판본 길이보다 큰 배수 가운데 가장 작은 수가 다음 목표입니다. 400자씩이라면 1,990자 다음은 2,000자, 2,100자 다음은 2,400자, 2,900자 다음은 3,200자입니다. 목표를 채워야 보낼 수 있고, 넘치는 것은 상관없습니다.</p>
+      <p class="note">첫 판본의 목표는 늘리는 분량과 같습니다. 그 뒤로는 직전 판본 길이보다 큰 배수 가운데 가장 작은 수가 다음 목표입니다. 400자씩이라면 1,990자 다음은 2,000자, 2,100자 다음은 2,400자, 2,900자 다음은 3,200자입니다. 목표를 채워야 보낼 수 있고, 넘치는 것은 상관없습니다. 처음부터 다시 하고 싶으면 오른쪽 아래 목표 옆 화살표로 목표를 한 단계씩 낮출 수 있습니다. 판본은 그대로 남고, 낮춘 목표는 한 번 보내면 사라집니다.</p>
       <p class="note">쓰는 글이 한 편 분량에 닿으면 한 번 알려줍니다. 흐름은 그대로 이어집니다. 0으로 두면 알리지 않습니다.</p>
 
       <h2>왼쪽 화면</h2>
@@ -406,10 +414,25 @@ function stamp(t){
 
 /* 이번에 채워야 할 분량 — 직전 판본 길이보다 큰, 늘리는 분량의 배수 중 가장 작은 수
    1,990자 → 2,000자, 2,100자 → 2,400자, 2,900자 → 3,200자 */
-function goalOf(p){
+function autoGoal(p){
   var n = p.versions.length;
   var last = n ? p.versions[n-1].text.length : 0;
   return (Math.floor(last / S.step) + 1) * S.step;
+}
+/* 손으로 낮춘 목표(p.cut)가 있으면 그쪽. 자동 목표보다 낮을 때만 뜻이 있고, 보내면 사라진다 */
+function goalOf(p){
+  var a = autoGoal(p);
+  if(typeof p.cut === "number" && p.cut >= S.step && p.cut < a) return p.cut;
+  return a;
+}
+function isCut(p){ return goalOf(p) < autoGoal(p); }
+function cutGoal(dir){
+  var p = proj(), g = goalOf(p), a = autoGoal(p);
+  var next = g + dir * S.step;
+  if(next < S.step || next > a) return;
+  if(next >= a) delete p.cut; else p.cut = next;
+  save(); renderHead(); renderCount();
+  elInput.focus();
 }
 function isPiece(n){ return !!(S.piece && n >= S.piece); }
 
@@ -500,7 +523,7 @@ function renderHead(){
   var last = v[v.length-1].text.length;
   elTally.innerHTML = "<b>"+v.length+"</b>번째 "+num(last)+"자"
     + (isPiece(last) ? ' <span class="piece">· 한 편</span>' : "")
-    + " · 다음 목표 <b>"+num(g)+"</b>자";
+    + " · 다음 목표 <b>"+num(g)+"</b>자" + (isCut(p) ? ' <span class="piece">낮춤</span>' : "");
 }
 
 /* ---------- 왼쪽 ---------- */
@@ -671,9 +694,16 @@ function renderCount(){
   var ok = n >= g;
   var left = g - n;
 
-  var html = "<b>"+num(n)+"</b>자 · "+mae(n)+"매";
-  if(ok) html += ' · <span class="ok">목표 '+num(g)+'자 채움</span>';
-  else html += " · 목표 "+num(g)+"자까지 "+num(left)+"자";
+  var a = autoGoal(p), cut = isCut(p);
+  var arrows = '<button type="button" class="arr" data-g="-1" title="목표를 '+num(S.step)+'자 낮추기"'
+             + (g - S.step < S.step ? ' disabled' : '') + '>\u25c2</button>'
+             + '<button type="button" class="arr" data-g="1" title="목표를 '+num(S.step)+'자 올리기"'
+             + (g + S.step > a ? ' disabled' : '') + '>\u25b8</button>';
+  var goalTxt = '<span class="goal'+(cut ? ' cut' : '')+'">목표 '+num(g)+'자</span>';
+  var html = "<b>"+num(n)+"</b>자 · "+mae(n)+"매 · "+arrows+" ";
+  if(ok) html += '<span class="ok">'+goalTxt+' 채움</span>';
+  else html += goalTxt+"까지 "+num(left)+"자";
+  if(cut) html += ' <span class="cutnote">(원래 '+num(a)+'자)</span>';
   if(isPiece(n)) html += ' · <span class="piece">한 편</span>';
   elCur.innerHTML = html;
 
@@ -736,6 +766,7 @@ function send(){
     return;
   }
   p.versions.push({ id:uid(), text:t, at:Date.now() });
+  delete p.cut;   /* 낮춘 목표는 한 번 보내면 사라진다 */
   viewIdx = null;
   elInput.value = ""; S.draft = "";
   save(); renderHead(); renderWrite();
@@ -907,6 +938,11 @@ elInput.addEventListener("keydown", function(e){
   if((e.metaKey||e.ctrlKey) && e.key==="Enter"){ e.preventDefault(); send(); }
 });
 elSend.addEventListener("click", send);
+elCur.addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest("button[data-g]") : null;
+  if(!b || b.disabled) return;
+  cutGoal(parseInt(b.getAttribute("data-g"), 10));
+});
 
 function leftText(){
   if(S.fix) return S.fixText || "";
