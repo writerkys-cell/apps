@@ -301,6 +301,25 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 function download(name,text,type='text/plain'){const b=new Blob([text],{type:type+';charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
 async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch(e){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}}
 function autogrow(ta){ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px';}
+/* 커서가 화면 아래쪽(62% 선)에 닿으면 60% 높이로 끌어올리고, 위로 벗어나면 끌어내림. textarea는 autogrow로 내부 스크롤이 없으니 .detail을 움직인다. */
+let caretMirror=null;
+function caretTop(ta){
+  if(!caretMirror){caretMirror=document.createElement('div');caretMirror.setAttribute('aria-hidden','true');document.body.appendChild(caretMirror);}
+  const m=caretMirror,cs=getComputedStyle(ta);
+  m.style.cssText='position:absolute;top:0;left:-9999px;visibility:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:break-word;';
+  ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','paddingTop','paddingBottom','paddingLeft','paddingRight','borderTopWidth','borderBottomWidth','borderLeftWidth','borderRightWidth','borderStyle','boxSizing','wordBreak','textIndent','tabSize'].forEach(k=>m.style[k]=cs[k]);
+  m.style.width=ta.offsetWidth+'px';
+  m.textContent=ta.value.slice(0,ta.selectionEnd);
+  const sp=document.createElement('span');sp.textContent=ta.value.slice(ta.selectionEnd,ta.selectionEnd+1)||'.';m.appendChild(sp);
+  return ta.getBoundingClientRect().top+sp.offsetTop;
+}
+function keepCaretInView(ta){
+  const sc=ta.closest('.detail');if(!sc||document.activeElement!==ta)return;
+  const r=sc.getBoundingClientRect();const lh=parseFloat(getComputedStyle(ta).lineHeight)||24;
+  const y=caretTop(ta)-r.top;
+  if(y+lh>r.height*0.62)sc.scrollTop+=y+lh-r.height*0.6;
+  else if(y<lh)sc.scrollTop-=lh*2-y;
+}
 const safeName=s=>(s||'lecture').replace(/[\\/:*?"<>|]+/g,'_').trim()||'lecture';
 
 /* ---------- render ---------- */
@@ -499,11 +518,12 @@ app.addEventListener('click',e=>{
 function focusCard(id){const ta=document.querySelector(`[data-cf="${id}"]`);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}}
 app.addEventListener('input',e=>{
   const el=e.target;const l=cur();if(!l)return;
-  if(el.dataset.lf){const k=el.dataset.lf;l[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);if(k==='cardChars'){renderDetail();}save();renderDerived();if(k==='cpm')renderDetail();return;}
+  if(el.dataset.lf){const k=el.dataset.lf;l[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA'){autogrow(el);keepCaretInView(el);}if(k==='cardChars'){renderDetail();}save();renderDerived();if(k==='cpm')renderDetail();return;}
   const t=curTopic();if(!t)return;
-  if(el.dataset.tf){const k=el.dataset.tf;t[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);save();renderDerived();updateTopicEst();return;}
-  if(el.dataset.cf){const c=t.cards.find(c=>c.id===el.dataset.cf);if(!c)return;c.text=el.value;autogrow(el);const card=el.closest('.card');if(c.draft){delete c.draft;card.classList.remove('draft');}card.querySelector('.cnt').innerHTML=cardFoot(l,c);card.classList.toggle('over',chars(c.text)>l.cardChars);save();renderDerived();updateTopicEst();}
+  if(el.dataset.tf){const k=el.dataset.tf;t[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA'){autogrow(el);keepCaretInView(el);}save();renderDerived();updateTopicEst();return;}
+  if(el.dataset.cf){const c=t.cards.find(c=>c.id===el.dataset.cf);if(!c)return;c.text=el.value;autogrow(el);keepCaretInView(el);const card=el.closest('.card');if(c.draft){delete c.draft;card.classList.remove('draft');}card.querySelector('.cnt').innerHTML=cardFoot(l,c);card.classList.toggle('over',chars(c.text)>l.cardChars);save();renderDerived();updateTopicEst();}
 });
+app.addEventListener('keyup',e=>{if(e.target.tagName==='TEXTAREA'&&/^(Arrow(Up|Down)|Page(Up|Down)|Home|End|Enter)$/.test(e.key))keepCaretInView(e.target);});
 app.addEventListener('change',e=>{if(e.target.dataset.act==='a4memo')ui.a4memo=e.target.checked;});
 document.addEventListener('click',e=>{if(!e.target.closest('details.menu'))app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));});
 app.addEventListener('toggle',e=>{const d=e.target;if(!d.matches||!d.matches('details.menu')||!d.open)return;const m=d.querySelector(':scope>div');if(!m)return;m.style.left='';m.style.right='';const r=m.getBoundingClientRect();if(r.left<4){m.style.right='auto';m.style.left='0';}},true);
