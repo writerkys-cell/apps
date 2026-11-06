@@ -141,6 +141,7 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .nt .ts{display:block;font-size:.78em;color:var(--ink-faint);letter-spacing:.06em;margin:.5em 0 .15em;font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
 .nt .ts::before{content:'— '}
 .nt a{color:var(--seal);text-decoration:none;border-bottom:1px solid var(--seal-wash);word-break:break-all}
+.nt a.auto::after{content:'↗';font-size:.75em;margin-left:.2em;color:var(--seal-soft)}   /* 앱 이름으로 줄인 맨 주소 */
 .nt.live .cb{cursor:pointer}
 
 /* ── 일 페이지 ── */
@@ -213,15 +214,17 @@ ol.list li .body{flex:1;padding:.42rem .3rem .5rem 0;line-height:1.6}
 @media (max-width:600px){
   ol.list li{flex-wrap:wrap}
   ol.list li .body{flex-basis:calc(100% - var(--gut));min-width:0}
-  ol.list li .dn,ol.list li .ed,ol.list li .up,ol.list li .mv,ol.list li .del{margin-left:var(--gut);margin-right:-.3rem;padding-top:0;padding-bottom:.55rem;visibility:visible}   /* 자리를 따로 잡으니 늘 보인다 */
-  ol.list li .ed,ol.list li .up,ol.list li .mv,ol.list li .del{margin-left:.2rem}
+  ol.list li .pg,ol.list li .dn,ol.list li .ed,ol.list li .up,ol.list li .mv,ol.list li .del{margin-left:var(--gut);margin-right:-.3rem;padding-top:0;padding-bottom:.55rem;visibility:visible}   /* 자리를 따로 잡으니 늘 보인다 */
+  ol.list li .dn,ol.list li .ed,ol.list li .up,ol.list li .mv,ol.list li .del{margin-left:.2rem}
+  ol.list li.done .mv{margin-left:var(--gut)}
   ol.list li .del{margin-left:auto;margin-right:.2rem}
 }
 ol.list li.done .body{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft);text-decoration-thickness:1px}
 ol.list li.act .body{font-weight:700}
 ol.list li.rest .body{color:var(--ink-soft)}
-ol.list li .del,ol.list li .mv,ol.list li .ed,ol.list li .up,ol.list li .dn{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
+ol.list li .del,ol.list li .mv,ol.list li .ed,ol.list li .up,ol.list li .dn,ol.list li .pg{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
 ol.list li .dn{color:var(--ink)}
+ol.list li .pg{color:var(--seal)}
 ol.list li .del{padding:.45rem .35rem}
 ol.list li .up:hover{color:var(--seal)}
 ol.list li.editor{display:block;padding:.9rem 0 1.1rem var(--gut);border-bottom:1px solid var(--rule);background:var(--paper-2)}
@@ -238,9 +241,10 @@ ol.list li:hover .del,ol.list li:focus-within .del,
 ol.list li:hover .mv,ol.list li:focus-within .mv,
 ol.list li:hover .up,ol.list li:focus-within .up,
 ol.list li:hover .ed,ol.list li:focus-within .ed,
-ol.list li:hover .dn,ol.list li:focus-within .dn{visibility:visible}
+ol.list li:hover .dn,ol.list li:focus-within .dn,
+ol.list li:hover .pg,ol.list li:focus-within .pg{visibility:visible}
 @media (hover:none){
-  ol.list li .del,ol.list li .mv,ol.list li .up,ol.list li .ed,ol.list li .dn{visibility:visible}
+  ol.list li .del,ol.list li .mv,ol.list li .up,ol.list li .ed,ol.list li .dn,ol.list li .pg{visibility:visible}
 }
 .listhead{font-size:.8rem;color:var(--ink-faint);letter-spacing:.04em;margin:0 0 .9rem;line-height:1.6}
 
@@ -667,9 +671,30 @@ function splitLink(text){
   return {text:clean, url:m[2]};
 }
 // 메모 표시: 저장은 글자 그대로, 보여줄 때만 '-' 줄을 점 항목으로 바꾼다
-// 줄 안의 주소(scheme://…)는 눌러 열리게. 이미 esc()를 거친 글에 쓴다
-const linkify = h => h.replace(/([a-z][a-z0-9+.-]*:\/\/[^\s<]+)/gi, u =>
-  `<a href="${u}"${/^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''}>${u}</a>`);
+// 줄 안의 주소는 눌러 열리게. 이미 esc()를 거친 글에 쓴다(2026년 11월 6일 손봄)
+// 「[제목](scheme://…)」은 제목만 보이고, 맨 주소(scheme://…)는 앱 이름이나 사이트 이름으로 줄여 보인다. 저장은 글자 그대로
+const APP_NAME = {'x-devonthink-item':'데본씽크', 'x-scrivener-item':'스크리브너', 'things':'Things', 'shortcuts':'단축어', 'obsidian':'옵시디언',
+  'bear':'Bear', 'craftdocs':'Craft', 'drafts':'Drafts', 'ulysses':'율리시스', 'omnifocus':'OmniFocus', 'notion':'노션', 'mailto':'메일', 'message':'메일', 'x-apple-reminderkit':'미리 알림'};
+function linkLabel(u){
+  const raw = u.replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+  const m = raw.match(/^([a-z][a-z0-9+.-]*):\/\/(.*)$/i); if(!m) return u;
+  const scheme = m[1].toLowerCase(), rest = m[2];
+  const dec = x => { try{ return decodeURIComponent(x); }catch(e){ return x; } };
+  if(scheme === 'http' || scheme === 'https'){
+    try{
+      const x = new URL(raw);
+      let path = dec(x.pathname).replace(/\/+$/, '');
+      if(path.length > 22) path = path.slice(0, 20) + '…';
+      return x.hostname.replace(/^www\./, '') + path;
+    }catch(e){ return u; }
+  }
+  if(scheme === 'x-scrivener-item'){ const f = rest.match(/([^\/]+)\.scriv/i); return f ? `스크리브너 · ${dec(f[1])}` : '스크리브너'; }
+  return APP_NAME[scheme] || scheme;
+}
+const aTag = (u, label, auto) => `<a href="${u}" title="${u}"${auto ? ' class="auto"' : ''}${/^https?:/i.test(u) ? ' target="_blank" rel="noopener"' : ''}>${label}</a>`;
+// 한 번에 훑는다. 두 번 훑으면 먼저 만든 <a href="…"> 안의 주소를 또 링크로 만든다
+const linkify = h => h.replace(/\[([^\]\n]+)\]\(([a-z][a-z0-9+.-]*:\/\/[^\s)<]+)\)|(^|[^a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/[^\s<]+)/gi,
+  (m, t, u, pre, bare) => t ? aTag(u, t.trim(), false) : pre + aTag(bare, esc(linkLabel(bare)), true));
 const TS_RE = /^\d{1,2}\/\d{1,2} \d{2}:\d{2} 시작$/;
 const END_RE = /^\d{1,2}\/\d{1,2} \d{2}:\d{2} 끝 · (\d+)분$/;
 // 기록 줄: 「조금 했다」「끝냈다」 때 적은 것이 페이지 끝에 시각과 함께 쌓인다(2026년 11월 3일)
@@ -1372,12 +1397,13 @@ function renderList(){
     const mv = t.done ? (isRest(t) ? '' : `<button class="mv" data-revive="${t.id}">되살리기</button>`) : `<button class="mv" data-end="${t.id}">끝으로</button>`;
     const up = t.done || isRest(t) ? '' : (t.today ? `<button class="up" data-unurg="${t.id}">오늘에서 빼기</button>` : `<button class="up" data-urg="${t.id}">오늘로</button>`);
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">고치기</button>`;
+    const pg = t.done ? '' : `<button class="pg" data-page="${t.id}">페이지</button>`;
     const dn = t.done ? '' : `<button class="dn" data-done="${t.id}">끝냈다</button>`;
     return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${isRest(t)?'rest':''}">
       <span class="gutter">${dot}</span>
       <span class="body">${urgTag(t)}${kindTag(t.kind)}${esc(t.text)}${linkTag(t.url)}${t.done ? '' : dueTag(t)}${t.note
-        ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}">${fmtNote(t.note)}</span>` : ''}</span>
-      ${dn}${ed}${up}${mv}
+        ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}"${t.done ? '' : ' title="누르면 페이지가 열립니다"'}>${fmtNote(t.note)}</span>` : ''}</span>
+      ${pg}${dn}${ed}${up}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>` + (editOpen === t.id ? editorHtml(t) : '');
   }).join('') || `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`;
@@ -1557,7 +1583,7 @@ function renderSheet(){
     return;
   }
   if(!$('#shIn')){
-    foot.innerHTML = `<div class="addline"><input id="shIn" placeholder="한 줄 적기 · []로 시작하면 체크박스, -로 시작하면 항목" enterkeyhint="done"><button id="shAdd">더하기</button></div>
+    foot.innerHTML = `<div class="addline"><input id="shIn" placeholder="한 줄 적기 · []로 시작하면 체크박스, -로 시작하면 항목, [제목](주소)는 제목만 보임" enterkeyhint="done"><button id="shAdd">더하기</button></div>
       <div class="tools"><button id="shEdit">전체 고치기</button><button id="shCopy">본문만 복사</button><button id="shDone">끝냈다</button></div>`;
     const take = wireEnter($('#shIn'), v => {
       const t = byId(sheet.id); if(!t) return;
@@ -1690,10 +1716,13 @@ document.addEventListener('click', e => {
   if(ar){ openArchived(+ar.dataset.arc); return; }
   const kr = e.target.closest('[data-knot]');
   if(kr){ if(!e.target.closest('a')) openSheetRow(knotRows[+kr.dataset.knot]); return; }
+  const pg = e.target.closest('[data-page]');
+  if(pg){ openSheet(pg.dataset.page); return; }
   const nt = e.target.closest('[data-note]');
   if(nt){
-    const id = nt.dataset.note;
-    noteOpen.has(id) ? noteOpen.delete(id) : noteOpen.add(id);
+    const id = nt.dataset.note, t = byId(id);
+    if(t && !t.done){ openSheet(id); return; }                    // 끝나지 않은 일: 미리보기를 누르면 페이지가 열린다
+    noteOpen.has(id) ? noteOpen.delete(id) : noteOpen.add(id);   // 끝낸 일: 펼치고 접기만
     renderList(); return;
   }
   const ed = e.target.closest('[data-edit]');
