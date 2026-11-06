@@ -78,7 +78,7 @@ header{
 #lineBtn{margin-left:auto}
 #lineBtn:hover,#fixBtn:hover{color:var(--inju)}
 #lineBtn.on,#fixBtn.on{color:var(--inju);border-bottom-color:var(--inju)}
-#lineBtn.hide,#fixBtn.hide{display:none}
+#lineBtn.hide,#fixBtn.hide{visibility:hidden;pointer-events:none}
 nav{display:flex;gap:1.1rem;font-size:.85rem}
 nav button{background:none;border:0;padding:.1rem 0;color:var(--meok-2);border-bottom:1px solid transparent}
 nav button.on{color:var(--meok);border-bottom-color:var(--inju)}
@@ -223,7 +223,17 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .ver .acts button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 .blank{color:var(--meok-3);padding:3rem 0;text-align:center}
 .sum{margin-bottom:2.4rem;font-size:.85rem;color:var(--meok-2);line-height:1.9}
-.sum .nm{color:var(--meok);font-size:1rem}
+.sum .nm{
+  display:block;background:none;border:0;padding:0;margin:0;
+  font-family:inherit;font-size:1rem;color:var(--meok);text-align:left;
+  border-bottom:1px solid transparent;cursor:text;
+}
+.sum button.nm:hover{color:var(--inju);border-bottom-color:var(--seon)}
+.sum input.nm{
+  width:100%;max-width:24rem;background:var(--jongi);
+  border:1px solid var(--seon);border-radius:2px;padding:.2rem .5rem;
+}
+.sum input.nm:focus{outline:none;border-color:var(--inju)}
 .sum .meta{color:var(--meok-3);font-size:.8rem}
 .sum .meta b{font-weight:400;color:var(--meok)}
 .sweep{margin-top:2.4rem;font-size:.85rem}
@@ -283,7 +293,7 @@ h2:first-child{margin-top:0}
   <button id="lineBtn" type="button" title="한 줄씩 집중해서 쓰기. 켜면 커서가 놓인 줄만 또렷하고, 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다. 끄면 보통 입력창입니다.">한줄</button>
   <button id="fixBtn" type="button" title="지금 쓰는 대목을 몇 번이고 다시 치는 모드. 판본으로 남지 않습니다.">고쳐쓰기</button>
   <nav>
-    <button data-view="write" class="on">다시쓰기</button>
+    <button data-view="write" class="on">400자 쓰기</button>
     <button data-view="vers">판본</button>
     <button data-view="set">설정</button>
   </nav>
@@ -335,7 +345,7 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="ifz">글자 크기</label><input type="number" id="ifz" min="12" max="28" step="1"><span class="unit">px</span></div>
 
       <h2>쓰기</h2>
-      <p class="note">한 줄씩 집중해서 쓰기는 다시쓰기 화면 위의 ‘한줄’ 단추로 켜고 끕니다. 켜면 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다.</p>
+      <p class="note">한 줄씩 집중해서 쓰기는 400자 쓰기 화면 위의 ‘한줄’ 단추로 켜고 끕니다. 켜면 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다.</p>
       <div class="row"><label for="smart">스마트 문장부호</label><input type="checkbox" id="smart"></div>
       <p class="note">왼쪽으로 보낼 때 따옴표가 여닫는 모양(“ ” ‘ ’)으로 바뀌고, 마침표 세 개는 가운데 말줄임표(⋯)로, 붙임표 두 개는 줄표(—)로 바뀝니다. 치는 동안에는 곧은 채로 보입니다.</p>
 
@@ -368,7 +378,7 @@ function fresh(){
   return {
     projects:[{id:uid(),name:"이름 없는 글",versions:[]}],
     current:null,
-    draft:"",
+    drafts:{},     /* 프로젝트별로 쓰던 글 — 프로젝트를 오가도 사라지지 않는다 */
     lineMode:true,
     smart:true,
     step:400,
@@ -383,9 +393,9 @@ function fresh(){
 }
 
 function load(){
-  var d = fresh();
+  var d = fresh(), raw = null;
   try{
-    var raw = localStorage.getItem(KEY);
+    raw = localStorage.getItem(KEY);
     if(raw){
       var p = JSON.parse(raw);
       for(var k in d) if(p[k]!==undefined && p[k]!==null) d[k]=p[k];
@@ -393,8 +403,14 @@ function load(){
   }catch(e){}
   if(!Array.isArray(d.projects) || !d.projects.length) d.projects = fresh().projects;
   if(!d.pieceSeen || typeof d.pieceSeen !== "object") d.pieceSeen = {};
+  if(!d.drafts || typeof d.drafts !== "object") d.drafts = {};
   d.projects.forEach(function(p){ if(!Array.isArray(p.versions)) p.versions = []; });
   if(!d.projects.some(function(p){return p.id===d.current;})) d.current = d.projects[0].id;
+  /* 예전 저장(쓰던 글이 하나뿐이던 때)에서 넘어오기 */
+  try{
+    var old = raw ? JSON.parse(raw).draft : "";
+    if(typeof old === "string" && old && !d.drafts[d.current]) d.drafts[d.current] = old;
+  }catch(e){}
   return d;
 }
 var S = load();
@@ -405,6 +421,25 @@ function save(){
 }
 
 function proj(){ return S.projects.filter(function(p){return p.id===S.current;})[0] || S.projects[0]; }
+function draftOf(id){ return S.drafts[id] || ""; }
+function setDraft(v){
+  if(v) S.drafts[S.current] = v; else delete S.drafts[S.current];
+}
+/* 다른 프로젝트로 옮기기 전에 쓰던 글을 지금 프로젝트에 남겨 둔다.
+   고쳐쓰기 중이고 오른쪽이 비어 있으면 왼쪽에 둔 글이 쓰던 글이다. */
+function stash(){
+  var v = elInput.value;
+  if(S.fix && !v.trim() && S.fixText) v = S.fixText;
+  setDraft(v);
+}
+/* 프로젝트를 바꾸고 그 프로젝트에서 쓰던 글을 오른쪽에 되돌려 놓는다 */
+function switchTo(id){
+  S.current = id;
+  viewIdx = null;
+  S.fix = false; S.fixText = ""; S.fixN = 0;
+  elInput.value = draftOf(id);
+  renderFix();
+}
 function mae(n){ return (n/200).toFixed(1); }
 function num(n){ return n.toLocaleString(); }
 function stamp(t){
@@ -735,7 +770,7 @@ function fixOnce(){
   if(!t) return;
   S.fixText = t;
   S.fixN += 1;
-  elInput.value = ""; S.draft = "";
+  elInput.value = ""; setDraft("");
   save(); renderWrite();
   elInput.focus();
 }
@@ -761,7 +796,7 @@ function toggleLine(){
          .filter(function(b){ return b.length; }).join("\n\n");
     S.lineMode = true;
   }
-  elInput.value = v; S.draft = v;
+  elInput.value = v; setDraft(v);
   var m = v.length; elInput.setSelectionRange(m, m);
   save(); renderLine(); renderMode(); renderCount();
   elInput.focus();
@@ -770,7 +805,7 @@ function toggleLine(){
 function toggleFix(){
   if(S.fix){
     /* 끌 때: 오른쪽이 비어 있으면 왼쪽의 마지막 고쳐쓴 글을 되돌려 놓는다 */
-    if(!elInput.value.trim() && S.fixText){ elInput.value = S.fixText; S.draft = S.fixText; }
+    if(!elInput.value.trim() && S.fixText){ elInput.value = S.fixText; setDraft(S.fixText); }
     S.fix = false; S.fixText = ""; S.fixN = 0;
     toast("고쳐쓰기를 끝냈습니다");
   }else{
@@ -794,7 +829,7 @@ function send(){
   p.versions.push({ id:uid(), text:t, at:Date.now() });
   delete p.cut;   /* 낮춘 목표는 한 번 보내면 사라진다 */
   viewIdx = null;
-  elInput.value = ""; S.draft = "";
+  elInput.value = ""; setDraft("");
   save(); renderHead(); renderWrite();
   toast(p.versions.length+"번째 판본 · 다음 목표 "+num(goalOf(p))+"자");
   elInput.focus();
@@ -823,9 +858,16 @@ function renderVers(){
   s.className = "sum";
   var last = v.length ? v[v.length-1].text.length : 0;
   var total = 0; v.forEach(function(x){ total += x.text.length; });
-  s.innerHTML = '<div class="nm">'+esc(p.name)+'</div>'
-    + '<div class="meta">판본 <b>'+v.length+'</b>개 · 최종 <b>'+num(last)+'</b>자('+mae(last)+'매)'
-    + ' · 지금까지 친 글자 <b>'+num(total)+'</b>자 · 다음 목표 <b>'+num(goalOf(p))+'</b>자</div>';
+  var nm = document.createElement("button");
+  nm.type = "button"; nm.className = "nm"; nm.title = "눌러서 제목 바꾸기";
+  nm.textContent = p.name;
+  nm.onclick = function(){ editName(nm, p); };
+  s.appendChild(nm);
+  var meta = document.createElement("div");
+  meta.className = "meta";
+  meta.innerHTML = '판본 <b>'+v.length+'</b>개 · 최종 <b>'+num(last)+'</b>자('+mae(last)+'매)'
+    + ' · 지금까지 친 글자 <b>'+num(total)+'</b>자 · 다음 목표 <b>'+num(goalOf(p))+'</b>자';
+  s.appendChild(meta);
   w.appendChild(s);
 
   if(!v.length){
@@ -882,10 +924,29 @@ function renderVers(){
   sw.appendChild(sb);
   w.appendChild(sw);
 }
-function esc(s){
-  return String(s).replace(/[&<>"]/g, function(c){
-    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+/* 판본 화면의 제목을 눌러 그 자리에서 고친다. 엔터로 저장, Esc로 취소 */
+function editName(btn, p){
+  var inp = document.createElement("input");
+  inp.type = "text"; inp.className = "nm"; inp.value = p.name;
+  inp.setAttribute("aria-label", "제목");
+  var done = false;
+  function finish(commit){
+    if(done) return; done = true;
+    var n = inp.value.trim();
+    if(commit && n && n !== p.name){
+      p.name = n;
+      save(); renderHead(); renderSet();
+      toast("제목을 바꿨습니다");
+    }
+    renderVers();
+  }
+  inp.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); finish(true); }
+    else if(e.key === "Escape"){ e.preventDefault(); finish(false); }
   });
+  inp.addEventListener("blur", function(){ finish(true); });
+  btn.parentNode.replaceChild(inp, btn);
+  inp.focus(); inp.select();
 }
 
 /* ---------- 설정 ---------- */
@@ -925,7 +986,8 @@ function renderSet(){
         if(!confirm(msg)) return;
         S.projects = S.projects.filter(function(q){ return q.id!==p.id; });
         delete S.pieceSeen[p.id];
-        if(S.current===p.id){ S.current = S.projects[0].id; viewIdx=null; S.draft=""; elInput.value=""; }
+        delete S.drafts[p.id];
+        if(S.current===p.id) switchTo(S.projects[0].id);
         save(); renderHead(); renderSet(); renderWrite(); renderVers();
       };
       li.appendChild(x);
@@ -938,17 +1000,16 @@ function newProject(){
   var n = prompt("프로젝트 이름");
   if(!n || !n.trim()) return false;
   var p = { id:uid(), name:n.trim(), versions:[] };
+  stash();
   S.projects.push(p);
-  S.current = p.id;
-  viewIdx = null; S.draft = ""; elInput.value = "";
-  S.fix = false; S.fixText = ""; S.fixN = 0; renderFix();
+  switchTo(p.id);
   save(); renderHead(); renderSet(); renderWrite(); renderVers();
   return true;
 }
 
 /* ---------- 연결 ---------- */
 elInput.addEventListener("input", function(){
-  S.draft = elInput.value;
+  setDraft(elInput.value);
   save(); renderMirror(); renderCount(); followCaret();
 });
 ["keyup","click","focus","select"].forEach(function(ev){
@@ -985,9 +1046,8 @@ elProj.addEventListener("change", function(){
     elInput.focus();
     return;
   }
-  S.current = elProj.value;
-  viewIdx = null; S.draft = ""; elInput.value = "";
-  S.fix = false; S.fixText = ""; S.fixN = 0; renderFix();
+  stash();
+  switchTo(elProj.value);
   save(); renderHead(); renderWrite(); renderVers(); renderSet();
 });
 
@@ -1027,7 +1087,7 @@ $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(
 
 /* 백업 */
 $("#expBtn").addEventListener("click", function(){
-  S.draft = elInput.value;
+  stash();
   save();
   var d = new Date(), z = function(n){ return (n<10?"0":"")+n; };
   var name = "사백자-" + d.getFullYear() + z(d.getMonth()+1) + z(d.getDate())
@@ -1105,10 +1165,10 @@ $("#addp").addEventListener("click", newProject);
   window.addEventListener("resize", function(){ renderMirror(); });
 })();
 
-window.addEventListener("beforeunload", function(){ S.draft = elInput.value; save(); });
+window.addEventListener("beforeunload", function(){ stash(); save(); });
 
 /* 시작 */
-elInput.value = S.draft || "";
+elInput.value = draftOf(S.current);
 applyStyle(); applySplit();
 renderFix(); renderLine(); renderHead(); renderWrite(); renderSet(); renderVers();
 elInput.focus();
