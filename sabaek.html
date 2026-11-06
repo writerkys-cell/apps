@@ -70,14 +70,15 @@ header{
 #tally{color:var(--meok-2);font-size:.85rem;font-variant-numeric:tabular-nums}
 #tally b{font-weight:400;color:var(--meok)}
 #tally .piece{color:var(--inju)}
-#fixBtn{
-  margin-left:auto;background:none;border:0;padding:.1rem 0;
+#lineBtn,#fixBtn{
+  background:none;border:0;padding:.1rem 0;
   font-size:.85rem;color:var(--meok-3);border-bottom:1px solid transparent;
   white-space:nowrap;
 }
-#fixBtn:hover{color:var(--inju)}
-#fixBtn.on{color:var(--inju);border-bottom-color:var(--inju)}
-#fixBtn.hide{display:none}
+#lineBtn{margin-left:auto}
+#lineBtn:hover,#fixBtn:hover{color:var(--inju)}
+#lineBtn.on,#fixBtn.on{color:var(--inju);border-bottom-color:var(--inju)}
+#lineBtn.hide,#fixBtn.hide{display:none}
 nav{display:flex;gap:1.1rem;font-size:.85rem}
 nav button{background:none;border:0;padding:.1rem 0;color:var(--meok-2);border-bottom:1px solid transparent}
 nav button.on{color:var(--meok);border-bottom-color:var(--inju)}
@@ -279,6 +280,7 @@ h2:first-child{margin-top:0}
 <header>
   <select id="proj" aria-label="프로젝트"></select>
   <span id="tally"></span>
+  <button id="lineBtn" type="button" title="한 줄씩 집중해서 쓰기. 켜면 커서가 놓인 줄만 또렷하고, 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다. 끄면 보통 입력창입니다.">한줄</button>
   <button id="fixBtn" type="button" title="지금 쓰는 대목을 몇 번이고 다시 치는 모드. 판본으로 남지 않습니다.">고쳐쓰기</button>
   <nav>
     <button data-view="write" class="on">다시쓰기</button>
@@ -333,8 +335,7 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="ifz">글자 크기</label><input type="number" id="ifz" min="12" max="28" step="1"><span class="unit">px</span></div>
 
       <h2>쓰기</h2>
-      <div class="row"><label for="lmode">한 줄씩 집중해서 쓰기</label><input type="checkbox" id="lmode"></div>
-      <p class="note">커서가 놓인 줄만 또렷하고 나머지는 흐려집니다. 왼쪽으로 보낼 때 줄바꿈은 공백 한 칸으로 이어 붙고, 한 줄을 비워둔 자리만 문단으로 나뉩니다. 꺼두면 보통 입력창이 됩니다.</p>
+      <p class="note">한 줄씩 집중해서 쓰기는 다시쓰기 화면 위의 ‘한줄’ 단추로 켜고 끕니다. 켜면 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다.</p>
       <div class="row"><label for="smart">스마트 문장부호</label><input type="checkbox" id="smart"></div>
       <p class="note">왼쪽으로 보낼 때 따옴표가 여닫는 모양(“ ” ‘ ’)으로 바뀌고, 마침표 세 개는 가운데 말줄임표(⋯)로, 붙임표 두 개는 줄표(—)로 바뀝니다. 치는 동안에는 곧은 채로 보입니다.</p>
 
@@ -443,6 +444,7 @@ var elPrev=$("#prev"), elWrap=$("#editWrap"), elMirror=$("#mirror"), elInput=$("
     elStrip=$("#strip"), elNums=$("#nums"), elWhen=$("#when"), elCopy=$("#copyBtn");
 var viewIdx = null;
 var elFix = $("#fixBtn");
+var elLine = $("#lineBtn");
 
 function toast(msg, cls){
   elToast.textContent = msg;
@@ -741,6 +743,30 @@ function renderFix(){
   elFix.classList.toggle("on", !!S.fix);
   elFix.textContent = S.fix ? "고쳐쓰기 끄기" : "고쳐쓰기";
 }
+function renderLine(){
+  elLine.classList.toggle("on", !!S.lineMode);
+  elLine.textContent = S.lineMode ? "한줄끄기" : "한줄";
+}
+/* 한줄 켜고 끄기: 입력창의 글을 새 모드의 규칙에 맞게 바꿔 둔다.
+   켤 때 — 보통 모드의 줄바꿈(문단)을 빈 줄로 벌려 문단이 그대로 남게 한다.
+   끌 때 — 줄 단위로 친 글을 문단으로 합쳐 보통 글 모양으로 만든다. */
+function toggleLine(){
+  var v = elInput.value;
+  if(S.lineMode){
+    v = tidy(v);
+    S.lineMode = false;
+  }else{
+    v = v.replace(/\r/g,"").split(/\n(?:[ \t\u3000]*\n)+/)
+         .map(function(b){ return b.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length; }).join("\n\n"); })
+         .filter(function(b){ return b.length; }).join("\n\n");
+    S.lineMode = true;
+  }
+  elInput.value = v; S.draft = v;
+  var m = v.length; elInput.setSelectionRange(m, m);
+  save(); renderLine(); renderMode(); renderCount();
+  elInput.focus();
+  followCaret();
+}
 function toggleFix(){
   if(S.fix){
     /* 끌 때: 오른쪽이 비어 있으면 왼쪽의 마지막 고쳐쓴 글을 되돌려 놓는다 */
@@ -872,7 +898,6 @@ function renderSet(){
   $("#pmax").value = S.pmax;
   $("#ppad").value = S.ppad;
   $("#pind").value = S.pind;
-  $("#lmode").checked = S.lineMode;
   $("#smart").checked = S.smart !== false;
   var ul = $("#plist");
   ul.innerHTML = "";
@@ -952,6 +977,7 @@ function leftText(){
 elCopy.addEventListener("click", function(){ if(leftText()) copyText(leftText()); });
 elPrev.addEventListener("dblclick", function(){ if(leftText()) copyText(leftText()); });
 elFix.addEventListener("click", toggleFix);
+elLine.addEventListener("click", toggleLine);
 
 elProj.addEventListener("change", function(){
   if(elProj.value === "__new__"){
@@ -975,6 +1001,7 @@ document.querySelectorAll("nav button").forEach(function(b){
     if(b.dataset.view==="vers") renderVers();
     if(b.dataset.view==="set") renderSet();
     elFix.classList.toggle("hide", b.dataset.view!=="write");
+    elLine.classList.toggle("hide", b.dataset.view!=="write");
     if(b.dataset.view==="write"){ elInput.focus(); renderMirror(); }
   });
 });
@@ -996,10 +1023,6 @@ bindNum($("#ifz"),"ifz",12,28,16,function(){ applyStyle(); renderMirror(); });
 bindNum($("#ppad"),"ppad",0,160,40,applyStyle);
 bindNum($("#pind"),"pind",0,4,1,applyStyle);
 
-$("#lmode").addEventListener("change", function(){
-  S.lineMode = this.checked;
-  save(); renderMode(); renderCount();
-});
 $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(); renderCount(); });
 
 /* 백업 */
@@ -1087,7 +1110,7 @@ window.addEventListener("beforeunload", function(){ S.draft = elInput.value; sav
 /* 시작 */
 elInput.value = S.draft || "";
 applyStyle(); applySplit();
-renderFix(); renderHead(); renderWrite(); renderSet(); renderVers();
+renderFix(); renderLine(); renderHead(); renderWrite(); renderSet(); renderVers();
 elInput.focus();
 
 })();
