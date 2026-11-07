@@ -454,6 +454,10 @@ h2:first-child{margin-top:0}
       <div class="row"><label for="smart">스마트 문장부호</label><input type="checkbox" id="smart"></div>
       <p class="note">판본으로 보낼 때 따옴표가 여닫는 모양(“ ” ‘ ’)으로 바뀌고, 마침표 세 개는 가운데 말줄임표(⋯)로, 붙임표 두 개는 줄표(—)로 바뀝니다. 치는 동안에는 곧은 채로 보입니다.</p>
 
+      <h2>보태기</h2>
+      <div class="row"><label for="autoSend">판본을 만들 때 보태기로 자동 보내기</label><input type="checkbox" id="autoSend"></div>
+      <p class="note">글이 보태기 원고에 연결되어 있으면, 목표를 채워 새 판본이 생길 때마다 그 판본을 보태기로 보냅니다. 보태기나 아이폰에서 고친 흔적이 있거나 분량이 절반 넘게 줄거나 앞부분이 다르면 자동으로 보내지 않고 알리기만 합니다. 보내지 못하면 다음에 연결될 때 다시 보냅니다. 연결되지 않은 글은 그냥 둡니다.</p>
+
       <h2>프로젝트</h2>
       <ul class="plist" id="plist"></ul>
       <button class="addp" id="addp">새 프로젝트 만들기</button>
@@ -510,6 +514,7 @@ function fresh(){
     lineMode:true,
     dim:true,      /* 한줄 쓰기에서 커서가 없는 줄을 흐리게 */
     smart:true,
+    autoSend:true, /* 판본이 생기면 연결된 보태기 원고로 바로 보낸다 */
     step:400,
     piece:2667,
     pfz:16, plh:1.9, ppad:40, pind:1, pmax:544, ifz:16,
@@ -970,13 +975,16 @@ function send(){
     toast("목표 "+num(g)+"자까지 "+num(g - t.length)+"자 남았습니다");
     return;
   }
-  p.versions.push({ id:uid(), text:t, at:Date.now() });
+  var nv = { id:uid(), text:t, at:Date.now() };
+  p.versions.push(nv);
   delete p.cut;   /* 낮춘 목표는 한 번 보내면 사라진다 */
   viewIdx = null;
   elInput.value = ""; setDraft("");
+  if(S.autoSend !== false && btLink()) p.btAuto = nv.id;   /* 연결된 글이면 이 판본을 보태기로 보낸다 */
   save(); renderHead(); renderWrite();
   toast(p.versions.length+"번째 판본 · 다음 목표 "+num(goalOf(p))+"자");
   elInput.focus();
+  flushAuto();
 }
 
 function copyText(text, msg){
@@ -1105,6 +1113,7 @@ function renderSet(){
   $("#pind").value = S.pind;
   $("#smart").checked = S.smart !== false;
   $("#dim").checked = S.dim !== false;
+  $("#autoSend").checked = S.autoSend !== false;
   var ul = $("#plist");
   ul.innerHTML = "";
   S.projects.forEach(function(p){
@@ -1231,6 +1240,7 @@ bindNum($("#pind"),"pind",0,4,1,applyStyle);
 
 $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(); renderCount(); });
 $("#dim").addEventListener("change", function(){ S.dim = this.checked; save(); renderMode(); });
+$("#autoSend").addEventListener("change", function(){ S.autoSend = this.checked; save(); if(this.checked) flushAuto(); });
 
 /* 백업 */
 $("#expBtn").addEventListener("click", function(){
@@ -1459,6 +1469,7 @@ function btLoad(){
     tidyNow();
     renderBt();
     startClock();
+    flushAuto();
     return flushPending().then(loadToday);
   }).catch(function(e){ BT.loading = false; if(e && e.message && !BT_ERR) BT_ERR = e.message; btNet(false); renderBt(); });
 }
@@ -1475,6 +1486,7 @@ function btOnProject(){
     if(l.work && l.work !== BT.work){ BT.work = l.work; BT.units = []; BT.loadedAt = 0; }
   }
   if(document.getElementById("bt").classList.contains("on")) openBt();
+  flushAuto();
 }
 
 /* ---- 그리기 ---- */
@@ -1543,7 +1555,7 @@ function renderBt(){
   var x = vi < 0 ? null : v[vi], t = x ? tighten(x.text) : "";
   if(!u) info.textContent = "";
   else if(!t) info.textContent = "'" + u.title + "' · 지금 " + fmt(clen(u.text)) + "자" + (u.unit_done || u.done_req ? " · 완성" : "");
-  else { var d = describe(u, t); info.textContent = (vi+1) + "번째 판본 → " + d.msg; info.classList.toggle("warn", d.warn); }
+  else { var d = describe(u, t); info.textContent = (vi+1) + "번째 판본 → " + sentNote(x, u, d); info.classList.toggle("warn", d.warn && !wasSent(x, u)); }
   var can = !!(u && t) && !BT.busy;
   $("#btSend").disabled = !can; $("#btSend").textContent = BT.busy ? "보내는 중…" : "보태기로 보내기";
   var done = !!(u && (u.unit_done || u.done_req));
@@ -1617,6 +1629,39 @@ function btLinkTo(u){
   S.btWork = BT.work;
   save();
 }
+/* 보낸 판본 표시 — 어느 원고에 보냈는지 판본에 남긴다 */
+function markSent(v, u){ if(v && u) v.sent = { ms:u.id, at:Date.now() }; }
+function wasSent(v, u){ return !!(v && u && v.sent && v.sent.ms === u.id); }
+function sentNote(v, u, d){ return wasSent(v, u) ? "이 판본은 이미 보냈습니다 · " + d.msg.replace(/ · 지금보다.*$/, "") : d.msg; }
+/* 자동 보내기 — 판본이 생길 때 걸어 두고, 원고를 읽은 뒤·연결된 뒤·프로젝트를 바꾼 뒤에도 다시 시도한다 */
+function flushAuto(){
+  var p = proj(), id = p.btAuto;
+  if(!id) return;
+  function drop(){ delete p.btAuto; save(); }
+  var l = btLink(), v = p.versions.filter(function(x){ return x.id === id; })[0];
+  if(S.autoSend === false || !l || !v){ drop(); return; }
+  var u = btUnitById(l.ms);
+  if(!u){
+    if(BT.loading) return;                      /* 읽고 나면 btLoad가 다시 부른다 */
+    if(l.work && l.work !== BT.work){ BT.work = l.work; BT.units = []; BT.loadedAt = 0; }
+    if(!BT.loadedAt || Date.now() - BT.loadedAt > 20000){ btLoad(); return; }
+    drop(); toast("연결된 원고를 보태기에서 찾지 못해 보내지 않았습니다 · 보태기 탭에서 확인하세요", "piece"); return;
+  }
+  if(wasSent(v, u)){ drop(); return; }
+  if(BT.busy){ setTimeout(flushAuto, 1500); return; }
+  var t = tighten(v.text);
+  if(!t){ drop(); return; }
+  var d = describe(u, t);
+  if(d.warn){ drop(); toast("보태기에 고친 글이 있어 자동으로 보내지 않았습니다 · 보태기 탭에서 확인 뒤 보내세요", "piece"); renderBt(); return; }
+  var n = p.versions.indexOf(v) + 1, before = clen(u.text);
+  BT.busy = true; renderBt();
+  sendText(u, t).then(function(){
+    u.text = t; u.phone_at = null; markSent(v, u); btLinkTo(u); drop();
+    var dl = clen(t) - before;
+    toast(n + "번째 판본을 보태기로 보냈습니다 · " + (dl > 0 ? "+" : "") + fmt(dl) + "자");
+  }).catch(function(){ toast("보태기로 보내지 못했습니다 · 연결되면 다시 보냅니다", "piece"); })
+  .then(function(){ BT.busy = false; renderBt(); });
+}
 function btSend(alsoDone){
   var u = btUnit(), vi = btVerIdx(), v = proj().versions;
   if(!u || vi < 0 || BT.busy) return;
@@ -1628,7 +1673,7 @@ function btSend(alsoDone){
   BT.busy = true; renderBt();
   var before = clen(u.text);
   sendText(u, t).then(function(){
-    u.text = t; u.phone_at = null;
+    u.text = t; u.phone_at = null; markSent(v[vi], u);
     btLinkTo(u);
     var dl = clen(t) - before;
     if(!alsoDone){ toast("보태기로 보냈습니다 · " + (dl > 0 ? "+" : "") + fmt(dl) + "자"); return; }
@@ -2010,7 +2055,7 @@ function renderAfter(){
   var t = vi < 0 ? "" : tighten(v[vi].text);
   if(!u) info.textContent = "";
   else if(!t) info.textContent = "지금 " + fmt(clen(u.text)) + "자";
-  else { var d = describe(u, t); info.textContent = d.msg; info.classList.toggle("warn", d.warn); }
+  else { var d = describe(u, t); info.textContent = sentNote(v[vi], u, d); info.classList.toggle("warn", d.warn && !wasSent(v[vi], u)); }
   var can = !!(u && t) && !BT.busy;
   $("#aSend").disabled = !can; $("#aSend").textContent = BT.busy ? "보내는 중…" : "보태기로 보내기";
   $("#aSendDone").disabled = !can; $("#aSendDone").hidden = !!(u && (u.unit_done || u.done_req));
@@ -2028,7 +2073,7 @@ function afterSend(alsoDone){
   BT.busy = true; renderAfter();
   var before = clen(u.text);
   sendText(u, t).then(function(){
-    u.text = t; u.phone_at = null; btLinkTo(u);
+    u.text = t; u.phone_at = null; markSent(v[vi], u); btLinkTo(u);
     var dl = clen(t) - before;
     return (alsoDone ? markDone(u) : Promise.resolve()).then(function(){
       if(NOW && NOW.phase === "after"){ NOW.sent = NOW.sent || {}; NOW.sent[String(vi+1)] = dl; putNow(); }
@@ -2080,13 +2125,42 @@ function renderTime(){
 }
 /* 머리줄 단추 — 보태기 탭과 같은 함수를 부른다. 상태가 바뀔 때만 다시 그린다 */
 var actsKey = null;
+/* 머리줄의 '글쓰기 시작' — 그냥 시작 모드로 바로 간다. 연결된 원고가 없으면 알리고 보태기 탭으로 */
+function waitLoad(){
+  return new Promise(function(res){ var n = 0; (function w(){ if(!BT.loading || n++ > 75) res(); else setTimeout(w, 200); })(); });
+}
+function quickStart(){
+  var l = btLink();
+  if(!l){
+    toast("이 글은 아직 보태기 원고에 연결되지 않았습니다 · 보태기 탭에서 원고를 고르거나 새로 만드세요", "piece");
+    document.querySelector('nav button[data-view="bt"]').click();
+    return;
+  }
+  S.btMode = "open"; save();
+  function go(){
+    if(!freeToStart()){ toast(macBusy() ? "보태기에서 몰입 중이라 지금은 시작할 수 없습니다" : foreignBusy() ? foreignText() : "이미 돌고 있습니다", "piece"); renderBt(); return; }
+    BT.unit = l.ms;
+    if(!btUnit()){
+      toast("연결된 원고를 보태기에서 찾지 못했습니다 · 보태기 탭에서 확인하세요", "piece");
+      document.querySelector('nav button[data-view="bt"]').click();
+      return;
+    }
+    startWrite();
+  }
+  if(btUnitById(l.ms)) { go(); return; }
+  if(l.work && l.work !== BT.work){ BT.work = l.work; BT.units = []; BT.loadedAt = 0; }
+  toast("원고를 읽는 중…");
+  (BT.loading ? waitLoad() : btLoad().then(waitLoad)).then(go);
+}
 function drawActs(){
-  var key = !mine() ? "" : NOW.phase === "focus" ? (NOW.open ? "open" : "timed") : (NOW.phase === "type" || NOW.phase === "pause") ? NOW.phase : "";
+  var key = !mine() ? (freeToStart() ? "idle" : "") : NOW.phase === "focus" ? (NOW.open ? "open" : "timed") : (NOW.phase === "type" || NOW.phase === "pause") ? NOW.phase : "";
   if(key === actsKey) return;
   actsKey = key;
   var box = $("#btActs"); box.innerHTML = ""; box.hidden = !key;
   function btn(label, fn, title){ var b = document.createElement("button"); b.type = "button"; b.textContent = label; if(title) b.title = title; b.onclick = fn; box.appendChild(b); }
-  if(key === "open"){
+  if(key === "idle"){
+    btn("글쓰기 시작", quickStart, "그냥 시작 · 연결된 보태기 원고로 바로 시작합니다");
+  }else if(key === "open"){
     btn("휴식", restWrite, "지금까지를 기록하고 휴식으로");
     btn("마침", function(){ if(confirm("글쓰기를 마칠까요?")) stopWrite(); }, "쉬지 않고 끝내기");
   }else if(key === "timed"){
@@ -2164,7 +2238,7 @@ function renderRestBox(){
   var t = vi < 0 ? "" : tighten(v[vi].text);
   if(!u) info.textContent = "";
   else if(!t) info.textContent = "지금 " + fmt(clen(u.text)) + "자";
-  else { var d = describe(u, t); info.textContent = d.msg; info.classList.toggle("warn", d.warn); }
+  else { var d = describe(u, t); info.textContent = sentNote(v[vi], u, d); info.classList.toggle("warn", d.warn && !wasSent(v[vi], u)); }
   var can = !!(u && t) && !BT.busy;
   $("#rSend").disabled = !can; $("#rSend").textContent = BT.busy ? "보내는 중…" : "보내기";
   $("#rSendDone").disabled = !can; $("#rSendDone").hidden = !!(u && (u.unit_done || u.done_req));
@@ -2179,7 +2253,7 @@ function restSend(alsoDone){
   BT.busy = true; renderRestBox();
   var before = clen(u.text);
   sendText(u, t).then(function(){
-    u.text = t; u.phone_at = null; btLinkTo(u);
+    u.text = t; u.phone_at = null; markSent(v[vi], u); btLinkTo(u);
     var dl = clen(t) - before;
     return (alsoDone ? markDone(u) : Promise.resolve()).then(function(){
       toast("보태기로 보냈습니다 · " + (dl > 0 ? "+" : "") + fmt(dl) + "자" + (alsoDone ? " · 완성" : ""));
