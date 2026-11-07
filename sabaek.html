@@ -287,6 +287,11 @@ h2:first-child{margin-top:0}
 #btState{color:var(--inju);font-size:.85rem;white-space:nowrap;cursor:pointer;border-bottom:1px solid transparent}
 #btState:hover{border-bottom-color:var(--inju)}
 #btState[hidden]{display:none}
+/* 머리줄 단추 — 돌고 있는 모드에 맞춰 휴식·마침·중단·타이핑 중단·재개·완료가 시간 옆에 선다 */
+#btActs{display:flex;gap:.8rem;white-space:nowrap}
+#btActs[hidden]{display:none}
+#btActs button{background:none;border:0;padding:.1rem 0;font-size:.85rem;color:var(--meok-2);border-bottom:1px solid transparent;white-space:nowrap}
+#btActs button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 .modes{display:flex;max-width:20rem;margin:.4rem 0 .2rem;border:1px solid var(--seon);border-radius:2px;overflow:hidden}
 .modes button{flex:1;font-size:.85rem;padding:.4rem 0;border:0;background:var(--jongi);color:var(--meok-2)}
 .modes button + button{border-left:1px solid var(--seon)}
@@ -352,6 +357,7 @@ h2:first-child{margin-top:0}
   <select id="proj" aria-label="프로젝트"></select>
   <span id="tally"></span>
   <span id="btState" hidden title="보태기 화면으로"></span>
+  <span id="btActs" hidden></span>
   <button id="lineBtn" type="button" title="한 줄씩 집중해서 쓰기. 켜면 커서가 놓인 줄만 또렷하고, 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다. 끄면 보통 입력창입니다.">한줄</button>
   <button id="fixBtn" type="button" title="지금 쓰는 대목을 몇 번이고 다시 치는 모드. 판본으로 남지 않습니다.">고쳐쓰기</button>
   <nav>
@@ -2072,9 +2078,30 @@ function renderTime(){
   renderAfter();
   tick();
 }
+/* 머리줄 단추 — 보태기 탭과 같은 함수를 부른다. 상태가 바뀔 때만 다시 그린다 */
+var actsKey = null;
+function drawActs(){
+  var key = !mine() ? "" : NOW.phase === "focus" ? (NOW.open ? "open" : "timed") : (NOW.phase === "type" || NOW.phase === "pause") ? NOW.phase : "";
+  if(key === actsKey) return;
+  actsKey = key;
+  var box = $("#btActs"); box.innerHTML = ""; box.hidden = !key;
+  function btn(label, fn, title){ var b = document.createElement("button"); b.type = "button"; b.textContent = label; if(title) b.title = title; b.onclick = fn; box.appendChild(b); }
+  if(key === "open"){
+    btn("휴식", restWrite, "지금까지를 기록하고 휴식으로");
+    btn("마침", function(){ if(confirm("글쓰기를 마칠까요?")) stopWrite(); }, "쉬지 않고 끝내기");
+  }else if(key === "timed"){
+    btn("중단", stopWrite, "몰입을 끊고 끝내기");
+  }else if(key === "type"){
+    btn("타이핑 중단", typeStop, "잠시 멈추기 · 재개할 수 있습니다");
+    btn("타이핑 완료", function(){ if(confirm("이번 타이핑을 끝낼까요?")) typeDone(); }, "끝내고 마무리 화면으로");
+  }else if(key === "pause"){
+    btn("타이핑 재개", typeResume, "멈춘 데서 이어서");
+  }
+}
 function tick(){
   var now = Date.now(), clock = $("#btClock"), bar = $("#btBar"), st = $("#btStateNote"), hs = $("#btState");
   tidyNowQuiet();
+  drawActs();
   var r = $("#rest");
   if(mine() && NOW.phase === "rest"){
     r.classList.add("on");
