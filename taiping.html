@@ -1832,10 +1832,12 @@ function renderPrev(keepScroll){
       var pb = document.createElement("p"); pb.className = "urv";
       pb.appendChild(document.createTextNode(lab + " · 고친 글 · 스크리브너에 아직 없음"));
       var cp = document.createElement("button"); cp.type = "button"; cp.textContent = "원고 복사";
-      cp.onclick = function(){ copyThen(lines(m).join("\n"), function(){ toast("'" + m.title + "'을 복사했습니다 · 스크리브너 문서에서 ⌘A, ⌘V"); }); };
-      var dn = document.createElement("button"); dn.type = "button"; dn.textContent = "반영함";
-      dn.onclick = function(){ m.phoneAt = null; m.phoneBase = null; m.dirty = true; save(); cloudPush(m); renderWrite(true); toast("스크리브너에 반영한 것으로 표시했습니다"); };
-      pb.appendChild(cp); pb.appendChild(dn);
+      var nr = m.scrivLink ? null : nearLink(m);
+      cp.title = m.scrivLink ? "서식 없는 글로 복사하고 스크리브너 문서를 엽니다 — ⌘A, ⌘V. 누르면 반영한 것으로 봅니다"
+               : nr ? "서식 없는 글로 복사하고, 링크가 없어 '" + nr.title + "'의 스크리브너 문서를 엽니다 — 새 문서를 만들어 붙인 뒤 돌아와 링크를 넣어주세요"
+               : "서식 없는 글로 복사합니다 — 링크가 없어 스크리브너는 열지 않습니다. 붙여 넣은 뒤 링크를 넣어주세요";
+      cp.onclick = function(){ phoneCopy(m); };
+      pb.appendChild(cp);
       elPrev.appendChild(pb);
     }
     if(hasReview(m)){
@@ -3117,6 +3119,31 @@ function handOver(m){
     }else{
       toast("복사했습니다 · 스크리브너에 붙여 넣은 뒤 링크를 넣어주세요", 4000);
     }
+  });
+}
+/* 고친 글을 스크리브너로 — 서식 없는 글로 복사하고 저장된 링크로 스크리브너 문서를 연다. 복사한 것으로 반영한 것으로 본다('반영함'을 따로 누르지 않는다).
+   이 원고에 링크가 없으면 같은 작품의 앞 원고 링크(없으면 가장 가까운 뒤 원고의 링크)를 열어, 거기서 새 문서를 만들어 붙이고 돌아와 링크를 넣게 한다 */
+function nearLink(m){
+  var w = workOf(m); if(!w) return null;
+  var us = unitsOf(w), i = -1;
+  us.forEach(function(x, k){ if(x.id === m.id) i = k; });
+  if(i < 0) return null;
+  var k;
+  for(k = i - 1; k >= 0; k--) if(us[k].scrivLink) return { link:us[k].scrivLink, title:us[k].title };
+  for(k = i + 1; k < us.length; k++) if(us[k].scrivLink) return { link:us[k].scrivLink, title:us[k].title };
+  return null;
+}
+function phoneCopy(m){
+  var text = lines(m).join("\n");
+  if(!text){ toast("복사할 원고가 없습니다"); return; }
+  var own = m.scrivLink || "", nr = own ? null : nearLink(m), link = own || (nr && nr.link) || "";
+  copyThen(text, function(){
+    m.phoneAt = null; m.phoneBase = null; m.dirty = true;
+    save(); cloudPush(m); renderWrite(true); renderList();
+    if(own) toast("복사했습니다 · 스크리브너 문서에서 ⌘A, ⌘V", 3500);
+    else if(nr) toast("복사했습니다 · 링크가 없어 '" + nr.title + "'의 문서를 엽니다. 새 문서를 만들어 붙인 뒤 돌아와 링크를 넣어주세요", 6000);
+    else toast("복사했습니다 · 스크리브너에 붙여 넣은 뒤 링크를 넣어주세요", 4000);
+    if(link) setTimeout(function(){ try{ window.location.href = link; }catch(e){} }, 150);
   });
 }
 function putLink(m){
@@ -5663,6 +5690,7 @@ function showView(v){
     document.getElementById(id).classList.toggle("on", id===v);
   });
   if(v==="tp") tpShow();
+  if(v==="write") renderWrite(true);   /* 400자 탭 등에서 원고가 바뀌었을 수 있다 */
   if(v==="list") renderList();
   if(v==="cal") renderCal();
   if(v==="set") renderSet();
@@ -6253,7 +6281,9 @@ function tpSend(){
   if(!m.phoneAt){ m.phoneBase = m.text; m.phoneAt = Date.now(); }
   commit(m, t, "400자에서 보낸 것", "tp");
   S.sel = null;
-  save(); renderHead(); renderList(); tpRender();
+  save(); renderHead(); renderList();
+  renderWrite(true);   /* 교열 화면도 바로 새 글로 — 탭을 옮겼을 때 옛 글이 남지 않게 */
+  tpRender();
   toast(u.versions.length + "번째 판본 · 원고 " + fmt(len(m.text)) + "자 · 다음 목표 " + fmt(tpGoal(u)) + "자", 3200);
   tpEl.input.focus();
 }
