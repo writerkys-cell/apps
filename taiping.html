@@ -1918,6 +1918,17 @@ function unumEl(m, lab){
   el.onclick = function(e){ e.preventDefault(); unumPick(m.id); tpOpen(m.id); };
   return el;
 }
+/* 교열 화면에서 원고 하나를 맨 위로 — 그 원고의 띠(고친 글·의견)부터 보이게. 화면이 보일 때(showView 뒤) 불러야 자리가 잡힌다 */
+var writeGoto = null;   /* 다음에 교열 탭을 열 때 맨 위에 둘 원고 id */
+function gotoUnit(id){
+  var first = elPrev.querySelector('[data-mid="' + id + '"]');
+  if(!first) return;
+  var el = first, p;
+  while((p = el.previousElementSibling) && !p.dataset.mid && !p.classList.contains("gap")) el = p;
+  var pad = parseFloat(getComputedStyle(elPrev).paddingTop) || 0;
+  var top = el.getBoundingClientRect().top - elPrev.getBoundingClientRect().top + elPrev.scrollTop;
+  elPrev.scrollTop = Math.max(0, top - pad);
+}
 function unumPick(id){
   if(S.current === id) return;
   S.current = id; S.sel = null; save();
@@ -4150,7 +4161,7 @@ function renderList(){
     var top = document.createElement("div"); top.className = "top";
     var nm = document.createElement("button");
     nm.className = "nm"; nm.type = "button"; nm.textContent = m.title;
-    if(openUnit(m)){ nm.title = "교열에서 열기"; nm.onclick = function(){ openMs(m.id); showView("write"); }; }
+    if(openUnit(m)){ nm.title = "교열에서 열기"; nm.onclick = function(){ openMs(m.id); writeGoto = m.id; showView("write"); }; }
     else { nm.title = "분석 탭에서 보기"; nm.onclick = function(){ showView("ana"); }; }
     top.appendChild(nm);
     /* 쓰기 — 스크리브너 문서를 연다(완성 전이든 뒤든). 그 원고를 지금 원고로 고른다. 완성한 작품에는 없다 */
@@ -4331,7 +4342,7 @@ function renderList(){
       if(hasChapters(w)){ act("새 장", function(){ newChapterFlow(w); }); act("새 부", function(){ newPartFlow(w); }); }
       else if(w.kind !== "청탁" && !draftMerged(w)) act("다음 원고", function(){
         var m = nextUnit(w); clockIn(); S.current = m.id; S.sel = null;
-        save(); renderHead(); renderWrite(); showView("write");
+        save(); renderHead(); renderWrite(); writeGoto = m.id; showView("write");
       });
       if(curRev(w)){ act("쪽수 적기", function(){ putPages(w); }); act(revLabel(curRev(w)) + " 마침", function(){ finishRev(w); }); }
       else if(isRevision(w)) act(lastRev(w) ? "개정 " + (lastRev(w).no + 1) + "차 시작" : "쪽수 적기", function(){ startRev(w); });
@@ -5695,7 +5706,7 @@ function showView(v){
   if(v==="cal") renderCal();
   if(v==="set") renderSet();
   if(v==="ana") renderAna();
-  if(v==="write"){ padInput(); elInput.focus(); renderMirror(); }
+  if(v==="write"){ padInput(); elInput.focus(); renderMirror(); if(writeGoto){ gotoUnit(writeGoto); writeGoto = null; } }
   renderGyo();
 }
 document.querySelectorAll("nav button").forEach(function(b){
@@ -6283,6 +6294,7 @@ function tpSend(){
   S.sel = null;
   save(); renderHead(); renderList();
   renderWrite(true);   /* 교열 화면도 바로 새 글로 — 탭을 옮겼을 때 옛 글이 남지 않게 */
+  writeGoto = m.id;    /* 교열 탭으로 가면 이 원고가 맨 위에 */
   tpRender();
   toast(u.versions.length + "번째 판본 · 원고 " + fmt(len(m.text)) + "자 · 다음 목표 " + fmt(tpGoal(u)) + "자", 3200);
   tpEl.input.focus();
@@ -6333,7 +6345,7 @@ tpEl.cur.addEventListener("click", function(e){
 tpEl.copy.addEventListener("click", function(){ var t = tpLeftText(); if(t) copyThen(t, function(){ toast("복사했습니다"); }); });
 tpEl.prev.addEventListener("dblclick", function(){ var t = tpLeftText(); if(t) copyThen(t, function(){ toast("복사했습니다"); }); });
 tpEl.versBtn.addEventListener("click", function(){ tpVersOn = !tpVersOn; tpRenderBtns(); if(tpVersOn) tpRenderVers(); });
-tpEl.back.addEventListener("click", function(){ var m = tpMs(); S.current = m.id; S.sel = null; save(); renderHead(); renderWrite(); showView("write"); });
+tpEl.back.addEventListener("click", function(){ var m = tpMs(); S.current = m.id; S.sel = null; save(); renderHead(); renderWrite(); writeGoto = m.id; showView("write"); });
 tpEl.line.addEventListener("mousedown", function(e){ e.preventDefault(); });
 tpEl.line.addEventListener("click", tpToggleLine);
 tpEl.fix.addEventListener("click", tpToggleFix);
