@@ -276,6 +276,18 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 .ms .badge.nt{color:var(--jjok);border-color:var(--jjok)}
 .ms button.badge.nt{cursor:pointer;background:none;font:inherit}
 .ms button.badge.nt:hover{background:var(--jjok);color:#fff}
+.strip .grow button.jump{font:inherit;font-size:.78rem;color:var(--meok-2);background:none;border:0;border-bottom:1px solid var(--seon);padding:0;margin:0;cursor:pointer}
+.strip .grow button.jump:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.strip .grow button.jump.now{margin-left:.6rem}
+.strip .grow button.jump.rv{color:var(--inju);border-bottom-color:var(--inju)}
+#jmenu{position:fixed;z-index:70;min-width:13rem;max-width:26rem;max-height:60vh;overflow-y:auto;background:var(--sheet);border:1px solid var(--seon);box-shadow:0 6px 24px rgba(0,0,0,.12);padding:.35rem 0;font-family:var(--ui);font-size:.8rem}
+#jmenu button{display:block;width:100%;text-align:left;background:none;border:0;padding:.38rem 1rem;color:var(--meok);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:inherit}
+#jmenu button:hover{background:rgba(0,0,0,.05)}
+#jmenu button.cur{color:var(--inju)}
+#jmenu button .lab{display:inline-block;min-width:2.4em;color:var(--meok-3)}
+#jmenu button .rv{color:var(--inju);margin-left:.5em}
+#jmenu button .fin{color:var(--meok-3);margin-left:.5em}
+#jmenu .none{margin:0;padding:.4rem 1rem;color:var(--meok-3)}
 .strip .grow button.ntwin{font:inherit;font-size:.78rem;color:var(--jjok);background:none;border:0;border-bottom:1px solid var(--jjok);padding:0;margin-left:.5em;cursor:pointer}
 /* 의견 창 — #notes=<원고 id>로 연 두 번째 창. 본문과 의견만, 왼쪽에 두고 보며 스크리브너에 타이핑한다 */
 body.noteswin{margin:0;padding:0;background:var(--sheet);color:var(--meok);min-height:100vh;display:block;overflow:auto}
@@ -1934,6 +1946,49 @@ function unumPick(id){
   S.current = id; S.sel = null; save();
   setTimeout(function(){ renderHead(); renderWrite(true); renderList(); }, 0);
 }
+/* 원고 목록 — 윗줄의 '원고 n개'·'고친 원고 n개' 밑에 펼친다. 부·장 머리 없이 원고만. 고르면 그 원고가 맨 위에 */
+var jmEl = null, jmSkip = false;
+function jumpClose(){
+  if(!jmEl) return;
+  jmEl.remove(); jmEl = null;
+  document.removeEventListener("mousedown", jumpOut, true);
+  document.removeEventListener("keydown", jumpKey, true);
+}
+function jumpOut(e){
+  if(!jmEl || jmEl.contains(e.target)) return;
+  var b = e.target.closest ? e.target.closest("button.jump") : null;
+  var same = b && b.dataset.kind === jmEl.dataset.kind;
+  jumpClose();
+  if(same) jmSkip = true;   /* 열려 있던 단추를 다시 누른 것 — 닫기만 한다 */
+}
+function jumpKey(e){ if(e.key === "Escape"){ jumpClose(); e.preventDefault(); } }
+function unitLab(w, us, m){
+  var mc = m.merged === "ch" && w ? chById(w, m.chId) : null;
+  return mc ? chNo(w, mc) + "장" : String(us.indexOf(m) + 1);
+}
+function jumpMenu(anchor, list, us, kind){
+  if(jmSkip){ jmSkip = false; return; }
+  jumpClose();
+  var w = workOf(cur());
+  var box = document.createElement("div"); box.id = "jmenu"; box.dataset.kind = kind;
+  if(!list.length){ var e0 = document.createElement("p"); e0.className = "none"; e0.textContent = kind + "가 없습니다"; box.appendChild(e0); }
+  list.forEach(function(m){
+    var b = document.createElement("button"); b.type = "button";
+    var lb = document.createElement("span"); lb.className = "lab"; lb.textContent = unitLab(w, us, m);
+    b.appendChild(lb); b.appendChild(document.createTextNode(m.title));
+    if(m.phoneAt && kind !== "고친 원고"){ var rv = document.createElement("span"); rv.className = "rv"; rv.textContent = "고친 글"; b.appendChild(rv); }
+    if(finished(m)){ var fi = document.createElement("span"); fi.className = "fin"; fi.textContent = "완성"; b.appendChild(fi); }
+    if(m.id === S.current) b.classList.add("cur");
+    b.onclick = function(){ jumpClose(); gotoUnit(m.id); };
+    box.appendChild(b);
+  });
+  document.body.appendChild(box); jmEl = box;
+  var r = anchor.getBoundingClientRect(), bw = box.offsetWidth;
+  box.style.top = (r.bottom + 6) + "px";
+  box.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 8 - bw)) + "px";
+  document.addEventListener("mousedown", jumpOut, true);
+  document.addEventListener("keydown", jumpKey, true);
+}
 function renderStrip(){
   var w = workOf(cur()), us = w ? unitsOf(w) : [cur()];
   elSelInfo.innerHTML = "";
@@ -1942,7 +1997,17 @@ function renderStrip(){
   var nn = us.reduce(function(a, m){ return a + notesOf(m).length; }, 0);
   elSelInfo.classList.toggle("rv", !!pn);
   elSelInfo.classList.toggle("nt", !pn && !!nn);
-  elSelInfo.textContent = "원고 " + us.length + "개" + (fn ? " · 완성 " + fn : "") + (pn ? " · 고친 원고 " + pn + "개" : "") + (nn ? " · 의견 " + nn + "개" : "");
+  var jm = function(label, kind, title, fn2){
+    var b = document.createElement("button"); b.type = "button"; b.className = "jump"; b.dataset.kind = kind;
+    b.textContent = label; b.title = title; b.onclick = fn2; elSelInfo.appendChild(b); return b;
+  };
+  var tx = function(s){ elSelInfo.appendChild(document.createTextNode(s)); };
+  jm("원고 " + us.length + "개", "원고", "원고 목록 — 고르면 그 원고가 맨 위에 옵니다", function(e){ jumpMenu(e.currentTarget, us, us, "원고"); });
+  var lastU = us[us.length - 1];
+  if(lastU && us.length > 1) jm("진행중", "진행중", "지금 쓰고 있는 마지막 원고 '" + lastU.title + "'로 갑니다", function(){ gotoUnit(lastU.id); }).classList.add("now");
+  if(fn) tx(" · 완성 " + fn);
+  if(pn){ tx(" · "); jm("고친 원고 " + pn + "개", "고친 원고", "스크리브너에 아직 없는 원고 — 고르면 그 원고가 맨 위에 옵니다", function(e){ jumpMenu(e.currentTarget, us.filter(function(m){ return m.phoneAt; }), us, "고친 원고"); }).classList.add("rv"); }
+  if(nn) tx(" · 의견 " + nn + "개");
   if(nn){
     /* 의견 창 — 지금 원고에 의견이 있으면 그것, 아니면 의견이 있는 첫 원고 */
     var nm = notesOf(cur()).length ? cur() : us.filter(function(m){ return notesOf(m).length; })[0];
@@ -5696,6 +5761,7 @@ elMsSel.addEventListener("change", function(){
 });
 
 function showView(v){
+  jumpClose();
   document.querySelectorAll("nav button").forEach(function(x){ x.classList.toggle("on", x.dataset.view===v); });
   ["write","tp","list","cal","ana","set"].forEach(function(id){
     document.getElementById(id).classList.toggle("on", id===v);
