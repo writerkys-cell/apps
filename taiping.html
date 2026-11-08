@@ -6226,8 +6226,7 @@ function tpRenderBtns(){
   tpEl.versBtn.classList.toggle("on", tpVersOn);
   tpEl.versBtn.textContent = tpVersOn ? "글" : "판본";
   tpEl.line.classList.toggle("on", TP.lineMode !== false);
-  tpEl.line.classList.toggle("lock", tpEl.input.value !== "");
-  tpEl.line.title = tpEl.input.value !== "" ? "보내거나 입력창을 비우면 바꿀 수 있습니다" : (TP.lineMode !== false ? "눌러서 끄기 — 엔터를 친 만큼 그대로 남깁니다" : "눌러서 켜기 — 커서가 놓인 줄만 또렷하게");
+  tpEl.line.title = TP.lineMode !== false ? "눌러서 끄기 — 보통 입력창으로, 엔터를 친 만큼 그대로 남깁니다. 쓰던 글은 문단으로 합쳐 둡니다" : "눌러서 켜기 — 커서가 놓인 줄만 또렷하게. 쓰던 글의 문단은 빈 줄로 벌려 둡니다";
   tpEl.fix.classList.toggle("on", !!u.fix);
   tpEl.fix.textContent = u.fix ? "고쳐쓰기 끄기" : "고쳐쓰기";
 }
@@ -6331,12 +6330,25 @@ function tpToggleFix(){
   tpViewIdx = null; tpVersOn = false;
   save(); tpRender(); tpEl.input.focus();
 }
+/* 한 줄씩 켜고 끄기 — 원래 400자 앱과 같이, 입력창의 글을 새 방식의 규칙에 맞게 바꿔 둔다(글은 잃지 않는다).
+   켤 때 — 보통 입력창의 줄바꿈(문단)을 빈 줄로 벌려 문단이 그대로 남게 한다.
+   끌 때 — 줄 단위로 친 글을 문단으로 합쳐 보통 글 모양으로 만든다. */
 function tpToggleLine(){
-  if(tpEl.input.value !== ""){ toast("보내거나 입력창을 비우면 바꿀 수 있습니다"); tpEl.input.focus(); return; }
-  TP.lineMode = TP.lineMode === false;
+  var v = tpEl.input.value, u = tpUnit();
+  if(TP.lineMode !== false){
+    v = tpTidy(v);
+    TP.lineMode = false;
+  }else{
+    v = v.replace(/\r/g, "").split(/\n(?:[ \t　]*\n)+/)
+         .map(function(b){ return b.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length; }).join("\n\n"); })
+         .filter(function(b){ return b.length; }).join("\n\n");
+    TP.lineMode = true;
+  }
+  tpEl.input.value = v; u.draft = v;
+  var n = v.length; tpEl.input.setSelectionRange(n, n);
   save(); tpRenderBtns(); tpRenderMode(); tpRenderCount();
   toast(TP.lineMode !== false ? "한 줄씩 집중해서 씁니다" : "보통 입력창으로 씁니다 — 엔터가 그대로 남습니다");
-  tpEl.input.focus();
+  tpEl.input.focus(); tpFollowCaret();
 }
 
 /* ---- 보내기 — 새 판본이 되고, 교열 원고의 본문이 된다 ---- */
