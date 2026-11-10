@@ -664,6 +664,7 @@ h2:first-child{margin-top:0}
 .tprev .gap{margin:0;line-height:var(--plh)}   /* 빈 줄 — 교열 화면처럼 한 줄 높이의 빈 문단 */
 .tprev.empty{color:var(--meok-3);display:flex;align-items:center;justify-content:center;text-align:center;font-size:1rem;line-height:1.9;font-family:var(--ui);padding-bottom:1.4rem}
 .tprev[hidden]{display:none}
+.tstrip .lnk[hidden]{display:none}
 /* 판본 목록 — 왼쪽 칸을 대신해 보인다 */
 .tvers{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:1.4rem var(--ppad) 5rem;max-width:var(--pmax);margin:0 auto;width:100%}
 .tvers[hidden]{display:none}
@@ -841,7 +842,7 @@ h2:first-child{margin-top:0}
         <span class="tally" id="tpTally"></span>
         <span class="nums" id="tpNums"></span>
         <span class="when" id="tpWhen"></span>
-        <button class="lnk" id="tpCopy" type="button" title="왼쪽 글 복사">복사</button>
+        <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
         <button class="lnk" id="tpVersBtn" type="button" title="이 원고에 쌓인 판본 목록">판본</button>
         <button class="lnk" id="tpBack" type="button" title="교열 탭에서 이 원고 보기">교열로</button>
       </div>
@@ -6018,7 +6019,7 @@ document.addEventListener("visibilitychange", function(){ clockIn(); save(); });
 var TP = S.tp;
 var tpEl = {
   view:$("#tp"), grip:$("#tpGrip"), strip:$("#tpStrip"), tally:$("#tpTally"), nums:$("#tpNums"), when:$("#tpWhen"),
-  copy:$("#tpCopy"), versBtn:$("#tpVersBtn"), back:$("#tpBack"), prev:$("#tpPrev"), vers:$("#tpVers"),
+  toRight:$("#tpToRight"), versBtn:$("#tpVersBtn"), back:$("#tpBack"), prev:$("#tpPrev"), vers:$("#tpVers"),
   wrap:$("#tpWrap"), mirror:$("#tpMirror"), input:$("#tpInput"), line:$("#tpLine"), fix:$("#tpFix"), cur:$("#tpCur"), send:$("#tpSend")
 };
 var tpViewIdx = null, tpVersOn = false, tpWheelUntil = 0;
@@ -6255,6 +6256,11 @@ function tpRenderBtns(){
   tpEl.line.title = TP.lineMode !== false ? "한 줄씩 — 엔터 한 번은 이어 붙고, 빈 줄 하나는 행갈이, 빈 줄 둘은 한 칸 띄우기가 됩니다. 눌러서 끄면 보통 입력창으로, 쓰던 글은 문단으로 합쳐 둡니다" : "눌러서 켜기 — 커서가 놓인 줄만 또렷하게. 쓰던 글의 문단은 빈 줄로 벌려 둡니다";
   tpEl.fix.classList.toggle("on", !!u.fix);
   tpEl.fix.textContent = u.fix ? "고쳐쓰기 끄기" : "고쳐쓰기";
+  /* 왼쪽 글을 입력창으로 — 왼쪽에 글이 보일 때만(판본 목록·고쳐쓰기 중에는 숨긴다) */
+  var st = tpStacked();
+  tpEl.toRight.hidden = tpVersOn || !!u.fix || !tpLeftText();
+  tpEl.toRight.textContent = st ? "아래 창으로" : "오른쪽 창으로";
+  tpEl.toRight.title = (st ? "위 글을 아래" : "왼쪽 글을 오른쪽") + " 입력창으로 옮깁니다 — " + (TP.lineMode !== false ? "한 줄씩에 맞는 모양으로 바꿔서. " : "") + "그 뒤에 이어서 목표까지 씁니다. 처음부터 다시 쓰려면 누르지 않고 그냥 씁니다";
 }
 
 /* ---- 오른쪽: 커서가 놓인 줄만 또렷하게 ---- */
@@ -6375,6 +6381,23 @@ function tpToggleLine(){
   tpEl.input.focus(); tpFollowCaret();
 }
 
+/* 왼쪽 글을 오른쪽 입력창으로 — 지금 입력 방식에 맞는 모양으로 옮겨, 그 뒤에 이어서 목표까지 쓴다.
+   한 줄씩이면 행갈이는 빈 줄 하나, 한 칸 띄우기는 빈 줄 둘로 벌린다(보낼 때 tpTidy가 되돌린다). 보통 입력창이면 글 그대로.
+   왼쪽에 보이는 판본을 옮긴다 — 예전 판본을 골라 두면 거기서 다시 시작한다 */
+function tpToRight(){
+  var u = tpUnit(); if(u.fix) return;
+  var t = tpLeftText(); if(!t) return;
+  var st = tpStacked();
+  if(tpEl.input.value.trim() && !confirm((st ? "아래" : "오른쪽") + " 창에 쓰던 글이 있습니다.\n" + (st ? "위" : "왼쪽") + " 글로 덮어쓸까요? 쓰던 글은 사라집니다.")){ tpEl.input.focus(); return; }
+  var v = TP.lineMode !== false ? tpSpread(t) : trimBlank(t.split("\n")).join("\n");
+  tpEl.input.value = v; u.draft = v;
+  var n = v.length; tpEl.input.setSelectionRange(n, n);
+  save(); tpRenderBtns(); tpRenderMode(); tpRenderCount();
+  tpEl.input.focus(); tpFollowCaret();
+  var g = tpGoal(u), c = len(tpOutgoing());
+  toast("글을 옮겼습니다 · " + (c < g ? "목표 " + fmt(g) + "자까지 " + fmt(g - c) + "자" : "목표 " + fmt(g) + "자를 채웠습니다"), 3200);
+}
+
 /* ---- 보내기 — 새 판본이 되고, 교열 원고의 본문이 된다 ---- */
 function tpSend(){
   var m = tpMs(), u = tpUnit(m);
@@ -6444,7 +6467,7 @@ tpEl.cur.addEventListener("click", function(e){
   if(!b || b.disabled) return;
   tpCutGoal(parseInt(b.getAttribute("data-g"), 10));
 });
-tpEl.copy.addEventListener("click", function(){ var t = tpLeftText(); if(t) copyThen(t, function(){ toast("복사했습니다"); }); });
+tpEl.toRight.addEventListener("click", tpToRight);
 tpEl.prev.addEventListener("dblclick", function(){ var t = tpLeftText(); if(t) copyThen(t, function(){ toast("복사했습니다"); }); });
 tpEl.versBtn.addEventListener("click", function(){ tpVersOn = !tpVersOn; tpRenderBtns(); if(tpVersOn) tpRenderVers(); });
 tpEl.back.addEventListener("click", function(){ var m = tpMs(); S.current = m.id; S.sel = null; save(); renderHead(); renderWrite(); writeGoto = m.id; showView("write"); });
@@ -6460,7 +6483,7 @@ tpEl.fix.addEventListener("click", tpToggleFix);
   function up(){ if(!on) return; on = false; tpEl.view.classList.remove("dragging"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); save(); tpRenderMirror(); }
   tpEl.grip.addEventListener("mousedown", function(e){ if(e.button) return; e.preventDefault(); on = true; tpEl.view.classList.add("dragging"); document.addEventListener("mousemove", move); document.addEventListener("mouseup", up); });
   tpEl.grip.addEventListener("dblclick", function(){ TP.split = 50; apply(); save(); tpRenderMirror(); });
-  window.addEventListener("resize", function(){ if(tpOn()){ tpPad(); tpRenderMirror(); } });
+  window.addEventListener("resize", function(){ if(tpOn()){ tpPad(); tpRenderMirror(); tpRenderBtns(); } });
   if(window.ResizeObserver) new ResizeObserver(function(){ if(tpOn()){ tpPad(); tpRenderMirror(); } }).observe(tpEl.wrap);
   apply();
 })();
