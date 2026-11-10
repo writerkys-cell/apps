@@ -854,7 +854,7 @@ h2:first-child{margin-top:0}
         <textarea id="tpInput" placeholder="여기에 씁니다." spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
       </div>
       <div class="tfoot">
-        <button class="tb" id="tpLine" type="button" title="한 줄씩 집중해서 쓰기. 켜면 커서가 놓인 줄만 또렷하고, 줄바꿈 하나는 공백으로 이어 붙고 빈 줄만 문단이 됩니다. 끄면 보통 입력창입니다.">한 줄씩</button>
+        <button class="tb" id="tpLine" type="button" title="한 줄씩 집중해서 쓰기. 켜면 커서가 놓인 줄만 또렷하고, 줄바꿈 하나는 공백으로 이어 붙고, 빈 줄 하나는 행갈이, 빈 줄 둘은 한 칸 띄우기가 됩니다. 끄면 보통 입력창입니다.">한 줄씩</button>
         <button class="tb" id="tpFix" type="button" title="지금 쓰는 대목을 몇 번이고 다시 치는 모드. 판본으로 남지 않습니다.">고쳐쓰기</button>
         <span id="tpCur"></span>
         <button id="tpSend" type="button" disabled>보내기</button>
@@ -6089,10 +6089,33 @@ function tpCutGoal(dir){
 function tpIsPiece(n){ return !!(S.piece && n >= S.piece); }
 
 /* ---- 글 다듬기 ---- */
+/* 한 줄씩으로 친 글 → 본문. 엔터 한 번은 공백으로 이어 붙고, 빈 줄 하나는 행갈이(문단 나눔),
+   빈 줄 둘 이상은 행갈이에 빈 줄 하나를 더한 한 칸 띄우기가 된다 */
 function tpTidy(raw){
-  return raw.split(/\n(?:[ \t　]*\n)+/).map(function(block){
-    return block.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length; }).join(" ");
-  }).filter(function(b){ return b.length; }).join("\n");
+  var out = [], cur = [], blanks = 0;
+  raw.replace(/\r/g, "").split("\n").forEach(function(l){
+    var s = l.trim();
+    if(s){
+      if(!cur.length && out.length && blanks >= 2) out.push("");
+      cur.push(s); blanks = 0;
+    }else{
+      if(cur.length){ out.push(cur.join(" ")); cur = []; }
+      blanks++;
+    }
+  });
+  if(cur.length) out.push(cur.join(" "));
+  return out.join("\n");
+}
+/* 본문 모양의 글 → 한 줄씩의 글(tpTidy의 거꾸로). 행갈이는 빈 줄 하나로, 한 칸 띄우기는 빈 줄 둘로 벌린다 */
+function tpSpread(raw){
+  var out = "", blanks = 0, any = false;
+  raw.replace(/\r/g, "").split("\n").forEach(function(l){
+    var s = l.trim();
+    if(!s){ blanks++; return; }
+    if(any) out += blanks ? "\n\n\n" : "\n\n";
+    out += s; any = true; blanks = 0;
+  });
+  return out;
 }
 function tpOutgoing(){
   var v = tpEl.input.value;
@@ -6229,7 +6252,7 @@ function tpRenderBtns(){
   tpEl.versBtn.classList.toggle("on", tpVersOn);
   tpEl.versBtn.textContent = tpVersOn ? "글" : "판본";
   tpEl.line.classList.toggle("on", TP.lineMode !== false);
-  tpEl.line.title = TP.lineMode !== false ? "눌러서 끄기 — 보통 입력창으로, 엔터를 친 만큼 그대로 남깁니다. 쓰던 글은 문단으로 합쳐 둡니다" : "눌러서 켜기 — 커서가 놓인 줄만 또렷하게. 쓰던 글의 문단은 빈 줄로 벌려 둡니다";
+  tpEl.line.title = TP.lineMode !== false ? "한 줄씩 — 엔터 한 번은 이어 붙고, 빈 줄 하나는 행갈이, 빈 줄 둘은 한 칸 띄우기가 됩니다. 눌러서 끄면 보통 입력창으로, 쓰던 글은 문단으로 합쳐 둡니다" : "눌러서 켜기 — 커서가 놓인 줄만 또렷하게. 쓰던 글의 문단은 빈 줄로 벌려 둡니다";
   tpEl.fix.classList.toggle("on", !!u.fix);
   tpEl.fix.textContent = u.fix ? "고쳐쓰기 끄기" : "고쳐쓰기";
 }
@@ -6334,7 +6357,7 @@ function tpToggleFix(){
   save(); tpRender(); tpEl.input.focus();
 }
 /* 한 줄씩 켜고 끄기 — 원래 400자 앱과 같이, 입력창의 글을 새 방식의 규칙에 맞게 바꿔 둔다(글은 잃지 않는다).
-   켤 때 — 보통 입력창의 줄바꿈(문단)을 빈 줄로 벌려 문단이 그대로 남게 한다.
+   켤 때 — 보통 입력창의 줄바꿈(문단)을 빈 줄로 벌려 문단이 그대로 남게 한다. 한 칸 띄운 곳은 빈 줄 둘로 벌린다.
    끌 때 — 줄 단위로 친 글을 문단으로 합쳐 보통 글 모양으로 만든다. */
 function tpToggleLine(){
   var v = tpEl.input.value, u = tpUnit();
@@ -6342,9 +6365,7 @@ function tpToggleLine(){
     v = tpTidy(v);
     TP.lineMode = false;
   }else{
-    v = v.replace(/\r/g, "").split(/\n(?:[ \t　]*\n)+/)
-         .map(function(b){ return b.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l.length; }).join("\n\n"); })
-         .filter(function(b){ return b.length; }).join("\n\n");
+    v = tpSpread(v);
     TP.lineMode = true;
   }
   tpEl.input.value = v; u.draft = v;
