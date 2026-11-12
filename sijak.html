@@ -435,7 +435,6 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
       <div class="strip inc sub" id="stripA" role="button" tabindex="0" title="원고 보기"></div></div>
     <div class="pair" id="pairR"><button class="tri" data-pair="R" aria-controls="stripP" aria-expanded="false" aria-label="쪽수 펼치기"></button>
       <a class="strip main" id="stripR" target="sijak_read" rel="opener"></a>
-      <div class="ssbox" id="ssFormR"></div>
       <div class="strip inc sub" id="stripP" role="button" tabindex="0" title="쪽수 보기"></div></div>
     <div class="pair" id="pairE"><button class="tri" data-pair="E" aria-controls="stripD" aria-expanded="false" aria-label="거리 펼치기"></button>
       <a class="strip main" id="stripE" target="sijak_run" rel="opener"></a>
@@ -650,7 +649,7 @@ async function loadRead(k){
       rest(cfg.mr,'seoga_meta?select=id,data&id=in.(active,settings)')
     ]);
     let min=0; const titles=[];
-    if(k<SS_SINCE) (rows||[]).forEach(r=>{ const d=r.data||{}; if(d.gone) return; min+=(+d.minutes||0); if(d.title&&!titles.includes(d.title)) titles.push(d.title); });   /* 전환한 날부터는 시작이 잰다 */
+    (rows||[]).forEach(r=>{ const d=r.data||{}; if(d.gone) return; min+=(+d.minutes||0); if(d.title&&!titles.includes(d.title)) titles.push(d.title); });
     const act=(meta||[]).find(x=>x.id==='active'), st=(meta||[]).find(x=>x.id==='settings');
     R={min, titles, goal:(st&&st.data&&+st.data.target)||120, active:act&&act.data&&act.data.active||null};
     Rerr='';
@@ -664,36 +663,33 @@ function readRunning(){
   return {min:0, label:(a.device?a.device+'에서 ':'')+'어제부터 읽는 중', title:a.title};
 }
 
-/* ═════════ 글쓰기·독서 세션 — 시작이 직접 잰다 (2026년 11월 12일) ═════════
-   칸을 누르면 그 순간부터 재고(타이핑·서가 탭은 열기만 한다), 칸을 다시 누르거나 시작이 연 탭이 닫히면 끝내기 칸이 뜬다.
-   한 세션 = sijak_sessions 한 줄(미래 프로젝트, 시작의 표). data: { id, kind:'write'|'read', start, end(끝내기 전엔 null),
-   min(실제 시간을 고쳤을 때만, 분), from, to(독서: 부터·까지 쪽), adv0, adv1(글쓰기: 시작·끝 때 그날 나아감 — 타이핑의 days 줄),
-   device, updatedAt, deleted }. 어느 글·어느 책인지는 적지 않는다. 단축어도 부르지 않는다.
-   2분 안에 끝내면 없던 일로. 3시간을 넘기거나 새벽 4시를 지나면 실제 시간을 묻는다. 기기 사이에 하나의 세션을 이어받아 끝낼 수 있다.
-   SS_SINCE부터 오늘의 글쓰기·독서 시간은 이 표만 센다(타이핑의 몰입·타이핑·교열, 서가의 읽기는 세지 않는다 — 둘 다 세면 두 번 센다. 떠들기만 그대로).
-   쪽수는 SS_SINCE 전은 서가의 읽기 기록, 그 뒤는 이 표의 부터·까지. 글자는 그대로 타이핑의 days 줄(타이핑에서 보내기를 눌러야 올라온다). */
+/* ═════════ 글쓰기 세션 — 시작이 직접 잰다 (2026년 11월 12일) ═════════
+   글쓰기 칸을 누르면 그 순간부터 재고(타이핑 탭은 열기만 한다), 칸을 다시 누르거나 시작이 연 탭이 닫히면 끝내기 칸이 뜬다.
+   한 세션 = sijak_sessions 한 줄(미래 프로젝트, 시작의 표). data: { id, kind:'write', start, end(끝내기 전엔 null),
+   min(실제 시간을 고쳤을 때만, 분), adv0, adv1(시작·끝 때 그날 나아감 — 타이핑의 days 줄), device, updatedAt, deleted }.
+   어느 글인지는 적지 않는다. 단축어도 부르지 않는다. 2분 안에 끝내면 없던 일로. 3시간을 넘기거나 새벽 4시를 지나면 실제 시간을 묻는다.
+   기기 사이에 하나의 세션을 이어받아 끝낼 수 있다. SS_SINCE부터 오늘의 글쓰기 시간은 이 표와 떠들기만 센다(타이핑의 몰입·타이핑·교열은 세지 않는다 — 둘 다 세면 두 번 센다).
+   글자는 그대로 타이핑의 days 줄(타이핑에서 보내기를 눌러야 올라온다).
+   독서는 서가가 잰다 — 11월 12일에 하루 동안 독서도 여기서 쟀다가 되돌렸다(서가 안에서 코멘트·쪽을 다루는 흐름이 읽기 시작에 묶여 있어서). kind:'read' 줄이 남아 있어도 쓰지 않는다. */
 const SS_KEY='sijak.sess', SS_SINCE='2026-11-12', SS_MIN_MS=2*60000, SS_LONG_MS=3*3600000;
 let SS=Object.assign({rows:{}, dirty:{}, since:''}, lsGet(SS_KEY,{}));
 if(!SS.rows) SS.rows={}; if(!SS.dirty) SS.dirty={};
 let ssTableMissing=false, ssPushT=null, ssPushing=false;
-let ssWin={write:null, read:null}, ssPoll=null, ssForm=null;   /* ssForm: {kind, at} 열려 있는 끝내기 칸 */
-const SS_NAME={write:'글쓰기', read:'독서'}, SS_TAB={write:'sijak_write', read:'sijak_read'}, SS_BOX={write:'ssFormW', read:'ssFormR'};
+let ssWin={write:null}, ssPoll=null, ssForm=null;   /* ssForm: {kind, at} 열려 있는 끝내기 칸 */
+const SS_NAME={write:'글쓰기'}, SS_TAB={write:'sijak_write'}, SS_BOX={write:'ssFormW'};
 function ssPersist(){ lsSet(SS_KEY,SS); }
-function ssLive(){ return Object.values(SS.rows).filter(r=>r&&r.id&&!r.deleted&&r.kind&&r.start); }
+function ssLive(){ return Object.values(SS.rows).filter(r=>r&&r.id&&!r.deleted&&r.kind==='write'&&r.start); }
 function ssOpen(kind){ return ssLive().filter(r=>r.kind===kind&&!r.end).sort((a,b)=>a.start.localeCompare(b.start))[0]||null; }
 function ssDay(r){ return dayKey(Date.parse(r.start)); }
 function ssMin(r){ if(r.min!=null&&+r.min>=0) return +r.min; const a=Date.parse(r.start), b=r.end?Date.parse(r.end):Date.now(); return Math.max(0,(b-a)/60000); }
 function ssDone(kind,k){ return ssLive().filter(r=>r.kind===kind&&r.end&&ssDay(r)===k); }
 function ssDoneMin(kind,k){ return ssDone(kind,k).reduce((t,r)=>t+ssMin(r),0); }
-function ssPages(r){ return (r.from!=null&&r.to!=null)?Math.max(0,(+r.to||0)-(+r.from||0)):0; }
 function ssRunning(kind){ const r=ssOpen(kind); if(!r) return null; const dev=r.device&&r.device!==myDevice()?r.device+'에서 ':''; return {min:ssMin(r), label:dev+SS_NAME[kind]+' 중', title:'', row:r}; }
-function ssLastTo(){ const l=ssLive().filter(r=>r.kind==='read'&&r.end&&r.to!=null).sort((a,b)=>b.end.localeCompare(a.end))[0]; return l?+l.to:null; }   /* 가장 나중에 끝낸 읽기의 ‘까지’ */
 function ssAdvToday(){ return (W&&W.adv)? (+W.adv[dayKey()]||0) : null; }
 function touchSs(r){
   r.updatedAt=new Date().toISOString(); r.device=myDevice();
   SS.rows[r.id]=r; SS.dirty[r.id]=1; ssPersist();
   clearTimeout(ssPushT); ssPushT=setTimeout(pushSs,500);
-  rdBuild();
 }
 async function pushSs(){
   if(!mrOn()||ssPushing) return;
@@ -710,7 +706,7 @@ async function pushSs(){
     ssTableMissing=false; setDot('sess','ok','');
   }catch(er){
     ssTableMissing=missingTable(er);
-    setDot('sess','err', ssTableMissing?'Supabase에 글쓰기·독서 표가 없습니다 · 설정에서 SQL을 실행하세요':'세션을 올리지 못했습니다 · '+er.message);
+    setDot('sess','err', ssTableMissing?'Supabase에 글쓰기 표가 없습니다 · 설정에서 SQL을 실행하세요':'세션을 올리지 못했습니다 · '+er.message);
   }
   ssPushing=false;
   if(Object.keys(SS.dirty).length && !ssTableMissing){ clearTimeout(ssPushT); ssPushT=setTimeout(pushSs,15000); }
@@ -733,13 +729,12 @@ async function pullSs(){
       if(!rows||rows.length<500) break; off+=500;
     }
     SS.since=max; ssPersist(); ssTableMissing=false;
-    if(changed) rdBuild();
     if(Object.keys(SS.dirty).length) pushSs(); else setDot('sess','ok','');
     return changed;
   }catch(er){
     ssTableMissing=missingTable(er);
     if(ssTableMissing && !ssLive().length) setDot('sess','','');
-    else setDot('sess','err', ssTableMissing?'Supabase에 글쓰기·독서 표가 없습니다 · 설정에서 SQL을 실행하세요':'세션을 받지 못했습니다');
+    else setDot('sess','err', ssTableMissing?'Supabase에 글쓰기 표가 없습니다 · 설정에서 SQL을 실행하세요':'세션을 받지 못했습니다');
     return false;
   }
 }
@@ -751,8 +746,7 @@ create policy "sess open" on sijak_sessions for all using (true) with check (tru
 /* 시작·끝 */
 function ssStart(kind){
   if(ssOpen(kind)) return null;
-  const r={id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, start:new Date().toISOString(), end:null, min:null,
-    from:kind==='read'?ssLastTo():null, to:null, adv0:kind==='write'?ssAdvToday():null, adv1:null};
+  const r={id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, start:new Date().toISOString(), end:null, min:null, adv0:ssAdvToday(), adv1:null};
   touchSs(r); ssForm=null; renderToday(); return r;
 }
 /* 탭은 window.open으로 열어 손잡이를 쥔다 — 닫히면 끝내기 칸을 띄우려고. 시작을 새로 열면 손잡이가 없으니 그때는 칸을 다시 누른다. */
@@ -763,8 +757,8 @@ function ssOpenTab(kind){
 function ssWatch(){
   if(ssPoll) return;
   ssPoll=setInterval(()=>{
-    ['write','read'].forEach(kind=>{ const w=ssWin[kind]; if(w&&w.closed){ ssWin[kind]=null; if(ssOpen(kind)&&!(ssForm&&ssForm.kind===kind)) ssStop(kind); } });
-    if(!ssWin.write&&!ssWin.read){ clearInterval(ssPoll); ssPoll=null; }
+    ['write'].forEach(kind=>{ const w=ssWin[kind]; if(w&&w.closed){ ssWin[kind]=null; if(ssOpen(kind)&&!(ssForm&&ssForm.kind===kind)) ssStop(kind); } });
+    if(!ssWin.write){ clearInterval(ssPoll); ssPoll=null; }
   },2000);
 }
 function ssStop(kind){
@@ -795,15 +789,12 @@ function ssFormHTML(r){
   const long=(now-a)>=SS_LONG_MS || dayKey(a.getTime())!==dayKey();
   let h=`<div class="evform"><p class="from"><b>${SS_NAME[kind]} · ${fmtMin(ssMin(r))}</b> <span class="of">${hm(a)}–${hm(now)}</span></p>`;
   if(long) h+=`<div class="field"><label>실제 시간 (분) — 3시간이 넘었거나 날이 바뀌었습니다. 탭 닫기를 잊었으면 고치세요</label><input class="ss-min" type="number" inputmode="numeric" value="${Math.round(ssMin(r))}"></div>`;
-  if(kind==='read') h+=`<div class="frow"><div class="field"><label>몇 쪽까지</label><input class="ss-to" type="number" inputmode="numeric" placeholder="쪽"></div>
-    <div class="field"><label>부터 (다른 책이면 고치세요)</label><input class="ss-from" type="number" inputmode="numeric" value="${r.from!=null?esc(r.from):''}" placeholder="쪽"></div></div>
-    <p class="hint">비워 두면 시간만 남습니다.</p>`;
-  else h+=`<p class="hint"><span id="ssAdv">${esc(ssAdvText(r))}</span> <button class="linkish" type="button" onclick="ssRecount()">다시 세기</button></p>`;
+  h+=`<p class="hint"><span id="ssAdv">${esc(ssAdvText(r))}</span> <button class="linkish" type="button" onclick="ssRecount()">다시 세기</button></p>`;
   h+=`<div class="btnrow"><button class="btn solid ss-end">끝</button><button class="btn ss-go">계속 (탭 다시 열기)</button><button class="btn warn ss-drop">없던 일로</button></div></div>`;
   return h;
 }
 function renderSsForms(){
-  ['write','read'].forEach(kind=>{
+  ['write'].forEach(kind=>{
     const box=$(SS_BOX[kind]); if(!box) return;
     const r=ssOpen(kind), on=!!(ssForm&&ssForm.kind===kind&&r);
     if(!on){ if(box.innerHTML){ box.innerHTML=''; box.dataset.at=''; } return; }
@@ -814,21 +805,16 @@ function renderSsForms(){
     q('.ss-go').onclick=()=>{ ssForm=null; box.innerHTML=''; box.dataset.at=''; ssOpenTab(kind); renderToday(); };
     q('.ss-drop').onclick=()=>{ if(!confirm('이번 '+SS_NAME[kind]+'를 기록에 남기지 않습니다. 괜찮습니까?')) return; r.deleted=true; touchSs(r); ssForm=null; renderToday(); toast('없던 일로 했습니다'); };
     box.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); ssFinish(r,q); } });
-    setTimeout(()=>{ const f=q('.ss-to')||q('.ss-min'); if(f&&!isTouch) f.focus(); box.scrollIntoView({block:'center'}); },30);
+    setTimeout(()=>{ const f=q('.ss-min'); if(f&&!isTouch) f.focus(); box.scrollIntoView({block:'center'}); },30);
   });
 }
 function ssFinish(r,q){
   const mi=q('.ss-min');
   if(mi){ const v=parseInt(String(mi.value).replace(/[^\d]/g,''),10); if(!(v>=0)){ toast('실제 시간을 분으로 적어 주세요'); mi.focus(); return; } r.min=v; }
-  if(r.kind==='read'){
-    const to=q('.ss-to').value.trim(), fr=q('.ss-from').value.trim();
-    r.to=to===''?null:Math.max(0,parseInt(to,10)||0); r.from=fr===''?null:Math.max(0,parseInt(fr,10)||0);
-    if(r.to!=null&&r.from!=null&&r.to<r.from){ toast('‘까지’가 ‘부터’보다 앞입니다 · 다른 책이면 ‘부터’를 고치세요'); q('.ss-to').focus(); return; }
-  } else r.adv1=ssAdvToday();
+  r.adv1=ssAdvToday();
   r.end=new Date().toISOString();
   touchSs(r); ssForm=null; if(document.activeElement) document.activeElement.blur(); renderToday();
-  const pg=ssPages(r);
-  toast(SS_NAME[r.kind]+' '+fmtMin(ssMin(r))+(pg?' · '+pg+'쪽':'')+' · 적었습니다');
+  toast(SS_NAME[r.kind]+' '+fmtMin(ssMin(r))+' · 적었습니다');
 }
 
 /* 할 일 = 방점(2026년 10월 10일, 전에는 미래). 방점은 목록 전체를 bangjeom 표의 한 줄(id = 목록 이름)에 둔다:
@@ -961,13 +947,11 @@ function renderToday(){
   if(Rerr==='setup'){ sr.removeAttribute('href'); sr.innerHTML=`<div class="strip-head"><span class="strip-name">독서</span></div><div class="strip-sub">${setupMsg()}</div>`; sr.classList.remove('met'); }
   else if(!R){ sr.innerHTML=`<div class="strip-head"><span class="strip-name">독서</span></div><div class="strip-sub">${Rerr?'<span class="err">'+esc(Rerr)+'</span>':'불러오는 중'}</div>`; }
   else{
-    const ss=ssRunning('read'), run=ss||(k<SS_SINCE?readRunning():null), done=R.min+ssDoneMin('read',k), tot=done+(run?run.min:0), met=tot>=R.goal;
-    const pg=ssDone('read',k).reduce((t,r)=>t+ssPages(r),0);
-    let sub = run ? `<span class="live">${esc(run.label)}${run.min>=1?' · '+fmtMin(run.min)+'째':''}</span>${run.title?' · 『'+esc(run.title)+'』':''}${ss?' · 누르면 끝':''}`
-      : (R.titles.length? R.titles.map(t=>'『'+esc(t)+'』').join(' ')+'을 읽었습니다' : done? '오늘 '+fmtMin(done)+' 읽었습니다' : '아직 읽지 않았습니다');
-    if(pg) sub+=' · '+pg+'쪽';
+    const run=readRunning(), tot=R.min+(run?run.min:0), met=tot>=R.goal;
+    let sub = run ? `<span class="live">${esc(run.label)}${run.min>=1?' · '+fmtMin(run.min)+'째':''}</span>${run.title?' · 『'+esc(run.title)+'』':''}`
+      : (R.titles.length? R.titles.map(t=>'『'+esc(t)+'』').join(' ')+'을 읽었습니다' : '아직 읽지 않았습니다');
     if(Rerr) sub+=` <span class="err">· ${esc(Rerr)}</span>`;
-    sr.innerHTML=stripHTML('독서', done, run?run.min:0, R.goal, sub, met, 'avgR');
+    sr.innerHTML=stripHTML('독서', R.min, run?run.min:0, R.goal, sub, met, 'avgR');
     sr.classList.toggle('met',met);
   }
 
@@ -2236,8 +2220,8 @@ function renderSet(){
   <pre class="sql">${esc(REF_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copyRefSql">SQL 복사</button></div>
 
-  <h3>글쓰기·독서 표</h3>
-  <p class="note">오늘 화면의 글쓰기·독서 칸이 재는 세션을 담습니다(${kLabelY(SS_SINCE)}부터). 칸을 누르면 재기 시작하고 타이핑·서가는 열기만 합니다. 다시 누르거나 연 탭을 닫으면 끝내기 칸이 뜨고, 독서는 그때 몇 쪽까지 읽었는지 적습니다. 어느 글·어느 책인지는 적지 않고, 단축어도 부르지 않습니다. 글자는 타이핑에서 보내기를 누를 때 셉니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <h3>글쓰기 표</h3>
+  <p class="note">오늘 화면의 글쓰기 칸이 재는 세션을 담습니다(${kLabelY(SS_SINCE)}부터). 칸을 누르면 재기 시작하고 타이핑은 열기만 합니다. 다시 누르거나 연 탭을 닫으면 끝내기 칸이 뜹니다. 어느 글인지는 적지 않고, 단축어도 부르지 않습니다. 글자는 타이핑에서 보내기를 누를 때 셉니다. 독서는 서가가 재고 시작은 읽기만 합니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
   <pre class="sql">${esc(SS_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copySsSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">끝낸 세션 ${ssLive().filter(r=>r.end).length}개가 있고, ${Object.keys(SS.dirty).length?Object.keys(SS.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
@@ -2352,7 +2336,7 @@ async function probe(){
   const out=[]; const p=$('probe'); p.textContent='확인하는 중…';
   if(btOn()){ try{ await rest(cfg.bt,'botaegi_sessions?select=id&limit=1'); out.push('✓ 보태기 기록을 읽을 수 있습니다'); }catch(e){ out.push('✕ 보태기: '+e.message); } } else out.push('· 보태기 프로젝트가 비어 있습니다');
   if(mrOn()){
-    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','일지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['ref_links','레퍼런스 표'],['proj_plans','프로젝트 표'],['prayers','기도 표'],['sijak_sessions','글쓰기·독서 표'],['run_log','달리기 표']]){
+    for(const [t,n] of [['seoga_reads','서가'],['items','미래'],['mp_entries','일지 표'],['cal_events','일정 표'],['income_log','수입 표'],['memo_notes','메모 표'],['ref_links','레퍼런스 표'],['proj_plans','프로젝트 표'],['prayers','기도 표'],['sijak_sessions','글쓰기 표'],['run_log','달리기 표']]){
       try{ await rest(cfg.mr,t+'?select=id&limit=1'); out.push('✓ '+n+'을(를) 읽을 수 있습니다'); }
       catch(e){ out.push('✕ '+n+': '+(missingTable(e)?'표가 없습니다':e.message)); }
     }
@@ -2610,7 +2594,7 @@ async function loadReads(force){
     RDraw=all; rdBuild(); RDat=Date.now(); RDerr='';
   }catch(er){ RDerr=missingTable(er)?'Supabase에 서가 표가 없습니다.':(er.message||'불러오지 못했습니다'); }
 }
-/* 서가의 읽기 기록(SS_SINCE 전)과 시작의 독서 세션(SS_SINCE부터)을 날짜별로 이어 붙인다. 세션이 바뀔 때마다 다시 짠다. */
+/* 받아 둔 서가의 읽기 기록(RDraw)으로 날짜별 쪽·시간을 짠다. (2026년 11월 12일에 하루 동안 시작의 독서 세션을 이어 붙였다가, 독서는 서가가 재는 것으로 되돌렸다.) */
 let RDraw=null;
 function rdBuild(){
   if(!RDraw) return;
@@ -2625,13 +2609,7 @@ function rdBuild(){
   };
   RDraw.forEach(r=>{
     if(r.gone==='true'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')) return;
-    if(r.date>=SS_SINCE) return;   /* 전환한 날부터는 시작의 세션으로 */
     add({date:r.date, fp:+r.fp||0, tp:+r.tp||0, min:+r.min||0, title:r.title||''});
-  });
-  ssLive().filter(r=>r.kind==='read'&&r.end).forEach(r=>{
-    const d=ssDay(r); if(d<SS_SINCE) return;
-    const has=r.from!=null&&r.to!=null;
-    add({date:d, fp:has?+r.from||0:0, tp:has?+r.to||0:0, min:ssMin(r), title:''});
   });
   cut.sort((a,b)=>b.date.localeCompare(a.date));
   RD={pages, mins, titles, cut, first:first||dayKey(), n:RDraw.length};
@@ -2682,7 +2660,7 @@ function renderPg(){
     <div class="sub">하루 평균 ${fmtMin(a.min)}${perH?' · 한 시간에 약 '+perH+'쪽':''}</div>
     <div class="now">${+cur.slice(5)}월에는 지금까지 ${mP.toLocaleString('ko-KR')}쪽 · ${fmtMin(mM)} · 읽은 날 ${mD}일</div>
   </div>
-  <p class="note">${kLabelY(SS_SINCE)}부터는 오늘 화면의 독서 칸이 잰 세션(끝낼 때 적은 ‘부터·까지’ 쪽)으로, 그 전은 서가의 읽기 기록으로 셉니다. 한 번의 읽기는 끝난 쪽에서 시작한 쪽을 뺀 만큼이고, 쉰 날도 나눕니다. 쪽을 비워 두면 시간만 셉니다.</p>`;
+  <p class="note">서가의 읽기 기록으로 셉니다. 한 번의 읽기는 끝난 쪽에서 시작한 쪽을 뺀 만큼이고, 쉰 날도 나눕니다. 중간부터 읽는 책은 읽기를 시작하기 전에 서가에서 “지금 몇 쪽”을 적어 두면 정확해집니다.</p>`;
   h+=`<h3>최근 30일 날마다</h3><div class="incchart">${barsSVG(pages,first,{div:1, fmt:fi, tip:(k,before)=>{ const p=+pages[k]||0, m=+mins[k]||0; if(before) return kLabel(k)+' · 기록 전'; if(!p&&!m) return kLabel(k)+' · 읽지 않음'; return kLabel(k)+' · '+p+'쪽 · '+fmtMin(m)+((titles[k]||[]).length?' · '+titles[k].map(t=>'『'+t+'』').join(' '):''); }})}</div>`;
   h+=`<h3>평균의 흐름</h3><div class="incchart">${flowSVG(pages,first,g,{div:1, unit:'쪽', fmt:fi, fmtG:fi})}</div>`;
   const ms=monthsOf(pages,first,mins);
@@ -3323,9 +3301,8 @@ window.go=go;
 document.querySelectorAll('.tri').forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation();
   const k=b.dataset.pair; PAIRS[k]=!PAIRS[k]; lsSet('sijak.pairs',PAIRS); applyPairs(); });
 applyPairs();
-/* 글쓰기·독서 칸: 누르면 시작이 재기 시작하고 탭을 연다, 재는 중에 누르면 끝내기 칸. ⌘·가운데 클릭은 그냥 링크 */
+/* 글쓰기 칸: 누르면 시작이 재기 시작하고 타이핑을 연다, 재는 중에 누르면 끝내기 칸. ⌘·가운데 클릭은 그냥 링크. 독서 칸은 링크 그대로(서가가 잰다) */
 $('stripW').addEventListener('click',e=>{ if(Werr==='setup'||e.target.closest('button')||e.metaKey||e.ctrlKey) return; if(ssClick('write')) e.preventDefault(); });
-$('stripR').addEventListener('click',e=>{ if(Rerr==='setup'||e.target.closest('button')||e.metaKey||e.ctrlKey) return; if(ssClick('read')) e.preventDefault(); });
 $('stripP').onclick=e=>{ if(!e.target.closest('button,a')) go('pg'); };
 $('stripP').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('pg'); } };
 $('stripD').onclick=e=>{ if(!e.target.closest('button,a')) go('dist'); };
