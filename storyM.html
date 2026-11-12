@@ -1,0 +1,1128 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>storyM</title>
+<style>
+:root{
+  --bg:#f6f5f0; --panel:#ffffff; --panel2:#f1efe8; --ink:#1f1f1d; --ink2:#5f5e5a; --muted:#8a8984;
+  --line:#e2e0d8; --line2:#c9c7bf;
+  --accent:#534ab7; --accent-bg:#eeedfe;
+  --ok:#0f6e56; --ok-bg:#e1f5ee; --warn:#854f0b; --warn-bg:#faeeda; --bad:#a32d2d; --bad-bg:#fcebeb;
+  --radius:8px;
+  --font:-apple-system,"Apple SD Gothic Neo",Pretendard,"Noto Sans KR",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:var(--font);color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5}
+button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px 12px;cursor:pointer}
+button:hover{background:var(--panel2)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.primary:hover{background:#3a3a37}
+button.ghost{border-color:transparent;background:transparent}
+button.ghost:hover{background:var(--panel2)}
+button.danger{color:var(--bad)}
+input,textarea,select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px 10px}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-bg);border-color:var(--accent)}
+textarea{resize:none;line-height:1.7}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+details.menu{position:relative}
+details.menu>summary{list-style:none;cursor:pointer;background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px 12px;user-select:none}
+details.menu>summary::-webkit-details-marker{display:none}
+details.menu>summary:hover{background:var(--panel2)}
+details.menu>div{position:absolute;right:0;top:calc(100% + 4px);background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);padding:6px;min-width:220px;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+details.menu>div button{display:block;width:100%;text-align:left;border:none;background:transparent;padding:8px 10px;border-radius:6px}
+details.menu>div button:hover{background:var(--panel2)}
+details.menu>div .sep{border-top:1px solid var(--line);margin:6px 0}
+details.menu>div label{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;font-size:13px}
+details.menu>div label input{width:72px;padding:3px 6px}
+
+/* home */
+.home{max-width:880px;margin:0 auto;padding:48px 24px}
+.home h1{font-size:28px;font-weight:500;margin:0 0 6px;letter-spacing:-.01em}
+.home .lead{color:var(--ink2);margin:0 0 28px}
+.home-actions{display:flex;gap:8px;margin-bottom:24px}
+.lect-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.lect{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer;position:relative}
+.lect:hover{border-color:var(--line2)}
+.lect h3{margin:0 0 6px;font-size:16px;font-weight:500}
+.lect .meta{color:var(--ink2);font-size:13px}
+.lect .del{position:absolute;top:10px;right:10px;opacity:0;font-size:12px}
+.lect:hover .del{opacity:1}
+.syncbox{margin-top:28px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+.syncbox h3{font-size:14px;font-weight:500;margin:0 0 8px}
+.syncform{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.syncform input{width:200px}
+.syncform.compact{flex-direction:column;align-items:stretch}
+.syncform.compact input{width:100%}
+.syncstat{font-size:12px;color:var(--muted);margin-top:6px}
+.syncstat.err{color:var(--bad)}
+.empty{border:1px dashed var(--line2);border-radius:12px;padding:40px;text-align:center;color:var(--ink2)}
+
+/* editor */
+.editor{display:flex;flex-direction:column;height:100vh}
+.ed-head{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+.ed-head .title{font-size:17px;font-weight:500;border:1px solid transparent;background:transparent;min-width:260px;flex:1}
+.ed-head .title:hover{border-color:var(--line2)}
+.ed-head .title:focus{background:var(--panel)}
+.ed-meta{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--ink2);flex-wrap:wrap}
+.ed-meta label{display:flex;align-items:center;gap:6px}
+.ed-meta input{padding:4px 8px;font-size:13px}
+.ed-meta input.n{width:64px}
+.ed-meta input.logline{flex:1;min-width:240px}
+.ed-meta .spacer{flex:1}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px}
+.badge.ok{background:var(--ok-bg);color:var(--ok)}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}
+.badge.bad{background:var(--bad-bg);color:var(--bad)}
+.timebar{display:flex;gap:2px;height:8px;margin:10px 16px 0;border-radius:4px;overflow:hidden}
+.timebar div{min-width:2px}
+.timebar .rest{background:transparent;border:1px dashed var(--line2);border-radius:4px}
+.ed-body{display:grid;grid-template-columns:300px minmax(0,1fr);flex:1;min-height:0}
+.sidebar{overflow:auto;border-right:1px solid var(--line);padding:12px}
+.sidebar .hd{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:12px;margin:4px 6px 8px}
+.trow{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border-radius:var(--radius);cursor:pointer;border:1px solid transparent;margin-bottom:4px;background:var(--panel)}
+.trow:hover{border-color:var(--line)}
+.trow.sel{border-color:var(--line2);background:var(--panel2)}
+.trow.dragover{border-top:2px solid var(--accent)}
+.trow .dot{width:8px;height:8px;border-radius:2px;margin-top:6px;flex:none}
+.trow .mins{color:var(--muted);font-size:12px;min-width:40px;margin-top:2px;text-align:right}
+.trow .tt{flex:1;min-width:0}
+.trow .tt .name{font-size:13px;line-height:1.4;word-break:break-word}
+.trow .tt .name.ph{color:var(--muted)}
+.trow .tt .st{font-size:11px;margin-top:2px}
+.srow{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border-radius:var(--radius);cursor:pointer;border:1px solid var(--line);margin-bottom:12px;background:var(--panel);font-size:13px}
+.srow:hover{border-color:var(--line2)}
+.srow.sel{background:var(--panel2);border-color:var(--line2)}
+.srow .c{font-size:11px;color:var(--warn)}
+.scratch textarea{width:100%;min-height:46vh;font-size:15px}
+.scratch .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.scratch .bar .reader{display:inline-flex;align-items:center;gap:0;border:1px solid var(--line2);border-radius:var(--radius);overflow:hidden}
+.scratch .bar .reader button{border:none;border-radius:0}
+.scratch .bar .reader select{border:none;border-left:1px solid var(--line2);border-radius:0;padding:6px 8px;max-width:220px;background:var(--panel2);font-size:13px}
+.card.draft{border-left:3px solid #c9b8ff}
+.tag{display:inline-block;padding:1px 6px;border-radius:5px;font-size:11px;background:var(--accent-bg);color:var(--accent);margin-left:6px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--panel);border-radius:12px;width:min(760px,100%);max-height:90vh;display:flex;flex-direction:column;padding:18px 20px}
+.modal h2{font-size:16px;font-weight:500;margin:0 0 6px}
+.modal textarea{width:100%;min-height:180px;flex:none;font-size:13px}
+.modal .prev{overflow:auto;flex:1;margin:12px 0;font-size:13px;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;background:var(--panel2);min-height:56px}
+.modal .prev li{margin:3px 0}
+.modal .acts{display:flex;justify-content:flex-end;gap:8px}
+.st-empty{color:var(--muted)} .st-memo{color:var(--warn)} .st-wip{color:var(--accent)} .st-done{color:var(--ok)}
+.detail{overflow:auto;padding:18px 24px 80px}
+.detail .row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.detail .ttl{font-size:18px;font-weight:500;flex:1;min-width:0}
+.detail .lbl{font-size:12px;color:var(--muted);margin:14px 0 4px;display:flex;justify-content:space-between;align-items:baseline}
+.detail input.full{width:100%}
+.detail textarea.memo{width:100%;min-height:64px;background:var(--panel2);border-color:transparent}
+.detail textarea.memo:focus{background:var(--panel)}
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 8px}
+.card.over{border-color:#e9b56a}
+.card textarea{width:100%;min-height:72px;border:none;padding:2px 0;font-size:15px;background:transparent}
+.card textarea:focus{outline:none}
+.card .ft{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-top:4px}
+.card .ft .tools{display:flex;gap:2px;opacity:0}
+.card:hover .ft .tools,.card:focus-within .ft .tools{opacity:1}
+.card .ft .tools button{padding:2px 7px;font-size:12px;border-color:transparent}
+.card .ft .warn{color:var(--warn)}
+.addcard{border:1px dashed var(--line2);background:transparent;color:var(--ink2);width:100%;padding:10px}
+.detail .bottom{display:flex;justify-content:space-between;margin-top:28px;padding-top:14px;border-top:1px solid var(--line)}
+.nodetail{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);text-align:center;padding:40px}
+
+/* print */
+#print-root{display:none}
+@media print{
+  body>*:not(#print-root){display:none !important}
+  #print-root{display:block}
+  html,body{margin:0;padding:0;height:auto;background:#fff;color:#000}
+}
+/* A6 가로는 148×105mm. Safari는 @page를 무시하고 자기 기본 여백(약 12.7mm)을 쓰기도 하므로, 그 안(약 122×79mm)에도 들어가게 카드를 120×78mm로 잡는다. 1mm라도 넘치면 카드마다 빈 장이 끼어든다. */
+/* --fs: 넘치는 카드만 인쇄 직전에 fitA6Cards()가 1 → 0.72까지 줄이는 글자 배율 */
+.a6 .pcard{--fs:1;width:120mm;height:78mm;margin:0 auto;overflow:hidden;display:flex;flex-direction:column;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;font-size:calc(12.5pt * var(--fs));line-height:1.55;color:#000}
+#print-root.measuring{display:block;position:absolute;left:-10000px;top:0;width:148mm}
+.a6 .pcard:last-child{page-break-after:auto;break-after:auto}
+.a6 .ph{display:flex;justify-content:space-between;font-size:8.5pt;color:#666;border-bottom:.5pt solid #999;padding-bottom:1.5mm;margin-bottom:3mm}
+.a6 .pb{flex:1;white-space:pre-wrap;word-break:keep-all;overflow:hidden}
+.a6 .pf{display:flex;justify-content:space-between;align-items:flex-end;font-size:8pt;color:#777;margin-top:2mm}
+.a6 .pf .m{white-space:pre-wrap;max-width:85%;font-size:8.5pt;color:#555}
+.a6 .cover{justify-content:center;text-align:center}
+.a6 .cover .k{font-size:9pt;color:#666;letter-spacing:.06em;margin-bottom:3mm}
+.a6 .cover h2{font-size:calc(19pt * var(--fs));font-weight:600;margin:0 0 3mm;line-height:1.3;word-break:keep-all}
+.a6 .cover p{font-size:calc(12pt * var(--fs));color:#333;margin:0;line-height:1.45}
+.a6 .cover .m{font-size:calc(9pt * var(--fs));color:#555;white-space:pre-wrap;margin-top:5mm;text-align:left}
+.a6 .cover .pf{position:absolute;left:0;right:0;bottom:0}
+.a6 .pcard.cover{position:relative}
+.a6 .title{justify-content:center;text-align:center}
+.a6 .title h1{font-size:calc(22pt * var(--fs));font-weight:600;margin:0 0 4mm;line-height:1.3;word-break:keep-all}
+.a6 .title p{margin:0;font-size:calc(10pt * var(--fs));color:#555}
+.a6 .title p.lg{font-size:calc(11pt * var(--fs));color:#333;margin-bottom:3mm}
+.a4{font-size:11pt;line-height:1.75;color:#000}
+.a4 h1{font-size:20pt;font-weight:600;margin:0 0 2mm;line-height:1.3}
+.a4 .meta{color:#555;font-size:10pt;margin-bottom:8mm}
+.a4 .meta .lg{color:#222;font-size:11pt;margin-bottom:1mm}
+.a4 h3{font-size:11pt;color:#444;margin:0 0 2mm;font-weight:600}
+.a4 table{width:100%;border-collapse:collapse;font-size:10pt;margin-bottom:4mm}
+.a4 th,.a4 td{border-bottom:.5pt solid #aaa;padding:1.6mm 2mm;text-align:left;vertical-align:top}
+.a4 th{border-bottom:1pt solid #333;font-weight:600;color:#333}
+.a4 td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.a4 .sec{display:grid;grid-template-columns:24mm minmax(0,1fr);column-gap:6mm;margin-top:9mm}
+.a4 .sec .lt{font-size:9pt;color:#555;border-top:1pt solid #333;padding-top:2mm;line-height:1.5}
+.a4 .sec .rt{border-top:1pt solid #333;padding-top:2mm;min-width:0}
+.a4 .sec h2{font-size:14pt;font-weight:600;margin:0 0 1mm;line-height:1.3}
+.a4 .sec .sum{color:#444;margin:0 0 3mm;font-size:10.5pt}
+.a4 .sec .memo{font-size:9.5pt;color:#555;background:#f3f2ee;padding:2mm 3mm;margin:0 0 3mm;white-space:pre-wrap;border-left:1pt solid #999}
+.a4 p{margin:0 0 3mm;white-space:pre-wrap;word-break:keep-all;page-break-inside:avoid;break-inside:avoid}
+.a4 p.draft{color:#555}
+.a4 .none{color:#888;font-style:italic}
+
+/* 줄거리 — 정해진 것의 나무 */
+.srow .c.q{color:var(--accent)}
+.ghead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.ghead .ttl{font-size:18px;font-weight:500}
+.gtree{display:flex;flex-direction:column;gap:2px}
+.gnode{margin-left:calc(var(--d,0)*22px)}
+.grow{display:flex;align-items:flex-start;gap:6px;padding:6px 8px;border-radius:var(--radius);cursor:pointer;border:1px solid transparent}
+.grow:hover{background:var(--panel)}
+.grow.open{background:var(--panel);border-color:var(--line2);border-bottom-left-radius:0;border-bottom-right-radius:0}
+.grow .fold{width:16px;flex:none;color:var(--muted);font-size:11px;text-align:center;margin-top:3px}
+.grow .glyph{width:16px;flex:none;text-align:center;color:var(--muted);margin-top:1px;font-size:13px}
+.grow .gt{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}
+.grow .gt.ph{color:var(--muted)}
+.grow .gm{flex:none;font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap}
+.grow .gm a{color:var(--accent);text-decoration:none;padding:0 2px}
+.gnode.q .gt{color:var(--ink2)}
+.gnode.q .glyph{color:var(--warn);font-weight:600}
+.gnode.h .grow{border-left:2px dotted var(--line2);border-radius:0 var(--radius) var(--radius) 0}
+.gnode.f .glyph{color:var(--ok);font-size:11px}
+.gpanel{background:var(--panel);border:1px solid var(--line2);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:10px 12px;margin-bottom:6px}
+.gpanel textarea{width:100%;min-height:56px;font-size:15px}
+.gpanel .grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+.gpanel .grid input,.gpanel .grid select{width:100%;padding:4px 8px;font-size:13px}
+.gpanel .grid .with{display:flex;gap:6px;align-items:center}
+.gpanel .grid .with input{flex:1}
+.gpanel .grid .with a{text-decoration:none}
+.gpanel .grid .with button{padding:4px 9px;font-size:12px;white-space:nowrap}
+.gpanel .tools{display:flex;gap:4px;flex-wrap:wrap;margin-top:10px}
+.gpanel .tools button{padding:3px 9px;font-size:12px}
+.glist{display:flex;flex-direction:column;gap:4px}
+.glist .gi{display:flex;gap:8px;align-items:flex-start;padding:6px 10px;background:var(--panel2);border-radius:var(--radius);font-size:13px;cursor:pointer}
+.glist .gi:hover{background:var(--panel);outline:1px solid var(--line)}
+.glist .gi .glyph{flex:none;color:var(--muted);width:14px;text-align:center}
+.glist .gi.q .glyph{color:var(--warn);font-weight:600}
+.glist .gi .gt{flex:1;min-width:0;white-space:pre-wrap}
+.glist .gi a{color:var(--accent);text-decoration:none;flex:none}
+.tpinfo{font-size:12px;color:var(--ink2);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tpinfo button{padding:1px 7px;font-size:11px}
+.tptext{white-space:pre-wrap;font-size:14px;line-height:1.8;background:var(--panel2);border-radius:var(--radius);padding:12px 14px;max-height:50vh;overflow:auto;margin-top:6px;word-break:keep-all}
+.lbl button.small{padding:2px 8px;font-size:11px}
+details.menu>div label input.wide{width:150px}
+
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:200}
+#toast.show{opacity:1}
+@media (max-width:760px){
+  .ed-body{grid-template-columns:1fr}
+  .sidebar{border-right:none;border-bottom:1px solid var(--line);max-height:40vh}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="print-root"></div>
+<style id="pageStyle"></style>
+<input type="file" id="importFile" accept="application/json" hidden>
+<div id="toast"></div>
+
+<script>
+'use strict';
+const STORE_KEY='storyM.v1';
+const PAGE=200; /* 원고지 한 장 = 200자 */
+const COLORS=['#7F77DD','#5DCAA5','#F0997B','#85B7EB','#FAC775','#ED93B1','#97C459','#B4B2A9'];
+const app=document.getElementById('app');
+const printRoot=document.getElementById('print-root');
+const pageStyle=document.getElementById('pageStyle');
+
+let db=load();
+const ui={view:'home',storyId:null,sceneId:null,pane:'scene',a4memo:false};
+
+/* ---------- data ---------- */
+function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);if(d&&Array.isArray(d.stories)){d.deleted=d.deleted||[];return d;}}}catch(e){}return{stories:[],deleted:[]};}
+let saveT=null;
+function save(now){
+  const l=cur();if(l){l.updatedAt=Date.now();markDirty(l.id);}
+  clearTimeout(saveT);
+  const f=()=>localStorage.setItem(STORE_KEY,JSON.stringify(db));
+  if(now)f();else saveT=setTimeout(f,250);
+}
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-3);
+const newStory=(title='')=>({id:uid(),title,logline:'',targetPages:600,cardChars:500,scratch:'',readerUpto:0,scenes:[],guide:{born:null,cards:[]},createdAt:Date.now(),updatedAt:Date.now()});
+const newScene=()=>({id:uid(),title:'',summary:'',memo:'',pages:10,tp:'',cards:[newCard()]});
+const newCard=()=>({id:uid(),text:''});
+/* 줄거리 카드 — 정해진 것 하나. parent로 나무를 만들고, 순서는 배열 순서 */
+const STATES=['궁금함','가설','확정','사실'];
+const newGuide=(parent=null,state='가설')=>({id:uid(),parent,text:'',state,year:null,dt:'',sceneId:null,shelved:false,why:'',fold:false});
+/* 옛 소설에 줄거리 칸과 타이핑 칸이 없으면 채운다 — 더하기만 하고 있는 것은 건드리지 않는다 */
+function ensure(l){if(!l)return l;if(!l.guide||!Array.isArray(l.guide.cards))l.guide={born:(l.guide&&l.guide.born)||null,cards:[]};l.scenes.forEach(t=>{if(t.tp==null)t.tp='';});return l;}
+const cur=()=>ensure(db.stories.find(l=>l.id===ui.storyId));
+const DIV_SRC='── .*? 정리에 보냄 ──';
+const cleanScratch=s=>s.split('\n').filter(x=>!/^›/.test(x.trim())&&!/^──.*──$/.test(x.trim())).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+function scratchBatches(l){return (l.scratch||'').split(new RegExp(DIV_SRC)).map(cleanScratch);}
+function unsentScratch(l){const b=scratchBatches(l);return b[b.length-1];}
+function lastSentScratch(l){const b=scratchBatches(l);for(let i=b.length-2;i>=0;i--)if(b[i])return b[i];return '';}
+function freshForPrompt(l){const u=unsentScratch(l);if(u)return{text:u,resend:false};return{text:lastSentScratch(l),resend:true};}
+const stampNow=()=>{const n=new Date();return `${n.getMonth()+1}월 ${n.getDate()}일 ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;};
+const hasContent=l=>l.scenes.some(t=>t.title.trim()||t.cards.some(c=>c.text.trim()));
+const curScene=()=>{const l=cur();return l&&l.scenes.find(t=>t.id===ui.sceneId);};
+
+function sample(){
+  const l=newStory('겨울 호수');
+  l.targetPages=120;
+  l.logline='얼어붙은 호수에서 아버지의 낚시 의자를 찾아낸 딸이, 그 의자를 집에 들이기까지의 하루.';
+  const mk=(title,summary,pages,memo,cards)=>{const t=newScene();Object.assign(t,{title,summary,pages,memo});t.cards=cards.map(x=>typeof x==='string'?{id:uid(),text:x}:{id:uid(),text:x.text,draft:true});return t;};
+  l.scenes=[
+    mk('호수에 간 아침','정윤이 아버지의 장례를 치른 지 사흘 만에 호수에 간다.',15,'· 2월, 호수는 얼어 있다\n· 아버지가 겨울마다 앉던 자리\n· 정윤은 낚시를 싫어했다',[
+      '버스에서 내렸을 때 정윤은 자기가 왜 여기에 왔는지 설명할 수 없었다. 장례를 치른 지 사흘이었고, 집에는 아직 치우지 못한 아버지의 신발이 있었다. 호수는 얼어 있었다. 그 위에 아무도 없었다.']),
+    mk('얼음 위의 의자','호수 한가운데에 아버지의 낚시 의자가 그대로 남아 있다.',20,'· 의자는 아버지가 직접 만든 것\n· 의자 옆에 뚫린 구멍이 다시 얼어 있다\n· 정윤은 의자에 앉지 않는다',[
+      {text:'정윤은 얼음 위를 걸어 호수 가운데로 간다. 거기에 접이식 의자가 하나 있다. 아버지가 나무로 만든 의자다. 의자 옆에 뚫어 놓은 구멍이 얇게 다시 얼어 있다. 정윤은 의자를 만지지 않고 그 앞에 한참 서 있다.'}]),
+    mk('마을 사람','낚시 가게 주인이 정윤을 알아보고 아버지의 마지막 날 이야기를 한다.',20,'· 주인은 아버지와 사십 년 친구\n· 아버지가 마지막으로 한 말 (아직 정하지 않음)',[]),
+    mk('의자를 두고 가다','정윤은 의자를 그대로 두고 호수를 떠나려 한다.',15,'· 버스 시간\n· 의자를 가져가는 것이 왜 두려운지',[]),
+    mk('다시 돌아오다','버스를 놓치고 돌아온 정윤이 의자에 앉는다.',30,'· 해가 진다\n· 의자에 앉으면 아버지가 보던 풍경이 보인다',[]),
+    mk('집으로','정윤이 의자를 접어 들고 집으로 간다.',20,'· 아버지의 신발 옆에 의자를 놓는다',[]),
+  ];
+  l.readerUpto=2;
+  const g=(text,state,parent,sceneIdx,year)=>{const c=newGuide(parent?parent.id:null,state);c.text=text;if(sceneIdx!=null)c.sceneId=l.scenes[sceneIdx].id;if(year)c.year=year;l.guide.cards.push(c);return c;};
+  const root=g('정윤이 아버지의 낚시 의자를 집에 들이기까지의 하루','확정');
+  g('아버지는 겨울마다 같은 자리에 앉았다. 사십 년.','확정',root,0);
+  g('의자는 아버지가 직접 만든 나무 접이식 의자다\n접었을 때 한 손에 들린다','확정',root,1);
+  g('낚시 가게 주인이 아버지의 마지막 날에 대해 아는 것','궁금함',root,2);
+  g('2월의 호수는 사람이 걸어 들어갈 만큼 언다','가설',root,0);
+  l.scratch='아버지는 말이 없는 사람이었고, 호수는 아버지가 유일하게 오래 앉아 있던 곳이다.\n정윤은 아버지를 이해한 적이 없다고 생각한다. 의자에 앉는 순간 그게 처음으로 흔들린다.\n낚시 가게 주인이 하는 말이 이 소설의 반전이 될지, 그냥 지나가는 말이 될지 아직 모르겠다.';
+  return l;
+}
+
+/* ---------- helpers ---------- */
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const chars=t=>(t||'').replace(/\n/g,'').length;
+const pagesOf=t=>chars(t)/PAGE;
+const ownCards=t=>t.cards.filter(c=>!c.draft&&c.text.trim());
+const cardChars=t=>ownCards(t).reduce((a,c)=>a+chars(c.text),0);
+/* 초고 글자 수 — 타이핑 원고가 이어져 있으면 그 글이 실제다. 아니면 내 토막 */
+const sceneChars=(t,l)=>{const r=tpRowFor(t,l);return r?chars(r.text):cardChars(t);};
+const sceneEst=(t,l)=>sceneChars(t,l)/PAGE;
+const allocated=l=>l.scenes.reduce((a,t)=>a+(+t.pages||0),0);
+const storyEst=l=>l.scenes.reduce((a,t)=>a+sceneEst(t,l),0);
+const col=i=>COLORS[i%COLORS.length];
+function fmtPages(p){if(!p||p<=0)return'0매';if(p<1)return(Math.round(p*10)/10)+'매';return Math.round(p)+'매';}
+function sceneStatus(l,t){
+  const r=tpRowFor(t,l);
+  if(r){const est=chars(r.text)/PAGE;const ok=t.pages>0&&est>=t.pages*0.8;return{label:'타이핑 · '+fmtPages(est)+(r.handed?' · 스크리브너':''),cls:ok?'st-done':'st-wip'};}
+  const filled=t.cards.filter(c=>c.text.trim()).length;
+  if(!filled)return t.memo.trim()?{label:'메모만',cls:'st-memo'}:{label:'뼈대만',cls:'st-empty'};
+  if(t.cards.some(c=>c.draft&&c.text.trim()))return{label:'트리트먼트',cls:'st-wip'};
+  const est=sceneEst(t);
+  if(t.pages>0&&est>=t.pages*0.8)return{label:'내 것 · '+fmtPages(est),cls:'st-done'};
+  return{label:'내 것 · '+fmtPages(est),cls:'st-wip'};
+}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),1800);}
+function download(name,text,type='text/plain'){const b=new Blob([text],{type:type+';charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch(e){const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(_){}ta.remove();return ok;}}
+function autogrow(ta){ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px';}
+const safeName=s=>(s||'storyM').replace(/[\\/:*?"<>|]+/g,'_').trim()||'storyM';
+/* 독자가 읽은 데까지: 저장된 값이 없거나 범위를 벗어나면 카드가 있는 마지막 장면 */
+function readerUpto(l){
+  const n=l.scenes.length;if(!n)return 0;
+  if(l.readerUpto>=1&&l.readerUpto<=n)return l.readerUpto;
+  let last=0;l.scenes.forEach((t,i)=>{if(t.cards.some(c=>c.text.trim())||tpRowFor(t,l))last=i+1;});
+  return last||n;
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(ui.view==='home')renderHome();else renderEditor();
+}
+function renderHome(){
+  const ls=[...db.stories].sort((a,b)=>b.updatedAt-a.updatedAt);
+  app.innerHTML=`<div class="home">
+    <h1>storyM</h1>
+    <p class="lead">소설의 장면을 세우고, 매수를 안배하고, 결말을 모르는 독자에게 읽혀 봅니다.</p>
+    <div class="home-actions">
+      <button class="primary" data-act="new">새 소설</button>
+      <button data-act="import">JSON 불러오기</button>
+      ${ls.length?'':'<button data-act="sample">예시 소설 만들기</button>'}
+    </div>
+    ${ls.length?`<div class="lect-grid">${ls.map(l=>`
+      <div class="lect" data-act="open" data-id="${l.id}">
+        <h3>${esc(l.title)||'<span class="muted">제목 없음</span>'}</h3>
+        <div class="meta">목표 ${l.targetPages}매 · 장면 ${l.scenes.length}개 · 초고 약 ${fmtPages(storyEst(l))}</div>
+        <div class="meta small">${l.logline?esc(l.logline)+' · ':''}수정 ${new Date(l.updatedAt).toLocaleDateString('ko-KR')}</div>
+        <button class="ghost del" data-act="delete" data-id="${l.id}">삭제</button>
+      </div>`).join('')}</div>`
+    :`<div class="empty">아직 소설이 없습니다. 제목 하나만 정하고 시작해 보세요.</div>`}
+    <div class="syncbox">${syncPanelHtml()}</div>
+    <p class="muted small" style="margin-top:20px">자료는 이 브라우저 안에 저장되고, 로그인하면 수파베이스를 통해 다른 기기와 맞춰집니다. JSON 백업은 편집 화면의 내보내기에 있습니다.</p>
+  </div>`;
+}
+
+function renderEditor(){
+  const l=cur();if(!l){ui.view='home';return renderHome();}
+  if(!l.scenes.find(t=>t.id===ui.sceneId))ui.sceneId=l.scenes[0]?.id||null;
+  app.innerHTML=`<div class="editor">
+    <div class="ed-head">
+      <button class="ghost" data-act="home">← 목록</button>
+      <input class="title" data-lf="title" value="${esc(l.title)}" placeholder="소설 제목">
+      <details class="menu"><summary>인쇄 ▾</summary><div>
+        <button data-act="printA6">A6 가로 카드</button>
+        <div class="muted small" style="padding:0 10px 6px">장면 표지 한 장과 토막마다 한 장. 들고 다니며 고치거나 바닥에 늘어놓고 순서를 잡는 용도입니다. 인쇄 창에서 용지 크기 A6, 방향 가로를 골라 주세요.</div>
+        <button data-act="printA4">A4 세로 문서</button>
+        <label><span>A4에 메모 포함</span><input type="checkbox" data-act="a4memo" ${ui.a4memo?'checked':''} style="width:auto"></label>
+        <div class="sep"></div>
+        <div class="muted small" style="padding:4px 10px">인쇄 창에서 PDF로 저장을 고르면 PDF가 됩니다.</div>
+      </div></details>
+      <details class="menu"><summary>내보내기 ▾</summary><div>
+        <button data-act="copyMd">마크다운 복사</button>
+        <button data-act="dlMd">마크다운 파일 저장</button>
+        <div class="sep"></div>
+        <button data-act="dlJson">JSON 백업 저장</button>
+        <button data-act="dlJsonAs">JSON 백업을 다른 위치에 저장…</button>
+        <div class="muted small" style="padding:4px 10px">처음 한 번 저장 위치를 고르면(앱 파일이 있는 폴더를 권합니다) 다음부터는 같은 파일에 바로 덮어씁니다. 크롬, 엣지에서 되고, 다른 브라우저는 다운로드 폴더에 저장됩니다.</div>
+      </div></details>
+      <details class="menu"><summary>설정 ▾</summary><div>
+        <label><span>카드 한 장 글자 수</span><input type="number" min="100" max="1500" data-lf="cardChars" value="${l.cardChars}"></label>
+        <div class="muted small" style="padding:4px 10px">토막 하나가 A6 카드 한 장입니다. 이 글자 수를 넘기면 알려 드립니다. 매수는 200자 원고지로 셉니다.</div>
+        <div class="sep"></div>
+        <label><span>타이핑 읽기</span><input type="checkbox" data-tp="on" ${tpConf.on?'checked':''} style="width:auto"></label>
+        <label><span>보태기 수파베이스</span><input class="wide" data-tp="url" value="${esc(tpConf.url)}" placeholder="https://….supabase.co"></label>
+        <label><span>열쇠</span><input class="wide" type="password" data-tp="key" value="${esc(tpConf.key)}" placeholder="공개용 열쇠"></label>
+        <label><span>타이핑 앱 주소</span><input class="wide" data-tp="base" value="${esc(tpConf.base)}" placeholder="file:///…/taiping.html"></label>
+        <div class="muted small" style="padding:4px 10px">장면에 이어진 타이핑 원고를 보태기 수파베이스에서 읽어 글자 수를 초고 매수로 셉니다. 읽기만 하고 고치지 않습니다. 작품 이름과 원고 이름이 소설 제목·장면 제목과 같으면 저절로 이어집니다. 타이핑 앱 주소를 넣으면 장면에서 타이핑으로 가는 링크가 생깁니다.</div>
+        <div class="sep"></div>
+        <div style="padding:2px 10px 6px">${syncPanelHtml(true)}</div>
+      </div></details>
+    </div>
+    <div class="ed-meta">
+      <label>목표 <input class="n" type="number" min="1" data-lf="targetPages" value="${l.targetPages}"> 매</label>
+      <input class="logline" data-lf="logline" value="${esc(l.logline||'')}" placeholder="한 줄 요약: 이 소설은 누가 무엇을 하는 이야기인가">
+      <span id="alloc"></span>
+    </div>
+    <div class="timebar" id="timebar"></div>
+    <div class="ed-body">
+      <div class="sidebar">
+        <div class="srow ${ui.pane==='scratch'?'sel':''}" data-act="scratch"><span>생각 모으기</span><span class="c" id="scratchCnt"></span></div>
+        <div class="srow ${ui.pane==='guide'?'sel':''}" data-act="guide" title="이 소설에서 정해진 것의 나무. 궁금함은 막힌 자리, 확정은 쓸 것"><span>줄거리</span><span class="c q" id="guideCnt"></span></div>
+        <div class="hd"><span>장면</span><span id="estTotal"></span></div>
+        <div id="tlist"></div>
+        <button class="addcard" data-act="addScene" style="margin-top:6px">+ 장면 추가</button>
+      </div>
+      <div class="detail" id="detail"></div>
+    </div>
+  </div>`;
+  renderDerived();renderDetail();
+  tpLoad(l).then(()=>{if(ui.view==='editor'&&cur()===l){renderDerived();updateSceneEst();}});
+}
+function markPanes(){app.querySelectorAll('.srow').forEach(r=>r.classList.toggle('sel',ui.pane===r.dataset.act));}
+function renderDerived(){
+  const l=cur();if(!l)return;
+  const a=allocated(l),rest=l.targetPages-a;
+  const alloc=document.getElementById('alloc');
+  alloc.innerHTML=`${a}매 배정 `+(rest>0?`<span class="badge warn">${rest}매 남음</span>`:rest<0?`<span class="badge bad">${-rest}매 초과</span>`:`<span class="badge ok">딱 맞음</span>`);
+  const tb=document.getElementById('timebar');
+  tb.innerHTML=l.scenes.map((t,i)=>`<div style="flex:${+t.pages||0};background:${col(i)}" title="${esc(t.title)} ${t.pages}매"></div>`).join('')+(rest>0?`<div class="rest" style="flex:${rest}"></div>`:'');
+  document.getElementById('estTotal').textContent=`초고 약 ${fmtPages(storyEst(l))}`;
+  const un=chars(unsentScratch(l));document.getElementById('scratchCnt').textContent=un?`새 생각 ${un}자`:'';
+  updateSendHint();
+  markPanes();
+  const k=gCounts(l);document.getElementById('guideCnt').textContent=k.q?`궁금함 ${k.q}`:k.n?`${k.n}장`:'';
+  document.getElementById('tlist').innerHTML=l.scenes.map((t,i)=>{const s=sceneStatus(l,t);const gs=gCards(l).filter(c=>c.sceneId===t.id);const q=gs.filter(c=>c.state==='궁금함').length;
+    const extra=(gs.length?` · 카드 ${gs.length}`:'')+(q?` · <span style="color:var(--warn)">궁금함 ${q}</span>`:'');return`
+    <div class="trow ${ui.pane==='scene'&&t.id===ui.sceneId?'sel':''}" draggable="true" data-act="selScene" data-id="${t.id}">
+      <span class="dot" style="background:${col(i)}"></span>
+      <span class="mins">${t.pages}매</span>
+      <div class="tt"><div class="name ${t.title?'':'ph'}">${i+1}. ${esc(t.title)||'제목 없는 장면'}</div>
+      <div class="st ${s.cls}">${s.label}${extra}</div></div>
+    </div>`;}).join('');
+}
+function updateSendHint(){const l=cur();const h=document.getElementById('sendHint');if(!l||!h)return;const un=chars(unsentScratch(l));const ls=lastSentScratch(l);h.textContent=un?`보낼 새 생각 ${un}자`:ls?`새 생각 없음. 마지막에 보낸 생각(${chars(ls)}자)을 다시 담습니다.`:'적은 생각이 없습니다.';}
+function renderScratch(){
+  const l=cur();const d=document.getElementById('detail');const first=!hasContent(l);
+  const upto=readerUpto(l);
+  const opts=l.scenes.map((t,i)=>`<option value="${i+1}" ${i+1===upto?'selected':''}>${i+1}. ${esc(t.title)||'제목 없는 장면'}까지</option>`).join('');
+  d.innerHTML=`<div class="scratch">
+    <div class="row"><div class="ttl" style="font-size:18px;font-weight:500">생각 모으기</div></div>
+    <p class="muted small" style="margin:0 0 10px">순서도 형식도 없이 떠오르는 대로 씁니다. 세 단계로 씁니다. 1) "뼈대 정리"로 장면과 매수와 메모를 세우고, 2) "트리트먼트 채우기"로 장면마다 무슨 일이 일어나는지를 받고, 3) 토막을 내 문장으로 바꿉니다. 그러고 나면 "독자 눈으로 보기"로 결말을 모르는 독자에게 읽혀 봅니다. 생각은 끝까지 계속 적어도 됩니다.</p>
+    <textarea data-lf="scratch" placeholder="이 소설이 무엇에 관한 이야기인지, 인물, 떠오르는 장면, 꼭 넣고 싶은 것, 아직 모르는 것...">${esc(l.scratch||'')}</textarea>
+    <div class="bar"><button class="primary" data-act="copySkeleton">1. 뼈대 정리</button><button data-act="copyFill" ${first?'disabled title="뼈대가 선 뒤에 쓰는 기능입니다"':''}>2. 트리트먼트 채우기</button><span class="reader"><button data-act="copyReader" ${l.scenes.length?'':'disabled title="장면이 있어야 합니다"'}>독자 눈으로 보기</button><select data-lf="readerUpto" title="독자가 여기까지만 읽습니다. 뒤 장면과 메모와 생각 모으기는 보내지 않습니다." ${l.scenes.length?'':'disabled'}>${opts||'<option>장면 없음</option>'}</select></span><button data-act="importOpen">클로드 답 가져오기</button><span class="muted small" id="sendHint"></span></div>
+    <p class="muted small"><b>뼈대 정리</b>는 ${first?'적은 생각으로 장면과 배정 매수와 메모만 만들어 옵니다. 트리트먼트는 쓰지 않고, 재료가 있는 만큼만 매수를 잡으며 남는 매수는 비워 둡니다.':'마지막 구분선 아래의 새 생각만 보내고, 기존 장면의 메모에 더할 줄과 새 장면만 받아 옵니다. 트리트먼트는 쓰지 않습니다.'} 복사하면 보낸 자리에 구분선이 남습니다. 한 줄 요약이 비어 있으면 제안을 받아 옵니다.</p>
+    <p class="muted small"><b>트리트먼트 채우기</b>는 뼈대와 내가 쓴 토막과 생각 모으기 전체를 보내, 장면마다 "무슨 일이 일어나는가"를 납작한 현재형 문장으로 받아 옵니다. 대사도 문체도 없이, 버리기 쉽게 씁니다. 내가 쓴 토막은 고치지 않고 그 앞뒤에만 넣으며, 재료가 모자라면 "(재료 부족)"을 남기고 멈춥니다. 특정 장면을 자유롭게 채워도 되면 그 장면 메모에 "클로드가 채워도 됨"이라고 적으세요.</p>
+    <p class="muted small"><b>독자 눈으로 보기</b>는 고른 장면까지의 토막 본문만 보냅니다. 한 줄 요약, 메모, 생각 모으기, 뒤 장면은 보내지 않습니다. 거기에 결말이 들어 있으니까요. 돌아오는 것은 지금 궁금한 것, 다음에 일어날 것 같은 일, 헷갈리는 곳, 그리고 "여기까지 읽고 생각하는 이 이야기" 한 줄입니다. 그 한 줄을 위의 한 줄 요약과 나란히 놓고 보세요. 가져오면 이 칸 아래에 "›"로 시작하는 줄로 쌓이고, "›" 줄은 다음 정리 요청에 보내지 않습니다.</p>
+  </div>`;
+  d.querySelectorAll('textarea').forEach(autogrow);
+  updateSendHint();
+}
+function renderDetail(){
+  const l=cur(),t=curScene();const d=document.getElementById('detail');
+  markPanes();
+  if(ui.pane==='scratch')return renderScratch();
+  if(ui.pane==='guide')return renderGuide();
+  if(!t){d.innerHTML=`<div class="nodetail">왼쪽에서 장면을 고르거나 새 장면을 추가하세요.<br><span class="small">장면 하나가 소설의 한 덩어리이고 타이핑 원고 하나에 대응합니다. 그 아래 토막 카드에는 트리트먼트를 씁니다.<br>막막하면 "생각 모으기"에 떠오르는 대로 적고 클로드에게 뼈대 정리를 맡겨 보세요. 정해진 것은 "줄거리"에 카드로 쌓입니다.</span></div>`;return;}
+  const idx=l.scenes.indexOf(t);
+  d.innerHTML=`
+    <div class="row">
+      <span class="muted">${idx+1}.</span>
+      <input class="ttl" data-tf="title" value="${esc(t.title)}" placeholder="장면 제목">
+      <label class="muted small" style="display:flex;align-items:center;gap:6px">배정 <input type="number" min="0" data-tf="pages" value="${t.pages}" style="width:64px">매</label>
+    </div>
+    <div class="lbl"><span>한 줄 요약</span><span>이 장면에서 일어나는 일</span></div>
+    <input class="full" data-tf="summary" value="${esc(t.summary)}" placeholder="누가 무엇을 하고, 끝나면 무엇이 달라지는가">
+    <div class="lbl"><span>메모</span><span>꼭 일어나야 할 일, 재료, 아직 못 정한 것</span></div>
+    <textarea class="memo" data-tf="memo" placeholder="· 이 장면에서 반드시 일어나야 할 일&#10;· 인물이 이 시점에 아는 것&#10;· 아직 정하지 않은 것">${esc(t.memo)}</textarea>
+    <div class="lbl"><span>줄거리 카드</span><span><button class="ghost small" data-act="stuck" title="이 장면에 걸린 궁금함 카드를 만듭니다. 타이핑에서 막혀 넘어왔을 때">막힌 것 적기</button> <button class="ghost small" data-act="sceneAddr" title="타이핑 원고의 줄거리 링크에 붙여 두면 거기서 이 장면으로 옵니다">장면 주소 복사</button></span></div>
+    <div class="glist" id="sceneGuide">${sceneGuideHtml(l,t)}</div>
+    <div class="lbl"><span>타이핑 원고</span><span id="tpInfo" class="tpinfo"></span></div>
+    <div style="display:flex;gap:6px;align-items:center"><input class="full" data-tf="tp" value="${esc(t.tp||'')}" placeholder="타이핑 원고 주소나 원고 id. 비워 두면 작품·원고 이름이 같은 것을 찾습니다" style="flex:1">${tpUrlFor(t)?`<a href="${esc(tpUrlFor(t))}" style="white-space:nowrap;color:var(--accent);text-decoration:none;font-size:13px">타이핑에서 이어 쓰기 ↗</a>`:''}</div>
+    <div id="tpText"></div>
+    <div class="lbl"><span>토막 카드</span><span id="sceneEst"></span></div>
+    <div class="cards" id="cards">${t.cards.map(c=>cardHtml(l,c)).join('')}</div>
+    <button class="addcard" data-act="addCard" style="margin-top:10px">+ 토막 추가</button>
+    <p class="muted small" style="margin-top:14px">토막 하나가 A6 카드 한 장입니다. 클로드가 쓴 트리트먼트는 표시가 붙어 있고 매수에 세지 않습니다. 고치는 순간 내 것이 되어 매수에 들어갑니다.</p>
+    <div class="bottom">
+      <div><button class="ghost" data-act="sceneUp">↑ 위로</button><button class="ghost" data-act="sceneDown">↓ 아래로</button><button class="ghost" data-act="copyFillOne">이 장면만 트리트먼트 프롬프트</button></div>
+      <button class="ghost danger" data-act="delScene">이 장면 삭제</button>
+    </div>`;
+  d.querySelectorAll('textarea').forEach(autogrow);
+  updateSceneEst();
+}
+function cardHtml(l,c){const n=chars(c.text);return`<div class="card ${n>l.cardChars?'over':''} ${c.draft?'draft':''}" data-card="${c.id}">
+  <textarea data-cf="${c.id}" placeholder="이 장면에서 일어나는 일을 적거나, 초고 문장을 씁니다">${esc(c.text)}</textarea>
+  <div class="ft"><span class="cnt">${cardFoot(l,c)}</span>
+  <span class="tools"><button data-act="cardUp" data-id="${c.id}">↑</button><button data-act="cardDown" data-id="${c.id}">↓</button><button data-act="cardAddBelow" data-id="${c.id}">아래 추가</button><button data-act="cardDel" data-id="${c.id}">삭제</button></span></div></div>`;}
+function cardFoot(l,c){const text=c.text;const n=chars(text);return`${n}자 · ${fmtPages(pagesOf(text))}`+(n>l.cardChars?` <span class="warn">카드 한 장(${l.cardChars}자)을 넘깁니다</span>`:'')+(c.draft?`<span class="tag" title="클로드가 쓴 트리트먼트입니다. 고치면 표시가 사라지고 매수에 들어갑니다.">클로드 트리트먼트</span>`:'');}
+function updateSceneEst(){const l=cur(),t=curScene();if(!t)return;const e=document.getElementById('sceneEst');if(!e)return;const r=tpRowFor(t,l);const est=sceneEst(t,l);const drafts=t.cards.filter(c=>c.draft&&c.text.trim()).length;const over=t.pages>0&&est>t.pages*1.1;const under=t.pages>0&&est<t.pages*0.5&&est>0;
+  e.innerHTML=`${r?'타이핑':'초고'} ${sceneChars(t,l)}자 · 약 ${fmtPages(est)} <span class="${over?'badge bad':under?'badge warn':''}">(${t.pages}매 배정)</span>${drafts?` · 트리트먼트 ${drafts}장`:''}${r?' · 토막은 매수에 세지 않음':''}`;
+  const info=document.getElementById('tpInfo');
+  if(info){
+    const re=`<button class="ghost" data-act="tpReload" title="보태기 수파베이스에서 다시 읽습니다">다시 읽기</button>`;
+    if(!tpConf.on)info.innerHTML='<span class="muted">타이핑 읽기가 꺼져 있습니다 (설정)</span>';
+    else if(r)info.innerHTML=`<span>${chars(r.text)}자 · ${fmtPages(chars(r.text)/PAGE)} · ${r.handed?'스크리브너로 넘김':r.unit_done?'원고 완성':'쓰는 중'}${r.phone_at?' · 스크리브너에 아직 없는 글':''}${tpWhen(r)?' · '+tpWhen(r):''}${tpId(t.tp)?'':' · 이름으로 이음'}</span><button class="ghost" data-act="tpShow">${ui.tpShow?'본문 접기':'본문 보기'}</button>${re}`;
+    else info.innerHTML=`<span class="muted">${tp.busy?'읽는 중…':tp.msg?esc(tp.msg):tp.loaded?'이어진 원고 없음':''}</span>${re}`;
+  }
+  const tx=document.getElementById('tpText');if(tx)tx.innerHTML=(r&&ui.tpShow)?`<div class="tptext">${esc(r.text||'')||'<span class="muted">(빈 원고)</span>'}</div>`:'';
+  const sg=document.getElementById('sceneGuide');if(sg)sg.innerHTML=sceneGuideHtml(l,t);}
+
+/* ---------- 줄거리 — 정해진 것의 나무 ---------- */
+const gCards=l=>(l.guide&&l.guide.cards||[]).filter(c=>!c.shelved);
+const gKids=(l,pid)=>gCards(l).filter(c=>(c.parent||null)===(pid||null));
+const gById=(l,id)=>(l.guide&&l.guide.cards||[]).find(c=>c.id===id);
+const gSiblings=(l,c)=>gCards(l).filter(x=>(x.parent||null)===(c.parent||null));
+const gGlyph=c=>c.state==='궁금함'?'?':c.state==='사실'?'史':c.state==='가설'?'…':'·';
+const gCls=c=>c.state==='궁금함'?'q':c.state==='가설'?'h':c.state==='사실'?'f':'';
+const gFirst=c=>(c.text||'').split('\n')[0].trim();
+const gRest=c=>(c.text||'').split('\n').slice(1).join('\n').trim();
+function gCounts(l){const cs=gCards(l);return{q:cs.filter(c=>c.state==='궁금함').length,unused:cs.filter(c=>(c.state==='확정'||c.state==='사실')&&!c.sceneId).length,n:cs.length};}
+function gMove(l,c,dir){const sib=gSiblings(l,c);const i=sib.indexOf(c);const j=i+dir;if(j<0||j>=sib.length)return false;const arr=l.guide.cards;const a=arr.indexOf(c),b=arr.indexOf(sib[j]);[arr[a],arr[b]]=[arr[b],arr[a]];return true;}
+const dtSearchUrl=c=>'x-devonthink://search?query='+encodeURIComponent(gFirst(c));
+const gAddr=(l,c)=>location.href.split('#')[0]+'#소설='+encodeURIComponent(l.id)+'&카드='+encodeURIComponent(c.id);
+const sceneAddr=(l,t)=>location.href.split('#')[0]+'#소설='+encodeURIComponent(l.id)+'&장면='+encodeURIComponent(t.id);
+function gRowHtml(l,c,d){
+  const kids=gKids(l,c.id);const open=ui.cardOpen===c.id;const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;
+  const meta=[c.year?`${c.year}년`:'',c.state,sc>=0?`${sc+1}장면`:'',c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:(c.state==='확정'?'<span title="자료가 걸려 있지 않습니다">자료 없음</span>':'')].filter(Boolean).join(' · ');
+  return `<div class="gnode ${gCls(c)}" style="--d:${d}"><div class="grow ${open?'open':''}" data-act="gOpen" data-id="${c.id}">
+    <span class="fold" data-act="gFold" data-id="${c.id}" title="${kids.length?'가지 접기/펼치기':''}">${kids.length?(c.fold?'▸':'▾'):''}</span>
+    <span class="glyph">${gGlyph(c)}</span>
+    <span class="gt ${gFirst(c)?'':'ph'}">${esc(gFirst(c))||'빈 카드'}</span>
+    <span class="gm">${meta}</span></div>${open?gPanelHtml(l,c):''}</div>`+(c.fold?'':kids.map(k=>gRowHtml(l,k,d+1)).join(''));
+}
+function gPanelHtml(l,c){
+  const scOpts='<option value="">없음</option>'+l.scenes.map((t,i)=>`<option value="${t.id}" ${c.sceneId===t.id?'selected':''}>${i+1}. ${esc(t.title)||'제목 없는 장면'}</option>`).join('');
+  return `<div class="gpanel">
+    <textarea data-gf="text" data-id="${c.id}" placeholder="정해진 것 하나를 한 줄로. 둘째 줄부터는 풀이">${esc(c.text)}</textarea>
+    <div class="grid">
+      <span>상태</span><select data-gf="state" data-id="${c.id}" title="궁금함: 아직 모름, 막힌 자리 · 가설: 지어낸 것 · 확정: 이 소설에서 정해진 것 · 사실: 실제 역사">${STATES.map(s=>`<option ${c.state===s?'selected':''}>${s}</option>`).join('')}</select>
+      <span>해</span><input type="number" data-gf="year" data-id="${c.id}" value="${c.year??''}" placeholder="연도 (비워도 됨)">
+      <span>자료</span><div class="with"><input data-gf="dt" data-id="${c.id}" value="${esc(c.dt)}" placeholder="데본씽크 그룹의 x-devonthink-item:// 주소">${c.dt?`<a href="${esc(c.dt)}"><button type="button" tabindex="-1">열기 ↗</button></a>`:`<a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크를 검색합니다. 찾은 자료를 그룹에 모으고 그룹 링크를 여기에 붙이세요"><button type="button" tabindex="-1">자료 찾기</button></a>`}</div>
+      <span>장면</span><select data-gf="sceneId" data-id="${c.id}">${scOpts}</select>
+    </div>
+    <div class="tools"><button data-act="gAddChild" data-id="${c.id}">가지 추가</button><button data-act="gUp" data-id="${c.id}">↑</button><button data-act="gDown" data-id="${c.id}">↓</button><button data-act="gIn" data-id="${c.id}" title="앞 카드의 가지로">→ 들이기</button><button data-act="gOut" data-id="${c.id}" title="한 단계 위로">← 내기</button><button data-act="gAddr" data-id="${c.id}" title="데본씽크 그룹의 URL 칸에 붙여 두면 거기서 이 카드로 옵니다">주소 복사</button><button class="danger" data-act="gDel" data-id="${c.id}">지우기</button></div>
+  </div>`;
+}
+function renderGuide(){
+  const l=cur();const d=document.getElementById('detail');if(!l||!d)return;const k=gCounts(l);const roots=gKids(l,null);
+  d.innerHTML=`<div class="ghead"><div class="ttl">줄거리</div><div class="muted small">${k.n?`궁금함 ${k.q}장 · 아직 안 쓴 확정 ${k.unused}장 · 모두 ${k.n}장`:''}</div></div>
+    <p class="muted small" style="margin:0 0 12px">이 소설에서 정해진 것을 한 장에 하나씩. 처음에는 한 줄이면 됩니다. 쓰다가 알게 되는 것을 그 밑에 가지로 붙입니다. 궁금함은 막힌 자리이고 "자료 찾기"로 데본씽크에 갑니다. 확정과 사실만 클로드에게 "정해진 것"으로 보내고, 궁금함은 "아직 모르는 것"으로 보냅니다. 가설은 보내지 않습니다.</p>
+    <div class="gtree">${roots.map(c=>gRowHtml(l,c,0)).join('')||'<div class="muted small" style="padding:8px">아직 카드가 없습니다. 이 소설이 무엇에 관한 이야기인지 한 줄로 시작해 보세요.</div>'}</div>
+    <button class="addcard" data-act="addGuide" style="margin-top:10px">+ 카드 추가</button>`;
+  d.querySelectorAll('textarea').forEach(autogrow);
+  if(ui.cardOpen){const ta=d.querySelector(`textarea[data-id="${ui.cardOpen}"]`);if(ta){if(ui.focusCard){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ui.focusCard=false;}ta.closest('.gnode')?.scrollIntoView({block:'nearest'});}}
+}
+/* 장면 상세의 줄거리 카드 단 — 궁금함이 먼저 */
+function sceneGuideHtml(l,t){
+  const cs=gCards(l).filter(c=>c.sceneId===t.id).sort((a,b)=>(a.state==='궁금함'?0:1)-(b.state==='궁금함'?0:1));
+  if(!cs.length)return '<div class="muted small">이 장면에 걸린 카드가 없습니다. 줄거리에서 카드의 장면 칸을 고르거나, 막힌 것을 적으세요.</div>';
+  return cs.map(c=>`<div class="gi ${gCls(c)}" data-act="gGo" data-id="${c.id}" title="줄거리에서 열기"><span class="glyph">${gGlyph(c)}</span><span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}</span><span class="muted small" style="flex:none">${c.state}${c.year?' · '+c.year+'년':''}</span>${c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:`<a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크 검색">찾기</a>`}</div>`).join('');
+}
+
+/* ---------- 타이핑(보태기 수파베이스) 읽기 — 읽기만 한다. 쓰기는 타이핑에서만 ---------- */
+const TP_KEY='storyM.tp';
+const TP_DEF={on:true,url:'https://pvunctdbsdcgvbqloslg.supabase.co',key:'sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY',base:''};
+let tpConf=(()=>{try{return Object.assign({},TP_DEF,JSON.parse(localStorage.getItem(TP_KEY))||{});}catch(e){return{...TP_DEF};}})();
+function tpSave(){localStorage.setItem(TP_KEY,JSON.stringify(tpConf));}
+const tp={rows:new Map(),at:0,story:null,busy:false,msg:'',loaded:false,titleT:null};
+/* 장면의 타이핑 칸 — 원고 id 그대로이거나 #원고=<id>가 든 주소 */
+const tpId=s=>{s=String(s||'').trim();if(!s)return '';const m=s.match(/[#&?](?:원고|ms)=([^&]+)/);if(m){try{return decodeURIComponent(m[1]);}catch(e){return m[1];}}return /^[a-z0-9]+$/i.test(s)?s:'';};
+/* 장면에 이어진 타이핑 원고 — id가 있으면 그것, 없으면 작품 이름·원고 이름이 같은 것 */
+function tpRowFor(t,l){l=l||cur();if(!l||!t||!tpConf.on||tp.story!==l.id)return null;const id=tpId(t.tp);if(id)return tp.rows.get(id)||null;
+  const wt=(l.title||'').trim(),tt=(t.title||'').trim();if(!wt||!tt)return null;for(const r of tp.rows.values())if((r.work_title||'').trim()===wt&&(r.title||'').trim()===tt)return r;return null;}
+async function tpFetch(q){const r=await fetch(tpConf.url.replace(/\/$/,'')+'/rest/v1/botaegi_ms?select=id,title,text,work_title,work_kind,handed,unit_done,updated_at,phone_at,link&'+q,{headers:{apikey:tpConf.key,Authorization:'Bearer '+tpConf.key}});if(!r.ok)throw new Error(String(r.status));return r.json();}
+async function tpLoad(l,force){
+  if(!tpConf.on||!l||!tpConf.url||!tpConf.key)return;if(tp.busy)return;if(!force&&tp.story===l.id&&Date.now()-tp.at<60000)return;
+  tp.busy=true;tp.msg='';
+  try{
+    const ids=l.scenes.map(t=>tpId(t.tp)).filter(Boolean);const qs=[];
+    if((l.title||'').trim())qs.push('work_title=eq.'+encodeURIComponent(l.title.trim()));
+    if(ids.length)qs.push('id=in.('+ids.map(encodeURIComponent).join(',')+')');
+    const got=[];for(const q of qs)got.push(...await tpFetch(q));
+    tp.rows.clear();got.forEach(r=>tp.rows.set(r.id,r));
+    tp.story=l.id;tp.at=Date.now();tp.loaded=true;
+  }catch(e){tp.msg='보태기 수파베이스를 읽지 못했습니다 ('+e.message+')';tp.story=l.id;tp.loaded=true;}
+  finally{tp.busy=false;}
+}
+function tpUrlFor(t){const id=tpId(t.tp);if(!id||!tpConf.base)return '';return tpConf.base.split('#')[0]+'#원고='+encodeURIComponent(id);}
+function tpWhen(r){const d=new Date(r.updated_at||r.phone_at||0);if(isNaN(d)||!d.getTime())return '';return `${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 고침`;}
+
+/* ---------- events ---------- */
+app.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act,id=b.dataset.id;const l=cur(),t=curScene();
+  const closeMenus=()=>app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));
+  switch(act){
+    case 'new':{const n=newStory();db.stories.push(n);ui.storyId=n.id;ui.view='editor';save(true);render();app.querySelector('[data-lf=title]').focus();break;}
+    case 'sample':{const n=sample();db.stories.push(n);save(true);markDirty(n.id);render();break;}
+    case 'import':document.getElementById('importFile').click();break;
+    case 'open':ui.storyId=id;ui.view='editor';render();break;
+    case 'delete':{e.stopPropagation();const x=db.stories.find(l=>l.id===id);if(confirm(`"${x.title||'제목 없음'}" 소설을 삭제할까요? 되돌릴 수 없습니다.`)){db.stories=db.stories.filter(l=>l.id!==id);db.deleted=(db.deleted||[]).filter(d=>d.id!==id);db.deleted.push({id,at:Date.now()});save(true);markDirty(id);render();}break;}
+    case 'home':ui.view='home';save(true);render();break;
+    case 'scratch':ui.pane='scratch';renderDerived();renderDetail();break;
+    /* 줄거리 */
+    case 'guide':ui.pane='guide';renderDerived();renderDetail();break;
+    case 'addGuide':{const c=newGuide(null);l.guide.cards.push(c);ui.cardOpen=c.id;ui.focusCard=true;save();renderDerived();renderGuide();break;}
+    case 'gOpen':{if(e.target.closest('a'))break;ui.cardOpen=ui.cardOpen===id?null:id;ui.focusCard=ui.cardOpen===id;renderGuide();break;}
+    case 'gFold':{e.stopPropagation();const c=gById(l,id);if(c&&gKids(l,c.id).length){c.fold=!c.fold;save();renderGuide();}else if(c){ui.cardOpen=ui.cardOpen===id?null:id;ui.focusCard=ui.cardOpen===id;renderGuide();}break;}
+    case 'gAddChild':{const p=gById(l,id);if(!p)break;const c=newGuide(p.id,p.state==='궁금함'?'가설':p.state);c.sceneId=p.sceneId;p.fold=false;l.guide.cards.push(c);ui.cardOpen=c.id;ui.focusCard=true;save();renderDerived();renderGuide();break;}
+    case 'gUp':case 'gDown':{const c=gById(l,id);if(c&&gMove(l,c,act==='gUp'?-1:1)){save();renderGuide();}break;}
+    case 'gIn':{const c=gById(l,id);if(!c)break;const sib=gSiblings(l,c);const i=sib.indexOf(c);if(i>0){c.parent=sib[i-1].id;sib[i-1].fold=false;save();renderGuide();}else toast('앞에 카드가 있어야 그 가지로 들어갑니다.');break;}
+    case 'gOut':{const c=gById(l,id);if(!c||!c.parent)break;const p=gById(l,c.parent);const arr=l.guide.cards;arr.splice(arr.indexOf(c),1);arr.splice(arr.indexOf(p)+1,0,c);c.parent=p.parent||null;save();renderGuide();break;}
+    case 'gDel':{const c=gById(l,id);if(!c)break;const kids=gKids(l,c.id);if((c.text.trim()||kids.length)&&!confirm(kids.length?`이 카드를 지우면 가지 ${kids.length}장은 한 단계 위로 올라갑니다. 지울까요?`:'이 카드를 지울까요?'))break;kids.forEach(k=>k.parent=c.parent||null);l.guide.cards=l.guide.cards.filter(x=>x!==c);if(ui.cardOpen===id)ui.cardOpen=null;save();renderDerived();renderGuide();break;}
+    case 'gAddr':{const c=gById(l,id);if(!c)break;copyText(gAddr(l,c)).then(ok=>toast(ok?'카드 주소를 복사했습니다. 데본씽크 그룹의 URL 칸에 붙여 두면 거기서 이 카드로 돌아옵니다.':'복사하지 못했습니다.'));break;}
+    case 'gGo':{if(e.target.closest('a'))break;ui.pane='guide';ui.cardOpen=id;renderDerived();renderDetail();break;}
+    case 'stuck':{if(!t)break;const c=newGuide(null,'궁금함');c.sceneId=t.id;l.guide.cards.push(c);ui.pane='guide';ui.cardOpen=c.id;ui.focusCard=true;save();renderDerived();renderDetail();toast('궁금함 카드를 만들었습니다. 막힌 것을 한 줄로 적고, 자료 찾기로 데본씽크에 가세요.');break;}
+    case 'sceneAddr':{if(!t)break;copyText(sceneAddr(l,t)).then(ok=>toast(ok?'장면 주소를 복사했습니다. 타이핑 원고의 "줄거리 링크 넣기"에 붙이세요.':'복사하지 못했습니다.'));break;}
+    case 'tpReload':tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();});updateSceneEst();break;
+    case 'tpShow':ui.tpShow=!ui.tpShow;updateSceneEst();break;
+    case 'copySkeleton':{const text=skeletonPrompt(l);const hadNew=!!unsentScratch(l);copyText(text).then(ok=>{if(!ok){toast('복사하지 못했습니다.');return;}if(hadNew){l.scratch=(l.scratch||'').replace(/\s+$/,'')+`\n\n── ${stampNow()} 정리에 보냄 ──\n\n`;save();renderDerived();renderDetail();toast('뼈대 정리 프롬프트를 복사했습니다. 클로드에 붙여 넣고, 답을 "클로드 답 가져오기"에 넣으세요.');}else{toast(lastSentScratch(l)?'새로 적은 생각이 없어 마지막에 보낸 생각을 다시 담아 복사했습니다.':'적은 생각이 없어 제목만으로 요청문을 복사했습니다.');}});break;}
+    case 'copyFill':copyText(fillPrompt(l)).then(ok=>toast(ok?'트리트먼트 채우기 프롬프트를 복사했습니다. 답을 "클로드 답 가져오기"에 넣으세요.':'복사하지 못했습니다.'));break;
+    case 'copyFillOne':if(t)copyText(fillPrompt(l,t)).then(ok=>toast(ok?`"${t.title||'이 장면'}"만 채우는 프롬프트를 복사했습니다. 답은 생각 모으기의 "클로드 답 가져오기"에 넣으세요.`:'복사하지 못했습니다.'));break;
+    case 'copyReader':{const upto=readerUpto(l);if(!upto){toast('장면이 없습니다.');break;}l.readerUpto=upto;save();copyText(readerPrompt(l,upto)).then(ok=>toast(ok?`${upto}번째 장면까지 읽은 독자의 프롬프트를 복사했습니다. 답은 "클로드 답 가져오기"에 넣으면 생각 모으기로 들어갑니다.`:'복사하지 못했습니다.'));break;}
+    case 'importOpen':openImport();break;
+    case 'addScene':{const n=newScene();l.scenes.push(n);ui.sceneId=n.id;ui.pane='scene';save();renderDerived();renderDetail();document.querySelector('[data-tf=title]').focus();break;}
+    case 'selScene':ui.sceneId=id;ui.pane='scene';renderDerived();renderDetail();break;
+    case 'delScene':{if(!t)break;const has=t.cards.some(c=>c.text.trim())||t.memo.trim()||t.title.trim();if(has&&!confirm(`"${t.title||'제목 없는 장면'}" 장면과 그 토막을 삭제할까요? 걸린 줄거리 카드는 남고 장면 칸만 빕니다.`))break;const i=l.scenes.indexOf(t);l.scenes.splice(i,1);gCards(l).forEach(c=>{if(c.sceneId===t.id)c.sceneId=null;});ui.sceneId=(l.scenes[i]||l.scenes[i-1])?.id||null;save();renderDerived();renderDetail();break;}
+    case 'sceneUp':case 'sceneDown':{const i=l.scenes.indexOf(t);const j=act==='sceneUp'?i-1:i+1;if(j<0||j>=l.scenes.length)break;[l.scenes[i],l.scenes[j]]=[l.scenes[j],l.scenes[i]];save();renderDerived();renderDetail();break;}
+    case 'addCard':{const c=newCard();t.cards.push(c);save();renderDetail();focusCard(c.id);break;}
+    case 'cardAddBelow':{const i=t.cards.findIndex(c=>c.id===id);const c=newCard();t.cards.splice(i+1,0,c);save();renderDetail();focusCard(c.id);break;}
+    case 'cardDel':{const c=t.cards.find(c=>c.id===id);if(c.text.trim()&&!confirm('이 토막을 삭제할까요?'))break;t.cards=t.cards.filter(c=>c.id!==id);save();renderDerived();renderDetail();break;}
+    case 'cardUp':case 'cardDown':{const i=t.cards.findIndex(c=>c.id===id);const j=act==='cardUp'?i-1:i+1;if(j<0||j>=t.cards.length)break;[t.cards[i],t.cards[j]]=[t.cards[j],t.cards[i]];save();renderDetail();focusCard(id);break;}
+    case 'printA6':closeMenus();doPrint('a6');break;
+    case 'printA4':closeMenus();doPrint('a4');break;
+    case 'a4memo':ui.a4memo=b.checked;break;
+    case 'copyMd':closeMenus();copyText(toMarkdown(l,true)).then(ok=>toast(ok?'마크다운을 복사했습니다.':'복사하지 못했습니다.'));break;
+    case 'dlMd':closeMenus();download(safeName(l.title)+'.md',toMarkdown(l,true),'text/markdown');break;
+    case 'dlJson':closeMenus();saveJsonBackup(l,false);break;
+    case 'dlJsonAs':closeMenus();saveJsonBackup(l,true);break;
+  }
+});
+function focusCard(id){const ta=document.querySelector(`[data-cf="${id}"]`);if(ta){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);}}
+app.addEventListener('input',e=>{
+  const el=e.target;const l=cur();if(!l)return;
+  if(el.dataset.lf){const k=el.dataset.lf;l[k]=(el.type==='number'||el.tagName==='SELECT')?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);if(k==='cardChars'){renderDetail();}save();renderDerived();if(k==='title'){clearTimeout(tp.titleT);tp.titleT=setTimeout(()=>tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();}),800);}return;}
+  if(el.dataset.gf){const c=gById(l,el.dataset.id);if(!c)return;const k=el.dataset.gf;
+    if(k==='year')c.year=el.value?+el.value:null;else if(k==='sceneId')c.sceneId=el.value||null;else c[k]=el.value;
+    if(el.tagName==='TEXTAREA'){autogrow(el);const row=el.closest('.gnode')?.querySelector(':scope>.grow .gt');if(row){row.textContent=gFirst(c)||'빈 카드';row.classList.toggle('ph',!gFirst(c));}}
+    save();if(k==='text')renderDerived();return;}
+  const t=curScene();if(!t)return;
+  if(el.dataset.tf){const k=el.dataset.tf;t[k]=el.type==='number'?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);save();renderDerived();updateSceneEst();if(k==='tp'||k==='title'){clearTimeout(tp.titleT);tp.titleT=setTimeout(()=>tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();}),800);}return;}
+  if(el.dataset.cf){const c=t.cards.find(c=>c.id===el.dataset.cf);if(!c)return;c.text=el.value;autogrow(el);const card=el.closest('.card');if(c.draft){delete c.draft;card.classList.remove('draft');}card.querySelector('.cnt').innerHTML=cardFoot(l,c);card.classList.toggle('over',chars(c.text)>l.cardChars);save();renderDerived();updateSceneEst();}
+});
+app.addEventListener('change',e=>{const el=e.target;if(el.dataset.act==='a4memo')ui.a4memo=el.checked;if(el.dataset.lf==='readerUpto'){const l=cur();if(l){l.readerUpto=+el.value||0;save();}}
+  /* 줄거리 카드의 상태·해·자료·장면 — 바꾸고 나면 줄과 배지를 다시 그린다 */
+  if(el.dataset.gf&&el.dataset.gf!=='text'){renderDerived();renderGuide();}
+  /* 타이핑 읽기 설정 */
+  if(el.dataset.tp){const k=el.dataset.tp;tpConf[k]=el.type==='checkbox'?el.checked:el.value.trim();tpSave();tp.story=null;tp.rows.clear();tp.loaded=false;tp.msg='';const l=cur();if(l)tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();});renderDerived();updateSceneEst();}
+});
+document.addEventListener('click',e=>{if(!e.target.closest('details.menu'))app.querySelectorAll('details.menu[open]').forEach(d=>d.removeAttribute('open'));});
+app.addEventListener('toggle',e=>{const d=e.target;if(!d.matches||!d.matches('details.menu')||!d.open)return;const m=d.querySelector(':scope>div');if(!m)return;m.style.left='';m.style.right='';const r=m.getBoundingClientRect();if(r.left<4){m.style.right='auto';m.style.left='0';}},true);
+/* drag reorder scenes */
+let dragId=null;
+app.addEventListener('dragstart',e=>{const r=e.target.closest('.trow');if(!r)return;dragId=r.dataset.id;e.dataTransfer.effectAllowed='move';});
+app.addEventListener('dragover',e=>{const r=e.target.closest('.trow');if(!r||!dragId)return;e.preventDefault();app.querySelectorAll('.trow.dragover').forEach(x=>x.classList.remove('dragover'));r.classList.add('dragover');});
+app.addEventListener('dragleave',e=>{const r=e.target.closest('.trow');if(r)r.classList.remove('dragover');});
+app.addEventListener('drop',e=>{const r=e.target.closest('.trow');if(!r||!dragId)return;e.preventDefault();const l=cur();const from=l.scenes.findIndex(t=>t.id===dragId);let to=l.scenes.findIndex(t=>t.id===r.dataset.id);if(from<0||to<0||from===to){dragId=null;renderDerived();return;}const [m]=l.scenes.splice(from,1);l.scenes.splice(to,0,m);dragId=null;save();renderDerived();renderDetail();});
+app.addEventListener('dragend',()=>{dragId=null;app.querySelectorAll('.trow.dragover').forEach(x=>x.classList.remove('dragover'));});
+document.getElementById('importFile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{const d=JSON.parse(rd.result);const arr=Array.isArray(d.stories)?d.stories:[d];let n=0;for(const x of arr){if(!x||!Array.isArray(x.scenes))continue;const c=JSON.parse(JSON.stringify(x));c.id=uid();const sm=new Map();c.scenes.forEach(t=>{const n=uid();sm.set(t.id,n);t.id=n;(t.cards||[]).forEach(k=>k.id=uid());});
+        if(c.guide&&Array.isArray(c.guide.cards)){const gm=new Map();c.guide.cards.forEach(g=>gm.set(g.id,uid()));c.guide.cards.forEach(g=>{g.id=gm.get(g.id);g.parent=g.parent?(gm.get(g.parent)||null):null;g.sceneId=g.sceneId?(sm.get(g.sceneId)||null):null;});}
+        c.updatedAt=Date.now();db.stories.push(c);markDirty(c.id);n++;}save(true);render();toast(n?`${n}개 소설을 불러왔습니다.`:'불러올 소설이 없습니다.');}catch(err){toast('JSON 파일을 읽지 못했습니다.');}e.target.value='';};
+  rd.readAsText(f);
+});
+
+/* ---------- organize: prompt, parser, import ---------- */
+/* 1단계 뼈대: 장면·매수·한 줄 요약·메모만. 트리트먼트는 쓰지 않음 */
+const SKELETON_FORMAT=`답은 아래 형식만 지켜서, 앞뒤 설명 없이 마크다운으로 써 주세요. 트리트먼트나 소설 문장은 쓰지 마세요.
+
+## 장면 제목 (30매)
+> 한 줄 요약. 이 장면에서 누가 무엇을 하고, 끝나면 무엇이 달라지는지 한 문장.
+메모:
+- 제가 적은 생각에서 이 장면에 들어갈 재료 (꼭 일어나야 할 일, 인물이 아는 것, 소품, 아직 못 정한 것)
+- 메모는 빈 줄로 끝냅니다
+
+## 다음 장면 제목 (10매)
+...
+
+## 제안
+- 비어 있는 매수를 채우려면 어떤 생각이 더 있어야 하는지, 질문으로만`;
+function storyHead(l){
+  const gb=guideBlock(l);
+  return `소설 제목: ${l.title||'(미정, 제안해 주세요)'}
+한 줄 요약: ${l.logline||'(미정, 제안해 주세요)'}
+목표 분량: ${l.targetPages}매 (200자 원고지. 넘지 말아야 할 한도입니다. 채워야 할 목표가 아닙니다)`+(gb?'\n\n'+gb:'');
+}
+/* 줄거리 카드를 프롬프트에 — 확정·사실은 "정해진 것", 궁금함은 "아직 모르는 것". 가설과 서랍은 보내지 않는다 */
+function guideBlock(l){
+  const cs=gCards(l);const fixed=cs.filter(c=>(c.state==='확정'||c.state==='사실')&&gFirst(c));const open=cs.filter(c=>c.state==='궁금함'&&gFirst(c));
+  const line=c=>{const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;return '- '+gFirst(c)+(c.year?` (${c.year}년)`:'')+(sc>=0?` [${sc+1}번째 장면]`:'')+(gRest(c)?'\n  '+gRest(c).replace(/\n/g,'\n  '):'');};
+  let s='';
+  if(fixed.length)s+=`정해진 것 (이 소설에서 이미 정해진 사실입니다. 바꾸거나 어긋나게 쓰지 마세요):\n${fixed.map(line).join('\n')}\n`;
+  if(open.length)s+=`${s?'\n':''}아직 모르는 것 (제가 아직 정하지 못한 것입니다. 지어내서 채우지 말고, 이 자리가 걸리면 "(재료 부족)"으로 남겨 주세요):\n${open.map(line).join('\n')}\n`;
+  return s;
+}
+function skeletonPrompt(l){
+  const ff=freshForPrompt(l);const fresh=ff.text;const freshLabel=ff.resend&&fresh?' (새로 적은 것이 없어 마지막에 보낸 생각을 다시 담았습니다)':'';
+  const head=storyHead(l);
+  const askTitle=l.title?'':'맨 첫 줄에 "# 제목" 형식으로 소설 제목을 제안해 주세요.';
+  const askLog=l.logline?'':'그 다음 줄에 "한 줄 요약: ..." 형식으로 이 소설이 무엇에 관한 이야기인지 한 줄을 제안해 주세요.';
+  const extra=[askTitle,askLog].filter(Boolean);
+  if(!hasContent(l)){
+    return `아래는 제가 쓰려는 소설에 대해 떠오르는 대로 적은 생각입니다. 이것을 바탕으로 소설의 뼈대, 곧 장면 목록만 잡아 주세요. 트리트먼트나 소설 문장은 쓰지 마세요.
+
+${head}
+
+요청 사항:
+1. 제가 적은 생각을 장면으로 묶어 주세요. 장면의 수는 재료가 있는 만큼만 만들고, 제 생각에 없는 장면을 지어내지 마세요. 순서는 독자가 읽을 순서입니다.
+2. 장면마다 배정 매수를 적되, 그 재료로 실제로 쓸 만큼만 잡아 주세요. 합이 목표 분량에 못 미쳐도 됩니다. 남는 매수는 비워 두세요.
+3. 장면마다 한 줄 요약과 메모를 써 주세요. 메모는 제가 적은 생각에서 그 장면에 들어갈 재료를 옮겨 적는 것이고, 새 내용을 보태지 마세요.
+4. 맨 끝 "## 제안"에는 비어 있는 매수를 채우려면 어떤 생각이 더 있어야 할지 질문으로만 적어 주세요.
+${extra.map((x,i)=>`${5+i}. ${x}`).join('\n')}
+${SKELETON_FORMAT}
+
+---
+제 생각${freshLabel}:
+
+${fresh||'(아직 적은 생각이 없습니다. 제목만 보고 장면 후보를 질문 형태로 제안해 주세요.)'}`;
+  }
+  const curr=l.scenes.map((t,i)=>`## ${t.title||'(제목 없음)'} (${t.pages}매)\n${t.summary?'> '+t.summary+'\n':''}${t.memo.trim()?'메모:\n'+t.memo.trim().split('\n').map(x=>'- '+x.replace(/^[-·•*]\s*/,'')).join('\n')+'\n':''}`).join('\n');
+  return `아래는 제가 쓰고 있는 소설의 현재 뼈대와, 그 뒤에 새로 떠오른 생각입니다. 새 생각을 뼈대에 어떻게 더할지 정리해 주세요. 트리트먼트나 소설 문장은 쓰지 마세요.
+
+${head}
+현재 배정 합계: ${allocated(l)}매
+
+요청 사항:
+1. 기존 장면은 그대로 둡니다. 새 생각이 기존 장면에 들어가면 그 장면의 제목을 한 글자도 바꾸지 말고 그대로 쓰고, 그 아래 "메모:"에 새로 추가할 줄만 써 주세요. 이미 있는 메모와 한 줄 요약은 다시 쓰지 마세요.
+2. 새 생각이 기존 장면에 맞지 않으면 새 장면을 만들고, 그 재료로 쓸 만큼만 매수를 잡아 주세요.
+3. 제 생각에 없는 내용을 보태지 마세요.
+4. 매수 합이 목표를 넘기거나 순서를 바꾸는 게 좋다면 "## 제안"에 글로만 적어 주세요. 비어 있는 매수를 채울 질문도 거기에 적어 주세요.
+${extra.map((x,i)=>`${5+i}. ${x}`).join('\n')}
+${SKELETON_FORMAT}
+
+---
+현재 뼈대:
+
+${curr}
+---
+새로 떠오른 생각${freshLabel}:
+
+${fresh||'(새로 적은 생각이 없습니다)'}`;
+}
+/* 2단계 트리트먼트: 뼈대가 선 뒤, 메모와 생각 모으기의 재료로 "무슨 일이 일어나는가"를 납작하게 채움 */
+const allScratch=l=>scratchBatches(l).filter(Boolean).join('\n\n');
+function fillPrompt(l,only){
+  const scenes=only?[only]:l.scenes;
+  const curr=scenes.map(t=>{const ex=t.cards.filter(c=>c.text.trim());const free=/클로드가 채워도 됨/.test(t.memo);
+    return `## ${t.title||'(제목 없음)'} (${t.pages}매${free?', 이 장면은 자유롭게 채워도 됨':''})\n${t.summary?'> '+t.summary+'\n':''}${t.memo.trim()?'메모:\n'+t.memo.trim().split('\n').map(x=>'- '+x.replace(/^[-·•*]\s*/,'')).join('\n')+'\n':''}${ex.length?'\n'+ex.map((c,k)=>`[기존 ${k+1}] ${c.text.trim()}`).join('\n\n')+'\n':'\n(아직 쓴 토막 없음)\n'}`;}).join('\n');
+  return `아래는 제가 쓰고 있는 소설의 뼈대와, 제가 직접 쓴 토막, 그리고 떠오르는 대로 적어 둔 생각 전체입니다. ${only?'"'+(only.title||'이 장면')+'" 장면의':'장면마다'} 트리트먼트를 써 주세요. 트리트먼트는 "이 장면에서 무슨 일이 일어나는가"를 적은 납작한 글이지, 소설 문장이 아닙니다.
+
+${storyHead(l)}
+
+규칙:
+1. 제가 쓴 토막([기존 1], [기존 2]...)은 한 글자도 고치지 말고 다시 쓰지도 마세요. 답에서는 그 자리에 "[기존 1]"처럼 표시만 쓰고, 그 앞뒤나 사이에 이어지는 새 토막을 넣어 주세요.
+2. 새 토막은 현재형 평서문으로, 누가 무엇을 하고 무엇이 달라지는지만 씁니다. 대사, 비유, 묘사, 문체를 넣지 마세요. 제 토막의 말투를 흉내 내지 마세요. 일부러 밋밋하게 써 주세요. 나중에 제가 제 문장으로 바꿔 쓸 것이고, 버리기 쉬워야 합니다.
+3. 재료는 그 장면의 한 줄 요약과 메모와 아래 "제 생각" 안에서만 가져오세요. 재료가 바닥나면 거기서 멈추고, 그 장면의 마지막 줄에 "(재료 부족)"이라고 적어 주세요. 지어내서 채우지 마세요.
+4. 메모에 "클로드가 채워도 됨"이라고 적힌 장면은 재료 밖의 내용을 넣어도 됩니다.
+5. 한 토막은 300자 안팎. 토막 사이는 빈 줄로 나눕니다. 한 줄 요약과 메모와 배정 매수는 다시 쓰지 마세요.
+
+답은 아래 형식만 지켜서, 앞뒤 설명 없이 마크다운으로 써 주세요.
+
+## 장면 제목 (30매)
+새 토막...
+
+[기존 1]
+
+새 토막...
+(재료 부족)
+
+---
+뼈대와 제가 쓴 토막:
+
+${curr}
+---
+제 생각 (생각 모으기 전체):
+
+${allScratch(l)||'(없음)'}`;
+}
+/* 독자 눈으로 보기: 장면 n까지의 토막 본문만. 로그라인, 메모, 생각 모으기, 뒤 장면은 보내지 않는다. */
+function readerPrompt(l,upto){
+  const scenes=l.scenes.slice(0,upto);
+  /* 타이핑 원고가 이어진 장면은 토막 대신 그 본문(실제 초고)을 보낸다 */
+  const body=scenes.map((t,i)=>{const r=tpRowFor(t,l);const tx=r&&(r.text||'').trim();const cs=t.cards.filter(c=>c.text.trim());
+    return `## ${i+1}. ${t.title||'(제목 없음)'}\n\n`+(tx?tx:cs.length?cs.map(c=>c.text.trim()).join('\n\n'):(t.summary.trim()?`(이 장면은 아직 요약만 있습니다) ${t.summary.trim()}`:'(아직 비어 있는 장면입니다)'));}).join('\n\n');
+  return `아래는 제가 쓰고 있는 소설의 처음부터 ${upto}번째 장면까지입니다. 당신은 여기까지만 읽은 독자입니다. 뒤에 무엇이 오는지 모르고, 작가의 의도도 모릅니다. 읽은 것만으로 답해 주세요. 어떤 장면은 완성된 문장이 아니라 요약이나 줄거리만 있는데, 그것도 그대로 읽은 것으로 쳐 주세요.
+
+소설 제목: ${l.title||'(미정)'}
+
+요청 사항:
+1. 지금 가장 궁금한 것 3개. 어느 장면에서 생긴 궁금증인지 장면 제목을 괄호로 앞에 붙여 주세요.
+2. 다음에 일어날 것 같은 일 3개. 왜 그렇게 예측하는지 한 줄씩.
+3. 헷갈리거나 늘어진 곳 2개. 장면 제목과 이유를 짧게.
+4. 여기까지 읽고 생각하는 이 이야기가 무엇에 관한 이야기인지 한 줄.
+5. 답이나 제안이나 고친 글을 쓰지 마세요. 독자로서 느낀 것만 써 주세요.
+
+답은 아래 형식으로, 앞뒤 설명 없이 써 주세요.
+
+## 지금 궁금한 것
+- (장면 제목) 궁금한 것
+## 다음에 일어날 것 같은 일
+- 예측. 이유
+## 헷갈리거나 늘어진 곳
+- (장면 제목) 이유
+## 여기까지 읽고 생각하는 이 이야기
+- 한 줄
+
+---
+${upto}번째 장면까지:
+
+${body}`;
+}
+const NOTE_TITLE=/(독자|질문|궁금|예측|일어날|헷갈|늘어진|여기까지|제안|빠지|빠진|보충|지적|피드백)/;
+function parseStructure(text){
+  const lines=String(text||'').replace(/\r/g,'').split('\n');
+  const out={title:'',logline:'',scenes:[],notes:[]};let t=null,mode='',para=[];
+  const flush=()=>{if(t&&para.length){const s=para.join('\n').trim();if(s&&!/^\((토막|트리트먼트|대본) 없음\)$/.test(s)){const m=s.match(/^\(재료 부족[^)]*\)$/);if(m)t.short.push(s);else t.cards.push(s);}}para=[];};
+  for(const raw of lines){
+    const line=raw.replace(/\s+$/,'');
+    const h=line.match(/^##\s+(.+)$/);
+    if(h){flush();let title=h[1].trim();let pages=0;const m=title.match(/[(（]([^()（）]*)[)）]\s*$/);if(m){const mm=m[1].match(/(\d+)\s*매/);if(mm){pages=+mm[1];title=title.slice(0,m.index).trim();}}title=title.replace(/^\d+[.)]\s*/,'').replace(/\*\*/g,'').trim();
+      t={title,pages,summary:'',memo:'',cards:[],short:[],note:/^(제안|순서 제안|조정 제안|매수 조정 제안)$/.test(title)||(!pages&&NOTE_TITLE.test(title))};out.scenes.push(t);mode='';continue;}
+    const h1=line.match(/^#\s+(.+)$/);if(h1){if(!t)out.title=h1[1].replace(/\*\*/g,'').trim();continue;}
+    if(!t){const lg=line.trim().match(/^\*{0,2}한 줄 요약\*{0,2}\s*[:：]\s*(.+)$/);if(lg)out.logline=lg[1].trim();continue;}
+    if(line.startsWith('|')||/^(-{3,}|\*{3,})$/.test(line.trim()))continue;
+    const ref=line.trim().match(/^\[기존\s*(\d+)\]$/);if(ref){flush();mode='';t.cards.push({ref:+ref[1]});continue;}
+    if(/^>\s?/.test(line)){t.summary=(t.summary?t.summary+' ':'')+line.replace(/^>\s?/,'').trim();mode='';continue;}
+    if(/^\*{0,2}메모\*{0,2}\s*[:：]/.test(line.trim())){flush();mode='memo';const rest=line.trim().replace(/^\*{0,2}메모\*{0,2}\s*[:：]\s*/,'');if(rest)t.memo+=rest.replace(/^[-*•·]\s*/,'· ')+'\n';continue;}
+    if(mode==='memo'){if(!line.trim()){mode='';continue;}t.memo+=line.trim().replace(/^[-*•·]\s*/,'· ')+'\n';continue;}
+    if(/^\(재료 부족[^)]*\)\s*$/.test(line.trim())){flush();t.short.push(line.trim());continue;}
+    if(!line.trim()){flush();continue;}
+    para.push(line.trim());
+  }
+  flush();
+  out.scenes.forEach(x=>x.memo=x.memo.trim());
+  out.notes=out.scenes.filter(x=>x.note).map(x=>({title:x.title,text:[x.summary,x.memo,...x.cards.filter(c=>typeof c==='string')].filter(Boolean).join('\n')}));
+  out.scenes=out.scenes.filter(x=>!x.note);
+  return out;
+}
+const normTitle=s=>String(s||'').toLowerCase().replace(/^\d+[.)]\s*/,'').replace(/[\s\p{P}\p{S}]/gu,'');
+const memoLines=m=>(m||'').split('\n').map(x=>x.trim()).filter(Boolean);
+const isReaderNote=n=>/(궁금|일어날|헷갈|늘어진|여기까지|독자)/.test(n.title);
+function planImport(l,parsed){
+  const plan={adds:[],news:[],notes:parsed.notes,title:(!l.title.trim()&&parsed.title)?parsed.title:'',logline:(!(l.logline||'').trim()&&parsed.logline)?parsed.logline:''};
+  for(const p of parsed.scenes){
+    const key=normTitle(p.title);
+    const ex=key?l.scenes.find(t=>normTitle(t.title)===key):null;
+    if(ex){
+      const have=new Set(memoLines(ex.memo).map(x=>x.replace(/^[·\-•*]\s*/,'')));
+      const newMemo=memoLines(p.memo).filter(x=>!have.has(x.replace(/^[·\-•*]\s*/,'')));
+      const newCards=p.cards.filter(c=>typeof c==='string');
+      plan.adds.push({scene:ex,p,cards:p.cards,newCards,refs:p.cards.some(c=>typeof c==='object'),fillSummary:!ex.summary.trim()&&!!p.summary,newMemo,short:p.short});
+    }else plan.news.push(p);
+  }
+  return plan;
+}
+function applyImport(l,plan){
+  if(plan.title)l.title=plan.title;
+  if(plan.logline)l.logline=plan.logline;
+  if(plan.notes.length){
+    const reader=plan.notes.some(isReaderNote);
+    const label=reader&&l.readerUpto?`${l.readerUpto}번째 장면까지 읽은 독자`:'클로드 제안';
+    const block=plan.notes.map(n=>`› [${n.title}]\n`+n.text.split('\n').map(x=>x.trim()).filter(Boolean).map(x=>'› '+x).join('\n')).join('\n\n');
+    l.scratch=(l.scratch||'').replace(/\s+$/,'')+`\n\n── ${stampNow()} ${label} ──\n${block}\n\n`;}
+  l.scenes=l.scenes.filter(t=>t.title.trim()||t.summary.trim()||t.memo.trim()||t.cards.some(c=>c.text.trim()));
+  let first=null;
+  for(const a of plan.adds){const t=a.scene;if(!l.scenes.includes(t))continue;
+    if(a.fillSummary)t.summary=a.p.summary;
+    if(a.newMemo.length)t.memo=[...memoLines(t.memo),...a.newMemo].join('\n');
+    if(a.short.length)t.memo=[...memoLines(t.memo),...a.short.map(x=>'· '+x)].join('\n');
+    const existing=t.cards.filter(c=>c.text.trim());
+    if(a.refs){const used=new Set();const seq=[];for(const x of a.cards){if(typeof x==='object'){const c=existing[x.ref-1];if(c&&!used.has(c)){seq.push(c);used.add(c);}}else seq.push({id:uid(),text:x,draft:true});}existing.forEach(c=>{if(!used.has(c))seq.push(c);});t.cards=seq;}
+    else{t.cards=existing;a.newCards.forEach(x=>t.cards.push({id:uid(),text:x,draft:true}));}
+    if(!t.cards.length)t.cards.push(newCard());first=first||t;}
+  for(const p of plan.news){const t=newScene();t.title=p.title;t.pages=p.pages||10;t.summary=p.summary;t.memo=[...memoLines(p.memo),...p.short.map(x=>'· '+x)].join('\n');t.cards=p.cards.filter(c=>typeof c==='string').map(x=>({id:uid(),text:x,draft:true}));if(!t.cards.length)t.cards=[newCard()];l.scenes.push(t);first=first||t;}
+  return first;
+}
+function openImport(){
+  const l=cur();if(!l)return;
+  const bg=document.createElement('div');bg.className='modal-bg';
+  bg.innerHTML=`<div class="modal"><h2>클로드 답 가져오기</h2>
+    <p class="muted small" style="margin:0 0 8px">뼈대 정리, 트리트먼트 채우기, 독자 눈으로 보기의 답을 모두 여기에 붙여 넣습니다. 기존 장면과 제목이 같으면 그 장면에 메모와 토막을 더하고, 처음 보는 제목이면 새 장면을 만들고, 독자의 말과 제안은 생각 모으기로 보냅니다. 있는 것을 지우거나 바꾸지는 않습니다. 장면 제목을 바꾼 뒤라면 같은 장면이 새로 생길 수 있으니 미리보기를 확인하세요.</p>
+    <textarea id="importText" placeholder="## 장면 제목 (30매)&#10;> 한 줄 요약&#10;메모:&#10;- 재료&#10;&#10;트리트먼트 토막..."></textarea>
+    <div class="prev" id="importPrev"><span class="muted">붙여 넣으면 무엇이 들어오는지 여기에 보입니다.</span></div>
+    <div class="acts"><button data-m="cancel">취소</button><button class="primary" data-m="apply" id="importApply" disabled>가져오기</button></div></div>`;
+  document.body.appendChild(bg);
+  const ta=bg.querySelector('#importText');ta.focus();
+  let plan=null;
+  const preview=()=>{
+    const parsed=parseStructure(ta.value);const pv=bg.querySelector('#importPrev');const btn=bg.querySelector('#importApply');
+    if(!parsed.scenes.length&&!parsed.notes.length){pv.innerHTML=`<span class="muted">"## 장면 제목 (매)"이나 "## 지금 궁금한 것" 같은 제목 줄을 찾지 못했습니다. 클로드의 답 전체를 붙여 넣어 보세요.</span>`;btn.disabled=true;plan=null;return;}
+    plan=planImport(l,parsed);const items=[];
+    if(plan.title)items.push(`소설 제목을 "${esc(plan.title)}"로 정합니다.`);
+    if(plan.logline)items.push(`한 줄 요약을 "${esc(plan.logline)}"로 채웁니다.`);
+    plan.adds.forEach(a=>{const parts=[];if(a.newCards.length)parts.push(`토막 ${a.newCards.length}장 추가${a.refs?' (내 토막 사이에 배치)':''}`);if(a.newMemo.length)parts.push(`메모 ${a.newMemo.length}줄 추가`);if(a.fillSummary)parts.push('한 줄 요약 채움');if(a.short.length)parts.push(`<span style="color:var(--warn)">${esc(a.short.join(', '))}</span>`);items.push(`<b>${esc(a.scene.title)}</b>: ${parts.join(', ')||'바뀌는 것 없음'}`);});
+    plan.news.forEach(p=>{const n=p.cards.filter(c=>typeof c==='string').length;items.push(`새 장면 <b>${esc(p.title)}</b> (${p.pages||10}매): ${n?`토막 ${n}장`:'뼈대만'}${memoLines(p.memo).length?`, 메모 ${memoLines(p.memo).length}줄`:''}${p.pages?'':' · 매수가 없어 10매로 둡니다'}`);});
+    const addP=plan.news.reduce((a,p)=>a+(p.pages||10),0);const after=allocated(l)+addP;
+    if(addP)items.push(`배정 합계 ${allocated(l)}매 → ${after}매 (목표 ${l.targetPages}매)${after>l.targetPages?' <span style="color:var(--bad)">초과, 가져온 뒤 조정이 필요합니다</span>':''}`);
+    const reader=plan.notes.some(isReaderNote);
+    plan.notes.forEach(n=>{const cnt=n.text.split('\n').filter(x=>x.trim()).length;items.push(`생각 모으기에 추가: <b>${esc(n.title)}</b> ${cnt}줄`);});
+    if(reader&&l.readerUpto)items.push(`<span class="muted">${l.readerUpto}번째 장면까지 읽은 독자의 말로 표시합니다.</span>`);
+    const any=plan.adds.some(a=>a.newCards.length||a.newMemo.length||a.fillSummary||a.short.length)||plan.news.length||plan.title||plan.logline||plan.notes.length;
+    pv.innerHTML='<ul style="margin:0;padding-left:18px">'+items.map(x=>`<li>${x}</li>`).join('')+'</ul>';btn.disabled=!any;
+  };
+  ta.addEventListener('input',preview);
+  bg.addEventListener('click',e=>{
+    if(e.target===bg){bg.remove();return;}
+    const b=e.target.closest('[data-m]');if(!b)return;
+    if(b.dataset.m==='cancel'){bg.remove();return;}
+    if(!plan)return;const first=applyImport(l,plan);save(true);bg.remove();
+    if(first){ui.pane='scene';ui.sceneId=first.id;renderEditor();toast(plan.notes.length?'가져왔습니다. 클로드가 쓴 토막에는 "클로드 트리트먼트" 표시가, 독자의 말과 제안은 생각 모으기에 들어갔습니다.':'가져왔습니다. 클로드가 쓴 토막에는 "클로드 트리트먼트" 표시가 붙어 있습니다.');}
+    else{ui.pane='scratch';renderEditor();toast('독자의 말과 제안을 생각 모으기 아래에 넣었습니다.');const ta=document.querySelector('[data-lf=scratch]');if(ta){ta.scrollTop=ta.scrollHeight;}}
+  });
+}
+
+/* ---------- backup to a chosen file ---------- */
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('storyM.handles',1);r.onupgradeneeded=()=>r.result.createObjectStore('h');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+async function hGet(k){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('h','readonly').objectStore('h').get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>rej(t.error);});}
+async function hSet(k,v){const d=await idb();return new Promise((res,rej)=>{const t=d.transaction('h','readwrite').objectStore('h').put(v,k);t.onsuccess=()=>res();t.onerror=()=>rej(t.error);});}
+async function saveJsonBackup(l,chooseNew){
+  const name=safeName(l.title)+'.storyM.json';const text=JSON.stringify(l,null,2);
+  if(typeof window.showSaveFilePicker!=='function'){download(name,text,'application/json');toast('다운로드 폴더에 저장했습니다. 이 브라우저는 저장 위치 지정을 지원하지 않습니다.');return;}
+  try{
+    let h=chooseNew?null:await hGet(l.id).catch(()=>null);
+    if(h){let perm='denied';try{perm=await h.queryPermission({mode:'readwrite'});if(perm!=='granted')perm=await h.requestPermission({mode:'readwrite'});}catch(e){}if(perm!=='granted')h=null;}
+    if(!h){h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'storyM 백업 (JSON)',accept:{'application/json':['.json']}}]});await hSet(l.id,h).catch(()=>{});}
+    const w=await h.createWritable();await w.write(text);await w.close();
+    toast(`"${h.name}"에 저장했습니다.`);
+  }catch(e){
+    if(e&&e.name==='AbortError')return;
+    download(name,text,'application/json');toast('저장 창을 열 수 없어 다운로드 폴더에 저장했습니다.');
+  }
+}
+
+/* ---------- markdown ---------- */
+function toMarkdown(l,withMemo){
+  const out=[];out.push(`# ${l.title||'제목 없음'}`,'');
+  if(l.logline)out.push(`한 줄 요약: ${l.logline}`,'');
+  out.push(`목표 ${l.targetPages}매 · 배정 ${allocated(l)}매 · 초고 약 ${fmtPages(storyEst(l))}`,'','## 장면 목록','','| 번호 | 배정 | 장면 | 한 줄 요약 |','|---|---|---|---|');
+  l.scenes.forEach((t,i)=>{out.push(`| ${i+1} | ${t.pages}매 | ${t.title||'(제목 없음)'} | ${t.summary||''} |`);});
+  out.push('');
+  l.scenes.forEach((t,i)=>{out.push(`## ${i+1}. ${t.title||'(제목 없음)'} (${t.pages}매)`,'');if(t.summary)out.push(`> ${t.summary}`,'');if(withMemo&&t.memo.trim())out.push('메모:',t.memo.trim().split('\n').map(x=>'  '+x).join('\n'),'');const cs=t.cards.filter(c=>c.text.trim());if(!cs.length)out.push('(토막 없음)','');cs.forEach(c=>out.push((c.draft?'(클로드 트리트먼트) ':'')+c.text.trim(),''));});
+  const gc=gCards(l);
+  if(gc.length){out.push('## 줄거리','');const walk=(pid,d)=>{gKids(l,pid).forEach(c=>{const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;out.push('  '.repeat(d)+'- '+(gFirst(c)||'(빈 카드)')+` (${c.state}${c.year?', '+c.year+'년':''}${sc>=0?', '+(sc+1)+'번째 장면':''})`+(c.dt?` [자료](${c.dt})`:''));if(gRest(c))out.push('  '.repeat(d+1)+gRest(c).replace(/\n/g,'\n'+'  '.repeat(d+1)));walk(c.id,d+1);});};walk(null,0);out.push('');}
+  return out.join('\n');
+}
+
+/* ---------- print ---------- */
+function doPrint(kind){
+  const l=cur();if(!l)return;
+  if(kind==='a6'){
+    pageStyle.textContent='@page{size:148mm 105mm;margin:8mm}';
+    let g=0;const cards=[];
+    cards.push(`<div class="pcard title"><h1>${esc(l.title)||'제목 없음'}</h1>${l.logline?`<p class="lg">${esc(l.logline)}</p>`:''}<p>목표 ${l.targetPages}매 · 장면 ${l.scenes.length}개 · 배정 ${allocated(l)}매</p></div>`);
+    l.scenes.forEach((t,i)=>{
+      const cs=t.cards.filter(c=>c.text.trim());
+      cards.push(`<div class="pcard cover"><div class="k">장면 ${i+1} / ${l.scenes.length} · ${t.pages}매</div><h2>${esc(t.title)||'제목 없는 장면'}</h2>${t.summary?`<p>${esc(t.summary)}</p>`:''}${t.memo.trim()?`<div class="m">${esc(t.memo.trim())}</div>`:''}<div class="pf"><span></span><span>${++g}</span></div></div>`);
+      cs.forEach((c,k)=>{cards.push(`<div class="pcard"><div class="ph"><span>${i+1}. ${esc(t.title)||'제목 없는 장면'}</span><span>${k+1} / ${cs.length} · ${chars(c.text)}자${c.draft?' · 트리트먼트':''}</span></div><div class="pb">${esc(c.text.trim())}</div><div class="pf"><span></span><span>${++g}</span></div></div>`);});
+    });
+    printRoot.className='a6';printRoot.innerHTML=cards.join('');
+    fitA6Cards();
+  }else{
+    pageStyle.textContent='@page{size:A4 portrait;margin:18mm 20mm}';
+    const rows=l.scenes.map((t,i)=>`<tr><td class="n">${i+1}</td><td class="n">${t.pages}매</td><td>${esc(t.title)||'(제목 없음)'}</td><td>${esc(t.summary)}</td></tr>`).join('');
+    const secs=l.scenes.map((t,i)=>{const cs=t.cards.filter(c=>c.text.trim());return`<div class="sec"><div class="lt"><div>장면 ${i+1}</div><div>${t.pages}매 배정</div>${sceneChars(t)?`<div>초고 ${fmtPages(sceneEst(t))}</div>`:''}</div><div class="rt"><h2>${esc(t.title)||'(제목 없음)'}</h2>${t.summary?`<p class="sum">${esc(t.summary)}</p>`:''}${ui.a4memo&&t.memo.trim()?`<div class="memo">${esc(t.memo.trim())}</div>`:''}${cs.length?cs.map(c=>`<p class="${c.draft?'draft':''}">${esc(c.text.trim())}</p>`).join(''):'<p class="none">(토막 없음)</p>'}</div></div>`;}).join('');
+    printRoot.className='a4';printRoot.innerHTML=`<h1>${esc(l.title)||'제목 없음'}</h1><div class="meta">${l.logline?`<div class="lg">${esc(l.logline)}</div>`:''}목표 ${l.targetPages}매 · 배정 ${allocated(l)}매 · 초고 약 ${fmtPages(storyEst(l))}</div><h3>장면 목록</h3><table><thead><tr><th style="text-align:right">번호</th><th style="text-align:right">배정</th><th>장면</th><th>한 줄 요약</th></tr></thead><tbody>${rows}</tbody></table>${secs}`;
+  }
+  setTimeout(()=>window.print(),50);
+}
+/* 넘치는 카드 처리: 본문이 카드에 안 들어가면 글자 배율을 0.04씩 0.72(약 9pt)까지 줄이고,
+   그래도 안 들어가는 토막 카드는 자연스러운 경계(빈 줄 > 문장 끝 > 띄어쓰기)에서 둘로 나눠 "이어서" 카드를 만든다.
+   화면에서 재지만 카드 크기(mm)와 글자(pt)가 모두 절대 단위라 인쇄와 같은 배치가 된다. */
+function fitA6Cards(){
+  const MIN=0.72,STEP=0.04,SLACK=2;
+  const contentH=el=>{const r=document.createRange();r.selectNodeContents(el);return r.getBoundingClientRect().height;};
+  const fits=el=>contentH(el)<=el.clientHeight-SLACK;
+  printRoot.classList.add('measuring');
+  const queue=[...printRoot.querySelectorAll('.pcard')];
+  let guard=0;
+  while(queue.length&&guard++<2000){
+    const card=queue.shift();const pb=card.querySelector('.pb');const box=pb||card;
+    let f=1;card.style.setProperty('--fs',f);
+    while(!fits(box)&&f-STEP>=MIN-1e-9){f=+(f-STEP).toFixed(2);card.style.setProperty('--fs',f);}
+    if(fits(box)||!pb)continue;
+    const text=pb.textContent;const cut=splitPoint(text);
+    if(cut<=0||cut>=text.length)continue;
+    const next=card.cloneNode(true);
+    pb.textContent=text.slice(0,cut).replace(/\s+$/,'');
+    next.querySelector('.pb').textContent=text.slice(cut).replace(/^\s+/,'');
+    const hs=next.querySelectorAll('.ph span');if(hs[1]&&!/이어서$/.test(hs[1].textContent))hs[1].textContent+=' · 이어서';
+    card.after(next);
+    queue.unshift(card,next);
+  }
+  let n=0;printRoot.querySelectorAll('.pcard .pf span:last-child').forEach(s=>{s.textContent=++n;});
+  printRoot.classList.remove('measuring');
+}
+function splitPoint(text){
+  const mid=text.length/2,win=text.length*0.3;
+  const pats=[/\n\s*\n/g,/\n/g,/[.!?。]\s+/g,/\s+/g];
+  for(const re of pats){
+    let best=-1,m;
+    while((m=re.exec(text))){const at=m.index+m[0].length;if(Math.abs(at-mid)<=win&&(best<0||Math.abs(at-mid)<Math.abs(best-mid)))best=at;}
+    if(best>0&&best<text.length)return best;
+  }
+  return Math.floor(mid);
+}
+window.addEventListener('afterprint',()=>{printRoot.innerHTML='';printRoot.className='';pageStyle.textContent='';});
+
+/* ---------- sync (Supabase) ---------- */
+const SB_URL='https://bmuslkayijcgosmgvnah.supabase.co';
+const SB_KEY='sb_publishable_sEHvPL_9_RHCZK4Fpw3zoA_VM7j9pyt';
+const SESS_KEY='storyM.session';
+const SB_TABLE='stories';
+let sess=(()=>{try{return JSON.parse(localStorage.getItem(SESS_KEY))||null;}catch(e){return null;}})();
+const sync={dirty:new Set(),timer:null,busy:false,last:0,lastPull:0,msg:'',err:false};
+function setSess(x){sess=x;if(x)localStorage.setItem(SESS_KEY,JSON.stringify(x));else localStorage.removeItem(SESS_KEY);}
+function jwtExp(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000;}catch(e){return 0;}}
+async function sbFetch(path,opt={}){
+  const r=await fetch(SB_URL+path,{...opt,headers:{apikey:SB_KEY,'Content-Type':'application/json',...(opt.headers||{})}});
+  const text=await r.text();let j=null;try{j=text?JSON.parse(text):null;}catch(e){}
+  if(!r.ok){let msg=(j&&(j.msg||j.message||j.error_description||j.error))||text||String(r.status);
+    if(/relation .*stories.* does not exist|PGRST205|Could not find the table/i.test(msg))msg='수파베이스에 stories 표가 없습니다. supabase-setup.sql을 SQL Editor에서 실행하세요.';
+    else if(/Invalid login credentials/i.test(msg))msg='이메일 또는 비밀번호가 맞지 않습니다.';
+    else if(/Email not confirmed/i.test(msg))msg='이메일 확인이 아직입니다. 받은 메일의 링크를 누른 뒤 다시 로그인하세요.';
+    else if(/User already registered/i.test(msg))msg='이미 가입된 이메일입니다. 로그인하세요.';
+    else if(/rate limit/i.test(msg))msg='요청이 너무 잦습니다. 잠시 뒤 다시 하세요.';
+    const e=new Error(msg);e.status=r.status;throw e;}
+  return j;
+}
+async function sbSignUp(email,password){const j=await sbFetch('/auth/v1/signup',{method:'POST',body:JSON.stringify({email,password})});if(j&&j.access_token){setSess({access_token:j.access_token,refresh_token:j.refresh_token,user:j.user.id,email});return true;}return false;}
+async function sbSignIn(email,password){const j=await sbFetch('/auth/v1/token?grant_type=password',{method:'POST',body:JSON.stringify({email,password})});setSess({access_token:j.access_token,refresh_token:j.refresh_token,user:j.user.id,email});}
+async function sbToken(){if(!sess)return null;if(jwtExp(sess.access_token)-Date.now()<60000){let j;try{j=await sbFetch('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:JSON.stringify({refresh_token:sess.refresh_token})});}catch(e){if(e.status===400||e.status===401){setSess(null);setSyncMsg('로그인이 풀렸습니다. 다시 로그인하세요.',true);renderSyncPanels();}throw e;}setSess({...sess,access_token:j.access_token,refresh_token:j.refresh_token});}return sess.access_token;}
+async function rest(path,opt={}){const tok=await sbToken();if(!tok)throw new Error('로그인이 필요합니다.');return sbFetch('/rest/v1'+path,{...opt,headers:{Authorization:'Bearer '+tok,...(opt.headers||{})}});}
+function setSyncMsg(m,err){sync.msg=m;sync.err=!!err;document.querySelectorAll('.syncstat').forEach(e=>{e.textContent=m;e.classList.toggle('err',!!err);});}
+function fmtTime(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function markDirty(id){if(!id)return;sync.dirty.add(id);if(!sess)return;clearTimeout(sync.timer);sync.timer=setTimeout(flushSync,1500);}
+async function pushStories(ids){
+  const rows=[];for(const id of ids){const l=db.stories.find(x=>x.id===id);if(l)rows.push({id:l.id,user_id:sess.user,data:l,updated_at:l.updatedAt||Date.now(),deleted:false});else{const d=(db.deleted||[]).find(x=>x.id===id);if(d)rows.push({id,user_id:sess.user,data:{},updated_at:d.at,deleted:true});}}
+  if(!rows.length)return;
+  await rest(`/${SB_TABLE}?on_conflict=user_id,id`,{method:'POST',keepalive:true,headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+}
+async function flushSync(){
+  if(!sess||sync.busy)return;const ids=[...sync.dirty];if(!ids.length)return;sync.dirty.clear();sync.busy=true;
+  try{await pushStories(ids);sync.last=Date.now();setSyncMsg(`동기화됨 ${fmtTime(sync.last)}`);}
+  catch(e){ids.forEach(i=>sync.dirty.add(i));setSyncMsg('보내기 실패: '+e.message,true);}
+  finally{sync.busy=false;}
+}
+async function pullStories(force){
+  if(!sess||sync.busy)return;if(!force&&Date.now()-sync.lastPull<10000)return;sync.busy=true;
+  try{
+    const rows=await rest(`/${SB_TABLE}?select=id,data,updated_at,deleted`);sync.lastPull=Date.now();
+    let changed=false;const toPush=new Set();const seen=new Set();db.deleted=db.deleted||[];
+    for(const r of rows){seen.add(r.id);const local=db.stories.find(x=>x.id===r.id);const tomb=db.deleted.find(d=>d.id===r.id);
+      if(r.deleted){if(local){if((local.updatedAt||0)<=r.updated_at){db.stories=db.stories.filter(x=>x.id!==r.id);changed=true;}else toPush.add(r.id);}continue;}
+      if(tomb){if(tomb.at>=r.updated_at){toPush.add(r.id);continue;}db.deleted=db.deleted.filter(d=>d.id!==r.id);}
+      if(!r.data||!Array.isArray(r.data.scenes))continue;
+      if(!local){db.stories.push(r.data);changed=true;}
+      else if(r.updated_at>(local.updatedAt||0)){for(const k of Object.keys(local))delete local[k];Object.assign(local,r.data);changed=true;}
+      else if(r.updated_at<(local.updatedAt||0))toPush.add(r.id);}
+    for(const l of db.stories)if(!seen.has(l.id))toPush.add(l.id);
+    for(const d of db.deleted)if(!seen.has(d.id))toPush.add(d.id);
+    if(changed){localStorage.setItem(STORE_KEY,JSON.stringify(db));if(!document.querySelector('.modal-bg')){render();if(hashPending&&applyHash())hashPending=false;}}
+    sync.busy=false;
+    if(toPush.size){toPush.forEach(i=>sync.dirty.add(i));await flushSync();}
+    else{sync.last=Date.now();setSyncMsg(`동기화됨 ${fmtTime(sync.last)}`);}
+  }catch(e){setSyncMsg('받기 실패: '+e.message,true);}
+  finally{sync.busy=false;}
+}
+function syncPanelHtml(compact){
+  if(sess)return `<h3 style="font-size:13px;font-weight:500;margin:0 0 6px">동기화 · ${esc(sess.email)}</h3>
+    <div class="syncform ${compact?'compact':''}"><button data-act="syncNow">지금 동기화</button><button class="ghost" data-act="syncOut">로그아웃</button></div>
+    <div class="syncstat ${sync.err?'err':''}">${esc(sync.msg)}</div>`;
+  return `<h3 style="font-size:13px;font-weight:500;margin:0 0 6px">동기화</h3>
+    <div class="syncform ${compact?'compact':''}"><input type="email" class="syncEmail" placeholder="이메일" autocomplete="username" style="width:${compact?'100%':'200px'}"><input type="password" class="syncPw" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" style="width:${compact?'100%':'180px'}"><button data-act="syncIn">로그인</button><button class="ghost" data-act="syncUp">가입</button></div>
+    <div class="syncstat ${sync.err?'err':''}">${esc(sync.msg)||'로그인하면 이 브라우저의 소설과 수파베이스의 소설을 서로 맞춥니다. 같은 소설을 두 기기에서 고치면 나중에 저장한 쪽이 남습니다. lecture 앱과 같은 계정을 써도 됩니다.'}</div>`;
+}
+function renderSyncPanels(){document.querySelectorAll('.syncbox').forEach(e=>e.innerHTML=syncPanelHtml(false));const m=document.querySelector('details.menu .syncform');if(m)m.parentElement.innerHTML=syncPanelHtml(true);}
+app.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;const act=b.dataset.act;
+  if(!/^sync(In|Up|Out|Now)$/.test(act))return;
+  const box=b.closest('.syncbox,details.menu')||app;
+  const email=(box.querySelector('.syncEmail')||{}).value||'',pw=(box.querySelector('.syncPw')||{}).value||'';
+  try{
+    if(act==='syncOut'){setSess(null);sync.dirty.clear();setSyncMsg('');renderSyncPanels();return;}
+    if(act==='syncNow'){setSyncMsg('동기화 중…');await pullStories(true);return;}
+    if(!email||!pw){setSyncMsg('이메일과 비밀번호를 넣으세요.',true);return;}
+    if(pw.length<6){setSyncMsg('비밀번호는 6자 이상이어야 합니다.',true);return;}
+    b.disabled=true;setSyncMsg(act==='syncUp'?'가입 중…':'로그인 중…');
+    if(act==='syncUp'){const ok=await sbSignUp(email,pw);if(!ok){setSyncMsg('확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 여기서 로그인하세요.');b.disabled=false;return;}}
+    else await sbSignIn(email,pw);
+    setSyncMsg('로그인했습니다. 동기화 중…');renderSyncPanels();
+    db.stories.forEach(l=>sync.dirty.add(l.id));(db.deleted||[]).forEach(d=>sync.dirty.add(d.id));
+    await pullStories(true);renderSyncPanels();
+  }catch(err){setSyncMsg(err.message||String(err),true);b.disabled=false;}
+});
+window.addEventListener('focus',()=>{pullStories(false);const l=cur();if(l&&ui.view==='editor')tpLoad(l).then(()=>{if(ui.view==='editor'&&cur()===l){renderDerived();updateSceneEst();}});});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pullStories(false);else if(sync.dirty.size)flushSync();});
+window.addEventListener('beforeunload',()=>{if(sync.dirty.size)flushSync();});
+
+/* ---------- 밖에서 오기 — #소설=ID&장면=ID 또는 #소설=ID&카드=ID ---------- */
+let hashPending=false;
+function readHash(){let h='';try{h=decodeURIComponent((location.hash||'').slice(1));}catch(e){h=(location.hash||'').slice(1);}if(!h)return null;const o={};h.split('&').forEach(p=>{const i=p.indexOf('=');if(i>0)o[p.slice(0,i)]=p.slice(i+1);});return{story:o['소설']||o.story,scene:o['장면']||o.scene,card:o['카드']||o.card};}
+function applyHash(){const q=readHash();if(!q||!q.story)return false;const l=db.stories.find(x=>x.id===q.story);if(!l)return false;ensure(l);ui.storyId=l.id;ui.view='editor';
+  if(q.card&&gById(l,q.card)){ui.pane='guide';ui.cardOpen=q.card;const c=gById(l,q.card);let p=c.parent;while(p){const pp=gById(l,p);if(!pp)break;pp.fold=false;p=pp.parent;}}
+  else if(q.scene&&l.scenes.find(t=>t.id===q.scene)){ui.pane='scene';ui.sceneId=q.scene;}
+  render();return true;}
+window.addEventListener('hashchange',()=>{applyHash();});
+
+render();
+hashPending=!!readHash()&&!applyHash();
+if(sess){setSyncMsg('동기화 확인 중…');pullStories(true);}
+</script>
+</body>
+</html>
