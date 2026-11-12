@@ -3229,6 +3229,13 @@ function phoneCopy(m){
 }
 /* 줄거리 링크 — storyM 장면 주소(storyM.html#소설=…&장면=…). 원고 탭의 '줄거리'와 400자 탭의 '줄거리 ↗'로 연다.
    맥의 저장소에만 두고 수파베이스에는 올리지 않는다(아이폰에는 필요 없다) */
+var STORYM_URL = "https://writerkys-cell.github.io/apps/storyM.html";
+/* 원고의 줄거리 주소. 링크가 있으면 그것(장면·카드까지), 없으면 작품 이름으로 storyM의 그 소설을 연다(storyM이 #소설제목= 을 읽음) */
+function storyLinkOf(m){
+  if(m && m.storyLink) return m.storyLink;
+  var w = workOf(m), t = w && w.title ? String(w.title).trim() : "";
+  return t ? STORYM_URL + "#소설제목=" + encodeURIComponent(t) : STORYM_URL;
+}
 function putStoryLink(m){
   var v = prompt("storyM 장면 주소를 붙여넣으세요.\n(storyM에서 장면을 열고 '장면 주소 복사'를 누르면 됩니다. 비우면 링크를 지웁니다)", m.storyLink || "");
   if(v === null) return;
@@ -4261,7 +4268,7 @@ function renderList(){
       }
       top.appendChild(wr);
       /* 줄거리 — storyM 장면으로. 막혔을 때 가는 길 */
-      if(m.storyLink){ var sl = document.createElement("a"); sl.className = "wr"; sl.href = m.storyLink; sl.target = "_blank"; sl.rel = "noopener"; sl.textContent = "줄거리"; sl.title = "storyM에서 이 원고의 장면 열기"; top.appendChild(sl); }
+      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "_blank"; sl.rel = "noopener"; sl.textContent = "줄거리"; sl.title = m.storyLink ? "storyM에서 이 원고의 장면 열기" : "storyM에서 이 작품의 줄거리 열기"; top.appendChild(sl);
     }
     var gap = document.createElement("span"); gap.className = "gap"; top.appendChild(gap);
     if(m.doneAt && !isRevMs(m)){ var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "한 편"; top.appendChild(bd); }
@@ -6154,7 +6161,7 @@ function tpLeftText(){ var u = tpUnit(); if(u.fix) return u.fixText || ""; var x
 
 function tpRenderStrip(){
   var m = tpMs(), u = tpUnit(m), v = u.versions, g = tpGoal(u);
-  var sl = document.getElementById("tpStory"); if(sl){ sl.hidden = !m.storyLink; sl.href = m.storyLink || "#"; }
+  var sl = document.getElementById("tpStory"); if(sl){ sl.hidden = false; sl.href = storyLinkOf(m); sl.title = m.storyLink ? "storyM에서 이 원고의 장면 열기 — 막혔을 때" : "storyM에서 이 작품의 줄거리 열기 — 막혔을 때"; }
   var old = tpEl.strip.querySelector(".mark, .fixn");
   while(old){ tpEl.strip.removeChild(old); old = tpEl.strip.querySelector(".mark, .fixn"); }
   tpEl.nums.innerHTML = ""; tpEl.when.textContent = "";
