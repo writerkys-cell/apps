@@ -184,6 +184,18 @@ details.menu>div label input{width:72px;padding:3px 6px}
 .srow .c.q{color:var(--accent)}
 .ghead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px}
 .ghead .ttl{font-size:18px;font-weight:500}
+.ghead .gsw{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.ghead .gsw button{padding:3px 9px;font-size:12px}
+.ghead .gsw button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ghead .gsw label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px;margin-left:8px}
+.ghead .gsw input{width:64px;padding:3px 6px;font-size:12px}
+.gtime{display:flex;flex-direction:column;gap:2px}
+.gtime .gi .yr{flex:none;width:92px;font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;margin-top:1px}
+.gtime .gi .yr b{color:var(--ink);font-weight:500}
+.gshelf .gi{cursor:default;flex-wrap:wrap}
+.gshelf .gi .why{flex-basis:100%;font-size:12px;color:var(--muted);padding-left:22px}
+.gshelf .gi .tools{flex-basis:100%;display:flex;gap:6px;padding-left:22px}
+.gshelf .gi .tools button{padding:2px 8px;font-size:12px}
 .gtree{display:flex;flex-direction:column;gap:2px}
 .gnode{margin-left:calc(var(--d,0)*22px)}
 .grow{display:flex;align-items:flex-start;gap:6px;padding:6px 8px;border-radius:var(--radius);cursor:pointer;border:1px solid transparent}
@@ -247,7 +259,7 @@ const printRoot=document.getElementById('print-root');
 const pageStyle=document.getElementById('pageStyle');
 
 let db=load();
-const ui={view:'home',storyId:null,sceneId:null,pane:'scene',a4memo:false};
+const ui={view:'home',storyId:null,sceneId:null,pane:'scene',a4memo:false,gview:'tree'};
 
 /* ---------- data ---------- */
 function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);if(d&&Array.isArray(d.stories)){d.deleted=d.deleted||[];return d;}}}catch(e){}return{stories:[],deleted:[]};}
@@ -376,7 +388,7 @@ function renderEditor(){
       <input class="title" data-lf="title" value="${esc(l.title)}" placeholder="소설 제목">
       <details class="menu"><summary>인쇄 ▾</summary><div>
         <button data-act="printA6">A6 가로 카드</button>
-        <div class="muted small" style="padding:0 10px 6px">장면 표지 한 장과 토막마다 한 장. 들고 다니며 고치거나 바닥에 늘어놓고 순서를 잡는 용도입니다. 인쇄 창에서 용지 크기 A6, 방향 가로를 골라 주세요.</div>
+        <div class="muted small" style="padding:0 10px 6px">장면 표지 한 장과 토막마다 한 장, 뒤에 줄거리 카드도 한 장씩(서랍 제외). 들고 다니며 고치거나 바닥에 늘어놓고 순서를 잡는 용도입니다. 인쇄 창에서 용지 크기 A6, 방향 가로를 골라 주세요.</div>
         <button data-act="printA4">A4 세로 문서</button>
         <label><span>A4에 메모 포함</span><input type="checkbox" data-act="a4memo" ${ui.a4memo?'checked':''} style="width:auto"></label>
         <div class="sep"></div>
@@ -397,7 +409,7 @@ function renderEditor(){
         <label><span>타이핑 읽기</span><input type="checkbox" data-tp="on" ${tpConf.on?'checked':''} style="width:auto"></label>
         <label><span>보태기 수파베이스</span><input class="wide" data-tp="url" value="${esc(tpConf.url)}" placeholder="https://….supabase.co"></label>
         <label><span>열쇠</span><input class="wide" type="password" data-tp="key" value="${esc(tpConf.key)}" placeholder="공개용 열쇠"></label>
-        <label><span>타이핑 앱 주소</span><input class="wide" data-tp="base" value="${esc(tpConf.base)}" placeholder="file:///…/taiping.html"></label>
+        <label><span>타이핑 앱 주소</span><input class="wide" data-tp="base" value="${esc(tpConf.base)}" placeholder="https://…/taiping.html"></label>
         <div class="muted small" style="padding:4px 10px">장면에 이어진 타이핑 원고를 보태기 수파베이스에서 읽어 글자 수를 초고 매수로 셉니다. 읽기만 하고 고치지 않습니다. 작품 이름과 원고 이름이 소설 제목·장면 제목과 같으면 저절로 이어집니다. 타이핑 앱 주소를 넣으면 장면에서 타이핑으로 가는 링크가 생깁니다.</div>
         <div class="sep"></div>
         <div style="padding:2px 10px 6px">${syncPanelHtml(true)}</div>
@@ -521,14 +533,22 @@ const gGlyph=c=>c.state==='궁금함'?'?':c.state==='사실'?'史':c.state==='�
 const gCls=c=>c.state==='궁금함'?'q':c.state==='가설'?'h':c.state==='사실'?'f':'';
 const gFirst=c=>(c.text||'').split('\n')[0].trim();
 const gRest=c=>(c.text||'').split('\n').slice(1).join('\n').trim();
-function gCounts(l){const cs=gCards(l);return{q:cs.filter(c=>c.state==='궁금함').length,unused:cs.filter(c=>(c.state==='확정'||c.state==='사실')&&!c.sceneId).length,n:cs.length};}
+function gCounts(l){const cs=gCards(l);return{q:cs.filter(c=>c.state==='궁금함').length,unused:cs.filter(c=>(c.state==='확정'||c.state==='사실')&&!c.sceneId).length,n:cs.length,shelf:gShelfRoots(l).length};}
+/* 나이는 세는 나이(태어난 해를 한 살로). 주인공 생년(guide.born)이 있을 때만 */
+const gAge=(l,c)=>(c.year!=null&&l.guide.born)?`${c.year-l.guide.born+1}살`:'';
+const gYearTxt=(l,c)=>c.year!=null?`${c.year}년${gAge(l,c)?' · '+gAge(l,c):''}`:'';
+const gDesc=(l,c)=>{const out=[];const walk=id=>(l.guide.cards||[]).filter(x=>x.parent===id).forEach(k=>{out.push(k);walk(k.id);});walk(c.id);return out;};
+const gShelfParent=(l,c)=>{const p=c.parent?gById(l,c.parent):null;return p&&p.shelved?p:null;};
+const gShelfRoots=l=>(l.guide.cards||[]).filter(c=>c.shelved&&!gShelfParent(l,c));
+function gShelve(l,c,why){c.shelved=true;c.why=why||'';c.shelfAt=Date.now();gDesc(l,c).forEach(k=>{k.shelved=true;});}
+function gUnshelve(l,c){c.shelved=false;gDesc(l,c).forEach(k=>{k.shelved=false;});if(c.parent&&(!gById(l,c.parent)||gById(l,c.parent).shelved))c.parent=null;}
 function gMove(l,c,dir){const sib=gSiblings(l,c);const i=sib.indexOf(c);const j=i+dir;if(j<0||j>=sib.length)return false;const arr=l.guide.cards;const a=arr.indexOf(c),b=arr.indexOf(sib[j]);[arr[a],arr[b]]=[arr[b],arr[a]];return true;}
 const dtSearchUrl=c=>'x-devonthink://search?query='+encodeURIComponent(gFirst(c));
 const gAddr=(l,c)=>location.href.split('#')[0]+'#소설='+encodeURIComponent(l.id)+'&카드='+encodeURIComponent(c.id);
 const sceneAddr=(l,t)=>location.href.split('#')[0]+'#소설='+encodeURIComponent(l.id)+'&장면='+encodeURIComponent(t.id);
 function gRowHtml(l,c,d){
   const kids=gKids(l,c.id);const open=ui.cardOpen===c.id;const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;
-  const meta=[c.year?`${c.year}년`:'',c.state,sc>=0?`${sc+1}장면`:'',c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:(c.state==='확정'?'<span title="자료가 걸려 있지 않습니다">자료 없음</span>':'')].filter(Boolean).join(' · ');
+  const meta=[gYearTxt(l,c),c.state,sc>=0?`${sc+1}장면`:'',c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:(c.state==='확정'?'<span title="자료가 걸려 있지 않습니다">자료 없음</span>':'')].filter(Boolean).join(' · ');
   return `<div class="gnode ${gCls(c)}" style="--d:${d}"><div class="grow ${open?'open':''}" data-act="gOpen" data-id="${c.id}">
     <span class="fold" data-act="gFold" data-id="${c.id}" title="${kids.length?'가지 접기/펼치기':''}">${kids.length?(c.fold?'▸':'▾'):''}</span>
     <span class="glyph">${gGlyph(c)}</span>
@@ -545,29 +565,44 @@ function gPanelHtml(l,c){
       <span>자료</span><div class="with"><input data-gf="dt" data-id="${c.id}" value="${esc(c.dt)}" placeholder="데본씽크 그룹의 x-devonthink-item:// 주소">${c.dt?`<a href="${esc(c.dt)}"><button type="button" tabindex="-1">열기 ↗</button></a>`:`<a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크를 검색합니다. 찾은 자료를 그룹에 모으고 그룹 링크를 여기에 붙이세요"><button type="button" tabindex="-1">자료 찾기</button></a>`}</div>
       <span>장면</span><select data-gf="sceneId" data-id="${c.id}">${scOpts}</select>
     </div>
-    <div class="tools"><button data-act="gAddChild" data-id="${c.id}">가지 추가</button><button data-act="gUp" data-id="${c.id}">↑</button><button data-act="gDown" data-id="${c.id}">↓</button><button data-act="gIn" data-id="${c.id}" title="앞 카드의 가지로">→ 들이기</button><button data-act="gOut" data-id="${c.id}" title="한 단계 위로">← 내기</button><button data-act="gAddr" data-id="${c.id}" title="데본씽크 그룹의 URL 칸에 붙여 두면 거기서 이 카드로 옵니다">주소 복사</button><button class="danger" data-act="gDel" data-id="${c.id}">지우기</button></div>
+    <div class="tools"><button data-act="gAddChild" data-id="${c.id}">가지 추가</button><button data-act="gUp" data-id="${c.id}">↑</button><button data-act="gDown" data-id="${c.id}">↓</button><button data-act="gIn" data-id="${c.id}" title="앞 카드의 가지로">→ 들이기</button><button data-act="gOut" data-id="${c.id}" title="한 단계 위로">← 내기</button><button data-act="gAddr" data-id="${c.id}" title="데본씽크 그룹의 URL 칸에 붙여 두면 거기서 이 카드로 옵니다">주소 복사</button><button data-act="gShelve" data-id="${c.id}" title="이 카드(와 가지)를 이야기에서 빼되 버리지 않습니다. 까닭을 적어 서랍에 둡니다">서랍에 넣기</button><button class="danger" data-act="gDel" data-id="${c.id}">지우기</button></div>
   </div>`;
 }
 function renderGuide(){
-  const l=cur();const d=document.getElementById('detail');if(!l||!d)return;const k=gCounts(l);const roots=gKids(l,null);
-  d.innerHTML=`<div class="ghead"><div class="ttl">줄거리</div><div class="muted small">${k.n?`궁금함 ${k.q}장 · 아직 안 쓴 확정 ${k.unused}장 · 모두 ${k.n}장`:''}</div></div>
-    <p class="muted small" style="margin:0 0 12px">이 소설에서 정해진 것을 한 장에 하나씩. 처음에는 한 줄이면 됩니다. 쓰다가 알게 되는 것을 그 밑에 가지로 붙입니다. 궁금함은 막힌 자리이고 "자료 찾기"로 데본씽크에 갑니다. 확정과 사실만 클로드에게 "정해진 것"으로 보내고, 궁금함은 "아직 모르는 것"으로 보냅니다. 가설은 보내지 않습니다.</p>
+  const l=cur();const d=document.getElementById('detail');if(!l||!d)return;const k=gCounts(l);const roots=gKids(l,null);const v=ui.gview||'tree';
+  const sw=`<div class="gsw"><button class="${v==='tree'?'on':''}" data-act="gView" data-v="tree">나무</button><button class="${v==='time'?'on':''}" data-act="gView" data-v="time">연표</button><button class="${v==='shelf'?'on':''}" data-act="gView" data-v="shelf">서랍${k.shelf?` ${k.shelf}`:''}</button><label title="주인공이 태어난 해. 적으면 카드의 해마다 세는 나이가 붙습니다">생년 <input type="number" data-gb="born" value="${l.guide.born??''}" placeholder="해"></label></div>`;
+  let body='';
+  if(v==='time'){
+    const cs=gCards(l).filter(c=>c.year!=null).sort((a,b)=>a.year-b.year||l.guide.cards.indexOf(a)-l.guide.cards.indexOf(b));const none=gCards(l).filter(c=>c.year==null&&gFirst(c));
+    const row=c=>{const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;return `<div class="gi ${gCls(c)}" data-act="gGo" data-id="${c.id}" title="줄거리에서 열기"><span class="yr"><b>${c.year}</b>${gAge(l,c)?' · '+gAge(l,c):''}</span><span class="glyph">${gGlyph(c)}</span><span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}</span><span class="muted small" style="flex:none">${c.state}${sc>=0?' · '+(sc+1)+'장면':''}</span>${c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:''}</div>`;};
+    body=`<p class="muted small" style="margin:0 0 12px">해가 적힌 카드를 시간순으로. 생년을 적으면 그때 주인공이 몇 살인지 함께 보입니다(세는 나이). 카드를 누르면 나무에서 열립니다.</p>
+      <div class="glist gtime">${cs.map(row).join('')||'<div class="muted small" style="padding:8px">해가 적힌 카드가 없습니다. 카드를 열어 해 칸을 채우세요.</div>'}</div>
+      ${none.length?`<div class="muted small" style="margin:14px 0 6px">해가 없는 카드 ${none.length}장</div><div class="glist">${none.map(c=>`<div class="gi ${gCls(c)}" data-act="gGo" data-id="${c.id}"><span class="glyph">${gGlyph(c)}</span><span class="gt">${esc(gFirst(c))}</span><span class="muted small" style="flex:none">${c.state}</span></div>`).join('')}</div>`:''}`;
+  }else if(v==='shelf'){
+    const rs=gShelfRoots(l);
+    const row=c=>{const n=gDesc(l,c).length;return `<div class="gi ${gCls(c)}" data-id="${c.id}"><span class="glyph">${gGlyph(c)}</span><span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}</span><span class="muted small" style="flex:none">${c.state}${c.year!=null?' · '+c.year+'년':''}${n?` · 가지 ${n}장`:''}</span>${c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:''}<div class="why">${c.why?'뺀 까닭: '+esc(c.why):'<span class="muted">까닭을 적지 않았습니다</span>'}${c.shelfAt?` <span class="muted">· ${new Date(c.shelfAt).toLocaleDateString('ko-KR')}</span>`:''}</div><div class="tools"><button data-act="gUnshelve" data-id="${c.id}">꺼내기</button><button data-act="gWhy" data-id="${c.id}">까닭 고치기</button><button class="danger" data-act="gShelfDel" data-id="${c.id}">아주 지우기</button></div></div>`;};
+    body=`<p class="muted small" style="margin:0 0 12px">이야기에서 뺐지만 버리지 않은 카드. 관점을 바꿔 다시 쓸 때, 다른 소설에서 꺼내 쓸 때를 위해 둡니다. 서랍의 카드는 클로드에게 보내지 않고 인쇄에도 들어가지 않습니다. 꺼내면 나무로 돌아갑니다(부모가 서랍에 있으면 맨 위로).</p>
+      <div class="glist gshelf">${rs.map(row).join('')||'<div class="muted small" style="padding:8px">서랍이 비어 있습니다. 카드를 열어 "서랍에 넣기"를 누르면 여기에 옵니다.</div>'}</div>`;
+  }else{
+    body=`<p class="muted small" style="margin:0 0 12px">이 소설에서 정해진 것을 한 장에 하나씩. 처음에는 한 줄이면 됩니다. 쓰다가 알게 되는 것을 그 밑에 가지로 붙입니다. 궁금함은 막힌 자리이고 "자료 찾기"로 데본씽크에 갑니다. 확정과 사실만 클로드에게 "정해진 것"으로 보내고, 궁금함은 "아직 모르는 것"으로 보냅니다. 가설은 보내지 않습니다.</p>
     <div class="gtree">${roots.map(c=>gRowHtml(l,c,0)).join('')||'<div class="muted small" style="padding:8px">아직 카드가 없습니다. 이 소설이 무엇에 관한 이야기인지 한 줄로 시작해 보세요.</div>'}</div>
     <button class="addcard" data-act="addGuide" style="margin-top:10px">+ 카드 추가</button>`;
+  }
+  d.innerHTML=`<div class="ghead"><div class="ttl">줄거리 <span class="muted small" style="font-weight:400">${k.n?`궁금함 ${k.q}장 · 아직 안 쓴 확정 ${k.unused}장 · 모두 ${k.n}장`:''}</span></div>${sw}</div>${body}`;
   d.querySelectorAll('textarea').forEach(autogrow);
-  if(ui.cardOpen){const ta=d.querySelector(`textarea[data-id="${ui.cardOpen}"]`);if(ta){if(ui.focusCard){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ui.focusCard=false;}ta.closest('.gnode')?.scrollIntoView({block:'nearest'});}}
+  if(v==='tree'&&ui.cardOpen){const ta=d.querySelector(`textarea[data-id="${ui.cardOpen}"]`);if(ta){if(ui.focusCard){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ui.focusCard=false;}ta.closest('.gnode')?.scrollIntoView({block:'nearest'});}}
 }
 /* 장면 상세의 줄거리 카드 단 — 궁금함이 먼저 */
 function sceneGuideHtml(l,t){
   const cs=gCards(l).filter(c=>c.sceneId===t.id).sort((a,b)=>(a.state==='궁금함'?0:1)-(b.state==='궁금함'?0:1));
   if(!cs.length)return '<div class="muted small">이 장면에 걸린 카드가 없습니다. 줄거리에서 카드의 장면 칸을 고르거나, 막힌 것을 적으세요.</div>';
-  return cs.map(c=>`<div class="gi ${gCls(c)}" data-act="gGo" data-id="${c.id}" title="줄거리에서 열기"><span class="glyph">${gGlyph(c)}</span><span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}</span><span class="muted small" style="flex:none">${c.state}${c.year?' · '+c.year+'년':''}</span>${c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:`<a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크 검색">찾기</a>`}</div>`).join('');
+  return cs.map(c=>`<div class="gi ${gCls(c)}" data-act="gGo" data-id="${c.id}" title="줄거리에서 열기"><span class="glyph">${gGlyph(c)}</span><span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}</span><span class="muted small" style="flex:none">${c.state}${gYearTxt(l,c)?' · '+gYearTxt(l,c):''}</span>${c.dt?`<a href="${esc(c.dt)}" title="데본씽크에서 열기">↗</a>`:`<a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크 검색">찾기</a>`}</div>`).join('');
 }
 
 /* ---------- 타이핑(보태기 수파베이스) 읽기 — 읽기만 한다. 쓰기는 타이핑에서만 ---------- */
 const TP_KEY='storyM.tp';
-const TP_DEF={on:true,url:'https://pvunctdbsdcgvbqloslg.supabase.co',key:'sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY',base:''};
-let tpConf=(()=>{try{return Object.assign({},TP_DEF,JSON.parse(localStorage.getItem(TP_KEY))||{});}catch(e){return{...TP_DEF};}})();
+const TP_DEF={on:true,url:'https://pvunctdbsdcgvbqloslg.supabase.co',key:'sb_publishable_Prt0uDw-FOCDfgrczhHa_w_6uj6OhKY',base:'https://writerkys-cell.github.io/apps/taiping.html'};
+let tpConf=(()=>{try{return Object.assign({},TP_DEF,JSON.parse(localStorage.getItem(TP_KEY))||{});}catch(e){return{...TP_DEF};}})();if(!tpConf.base)tpConf.base=TP_DEF.base;
 function tpSave(){localStorage.setItem(TP_KEY,JSON.stringify(tpConf));}
 const tp={rows:new Map(),at:0,story:null,busy:false,msg:'',loaded:false,titleT:null};
 /* 장면의 타이핑 칸 — 원고 id 그대로이거나 #원고=<id>가 든 주소 */
@@ -615,8 +650,13 @@ app.addEventListener('click',e=>{
     case 'gIn':{const c=gById(l,id);if(!c)break;const sib=gSiblings(l,c);const i=sib.indexOf(c);if(i>0){c.parent=sib[i-1].id;sib[i-1].fold=false;save();renderGuide();}else toast('앞에 카드가 있어야 그 가지로 들어갑니다.');break;}
     case 'gOut':{const c=gById(l,id);if(!c||!c.parent)break;const p=gById(l,c.parent);const arr=l.guide.cards;arr.splice(arr.indexOf(c),1);arr.splice(arr.indexOf(p)+1,0,c);c.parent=p.parent||null;save();renderGuide();break;}
     case 'gDel':{const c=gById(l,id);if(!c)break;const kids=gKids(l,c.id);if((c.text.trim()||kids.length)&&!confirm(kids.length?`이 카드를 지우면 가지 ${kids.length}장은 한 단계 위로 올라갑니다. 지울까요?`:'이 카드를 지울까요?'))break;kids.forEach(k=>k.parent=c.parent||null);l.guide.cards=l.guide.cards.filter(x=>x!==c);if(ui.cardOpen===id)ui.cardOpen=null;save();renderDerived();renderGuide();break;}
+    case 'gView':ui.gview=e.target.closest('[data-v]').dataset.v;renderGuide();break;
+    case 'gShelve':{const c=gById(l,id);if(!c)break;const n=gDesc(l,c).length;const why=prompt(`"${gFirst(c)||'빈 카드'}"${n?`와 가지 ${n}장`:''}을 서랍에 넣습니다. 왜 빼는지 한 줄로 적어 두세요(비워도 됩니다).`,c.why||'');if(why===null)break;gShelve(l,c,why.trim());if(ui.cardOpen===id)ui.cardOpen=null;save();renderDerived();renderGuide();toast('서랍에 넣었습니다');break;}
+    case 'gUnshelve':{const c=gById(l,id);if(!c)break;gUnshelve(l,c);ui.gview='tree';ui.cardOpen=c.id;save();renderDerived();renderGuide();toast('나무로 꺼냈습니다');break;}
+    case 'gWhy':{const c=gById(l,id);if(!c)break;const why=prompt('뺀 까닭',c.why||'');if(why===null)break;c.why=why.trim();save();renderGuide();break;}
+    case 'gShelfDel':{const c=gById(l,id);if(!c)break;const n=gDesc(l,c).length;if(!confirm(`서랍에서 아주 지웁니다${n?` (가지 ${n}장도 함께)`:''}. 되돌릴 수 없습니다. 지울까요?`))break;const del=new Set([c,...gDesc(l,c)]);l.guide.cards=l.guide.cards.filter(x=>!del.has(x));save();renderDerived();renderGuide();break;}
     case 'gAddr':{const c=gById(l,id);if(!c)break;copyText(gAddr(l,c)).then(ok=>toast(ok?'카드 주소를 복사했습니다. 데본씽크 그룹의 URL 칸에 붙여 두면 거기서 이 카드로 돌아옵니다.':'복사하지 못했습니다.'));break;}
-    case 'gGo':{if(e.target.closest('a'))break;ui.pane='guide';ui.cardOpen=id;renderDerived();renderDetail();break;}
+    case 'gGo':{if(e.target.closest('a'))break;ui.pane='guide';ui.gview='tree';ui.cardOpen=id;renderDerived();renderDetail();break;}
     case 'stuck':{if(!t)break;const c=newGuide(null,'궁금함');c.sceneId=t.id;l.guide.cards.push(c);ui.pane='guide';ui.cardOpen=c.id;ui.focusCard=true;save();renderDerived();renderDetail();toast('궁금함 카드를 만들었습니다. 막힌 것을 한 줄로 적고, 자료 찾기로 데본씽크에 가세요.');break;}
     case 'sceneAddr':{if(!t)break;copyText(sceneAddr(l,t)).then(ok=>toast(ok?'장면 주소를 복사했습니다. 타이핑 원고의 "줄거리 링크 넣기"에 붙이세요.':'복사하지 못했습니다.'));break;}
     case 'tpReload':tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();});updateSceneEst();break;
@@ -647,6 +687,7 @@ function focusCard(id){const ta=document.querySelector(`[data-cf="${id}"]`);if(t
 app.addEventListener('input',e=>{
   const el=e.target;const l=cur();if(!l)return;
   if(el.dataset.lf){const k=el.dataset.lf;l[k]=(el.type==='number'||el.tagName==='SELECT')?(+el.value||0):el.value;if(el.tagName==='TEXTAREA')autogrow(el);if(k==='cardChars'){renderDetail();}save();renderDerived();if(k==='title'){clearTimeout(tp.titleT);tp.titleT=setTimeout(()=>tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();}),800);}return;}
+  if(el.dataset.gb==='born'){l.guide.born=el.value?+el.value:null;save();return;}
   if(el.dataset.gf){const c=gById(l,el.dataset.id);if(!c)return;const k=el.dataset.gf;
     if(k==='year')c.year=el.value?+el.value:null;else if(k==='sceneId')c.sceneId=el.value||null;else c[k]=el.value;
     if(el.tagName==='TEXTAREA'){autogrow(el);const row=el.closest('.gnode')?.querySelector(':scope>.grow .gt');if(row){row.textContent=gFirst(c)||'빈 카드';row.classList.toggle('ph',!gFirst(c));}}
@@ -657,6 +698,7 @@ app.addEventListener('input',e=>{
 });
 app.addEventListener('change',e=>{const el=e.target;if(el.dataset.act==='a4memo')ui.a4memo=el.checked;if(el.dataset.lf==='readerUpto'){const l=cur();if(l){l.readerUpto=+el.value||0;save();}}
   /* 줄거리 카드의 상태·해·자료·장면 — 바꾸고 나면 줄과 배지를 다시 그린다 */
+  if(el.dataset.gb==='born'){renderGuide();return;}
   if(el.dataset.gf&&el.dataset.gf!=='text'){renderDerived();renderGuide();}
   /* 타이핑 읽기 설정 */
   if(el.dataset.tp){const k=el.dataset.tp;tpConf[k]=el.type==='checkbox'?el.checked:el.value.trim();tpSave();tp.story=null;tp.rows.clear();tp.loaded=false;tp.msg='';const l=cur();if(l)tpLoad(l,true).then(()=>{renderDerived();updateSceneEst();});renderDerived();updateSceneEst();}
@@ -956,6 +998,8 @@ function toMarkdown(l,withMemo){
   l.scenes.forEach((t,i)=>{out.push(`## ${i+1}. ${t.title||'(제목 없음)'} (${t.pages}매)`,'');if(t.summary)out.push(`> ${t.summary}`,'');if(withMemo&&t.memo.trim())out.push('메모:',t.memo.trim().split('\n').map(x=>'  '+x).join('\n'),'');const cs=t.cards.filter(c=>c.text.trim());if(!cs.length)out.push('(토막 없음)','');cs.forEach(c=>out.push((c.draft?'(클로드 트리트먼트) ':'')+c.text.trim(),''));});
   const gc=gCards(l);
   if(gc.length){out.push('## 줄거리','');const walk=(pid,d)=>{gKids(l,pid).forEach(c=>{const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;out.push('  '.repeat(d)+'- '+(gFirst(c)||'(빈 카드)')+` (${c.state}${c.year?', '+c.year+'년':''}${sc>=0?', '+(sc+1)+'번째 장면':''})`+(c.dt?` [자료](${c.dt})`:''));if(gRest(c))out.push('  '.repeat(d+1)+gRest(c).replace(/\n/g,'\n'+'  '.repeat(d+1)));walk(c.id,d+1);});};walk(null,0);out.push('');}
+  const sh=gShelfRoots(l);
+  if(sh.length){out.push('## 서랍 (이야기에서 뺀 카드)','');sh.forEach(c=>{out.push('- '+(gFirst(c)||'(빈 카드)')+` (${c.state}${c.year!=null?', '+c.year+'년':''})`+(c.why?' — 뺀 까닭: '+c.why:''));if(gRest(c))out.push('  '+gRest(c).replace(/\n/g,'\n  '));});out.push('');}
   return out.join('\n');
 }
 
@@ -971,6 +1015,11 @@ function doPrint(kind){
       cards.push(`<div class="pcard cover"><div class="k">장면 ${i+1} / ${l.scenes.length} · ${t.pages}매</div><h2>${esc(t.title)||'제목 없는 장면'}</h2>${t.summary?`<p>${esc(t.summary)}</p>`:''}${t.memo.trim()?`<div class="m">${esc(t.memo.trim())}</div>`:''}<div class="pf"><span></span><span>${++g}</span></div></div>`);
       cs.forEach((c,k)=>{cards.push(`<div class="pcard"><div class="ph"><span>${i+1}. ${esc(t.title)||'제목 없는 장면'}</span><span>${k+1} / ${cs.length} · ${chars(c.text)}자${c.draft?' · 트리트먼트':''}</span></div><div class="pb">${esc(c.text.trim())}</div><div class="pf"><span></span><span>${++g}</span></div></div>`);});
     });
+    const gc=gCards(l);
+    if(gc.length){
+      cards.push(`<div class="pcard cover"><div class="k">줄거리 · ${gc.length}장${l.guide.born?` · 주인공 ${l.guide.born}년생`:''}</div><h2>정해진 것</h2><p>${STATES.map(st=>{const n=gc.filter(c=>c.state===st).length;return n?`${st} ${n}`:'';}).filter(Boolean).join(' · ')}</p><div class="pf"><span></span><span>${++g}</span></div></div>`);
+      let k=0;const walk=(pid,path)=>{gKids(l,pid).forEach(c=>{k++;const sc=c.sceneId?l.scenes.findIndex(t=>t.id===c.sceneId):-1;const head=[c.state,gYearTxt(l,c)].filter(Boolean).join(' · ');cards.push(`<div class="pcard"><div class="ph"><span>줄거리 ${k} / ${gc.length}${path?' · '+esc(path):''}</span><span>${head}</span></div><div class="pb"><b>${esc(gFirst(c))||'빈 카드'}</b>${gRest(c)?'\n'+esc(gRest(c)):''}</div><div class="pf"><span class="m">${[sc>=0?`${sc+1}. ${esc(l.scenes[sc].title)||'제목 없는 장면'}`:'',c.dt?'자료 있음':''].filter(Boolean).join(' · ')}</span><span>${++g}</span></div></div>`);walk(c.id,gFirst(c).slice(0,18));});};walk(null,'');
+    }
     printRoot.className='a6';printRoot.innerHTML=cards.join('');
     fitA6Cards();
   }else{

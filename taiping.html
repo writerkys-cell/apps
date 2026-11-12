@@ -6078,6 +6078,15 @@ function tpTake(m){
   tpViewIdx = null;
   return true;
 }
+/* storyM에서 온 주소 — #원고=<id> 면 그 원고의 400자 탭을 연다. 아직 받지 않은 원고면 수파베이스에서 받은 뒤 한 번 더 본다 */
+function tpHashId(){ var h = location.hash || ""; try{ h = decodeURIComponent(h); }catch(e){} var m = /[#&]원고=([^&]+)/.exec(h); return m ? m[1].trim() : null; }
+function tpHashOpen(loud){
+  var id = tpHashId(); if(!id) return true;
+  var m = msById(id);
+  if(!m){ if(loud) toast("주소의 원고를 찾지 못했습니다"); return false; }
+  if(m.folded){ if(loud) toast("접어 둔 원고입니다 — 원고 탭에서 펼친 뒤 여세요"); return true; }
+  tpOpen(id); return true;
+}
 /* 교열에서 숫자를 눌렀다 — 그 원고를 데려와 400자 탭을 연다 */
 function tpOpen(id){
   var m = msById(id); if(!m || m.folded) return;
@@ -6561,7 +6570,9 @@ applyStyle(); applySplit(); applyRight();
 renderHead(); renderWrite(); renderSet(); renderToday();
 tpRender();
 restore(); tick(); setInterval(tick, 250);
-cloudPull();
+var hashDone = tpHashOpen(false);
+cloudPull().then(function(){ if(!hashDone) tpHashOpen(true); });
+window.addEventListener("hashchange", function(){ tpHashOpen(true); });
 /* 의견 창이 적어 둔 '마침' — 바로(storage 사건), 그리고 2초마다 */
 takeNoteReqs();
 window.addEventListener("storage", function(e){ if(!e.key || e.key === NOTEREQ) takeNoteReqs(); });
