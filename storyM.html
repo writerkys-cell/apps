@@ -494,7 +494,7 @@ function renderDetail(){
     <div class="lbl"><span>줄거리 카드</span><span><button class="ghost small" data-act="stuck" title="이 장면에 걸린 궁금함 카드를 만듭니다. 타이핑에서 막혀 넘어왔을 때">막힌 것 적기</button> <button class="ghost small" data-act="sceneAddr" title="타이핑 원고의 줄거리 링크에 붙여 두면 거기서 이 장면으로 옵니다">장면 주소 복사</button></span></div>
     <div class="glist" id="sceneGuide">${sceneGuideHtml(l,t)}</div>
     <div class="lbl"><span>타이핑 원고</span><span id="tpInfo" class="tpinfo"></span></div>
-    <div style="display:flex;gap:6px;align-items:center"><input class="full" data-tf="tp" value="${esc(t.tp||'')}" placeholder="타이핑 원고 주소나 원고 id. 비워 두면 작품·원고 이름이 같은 것을 찾습니다" style="flex:1">${tpUrlFor(t)?`<a href="${esc(tpUrlFor(t))}" style="white-space:nowrap;color:var(--accent);text-decoration:none;font-size:13px">타이핑에서 이어 쓰기 ↗</a>`:''}</div>
+    <div style="display:flex;gap:6px;align-items:center"><input class="full" data-tf="tp" value="${esc(t.tp||'')}" placeholder="타이핑 원고 주소나 원고 id. 비워 두면 작품·원고 이름이 같은 것을 찾습니다" style="flex:1"><span id="tpGoWrap">${tpLinkHtml(t,l)}</span></div>
     <div id="tpText"></div>
     <div class="lbl"><span>토막 카드</span><span id="sceneEst"></span></div>
     <div class="cards" id="cards">${t.cards.map(c=>cardHtml(l,c)).join('')}</div>
@@ -514,6 +514,7 @@ function cardHtml(l,c){const n=chars(c.text);return`<div class="card ${n>l.cardC
 function cardFoot(l,c){const text=c.text;const n=chars(text);return`${n}자 · ${fmtPages(pagesOf(text))}`+(n>l.cardChars?` <span class="warn">카드 한 장(${l.cardChars}자)을 넘깁니다</span>`:'')+(c.draft?`<span class="tag" title="클로드가 쓴 트리트먼트입니다. 고치면 표시가 사라지고 매수에 들어갑니다.">클로드 트리트먼트</span>`:'');}
 function updateSceneEst(){const l=cur(),t=curScene();if(!t)return;const e=document.getElementById('sceneEst');if(!e)return;const r=tpRowFor(t,l);const est=sceneEst(t,l);const drafts=t.cards.filter(c=>c.draft&&c.text.trim()).length;const over=t.pages>0&&est>t.pages*1.1;const under=t.pages>0&&est<t.pages*0.5&&est>0;
   e.innerHTML=`${r?'타이핑':'초고'} ${sceneChars(t,l)}자 · 약 ${fmtPages(est)} <span class="${over?'badge bad':under?'badge warn':''}">(${t.pages}매 배정)</span>${drafts?` · 트리트먼트 ${drafts}장`:''}${r?' · 토막은 매수에 세지 않음':''}`;
+  const gw=document.getElementById('tpGoWrap');if(gw)gw.innerHTML=tpLinkHtml(t,l);
   const info=document.getElementById('tpInfo');
   if(info){
     const re=`<button class="ghost" data-act="tpReload" title="보태기 수파베이스에서 다시 읽습니다">다시 읽기</button>`;
@@ -624,7 +625,8 @@ async function tpLoad(l,force){
   }catch(e){tp.msg='보태기 수파베이스를 읽지 못했습니다 ('+e.message+')';tp.story=l.id;tp.loaded=true;}
   finally{tp.busy=false;}
 }
-function tpUrlFor(t){const id=tpId(t.tp);if(!id||!tpConf.base)return '';return tpConf.base.split('#')[0]+'#원고='+encodeURIComponent(id);}
+function tpUrlFor(t,l){const r=tpRowFor(t,l||cur());const id=(r&&r.id)||tpId(t.tp);if(!id||!tpConf.base)return '';return tpConf.base.split('#')[0]+'#원고='+encodeURIComponent(id);}
+const tpLinkHtml=(t,l)=>{const u=tpUrlFor(t,l);return u?`<a id="tpGo" href="${esc(u)}" target="_blank" rel="noopener" style="white-space:nowrap;color:var(--accent);text-decoration:none;font-size:13px" title="타이핑의 그 원고 400자 탭을 엽니다">타이핑에서 이어 쓰기 ↗</a>`:'';};
 function tpWhen(r){const d=new Date(r.updated_at||r.phone_at||0);if(isNaN(d)||!d.getTime())return '';return `${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 고침`;}
 
 /* ---------- events ---------- */
