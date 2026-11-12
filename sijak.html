@@ -623,8 +623,8 @@ async function loadWrite(k){
       rest(cfg.bt,'botaegi_kv?select=id,data&id=in.(now,conf,days,works)')
     ]);
     let ms=0, tt=0;
-    const own=k>=SS_SINCE;   /* 전환한 날부터는 시작이 재므로 타이핑의 몰입·타이핑·교열은 세지 않는다. 떠들기(자기 타이머)만 그대로 */
-    (rows||[]).forEach(r=>{ if(/^(focus|ty|gyo)/.test(r.type||'')){  /* 몰입(책 고치기 포함)·타이핑·교열 — 보태기의 하루 몰입과 같은 기준 */ if(own&&r.source!=='tteodeulgi') return; const a=Date.parse(r.start_at), b=Date.parse(r.end_at); if(b>a){ ms+=b-a; if(r.source==='tteodeulgi') tt+=b-a; } } });
+    const own=k>=SS_SINCE;   /* 전환한 날부터는 시작이 재므로(떠들기·타자기 링크로 연 것도) 타이핑 표의 몰입·타이핑·교열·떠들기는 세지 않는다 */
+    (rows||[]).forEach(r=>{ if(/^(focus|ty|gyo)/.test(r.type||'')){  /* 몰입(책 고치기 포함)·타이핑·교열 — 보태기의 하루 몰입과 같은 기준 */ if(own) return; const a=Date.parse(r.start_at), b=Date.parse(r.end_at); if(b>a){ ms+=b-a; if(r.source==='tteodeulgi') tt+=b-a; } } });
     const now=(kv||[]).find(x=>x.id==='now'), conf=(kv||[]).find(x=>x.id==='conf'), days=(kv||[]).find(x=>x.id==='days'), works=(kv||[]).find(x=>x.id==='works');
     const c=conf&&conf.data||{};
     const goal=(c.goalH!=null||c.goalM!=null)? ((+c.goalH||0)*60+(+c.goalM||0)) : null;
@@ -667,6 +667,7 @@ function readRunning(){
    글쓰기 칸을 누르면 그 순간부터 재고(타이핑 탭은 열기만 한다), 칸을 다시 누르거나 시작이 연 탭이 닫히면 끝내기 칸이 뜬다.
    한 세션 = sijak_sessions 한 줄(미래 프로젝트, 시작의 표). data: { id, kind:'write', start, end(끝내기 전엔 null),
    min(실제 시간을 고쳤을 때만, 분), adv0, adv1(시작·끝 때 그날 나아감 — 타이핑의 days 줄), device, updatedAt, deleted }.
+   via는 어느 링크로 열었나('write' 타이핑 · 'tteo' 떠들기 · 'typewriter' 타자기, 2026년 11월 13일). 셋 다 글쓰기 시간이다.
    어느 글인지는 적지 않는다. 단축어도 부르지 않는다. 2분 안에 끝내면 없던 일로. 3시간을 넘기거나 새벽 4시를 지나면 실제 시간을 묻는다.
    기기 사이에 하나의 세션을 이어받아 끝낼 수 있다. SS_SINCE부터 오늘의 글쓰기 시간은 이 표와 떠들기만 센다(타이핑의 몰입·타이핑·교열은 세지 않는다 — 둘 다 세면 두 번 센다).
    글자는 그대로 타이핑의 days 줄(타이핑에서 보내기를 눌러야 올라온다).
@@ -675,8 +676,12 @@ const SS_KEY='sijak.sess', SS_SINCE='2026-11-12', SS_MIN_MS=2*60000, SS_LONG_MS=
 let SS=Object.assign({rows:{}, dirty:{}, since:''}, lsGet(SS_KEY,{}));
 if(!SS.rows) SS.rows={}; if(!SS.dirty) SS.dirty={};
 let ssTableMissing=false, ssPushT=null, ssPushing=false;
-let ssWin={write:null}, ssPoll=null, ssForm=null;   /* ssForm: {kind, at} 열려 있는 끝내기 칸 */
-const SS_NAME={write:'글쓰기'}, SS_TAB={write:'sijak_write'}, SS_BOX={write:'ssFormW'};
+let ssWin=[], ssPoll=null, ssForm=null;   /* ssWin: 시작이 연 탭 손잡이들(타이핑·떠들기·타자기). ssForm: {kind, at} 열려 있는 끝내기 칸 */
+const SS_NAME={write:'글쓰기'}, SS_BOX={write:'ssFormW'};
+/* via: 어느 링크로 열었나. 셋 다 글쓰기 시간이고, 떠들기·타자기 몫은 칸에 따로 적는다 */
+const SS_VIA={write:'글쓰기', tteo:'떠들기', typewriter:'타자기'}, SS_TAB={write:'sijak_write', tteo:'sijak_tteo', typewriter:'sijak_typewriter'};
+function ssVia(r){ return SS_VIA[r&&r.via]?r.via:'write'; }
+function ssViaMin(k,via){ return ssDone('write',k).filter(r=>ssVia(r)===via).reduce((t,r)=>t+ssMin(r),0); }
 function ssPersist(){ lsSet(SS_KEY,SS); }
 function ssLive(){ return Object.values(SS.rows).filter(r=>r&&r.id&&!r.deleted&&r.kind==='write'&&r.start); }
 function ssOpen(kind){ return ssLive().filter(r=>r.kind===kind&&!r.end).sort((a,b)=>a.start.localeCompare(b.start))[0]||null; }
@@ -684,7 +689,7 @@ function ssDay(r){ return dayKey(Date.parse(r.start)); }
 function ssMin(r){ if(r.min!=null&&+r.min>=0) return +r.min; const a=Date.parse(r.start), b=r.end?Date.parse(r.end):Date.now(); return Math.max(0,(b-a)/60000); }
 function ssDone(kind,k){ return ssLive().filter(r=>r.kind===kind&&r.end&&ssDay(r)===k); }
 function ssDoneMin(kind,k){ return ssDone(kind,k).reduce((t,r)=>t+ssMin(r),0); }
-function ssRunning(kind){ const r=ssOpen(kind); if(!r) return null; const dev=r.device&&r.device!==myDevice()?r.device+'에서 ':''; return {min:ssMin(r), label:dev+SS_NAME[kind]+' 중', title:'', row:r}; }
+function ssRunning(kind){ const r=ssOpen(kind); if(!r) return null; const dev=r.device&&r.device!==myDevice()?r.device+'에서 ':''; return {min:ssMin(r), label:dev+SS_VIA[ssVia(r)]+' 중', title:'', row:r}; }
 function ssAdvToday(){ return (W&&W.adv)? (+W.adv[dayKey()]||0) : null; }
 function touchSs(r){
   r.updatedAt=new Date().toISOString(); r.device=myDevice();
@@ -744,21 +749,23 @@ drop policy if exists "sess open" on sijak_sessions;
 create policy "sess open" on sijak_sessions for all using (true) with check (true);`;
 
 /* 시작·끝 */
-function ssStart(kind){
+function ssStart(kind,via){
   if(ssOpen(kind)) return null;
-  const r={id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, start:new Date().toISOString(), end:null, min:null, adv0:ssAdvToday(), adv1:null};
+  const r={id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, via:SS_VIA[via]?via:'write', start:new Date().toISOString(), end:null, min:null, adv0:ssAdvToday(), adv1:null};
   touchSs(r); ssForm=null; renderToday(); return r;
 }
-/* 탭은 window.open으로 열어 손잡이를 쥔다 — 닫히면 끝내기 칸을 띄우려고. 시작을 새로 열면 손잡이가 없으니 그때는 칸을 다시 누른다. */
-function ssOpenTab(kind){
-  const href=linkFor(kind); if(!href) return null;
-  try{ const w=window.open(href,SS_TAB[kind]); if(w){ ssWin[kind]=w; ssWatch(); } return w||null; }catch(e){ return null; }
+/* 탭은 window.open으로 열어 손잡이를 쥔다 — 닫히면 끝내기 칸을 띄우려고. 시작이 연 탭이 모두 닫혀야 끝낸다(타이핑과 떠들기를 함께 열어 둘 수 있으니).
+   시작을 새로 열면 손잡이가 없으니 그때는 칸을 다시 누른다. */
+function ssOpenTab(via){
+  via=SS_VIA[via]?via:'write';
+  const href=linkFor(via); if(!href) return null;
+  try{ const w=window.open(href,SS_TAB[via]); if(w){ ssWin.push(w); ssWatch(); } return w||null; }catch(e){ return null; }
 }
 function ssWatch(){
   if(ssPoll) return;
   ssPoll=setInterval(()=>{
-    ['write'].forEach(kind=>{ const w=ssWin[kind]; if(w&&w.closed){ ssWin[kind]=null; if(ssOpen(kind)&&!(ssForm&&ssForm.kind===kind)) ssStop(kind); } });
-    if(!ssWin.write){ clearInterval(ssPoll); ssPoll=null; }
+    if(ssWin.length && ssWin.every(w=>w.closed)){ ssWin=[]; if(ssOpen('write')&&!(ssForm&&ssForm.kind==='write')) ssStop('write'); }
+    if(!ssWin.length){ clearInterval(ssPoll); ssPoll=null; }
   },2000);
 }
 function ssStop(kind){
@@ -768,16 +775,21 @@ function ssStop(kind){
   if(kind==='write'&&btOn()) setTimeout(()=>{ loadWrite(dayKey()).then(ssAdvLine); },3500);   /* 타이핑의 보내기는 3초 뒤에 올라온다 */
 }
 /* 칸의 클릭. 돌려주는 값이 true면 링크의 기본 동작을 막는다(false: 탭을 못 열었으니 링크가 그대로 새 탭을 연다) */
-function ssClick(kind){
+function ssClick(kind,via){
+  via=SS_VIA[via]?via:'write';
   if(!mrOn()){ toast('설정에서 미래 프로젝트를 먼저 이어 주세요'); go('set'); return true; }
   if(ssForm&&ssForm.kind===kind){ const b=$(SS_BOX[kind]); if(b) b.scrollIntoView({block:'center'}); return true; }
-  if(ssOpen(kind)){ ssStop(kind); return true; }
-  ssStart(kind); return !!ssOpenTab(kind);
+  if(ssOpen(kind)){
+    if(via==='write'){ ssStop(kind); return true; }   /* 칸을 다시 누르면 끝 */
+    return !!ssOpenTab(via);   /* 재는 중에 떠들기·타자기를 누르면 그 탭만 더 연다 */
+  }
+  ssStart(kind,via); return !!ssOpenTab(via);
 }
 window.ssClick=ssClick;
 
 /* 끝내기 칸 */
 function ssAdvText(r){
+  if(ssVia(r)!=='write') return SS_VIA[ssVia(r)]+'로 쓴 시간입니다 · 글자는 타이핑에 보내면 셉니다';
   const a=ssAdvToday(); if(a==null||r.adv0==null) return '글자는 타이핑에서 보내기를 누를 때 셉니다';
   const d=a-(+r.adv0||0);
   return d>0?'이번에 +'+d.toLocaleString('ko-KR')+'자':d<0?'이번에 '+d.toLocaleString('ko-KR')+'자':'늘어난 글자가 없습니다 · 타이핑에 보내지 않았으면 보내기(⌘↩)를 누르고 ‘다시 세기’';
@@ -787,9 +799,9 @@ window.ssRecount=function(){ const el=$('ssAdv'); if(el) el.textContent='다시 
 function ssFormHTML(r){
   const kind=r.kind, a=new Date(r.start), now=new Date(), hm=d=>pad(d.getHours())+':'+pad(d.getMinutes());
   const long=(now-a)>=SS_LONG_MS || dayKey(a.getTime())!==dayKey();
-  let h=`<div class="evform"><p class="from"><b>${SS_NAME[kind]} · ${fmtMin(ssMin(r))}</b> <span class="of">${hm(a)}–${hm(now)}</span></p>`;
+  let h=`<div class="evform"><p class="from"><b>${SS_VIA[ssVia(r)]} · ${fmtMin(ssMin(r))}</b> <span class="of">${hm(a)}–${hm(now)}</span></p>`;
   if(long) h+=`<div class="field"><label>실제 시간 (분) — 3시간이 넘었거나 날이 바뀌었습니다. 탭 닫기를 잊었으면 고치세요</label><input class="ss-min" type="number" inputmode="numeric" value="${Math.round(ssMin(r))}"></div>`;
-  h+=`<p class="hint"><span id="ssAdv">${esc(ssAdvText(r))}</span> <button class="linkish" type="button" onclick="ssRecount()">다시 세기</button></p>`;
+  h+=`<p class="hint"><span id="ssAdv">${esc(ssAdvText(r))}</span>${ssVia(r)==='write'?' <button class="linkish" type="button" onclick="ssRecount()">다시 세기</button>':''}</p>`;
   h+=`<div class="btnrow"><button class="btn solid ss-end">끝</button><button class="btn ss-go">계속 (탭 다시 열기)</button><button class="btn warn ss-drop">없던 일로</button></div></div>`;
   return h;
 }
@@ -802,7 +814,7 @@ function renderSsForms(){
     box.dataset.at=String(ssForm.at); box.innerHTML=ssFormHTML(r);
     const q=s=>box.querySelector(s);
     q('.ss-end').onclick=()=>ssFinish(r,q);
-    q('.ss-go').onclick=()=>{ ssForm=null; box.innerHTML=''; box.dataset.at=''; ssOpenTab(kind); renderToday(); };
+    q('.ss-go').onclick=()=>{ ssForm=null; box.innerHTML=''; box.dataset.at=''; ssOpenTab(ssVia(r)); renderToday(); };
     q('.ss-drop').onclick=()=>{ if(!confirm('이번 '+SS_NAME[kind]+'를 기록에 남기지 않습니다. 괜찮습니까?')) return; r.deleted=true; touchSs(r); ssForm=null; renderToday(); toast('없던 일로 했습니다'); };
     box.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); ssFinish(r,q); } });
     setTimeout(()=>{ const f=q('.ss-min'); if(f&&!isTouch) f.focus(); box.scrollIntoView({block:'center'}); },30);
@@ -814,7 +826,7 @@ function ssFinish(r,q){
   r.adv1=ssAdvToday();
   r.end=new Date().toISOString();
   touchSs(r); ssForm=null; if(document.activeElement) document.activeElement.blur(); renderToday();
-  toast(SS_NAME[r.kind]+' '+fmtMin(ssMin(r))+' · 적었습니다');
+  toast(SS_VIA[ssVia(r)]+' '+fmtMin(ssMin(r))+' · 적었습니다');
 }
 
 /* 할 일 = 방점(2026년 10월 10일, 전에는 미래). 방점은 목록 전체를 bangjeom 표의 한 줄(id = 목록 이름)에 둔다:
@@ -915,13 +927,14 @@ function renderToday(){
   else if(!W){ sw.innerHTML=`<div class="strip-head"><span class="strip-name">글쓰기</span></div><div class="strip-sub">${Werr?'<span class="err">'+esc(Werr)+'</span>':'불러오는 중'}</div>`; }
   else{
     /* 전환한 날부터 시간은 시작의 세션(ssDoneMin)이고, W.min은 떠들기 몫뿐. 흐르는 것도 시작의 세션. 그 전 날짜는 예전대로 타이핑의 것 */
-    const ss=ssRunning('write'), run=ss||(k<SS_SINCE?writeRunning():null), done=W.min+ssDoneMin('write',k), goal=W.goal||180, tot=done+(run?run.min:0), met=tot>=goal;
+    const ss=ssRunning('write'), run=ss||(k<SS_SINCE?writeRunning():null), done=W.min+ssDoneMin('write',k), goal=writeMinGoal(), tot=done+(run?run.min:0), met=tot>=goal;
     const advT=(W.adv&&+W.adv[k])||0;
     let sub = run ? `<span class="live">${esc(run.label)}${run.min>=1?' · '+fmtMin(run.min)+'째':''}</span>${run.title?' · '+esc(run.title):''}${ss?' · 누르면 끝':''}`
       : (done? '오늘 '+fmtMin(done)+' 썼습니다' : '아직 쓰지 않았습니다');
     if(advT) sub+=' · +'+advT.toLocaleString('ko-KR')+'자';   /* 타이핑에 보낸 오늘 나아감 */
-    if(W.tteo>=1) sub+=' · 떠들기 '+fmtMin(W.tteo);   /* 합계 안의 떠들기 몫 */
-    if(!W.goalKnown) sub+=' <span class="of">(목표는 타이핑에서 올라오면 바뀝니다)</span>';
+    const tt=W.tteo+ssViaMin(k,'tteo'), ty=ssViaMin(k,'typewriter');   /* 합계 안의 떠들기·타자기 몫 */
+    if(tt>=1) sub+=' · 떠들기 '+fmtMin(tt);
+    if(ty>=1) sub+=' · 타자기 '+fmtMin(ty);
     if(Werr) sub+=` <span class="err">· ${esc(Werr)}</span>`;
     sw.innerHTML=stripHTML('글쓰기', done, run?run.min:0, goal, sub, met, 'avgW');
     sw.classList.toggle('met',met);
@@ -2221,7 +2234,7 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="copyRefSql">SQL 복사</button></div>
 
   <h3>글쓰기 표</h3>
-  <p class="note">오늘 화면의 글쓰기 칸이 재는 세션을 담습니다(${kLabelY(SS_SINCE)}부터). 칸을 누르면 재기 시작하고 타이핑은 열기만 합니다. 다시 누르거나 연 탭을 닫으면 끝내기 칸이 뜹니다. 어느 글인지는 적지 않고, 단축어도 부르지 않습니다. 글자는 타이핑에서 보내기를 누를 때 셉니다. 독서는 서가가 재고 시작은 읽기만 합니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <p class="note">오늘 화면의 글쓰기 칸이 재는 세션을 담습니다(${kLabelY(SS_SINCE)}부터). 칸이나 떠들기·타자기 링크를 누르면 재기 시작하고 그 앱은 열기만 합니다. 다시 누르거나 연 탭을 닫으면 끝내기 칸이 뜹니다. 어느 글인지는 적지 않고, 단축어도 부르지 않습니다. 글자는 타이핑에서 보내기를 누를 때 셉니다. 독서는 서가가 재고 시작은 읽기만 합니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
   <pre class="sql">${esc(SS_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copySsSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">끝낸 세션 ${ssLive().filter(r=>r.end).length}개가 있고, ${Object.keys(SS.dirty).length?Object.keys(SS.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
@@ -2232,8 +2245,13 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="copyPjSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">프로젝트 ${liveProjs().length}개가 있고, ${Object.keys(PJ.dirty).length?Object.keys(PJ.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
 
+  <h3>글쓰기</h3>
+  <p class="note">글쓰기 칸의 하루 목표입니다. 칸을 누른 때부터 끝낼 때까지(떠들기·타자기로 연 것도) 잰 시간을 이 목표와 견줍니다. 분 단위로 적으세요.</p>
+  <div class="field"><label>하루 목표 (분)</label><input id="wMin" inputmode="numeric" value="${writeMinGoal()}"></div>
+  <div class="btnrow"><button class="btn" id="saveWMin">목표 저장</button></div>
+
   <h3>원고</h3>
-  <p class="note">오늘 화면에 보태기의 나아감(완성 전 원고에서 늘어난 글자)으로 최근 30일 하루 평균을 보이고, 이 기준선과 견줍니다. 쉰 날도 나누므로 보태기의 하루 목표보다 낮게 잡아도 됩니다. 매 단위로 적으세요(0.5매까지).</p>
+  <p class="note">오늘 화면에 타이핑의 나아감(완성 전 원고에서 늘어난 글자)으로 최근 30일 하루 평균을 보이고, 이 기준선과 견줍니다. 쉰 날도 나누므로 보태기의 하루 목표보다 낮게 잡아도 됩니다. 매 단위로 적으세요(0.5매까지).</p>
   <div class="field"><label>기준선 (매)</label><input id="wGoal" inputmode="decimal" value="${maeTxt(writeGoal())}"></div>
   <div class="btnrow"><button class="btn" id="saveWGoal">기준선 저장</button></div>
 
@@ -2297,6 +2315,7 @@ function renderSet(){
   $('copySql').onclick=()=>navigator.clipboard.writeText(MP_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyIncSql').onclick=()=>navigator.clipboard.writeText(INC_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('saveIncGoal').onclick=()=>{ const v=parseFloat(String($('incGoal').value).replace(/[^\d.]/g,'')); if(!(v>0)){ toast('기준선을 만 원 단위 숫자로 적으세요'); return; } touchIncConf({goal:Math.round(v*10000)}); toast('기준선을 '+man(v*10000)+'으로 두었습니다'); renderSet(); };
+  $('saveWMin').onclick=()=>{ const v=parseInt(String($('wMin').value).replace(/[^\d]/g,''),10); if(!(v>0&&v<=1440)){ toast('목표를 분 단위 숫자로 적으세요'); return; } touchIncConf({writeMin:v}); toast('글쓰기 하루 목표를 '+fmtMin(v)+'으로 두었습니다'); renderSet(); };
   $('saveWGoal').onclick=()=>{ const v=parseFloat(String($('wGoal').value).replace(/[^\d.]/g,'')); if(!(v>0&&v<=100)){ toast('기준선을 매 단위 숫자로 적으세요'); return; } const g=Math.round(v*2)/2||0.5; touchIncConf({writeGoal:g}); toast('원고 기준선을 '+maeTxt(g)+'매로 두었습니다'); renderSet(); };
   $('savePGoal').onclick=()=>{ const v=parseInt(String($('pGoal').value).replace(/[^\d]/g,''),10); if(!(v>0&&v<=2000)){ toast('기준선을 쪽 단위 숫자로 적으세요'); return; } touchIncConf({readGoal:v}); toast('쪽수 기준선을 '+v+'쪽으로 두었습니다'); renderSet(); renderPgStrip(); };
   $('impInc').onclick=()=>$('impIncFile').click();
@@ -2361,8 +2380,10 @@ let incDraft={date:'', amount:'', warned:false};
 function incPersist(){ lsSet(INC_KEY,INC); }
 function incGoal(){ const c=INC.rows.conf; return (c&&+c.goal>0)?+c.goal:INC_DEF_GOAL; }
 /* 원고 칸의 기준선(매) — 표를 새로 만들지 않고 income_log의 conf 줄에 함께 둔다 */
-const WRITE_DEF_GOAL=4;
+const WRITE_DEF_GOAL=4, WRITE_DEF_MIN=180;
 function writeGoal(){ const c=INC.rows.conf; return (c&&+c.writeGoal>0)?+c.writeGoal:WRITE_DEF_GOAL; }
+/* 글쓰기 칸의 하루 목표(분). 2026년 11월 12일까지는 타이핑의 conf(goalH·goalM)를 읽었다 */
+function writeMinGoal(){ const c=INC.rows.conf; return (c&&+c.writeMin>0)?+c.writeMin:WRITE_DEF_MIN; }
 function maeTxt(v){ return String(Math.round(v*10)/10); }
 /* conf 줄은 수입 기준선과 원고 기준선이 함께 쓴다 — 통째로 덮지 않고 제 칸만 바꾼다 */
 function touchIncConf(p){ const c=INC.rows.conf||{}; const r=Object.assign({},c,p,{id:'conf'}); delete r.deleted; touchInc(r); }
@@ -3302,7 +3323,9 @@ document.querySelectorAll('.tri').forEach(b=>b.onclick=e=>{ e.preventDefault(); 
   const k=b.dataset.pair; PAIRS[k]=!PAIRS[k]; lsSet('sijak.pairs',PAIRS); applyPairs(); });
 applyPairs();
 /* 글쓰기 칸: 누르면 시작이 재기 시작하고 타이핑을 연다, 재는 중에 누르면 끝내기 칸. ⌘·가운데 클릭은 그냥 링크. 독서 칸은 링크 그대로(서가가 잰다) */
-$('stripW').addEventListener('click',e=>{ if(Werr==='setup'||e.target.closest('button')||e.metaKey||e.ctrlKey) return; if(ssClick('write')) e.preventDefault(); });
+$('stripW').addEventListener('click',e=>{ if(Werr==='setup'||e.target.closest('button')||e.metaKey||e.ctrlKey) return; if(ssClick('write','write')) e.preventDefault(); });
+$('tteoLink').addEventListener('click',e=>{ if(Werr==='setup'||e.metaKey||e.ctrlKey) return; if(ssClick('write','tteo')) e.preventDefault(); });
+$('typeLink').addEventListener('click',e=>{ if(Werr==='setup'||e.metaKey||e.ctrlKey) return; if(ssClick('write','typewriter')) e.preventDefault(); });
 $('stripP').onclick=e=>{ if(!e.target.closest('button,a')) go('pg'); };
 $('stripP').onkeydown=e=>{ if((e.key==='Enter'||e.key===' ')&&e.target===e.currentTarget){ e.preventDefault(); go('pg'); } };
 $('stripD').onclick=e=>{ if(!e.target.closest('button,a')) go('dist'); };
