@@ -1025,8 +1025,6 @@ h2:first-child{margin-top:0}
       <p class="note">몰입과 타이핑, 휴식은 스크리브너 안의 '보태기 곁'이 맡고, 교열은 보태기 머리줄에서 잽니다. 곁은 아무것도 기억하지 않으니, 곁이 부를 단축어의 이름과 휴식 시간은 여기서 정합니다.</p>
       <div class="row"><label for="focus1cut">몰입 — 곁에서 몰입을 시작할 때</label><input type="text" id="focus1cut"></div>
       <p class="note">집중 모드를 켜고, 캘린더에 새 일정을 시작하고, 흐르던 음악을 멈추는 단축어를 적어주세요. 몰입 분을 입력으로 보냅니다.</p>
-      <div class="row"><label for="writecut">글쓰기 — 머리줄에서 '글쓰기'를 고르고 시작할 때</label><input type="text" id="writecut" placeholder="비우면 '글쓰기'"></div>
-      <p class="note">시계 없이 쓰는 시간입니다. 단축어에 든 타이머가 울리면 머리줄의 '휴식'이나 '중단'을 누르세요. 휴식이 끝나면 처음 상태로 돌아옵니다. 작품 제목을 입력으로 보냅니다.</p>
       <div class="row"><label for="gyocut">시작 — 머리줄에서 분을 고르고 시작할 때</label><input type="text" id="gyocut" placeholder="비우면 '시작'"></div>
       <p class="note">머리줄의 시간은 교열과 400자가 함께 씁니다. 몰입 단축어를 복제해 캘린더 일정 제목만 바꾼 단축어를 적어주세요. 고른 분을 입력으로 보냅니다. 비워 두면 '시작'이라는 단축어를 부릅니다.</p>
       <div class="row"><label for="rest1cut">휴식 — 몰입이나 교열을 다 채웠을 때</label><input type="text" id="rest1cut"></div>
@@ -1283,7 +1281,6 @@ function fresh(){
     focus1Cut:"몰입1",
     rest1Cut:"휴식",
     gyoCut:"시작",   /* 머리줄에서 분을 고르고 '시작'을 누를 때 부를 단축어 */
-    writeCut:"글쓰기",   /* 머리줄에서 '글쓰기'를 고르고 '시작'을 누를 때 부를 단축어 */
     gyoMin:null,   /* 예전 칸 — 쓰지 않는다(교열 시간은 저장하지 않음) */
     rightOn:true,
     sess:null,   /* 몰입 {id, start, mins, token} */
@@ -1417,7 +1414,6 @@ function load(){
   });
   if(!d.mss.some(function(m){ return m.id===d.current; })) d.current = d.mss[0].id;
   if(!d.gyoCut || !String(d.gyoCut).trim()) d.gyoCut = "시작";
-  if(!d.writeCut || !String(d.writeCut).trim()) d.writeCut = "글쓰기";
   /* 400자 탭 */
   var t0 = fresh().tp;
   if(!d.tp || typeof d.tp !== "object") d.tp = t0;
@@ -5208,7 +5204,6 @@ function renderSet(){
   $("#focus1cut").value = S.focus1Cut || "";
   $("#rest1cut").value = S.rest1Cut || "";
   $("#gyocut").value = S.gyoCut || "";
-  $("#writecut").value = S.writeCut || "";
   ["pfz","plh","pmax","ppad","pind","nwfz","nwlh","ifz","ilh","daily","dailyPg","dayStart","prfz","prlh","goalH","goalM"].forEach(function(k){
     $("#"+k).value = S[k];
   });
@@ -5379,26 +5374,25 @@ function startGyo(){
 }
 
 /* ===================== 머리줄의 시간 — 교열과 400자가 함께 쓴다 =====================
-   고르는 칸: 글쓰기(기본) · 5~50분 · 타이핑1 · 타이핑2.
-   글쓰기 — 시계 없이. '시작'은 단축어 '글쓰기'를 부르고, 도는 동안 '휴식'과 '중단'이 선다. 휴식은 그때까지를 기록하고
-            휴식 단축어와 검은 화면으로, 중단은 기록만 하고 끝낸다. 네 시간 동안 아무것도 누르지 않으면 기록하지 않고 접는다.
+   고르는 칸: 5~50분 · 타이핑1 · 타이핑2. 처음 값은 설정의 몰입 시간(기본).
+   (시계 없는 '글쓰기' 항목은 2026-11-12에 없앴다. 그때 돌고 있던 글쓰기를 마칠 수 있게 '휴식'·'중단' 처리만 남겨 둔다.)
    분 — 정한 시간을 잰다. 단축어 '시작'을 부르고 '멈춤'이 선다. 다 되면 휴식.
    타이핑1·2 — 단축어 '오전타이핑1·2'를 부르고 '타이핑중단'·'타이핑완료'가 선다. 중단하면 '타이핑재개'. 완료는 손으로 누른다.
    기록: 글쓰기와 분은 작품의 글쓰기(gyo:<작품 id>, type "gyo")로, 타이핑은 지금 원고(ty1·ty2)로 — 곁과 같다. */
-var hdSel = "open";
-var OPEN_CAP_MIN = 240;   /* 글쓰기의 상한 — 이만큼 지나도록 휴식도 중단도 없으면 접는다 */
+var hdSel = "";   /* 고른 것 — 비어 있으면 설정의 몰입 시간(기본)을 따른다 */
+function hdCur(){ return hdSel || String(gyoDef()); }
 function drawGsel(){
-  var gs = $("#gsel"), d = gyoDef(), sig = "v2:" + d;
+  var gs = $("#gsel"), d = gyoDef(), sig = "v3:" + d;
   if(sig !== gselSig){
     gselSig = sig; gs.innerHTML = "";
-    var list = [["open", "글쓰기"]], mins = [5,10,15,25,50];
+    var list = [], mins = [5,10,15,25,50];
     if(mins.indexOf(d) < 0) mins.push(d);
     mins.sort(function(a, b){ return a - b; }).forEach(function(n){ list.push([String(n), n + "분" + (n === d ? " · 기본" : "")]); });
     list.push(["t1", "타이핑1"], ["t2", "타이핑2"]);
     list.forEach(function(x){ var o = document.createElement("option"); o.value = x[0]; o.textContent = x[1]; gs.appendChild(o); });
   }
-  gs.value = hdSel;
-  if(gs.value !== hdSel){ hdSel = "open"; gs.value = hdSel; }
+  gs.value = hdCur();
+  if(gs.value !== hdCur()){ hdSel = ""; gs.value = hdCur(); }
 }
 function hdAct(box, label, fn, title){
   var b = document.createElement("button"); b.type = "button"; b.textContent = label; if(title) b.title = title;
@@ -5437,33 +5431,18 @@ function renderGyo(){
   gs.disabled = busy;
   go.classList.toggle("wait", busy);
   go.title = remoteRunning() ? "곁에서 " + remoteShow() + " 중입니다" : S.phase === "rest" ? "휴식이 끝나면 시작할 수 있습니다"
-           : hdSel === "open" ? "시계 없이 시작합니다 — 단축어 '글쓰기'를 부릅니다"
-           : /^t/.test(hdSel) ? "타이핑을 시작합니다 — 단축어 '오전타이핑'을 부릅니다"
+           : /^t/.test(hdCur()) ? "타이핑을 시작합니다 — 단축어 '오전타이핑'을 부릅니다"
            : "정한 시간만큼 시간을 잽니다 — 단축어 '시작'을 부릅니다";
 }
 function hdStart(){
   if(S.phase !== "idle" || typRunning() || S.typ) return;
-  if(hdSel === "open") return startOpen();
-  if(hdSel === "t1" || hdSel === "t2") return hdTyp(hdSel);
-  var n = parseInt(hdSel, 10);
+  var sel = hdCur();
+  if(sel === "t1" || sel === "t2") return hdTyp(sel);
+  var n = parseInt(sel, 10);
   gyoPick = n > 0 && n !== gyoDef() ? n : null;
   startGyo();
 }
-/* 글쓰기 — 시계 없이. 상한(네 시간)은 접기 위한 것이지 기록이 아니다 */
-function startOpen(){
-  if(S.phase !== "idle" || typRunning()) return;
-  var w = workOf(cur());
-  if(!w){ toast("작품을 먼저 고르세요"); return; }
-  if(remoteRunning()){ toast("곁(스크리브너)에서 '" + S.remoteNow.ms_title + "' " + remoteShow() + " 중입니다. 끝난 뒤에 시작할 수 있습니다", 3500); return; }
-  var now = Date.now();
-  S.sess = { id:"gyo:" + w.id, start:now, mins:OPEN_CAP_MIN, rest:S.restMin, token:String(now), c0:null, mode:"open", pending:false };
-  S.phase = "focus"; S.endsAt = now + OPEN_CAP_MIN*60000;
-  save();
-  runShortcut((S.writeCut && S.writeCut.trim()) ? S.writeCut : "글쓰기", w.title);
-  toast("글쓰기를 시작합니다 · " + hhmm(now));
-  renderHead(); tick(); shareNow();
-}
-/* 글쓰기의 휴식 — 그때까지를 기록하고 휴식으로 */
+/* (예전) 글쓰기의 휴식 — 그때까지를 기록하고 휴식으로. 항목을 없애기 전에 시작한 글쓰기만 여기에 닿는다 */
 function hdRest(){
   if(!(S.phase === "focus" && S.sess && S.sess.mode === "open")) return;
   endFocusSC(Date.now(), false);
@@ -5504,7 +5483,7 @@ function hdTyp(a){
   shareNow();
 }
 $("#ggo").addEventListener("click", hdStart);
-$("#gsel").addEventListener("change", function(){ hdSel = this.value || "open"; renderGyo(); });
+$("#gsel").addEventListener("change", function(){ hdSel = this.value === String(gyoDef()) ? "" : (this.value || ""); renderGyo(); });
 /* ---------- 스크리브너 타이핑 — 시간은 단축어와 음악이 이끌고, 앱은 시각만 적는다 ---------- */
 var TY_CAP = { 1: 54*60000, 2: 69*60000 };
 function typRunning(){ return !!(S.typ && S.typ.start); }
@@ -5944,7 +5923,6 @@ $("#prRec").addEventListener("change", function(){ S.printRecord = this.checked;
 $("#focus1cut").addEventListener("change", function(){ S.focus1Cut = this.value; save(); });
 $("#rest1cut").addEventListener("change", function(){ S.rest1Cut = this.value; save(); });
 $("#gyocut").addEventListener("change", function(){ S.gyoCut = this.value.trim(); save(); });
-$("#writecut").addEventListener("change", function(){ S.writeCut = this.value.trim(); save(); });
 $("#rightOn").addEventListener("change", function(){
   if(S.phase === "focus" || typRunning()){ this.checked = S.rightOn !== false; toast("몰입이 끝나면 바꿀 수 있습니다"); return; }
   S.rightOn = this.checked; if(!S.rightOn) S.sel = null;
@@ -6077,15 +6055,6 @@ function tpTake(m){
   delete u.cut;
   tpViewIdx = null;
   return true;
-}
-/* storyM에서 온 주소 — #원고=<id> 면 그 원고의 400자 탭을 연다. 아직 받지 않은 원고면 수파베이스에서 받은 뒤 한 번 더 본다 */
-function tpHashId(){ var h = location.hash || ""; try{ h = decodeURIComponent(h); }catch(e){} var m = /[#&]원고=([^&]+)/.exec(h); return m ? m[1].trim() : null; }
-function tpHashOpen(loud){
-  var id = tpHashId(); if(!id) return true;
-  var m = msById(id);
-  if(!m){ if(loud) toast("주소의 원고를 찾지 못했습니다"); return false; }
-  if(m.folded){ if(loud) toast("접어 둔 원고입니다 — 원고 탭에서 펼친 뒤 여세요"); return true; }
-  tpOpen(id); return true;
 }
 /* 교열에서 숫자를 눌렀다 — 그 원고를 데려와 400자 탭을 연다 */
 function tpOpen(id){
@@ -6570,9 +6539,7 @@ applyStyle(); applySplit(); applyRight();
 renderHead(); renderWrite(); renderSet(); renderToday();
 tpRender();
 restore(); tick(); setInterval(tick, 250);
-var hashDone = tpHashOpen(false);
-cloudPull().then(function(){ if(!hashDone) tpHashOpen(true); });
-window.addEventListener("hashchange", function(){ tpHashOpen(true); });
+cloudPull();
 /* 의견 창이 적어 둔 '마침' — 바로(storage 사건), 그리고 2초마다 */
 takeNoteReqs();
 window.addEventListener("storage", function(e){ if(!e.key || e.key === NOTEREQ) takeNoteReqs(); });
