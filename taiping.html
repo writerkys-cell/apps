@@ -846,6 +846,7 @@ h2:first-child{margin-top:0}
         <span class="when" id="tpWhen"></span>
         <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
         <button class="lnk" id="tpVersBtn" type="button" title="이 원고에 쌓인 판본 목록">판본</button>
+        <a class="lnk" id="tpCard" hidden target="_blank" rel="noopener" href="#" title="storyM에서 이 원고에 이어진 집필 카드를 바로 엽니다">카드 ↗</a>
         <a class="lnk" id="tpStory" hidden target="_blank" rel="noopener" href="#" title="storyM에서 카드 찾기 — 막혔을 때">카드 찾기 ↗</a>
         <button class="lnk" id="tpBack" type="button" title="교열 탭에서 이 원고 보기">교열로</button>
       </div>
@@ -3237,6 +3238,10 @@ function storyFindUrl(m, q){
   var w = workOf(m), t = w && w.title ? String(w.title).trim() : "";
   return STORYM_URL + "#" + (t ? "소설제목=" + encodeURIComponent(t) + "&" : "") + "찾기=" + encodeURIComponent(q || "");
 }
+/* 원고 주소 — storyM 집필 카드의 '타이핑 원고' 칸에 붙이는 주소(…taiping.html#원고=<id>).
+   storyM이 이 주소의 id로 카드와 원고를 잇고, 이 주소를 열면 그 원고의 400자 탭이 열린다 */
+function msAddr(m){ return location.href.replace(/#.*$/, "") + "#원고=" + encodeURIComponent(m.id); }
+function copyMsAddr(m){ copyThen(msAddr(m), function(){ toast("원고 주소를 복사했습니다 · storyM 카드의 '타이핑 원고' 칸에 붙이세요", 3500); }); }
 function putStoryLink(m){
   var v = prompt("storyM 카드 주소를 붙여넣으세요.\n(storyM에서 카드를 열고 '주소 복사'를 누르면 됩니다. 비우면 링크를 지웁니다)", m.storyLink || "");
   if(v === null) return;
@@ -4298,6 +4303,7 @@ function renderList(){
       /* 합친 원고 — 완성은 장 머리(장 완성)나 작품(초고 완성)에서. 링크만 여기서 */
       act(m.scrivLink ? "링크 바꾸기" : "링크 넣기", function(){ putLink(m); });
       act(m.storyLink ? "카드 링크 바꾸기" : "카드 링크 넣기", function(){ putStoryLink(m); });
+      act("원고 주소 복사", function(){ copyMsAddr(m); });
     }else if(!wDone){
       act("제목 바꾸기", function(){
         var t = prompt("원고 제목", m.title);
@@ -4314,6 +4320,7 @@ function renderList(){
       }
       act(m.scrivLink ? "링크 바꾸기" : "링크 넣기", function(){ putLink(m); });
       act(m.storyLink ? "카드 링크 바꾸기" : "카드 링크 넣기", function(){ putStoryLink(m); });
+      act("원고 주소 복사", function(){ copyMsAddr(m); });
       if(rw) act(rv ? "새 글로 바꾸기" : "개정으로 바꾸기", function(){ switchRev(m); });
       act("↑", function(){ shiftUnit(m, -1); });
       act("↓", function(){ shiftUnit(m, 1); });
@@ -6061,10 +6068,66 @@ function tpTake(m){
   tpViewIdx = null;
   return true;
 }
-/* storyM에서 온 주소 — #원고=<id> 면 그 원고의 400자 탭을 연다. 아직 받지 않은 원고면 수파베이스에서 받은 뒤 한 번 더 본다 */
-function tpHashId(){ var h = location.hash || ""; try{ h = decodeURIComponent(h); }catch(e){} var m = /[#&]원고=([^&]+)/.exec(h); return m ? m[1].trim() : null; }
+/* storyM에서 온 주소 — #원고=<id> 면 그 원고의 400자 탭을 연다. 아직 받지 않은 원고면 수파베이스에서 받은 뒤 한 번 더 본다.
+   #작품=…&새원고=… 면 카드 이름의 원고를 찾아 열거나 만든다(tpHashNew) */
+/* 주소의 # 뒤를 열쇠=값으로 읽는다 — 값마다 따로 풀어, 값 속의 &·#에 걸리지 않게 */
+function hashParams(){
+  var o = {}, h = (location.hash || "").replace(/^#/, "");
+  h.split("&").forEach(function(p){
+    var i = p.indexOf("="); if(i <= 0) return;
+    var k = p.slice(0, i), v = p.slice(i + 1);
+    try{ k = decodeURIComponent(k); }catch(e){} try{ v = decodeURIComponent(v); }catch(e){}
+    o[k.trim()] = v.trim();
+  });
+  return o;
+}
+function tpHashId(){ return hashParams()["원고"] || null; }
+/* storyM의 집필 카드에서 "타이핑에서 쓰기 시작" — #작품=<소설 제목>&새원고=<카드 첫 줄>&소설=<소설 id>&카드=<카드 id>&장=<부·장>
+   그 작품에 같은 이름의 원고가 있으면 그것을 열고, 없으면 물어보고 만든다. 원고 이름이 카드 첫 줄과 같으니 storyM이 이름으로 잇는다.
+   카드 링크(storyLink)도 함께 넣어 타이핑에서 카드로 바로 돌아갈 수 있게 한다. 작품은 만들지 않는다(같은 이름의 작품이 있어야 한다) */
+function tpHashNew(q, loud){
+  var name = String(q["새원고"] || "").replace(/\s+/g, " ").trim(), wt = String(q["작품"] || "").trim();
+  if(!name) return true;
+  var link = q["소설"] && q["카드"] ? STORYM_URL + "#소설=" + encodeURIComponent(q["소설"]) + "&카드=" + encodeURIComponent(q["카드"]) : "";
+  var ws = S.works.filter(function(w){ return String(w.title || "").trim() === wt; });
+  var w = ws.filter(workActive)[0] || ws[0];
+  if(!w){ if(loud) toast("타이핑에 '" + wt + "' 작품이 없습니다 — 원고 탭에서 같은 이름의 작품을 먼저 만드세요", 5000); return false; }
+  var done = function(m, made){
+    if(link && !m.storyLink){ m.storyLink = link; save(); }
+    /* 주소를 그 원고의 주소로 바꿔 둔다 — 새로 고쳐도 다시 묻지 않게 */
+    try{ history.replaceState(null, "", location.href.replace(/#.*$/, "") + "#원고=" + encodeURIComponent(m.id)); }catch(e){}
+    tpOpen(m.id);
+    if(made) toast("'" + m.title + "' 원고를 만들었습니다 · storyM의 카드와 이름으로 이어집니다", 4000);
+  };
+  var ex = S.mss.filter(function(m){ return m.workId === w.id && !m.folded && String(m.title || "").replace(/\s+/g, " ").trim() === name; })[0];
+  if(ex){ done(ex, false); return true; }
+  if(!loud) return false;   /* 수파베이스에서 받은 뒤에 한 번 더 보고, 그때도 없으면 만든다 */
+  if(!workActive(w)){ toast("'" + w.title + "'은 완성한 작품이라 새 원고를 만들 수 없습니다", 4000); return true; }
+  var c = null;
+  if(hasChapters(w)){
+    /* 카드의 부·장("1부 › 2장")에서 뒤쪽 이름부터 타이핑의 장 이름과 맞춰 본다. 없으면 지금 쓰는 장 */
+    var segs = String(q["장"] || "").split("›").map(function(x){ return x.trim(); }).filter(Boolean), chs = chaptersOf(w);
+    for(var i = segs.length - 1; i >= 0 && !c; i--) c = chs.filter(function(x){ return String(x.name || "").trim() === segs[i]; })[0] || null;
+    c = defaultChapter(w, c);
+    if(!c){ toast("'" + w.title + "'에 열린 장이 없습니다 — 원고 탭에서 장을 먼저 만드세요", 5000); return true; }
+  }
+  if(!confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\nstoryM의 카드와 이름이 같아 저절로 이어집니다. 만들까요?")){
+    try{ history.replaceState(null, "", location.href.replace(/#.*$/, "")); }catch(e){}
+    return true;
+  }
+  var m = nextUnit(w, c);
+  if(!m){ toast("원고를 만들지 못했습니다"); return true; }
+  m.title = name; m.dirty = true;
+  if(link) m.storyLink = link;
+  clockIn(); S.current = m.id; S.sel = null;
+  save(); renderHead(); renderWrite(); renderList();
+  done(m, true);
+  return true;
+}
 function tpHashOpen(loud){
-  var id = tpHashId(); if(!id) return true;
+  var q = hashParams();
+  if(q["새원고"]) return tpHashNew(q, loud);
+  var id = q["원고"] || null; if(!id) return true;
   var m = msById(id);
   if(!m){ if(loud) toast("주소의 원고를 찾지 못했습니다"); return false; }
   if(m.folded){ if(loud) toast("접어 둔 원고입니다 — 원고 탭에서 펼친 뒤 여세요"); return true; }
@@ -6153,6 +6216,7 @@ function tpLeftText(){ var u = tpUnit(); if(u.fix) return u.fixText || ""; var x
 
 function tpRenderStrip(){
   var m = tpMs(), u = tpUnit(m), v = u.versions, g = tpGoal(u);
+  var sc = document.getElementById("tpCard"); if(sc){ sc.hidden = !m.storyLink; sc.href = m.storyLink || "#"; }
   var sl = document.getElementById("tpStory"); if(sl){ sl.hidden = false; sl.href = storyLinkOf(m); sl.title = "storyM에서 카드 찾기 — 막혔을 때. 입력창에서 글자를 골라 놓고 누르면 그 말로 찾고, 고른 것이 없으면 찾을 말을 묻습니다"; }
   var old = tpEl.strip.querySelector(".mark, .fixn");
   while(old){ tpEl.strip.removeChild(old); old = tpEl.strip.querySelector(".mark, .fixn"); }
