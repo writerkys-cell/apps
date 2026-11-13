@@ -846,7 +846,7 @@ h2:first-child{margin-top:0}
         <span class="when" id="tpWhen"></span>
         <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
         <button class="lnk" id="tpVersBtn" type="button" title="이 원고에 쌓인 판본 목록">판본</button>
-        <a class="lnk" id="tpStory" hidden target="_blank" rel="noopener" title="storyM에서 이 원고의 장면 열기 — 막혔을 때">줄거리 ↗</a>
+        <a class="lnk" id="tpStory" hidden target="_blank" rel="noopener" href="#" title="storyM에서 카드 찾기 — 막혔을 때">카드 찾기 ↗</a>
         <button class="lnk" id="tpBack" type="button" title="교열 탭에서 이 원고 보기">교열로</button>
       </div>
       <div class="tprev empty" id="tpPrev"></div>
@@ -3223,7 +3223,7 @@ function phoneCopy(m){
     if(link) setTimeout(function(){ try{ window.location.href = link; }catch(e){} }, 150);
   });
 }
-/* 줄거리 링크 — storyM 장면 주소(storyM.html#소설=…&장면=…). 원고 탭의 '줄거리'와 400자 탭의 '줄거리 ↗'로 연다.
+/* 카드 링크(옛 이름 줄거리 링크, 칸 이름은 storyLink 그대로) — storyM 카드 주소(storyM.html#소설=…&카드=…). 원고 탭의 '카드'로 연다. 400자 탭의 '카드 찾기 ↗'는 아래 storyFindUrl.
    맥의 저장소에만 두고 수파베이스에는 올리지 않는다(아이폰에는 필요 없다) */
 var STORYM_URL = "https://writerkys-cell.github.io/apps/storyM.html";
 /* 원고의 줄거리 주소. 링크가 있으면 그것(장면·카드까지), 없으면 작품 이름으로 storyM의 그 소설을 연다(storyM이 #소설제목= 을 읽음) */
@@ -3232,14 +3232,19 @@ function storyLinkOf(m){
   var w = workOf(m), t = w && w.title ? String(w.title).trim() : "";
   return t ? STORYM_URL + "#소설제목=" + encodeURIComponent(t) : STORYM_URL;
 }
+/* 카드 찾기 — storyM의 그 소설(작품 이름이 같은 것)에서 q가 든 카드를 찾는 주소. storyM이 #소설제목=…&찾기=… 를 읽는다 */
+function storyFindUrl(m, q){
+  var w = workOf(m), t = w && w.title ? String(w.title).trim() : "";
+  return STORYM_URL + "#" + (t ? "소설제목=" + encodeURIComponent(t) + "&" : "") + "찾기=" + encodeURIComponent(q || "");
+}
 function putStoryLink(m){
-  var v = prompt("storyM 장면 주소를 붙여넣으세요.\n(storyM에서 장면을 열고 '장면 주소 복사'를 누르면 됩니다. 비우면 링크를 지웁니다)", m.storyLink || "");
+  var v = prompt("storyM 카드 주소를 붙여넣으세요.\n(storyM에서 카드를 열고 '주소 복사'를 누르면 됩니다. 비우면 링크를 지웁니다)", m.storyLink || "");
   if(v === null) return;
   v = v.trim();
-  if(v && !/storyM\.html#/i.test(v) && !confirm("storyM 장면 주소처럼 보이지 않습니다(storyM.html# 이 없음). 그래도 저장할까요?")) return;
+  if(v && !/storyM\.html#/i.test(v) && !confirm("storyM 카드 주소처럼 보이지 않습니다(storyM.html# 이 없음). 그래도 저장할까요?")) return;
   m.storyLink = v; save(); renderList();
   if(typeof tpRenderStrip === "function" && tpOn()) tpRenderStrip();
-  toast(v ? "줄거리 링크를 넣었습니다" : "줄거리 링크를 지웠습니다");
+  toast(v ? "카드 링크를 넣었습니다" : "카드 링크를 지웠습니다");
 }
 function putLink(m){
   var link = askLink(m, "스크리브너 링크를 붙여넣으세요.");
@@ -4264,7 +4269,7 @@ function renderList(){
       }
       top.appendChild(wr);
       /* 줄거리 — storyM 장면으로. 막혔을 때 가는 길 */
-      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "_blank"; sl.rel = "noopener"; sl.textContent = "줄거리"; sl.title = m.storyLink ? "storyM에서 이 원고의 장면 열기" : "storyM에서 이 작품의 줄거리 열기"; top.appendChild(sl);
+      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "_blank"; sl.rel = "noopener"; sl.textContent = "카드"; sl.title = m.storyLink ? "storyM에서 이 원고에 건 카드 열기" : "storyM에서 이 작품의 카드 열기"; top.appendChild(sl);
     }
     var gap = document.createElement("span"); gap.className = "gap"; top.appendChild(gap);
     if(m.doneAt && !isRevMs(m)){ var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "한 편"; top.appendChild(bd); }
@@ -4292,7 +4297,7 @@ function renderList(){
     if(!wDone && m.merged){
       /* 합친 원고 — 완성은 장 머리(장 완성)나 작품(초고 완성)에서. 링크만 여기서 */
       act(m.scrivLink ? "링크 바꾸기" : "링크 넣기", function(){ putLink(m); });
-      act(m.storyLink ? "줄거리 링크 바꾸기" : "줄거리 링크 넣기", function(){ putStoryLink(m); });
+      act(m.storyLink ? "카드 링크 바꾸기" : "카드 링크 넣기", function(){ putStoryLink(m); });
     }else if(!wDone){
       act("제목 바꾸기", function(){
         var t = prompt("원고 제목", m.title);
@@ -4308,7 +4313,7 @@ function renderList(){
         act("원고 완성", function(){ finishMs(m); });
       }
       act(m.scrivLink ? "링크 바꾸기" : "링크 넣기", function(){ putLink(m); });
-      act(m.storyLink ? "줄거리 링크 바꾸기" : "줄거리 링크 넣기", function(){ putStoryLink(m); });
+      act(m.storyLink ? "카드 링크 바꾸기" : "카드 링크 넣기", function(){ putStoryLink(m); });
       if(rw) act(rv ? "새 글로 바꾸기" : "개정으로 바꾸기", function(){ switchRev(m); });
       act("↑", function(){ shiftUnit(m, -1); });
       act("↓", function(){ shiftUnit(m, 1); });
@@ -6056,6 +6061,15 @@ function tpTake(m){
   tpViewIdx = null;
   return true;
 }
+/* storyM에서 온 주소 — #원고=<id> 면 그 원고의 400자 탭을 연다. 아직 받지 않은 원고면 수파베이스에서 받은 뒤 한 번 더 본다 */
+function tpHashId(){ var h = location.hash || ""; try{ h = decodeURIComponent(h); }catch(e){} var m = /[#&]원고=([^&]+)/.exec(h); return m ? m[1].trim() : null; }
+function tpHashOpen(loud){
+  var id = tpHashId(); if(!id) return true;
+  var m = msById(id);
+  if(!m){ if(loud) toast("주소의 원고를 찾지 못했습니다"); return false; }
+  if(m.folded){ if(loud) toast("접어 둔 원고입니다 — 원고 탭에서 펼친 뒤 여세요"); return true; }
+  tpOpen(id); return true;
+}
 /* 교열에서 숫자를 눌렀다 — 그 원고를 데려와 400자 탭을 연다 */
 function tpOpen(id){
   var m = msById(id); if(!m || m.folded) return;
@@ -6139,7 +6153,7 @@ function tpLeftText(){ var u = tpUnit(); if(u.fix) return u.fixText || ""; var x
 
 function tpRenderStrip(){
   var m = tpMs(), u = tpUnit(m), v = u.versions, g = tpGoal(u);
-  var sl = document.getElementById("tpStory"); if(sl){ sl.hidden = false; sl.href = storyLinkOf(m); sl.title = m.storyLink ? "storyM에서 이 원고의 장면 열기 — 막혔을 때" : "storyM에서 이 작품의 줄거리 열기 — 막혔을 때"; }
+  var sl = document.getElementById("tpStory"); if(sl){ sl.hidden = false; sl.href = storyLinkOf(m); sl.title = "storyM에서 카드 찾기 — 막혔을 때. 입력창에서 글자를 골라 놓고 누르면 그 말로 찾고, 고른 것이 없으면 찾을 말을 묻습니다"; }
   var old = tpEl.strip.querySelector(".mark, .fixn");
   while(old){ tpEl.strip.removeChild(old); old = tpEl.strip.querySelector(".mark, .fixn"); }
   tpEl.nums.innerHTML = ""; tpEl.when.textContent = "";
@@ -6472,6 +6486,18 @@ tpEl.cur.addEventListener("click", function(e){
   tpCutGoal(parseInt(b.getAttribute("data-g"), 10));
 });
 tpEl.toRight.addEventListener("click", tpToRight);
+/* '카드 찾기 ↗' — 입력창에서 고른 말로 storyM을 연다. 고른 말이 없으면 묻고, 비우면 그 소설(준비할 것)을 연다 */
+document.getElementById("tpStory").addEventListener("click", function(e){
+  var el = tpEl.input, q = "";
+  try{ q = el.value.slice(el.selectionStart, el.selectionEnd).trim(); }catch(x){}
+  if(!q){
+    var v = prompt("storyM에서 찾을 말을 넣으세요.\n(입력창에서 글자를 골라 놓고 누르면 묻지 않습니다. 비우면 이 작품의 준비할 것을 엽니다)", "");
+    if(v === null){ e.preventDefault(); return; }
+    q = v.trim();
+  }
+  q = q.replace(/\s+/g, " ").slice(0, 60);
+  this.href = q ? storyFindUrl(tpMs(), q) : storyLinkOf(tpMs());
+});
 tpEl.prev.addEventListener("dblclick", function(){ var t = tpLeftText(); if(t) copyThen(t, function(){ toast("복사했습니다"); }); });
 tpEl.versBtn.addEventListener("click", function(){ tpVersOn = !tpVersOn; tpRenderBtns(); if(tpVersOn) tpRenderVers(); });
 tpEl.back.addEventListener("click", function(){ var m = tpMs(); S.current = m.id; S.sel = null; save(); renderHead(); renderWrite(); writeGoto = m.id; showView("write"); });
@@ -6539,7 +6565,9 @@ applyStyle(); applySplit(); applyRight();
 renderHead(); renderWrite(); renderSet(); renderToday();
 tpRender();
 restore(); tick(); setInterval(tick, 250);
-cloudPull();
+var hashDone = tpHashOpen(false);
+cloudPull().then(function(){ if(!hashDone) tpHashOpen(true); });
+window.addEventListener("hashchange", function(){ tpHashOpen(true); });
 /* 의견 창이 적어 둔 '마침' — 바로(storage 사건), 그리고 2초마다 */
 takeNoteReqs();
 window.addEventListener("storage", function(e){ if(!e.key || e.key === NOTEREQ) takeNoteReqs(); });
