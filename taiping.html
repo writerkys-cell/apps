@@ -1431,9 +1431,19 @@ if(!S.advSince){
   if((S.net[S.advSince] || 0) > 0 && !S.adv[S.advSince]) S.adv[S.advSince] = S.net[S.advSince];
 }
 var frozen = false;
+/* 저장 도장(KEY:stamp) — 같은 저장소를 쓰는 창이 둘이면(크롬 창과 PWA 창, 오래 열어 둔 탭) 뒤에 저장한 창이 앞의 것을 통째로 덮었다(2026년 11월 14일).
+   저장할 때마다 도장을 찍고, 다른 창이 그 뒤에 찍었으면 숨은 창은 저장하지 않고(staleWin), 앞으로 올 때 다시 읽는다(visibilitychange).
+   보이는 창끼리 번갈아 쓰는 건 막지 못한다 — 알리기만 한다 */
+var STAMP = KEY + ":stamp", myStamp = storedStamp(), staleWin = false, stampWarned = false;
+function storedStamp(){ try{ return +localStorage.getItem(STAMP) || 0; }catch(e){ return 0; } }
+function othersWrote(){ return storedStamp() > myStamp; }
 function save(){
   if(frozen) return;
-  try{ localStorage.setItem(KEY, JSON.stringify(S)); }
+  if(othersWrote()){
+    if(document.visibilityState !== "visible"){ staleWin = true; return; }   /* 숨은 창 — 옛 상태로 덮지 않는다. 보이면 다시 읽는다 */
+    if(!stampWarned){ stampWarned = true; toast("다른 창도 이 저장소에 쓰고 있습니다 — 타이핑은 한 창만 쓰세요", 6000); }
+  }
+  try{ myStamp = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); localStorage.setItem(STAMP, String(myStamp)); }
   catch(e){ toast("저장 공간이 모자랍니다. 백업을 내보내 주세요"); }
 }
 
@@ -2771,6 +2781,71 @@ function dropOrphanStubs(ids){
     if(k) toast("다른 브라우저가 남긴 빈 '이름 없는 작품' " + k + "줄을 아이폰 목록에서 내렸습니다", 5000);
   }).catch(function(){});
 }
+/* ---------- 모르는 원고 내려받기 (2026년 11월 14일) ----------
+   원고는 브라우저 저장소에만 있고 저장소는 주소·브라우저·웹 앱마다 따로라, 다른 곳에서 만든 원고는 이 저장소에 없었다.
+   이제 cloudPull이 보는 줄 가운데 이 저장소가 모르는 원고(자리표 제외)는 본문째 받아, 같은 id의 작품(없으면 같은 이름, 그것도 없으면 새 작품)에 넣는다.
+   부·장은 구름의 작품 목록(kv works — 다른 저장소가 올린 것)에서 그 원고가 든 장을 찾아 같은 id로 만들어 넣고, 없으면 지금 쓰는 장에 넣는다.
+   400자 탭의 판본과 storyM 카드 링크는 구름에 없어 따라오지 않는다(카드와는 이름으로 이어진다). 한 번 받은 줄은 다시 받지 않는다(strangersDone) */
+var cloudWorksRows = null, strangersBusy = false, strangersDone = {};
+function fetchCloudWorks(need){
+  if(!need || !cloudOn()) return Promise.resolve();
+  return sb("botaegi_kv?select=data&id=eq.works").then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rs){ var d = rs[0] && rs[0].data; if(Array.isArray(d)) cloudWorksRows = d; }).catch(function(){});
+}
+function pullStrangers(ids){
+  ids = (ids || []).filter(function(id){ return !strangersDone[id] && !msById(id); }).slice(0, 50);
+  if(!ids.length || !cloudOn() || strangersBusy) return Promise.resolve();
+  strangersBusy = true;
+  return fetchCloudWorks(!cloudWorksRows)
+  .then(function(){ return sb(TABLE + "?select=*&id=in.(" + ids.map(encodeURIComponent).join(",") + ")"); })
+  .then(function(r){ return r.ok ? r.json() : []; })
+  .then(function(rows){
+    var n = 0, names = [];
+    rows.forEach(function(x){ strangersDone[x.id] = true; if(msById(x.id)) return; if(adoptRow(x, cloudWorksRows || [])){ n++; names.push(x.title || ""); } });
+    if(n){
+      save(); renderHead(); renderWrite(true); renderList(); shareWorks();
+      toast("다른 저장소에서 만든 원고 " + n + "개를 받았습니다: " + names.slice(0, 3).join(" · ") + (n > 3 ? " …" : ""), 7000);
+    }
+  }).catch(function(){}).then(function(){ strangersBusy = false; });
+}
+/* 구름의 한 줄을 이 저장소의 원고로. 작품·부·장이 없으면 만든다 */
+function adoptRow(x, works){
+  var cw = works.filter(function(w){ return w.id === x.work_id; })[0] || null;
+  var w = x.work_id ? workById(x.work_id) : null;
+  if(!w && x.work_title){ var ws = S.works.filter(function(y){ return String(y.title || "").trim() === String(x.work_title).trim(); }); w = ws.filter(workActive)[0] || ws[0] || null; }
+  if(!w){
+    if(!x.work_title) return false;
+    w = newWork(x.work_title, x.work_kind || (cw && cw.kind) || "", (cw && cw.target_mae) || null);
+    if(x.work_id) w.id = x.work_id;
+    if(cw){ w.due = cw.due || ""; w.doneDue = cw.done_due || ""; w.actMae = cw.act_mae || null; if(cw.new_kind) w.newKind = cw.new_kind; }
+    S.works.push(w);
+  }
+  var c = null, kc = null;
+  if(hasChapters(w)){
+    if(!Array.isArray(w.chapters)) w.chapters = []; if(!Array.isArray(w.parts)) w.parts = [];
+    kc = cw && cw.chapters ? cw.chapters.filter(function(k){ return (k.ms || []).indexOf(x.id) > -1 || k.mid === x.id; })[0] || null : null;
+    if(kc){
+      if(kc.part && !partById(w, kc.part)){ var kp = (cw.parts || []).filter(function(q){ return q.id === kc.part; })[0]; var p = newPart(kp ? kp.name : ""); p.id = kc.part; w.parts.push(p); }
+      c = chById(w, kc.id);
+      if(!c){ c = newChapter(kc.name || "이름 없는 장"); c.id = kc.id; c.order = kc.no || (w.chapters.length + 1); if(kc.part) c.partId = kc.part; w.chapters.push(c); }
+    }
+    if(!c) c = defaultChapter(w);
+    if(!c){ c = newChapter("이름 없는 장"); c.order = w.chapters.length ? Math.max.apply(null, w.chapters.map(function(y){ return y.order || 0; })) + 1 : 1; w.chapters.push(c); }
+  }
+  var all = allOf(w), ord = x.ord || (all.length ? Math.max.apply(null, all.map(function(y){ return y.order || 0; })) + 1 : 1);
+  var m = newMs(x.title || "이름 없는 원고", w.id, ord);
+  m.id = x.id; m.text = x.text || "";
+  var at = Date.parse(x.updated_at) || Date.now();
+  m.createdAt = at; m.editedAt = normal(m.text) ? at : null; m.syncAt = x.updated_at || null; m.dirty = false;
+  if(c) m.chId = c.id;
+  if(x.link) m.scrivLink = x.link;
+  if(x.handed) m.scrivAt = at;
+  if(x.unit_done){ m.finishedAt = at; m.finalChars = len(m.text); }
+  if(isRevision(w)) m.rev = (cw && cw.rev_ms && cw.rev_ms.indexOf(x.id) > -1) ? "개정" : "새 글";
+  if(kc && kc.mid === x.id) m.merged = true;
+  S.mss.push(m);
+  return true;
+}
 function cloudDrop(id){
   if(!cloudOn()) return;
   sb(TABLE + "?id=eq." + encodeURIComponent(id), {
@@ -2889,7 +2964,8 @@ function cloudPull(loud){
   if(!cloudOn() || pulling){ return Promise.resolve(); }
   pulling = true;
   var fresh0 = virgin();   /* 자리표뿐인 저장소(처음 여는 브라우저) — 받기만 하고 곁의 요청도 건드리지 않는다 */
-  return flush().then(function(){ return fresh0 ? null : applyReqs(); }).then(function(){
+  /* 이 창의 첫 읽기 — 작품 목록을 올리기 전에 구름의 작품 목록을 받아 둔다(다른 저장소가 올린 부·장을 알아야 모르는 원고를 제자리에 넣는다) */
+  return fetchCloudWorks(worksSent === "").then(flush).then(function(){ return fresh0 ? null : applyReqs(); }).then(function(){
     shareConf(); shareDays(); shareWorks(); shareSess(); shareNow();
     return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo(), pullNotes()]);
   }).then(function(){
@@ -2908,11 +2984,11 @@ function cloudPull(loud){
         return rows;
       });
   }).then(function(rows){
-    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, staleSrc = null, emptyN = 0, emptyMs = null, autoN = 0, changed = false, orphans = [];
+    var got = 0, back = 0, doneN = 0, phoneN = 0, stale = 0, staleMs = null, staleSrc = null, emptyN = 0, emptyMs = null, autoN = 0, changed = false, orphans = [], strangers = [];
     rows.forEach(function(row){
       var m = S.mss.filter(function(x){ return x.id === row.id; })[0];
-      /* 맥이 모르는 '이름 없는 작품' 줄 — 다른 브라우저가 남긴 자리표. 본문이 비었으면 내린다 */
-      if(!m){ if(row.work_title === "이름 없는 작품" || row.title === "이름 없는 작품 · 1") orphans.push(row.id); return; }
+      /* 맥이 모르는 '이름 없는 작품' 줄 — 다른 브라우저가 남긴 자리표. 본문이 비었으면 내린다. 그 밖의 모르는 줄은 다른 저장소가 만든 원고 — 받는다(pullStrangers) */
+      if(!m){ if(row.work_title === "이름 없는 작품" || row.title === "이름 없는 작품 · 1") orphans.push(row.id); else strangers.push(row.id); return; }
       if(m.folded){ cloudDrop(m.id); return; }   /* 합쳐서 접어 둔 조각 — 줄이 남아 있으면 내린다 */
       takeReview(m, row);
       /* 아이폰에서 누른 '원고 완성' — 함께 온 글을 먼저 받은 뒤에 표시한다 */
@@ -2954,6 +3030,7 @@ function cloudPull(loud){
     }
     pulling = false;
     dropOrphanStubs(orphans);
+    pullStrangers(strangers);
     if(changed){ save(); renderHead(); renderWrite(true); renderList(); flush(); }
     if(emptyN) toast("'" + emptyMs.title + "'에 아이폰에서 빈 글이 왔지만 본문을 비우지 않았습니다", 5000);
     else if(stale) lostNote(staleMs, staleSrc);
@@ -6023,7 +6100,11 @@ $("#impFile").addEventListener("change", function(){
 })();
 
 window.addEventListener("beforeunload", function(){ clockIn(); save(); });
-document.addEventListener("visibilitychange", function(){ clockIn(); save(); });
+document.addEventListener("visibilitychange", function(){
+  /* 숨어 있는 동안 다른 창이 저장했으면 — 이 창의 옛 상태를 버리고 다시 읽는다 */
+  if(document.visibilityState === "visible" && (staleWin || othersWrote())){ frozen = true; location.reload(); return; }   /* frozen — 다시 읽는 동안 beforeunload의 save()가 옛 상태를 쓰지 않게 */
+  clockIn(); save();
+});
 
 
 /* ===================== 400자 — 교열의 원고를 왼쪽에 두고 400자씩 늘려 쓴다 =====================
