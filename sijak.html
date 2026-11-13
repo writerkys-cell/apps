@@ -551,6 +551,7 @@ const CFG_KEY='sijak.cfg';
 const DEF_LINKS={ write:'./taiping.html', writePhone:'./botaegi-phone.html', read:'./seoga.html#read', todo:'./bangjeom.html', run:'./dalligi.html#write', tteo:'./tteodeulgi.html', typewriter:'https://writerkys-cell.github.io/apps/typewriter.html', diary:'', jeok:'./jeokbarim.html', research:'https://claude.ai/new' };
 let cfg = Object.assign({ bt:{url:'',key:''}, mr:{url:'',key:''}, bj:{url:'',key:'',list:''}, ics:{on:false,bucket:''}, links:Object.assign({},DEF_LINKS) }, lsGet(CFG_KEY,{}));
 if(!cfg.ics) cfg.ics={on:false,bucket:''};   /* 2026년 10월 19일: 애플 캘린더 구독(ICS) */
+cfg.sc=Object.assign({start:'',end:''}, cfg.sc||{});   /* 2026년 11월 13일: 글쓰기를 재기 시작·끝낼 때 부르는 단축어 이름(기기마다. 비우면 안 부름) */
 cfg.links = Object.assign({}, DEF_LINKS, cfg.links||{});
 cfg.bj = Object.assign({url:'',key:'',list:''}, cfg.bj||{});
 if(cfg.links.todo==='./mirae.html'){ cfg.links.todo=DEF_LINKS.todo; lsSet(CFG_KEY,cfg); } /* 2026년 10월 10일: 할 일 앱이 미래에서 방점으로 */
@@ -668,7 +669,7 @@ function readRunning(){
    한 세션 = sijak_sessions 한 줄(미래 프로젝트, 시작의 표). data: { id, kind:'write', start, end(끝내기 전엔 null),
    min(실제 시간을 고쳤을 때만, 분), adv0, adv1(시작·끝 때 그날 나아감 — 타이핑의 days 줄), device, updatedAt, deleted }.
    via는 어느 링크로 열었나('write' 타이핑 · 'tteo' 떠들기 · 'typewriter' 타자기, 2026년 11월 13일). 셋 다 글쓰기 시간이다.
-   어느 글인지는 적지 않는다. 단축어도 부르지 않는다. 2분 안에 끝내면 없던 일로. 3시간을 넘기거나 새벽 4시를 지나면 실제 시간을 묻는다.
+   어느 글인지는 적지 않는다. 단축어는 설정에 이름을 적었을 때만(cfg.sc.start·end, 2026년 11월 13일) — 시작할 때 것은 칸을 누른 그 클릭에서, 끝낼 때 것은 끝내기 칸의 단추 클릭에서. cut은 시작 단축어를 불렀다는 표시. 2분 안에 끝내면 없던 일로(단, 시작 단축어를 불렀는데 탭 닫힘으로 끝나면 끝내기 칸을 띄운다). 3시간을 넘기거나 새벽 4시를 지나면 실제 시간을 묻는다.
    기기 사이에 하나의 세션을 이어받아 끝낼 수 있다. SS_SINCE부터 오늘의 글쓰기 시간은 이 표와 떠들기만 센다(타이핑의 몰입·타이핑·교열은 세지 않는다 — 둘 다 세면 두 번 센다).
    글자는 그대로 타이핑의 days 줄(타이핑에서 보내기를 눌러야 올라온다).
    독서는 서가가 잰다 — 11월 12일에 하루 동안 독서도 여기서 쟀다가 되돌렸다(서가 안에서 코멘트·쪽을 다루는 흐름이 읽기 시작에 묶여 있어서). kind:'read' 줄이 남아 있어도 쓰지 않는다. */
@@ -749,9 +750,20 @@ drop policy if exists "sess open" on sijak_sessions;
 create policy "sess open" on sijak_sessions for all using (true) with check (true);`;
 
 /* 시작·끝 */
+/* 단축어(집중 모드·음악). 레퍼런스의 refHref와 같은 주소. 아이폰에서는 x-callback으로 시작에 되돌아온다.
+   사파리는 누른 순간에만 앱 주소를 열어 주므로 늘 클릭 안에서 부른다 — 탭이 닫혀 끝날 때는 끝내기 칸의 단추를 누를 때 */
+function ssRunCut(name){
+  name=String(name||'').trim(); if(!name) return false;
+  let url='shortcuts://'+(isTouch?'x-callback-url/':'')+'run-shortcut?name='+enc(name);
+  if(isTouch) url+='&x-success='+enc(location.href.split('#')[0]);
+  try{ location.href=url; }catch(e){}
+  return true;
+}
+function ssEndCut(r){ if(r&&r.cut&&cfg.sc.end){ r.cut=false; ssRunCut(cfg.sc.end); } }   /* 시작 단축어를 불렀던 세션만, 한 번만 */
 function ssStart(kind,via){
   if(ssOpen(kind)) return null;
-  const r={id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, via:SS_VIA[via]?via:'write', start:new Date().toISOString(), end:null, min:null, adv0:ssAdvToday(), adv1:null};
+  const r={id:'s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), kind, via:SS_VIA[via]?via:'write', start:new Date().toISOString(), end:null, min:null, adv0:ssAdvToday(), adv1:null, cut:!!cfg.sc.start};
+  ssWin=[];   /* 이번 세션에서 연 탭만 센다 */
   touchSs(r); ssForm=null; renderToday(); return r;
 }
 /* 탭은 window.open으로 열어 손잡이를 쥔다 — 닫히면 끝내기 칸을 띄우려고. 시작이 연 탭이 모두 닫혀야 끝낸다(타이핑과 떠들기를 함께 열어 둘 수 있으니).
@@ -768,9 +780,9 @@ function ssWatch(){
     if(!ssWin.length){ clearInterval(ssPoll); ssPoll=null; }
   },2000);
 }
-function ssStop(kind){
+function ssStop(kind,byClick){
   const r=ssOpen(kind); if(!r) return;
-  if(Date.now()-Date.parse(r.start)<SS_MIN_MS){ r.deleted=true; touchSs(r); ssForm=null; renderToday(); toast('2분이 안 되어 없던 일로 했습니다'); return; }
+  if(Date.now()-Date.parse(r.start)<SS_MIN_MS && (byClick||!r.cut)){ r.deleted=true; if(byClick) ssEndCut(r); touchSs(r); ssForm=null; renderToday(); toast('2분이 안 되어 없던 일로 했습니다'); return; }
   ssForm={kind, at:Date.now()}; renderToday();
   if(kind==='write'&&btOn()) setTimeout(()=>{ loadWrite(dayKey()).then(ssAdvLine); },3500);   /* 타이핑의 보내기는 3초 뒤에 올라온다 */
 }
@@ -780,10 +792,12 @@ function ssClick(kind,via){
   if(!mrOn()){ toast('설정에서 미래 프로젝트를 먼저 이어 주세요'); go('set'); return true; }
   if(ssForm&&ssForm.kind===kind){ const b=$(SS_BOX[kind]); if(b) b.scrollIntoView({block:'center'}); return true; }
   if(ssOpen(kind)){
-    if(via==='write'){ ssStop(kind); return true; }   /* 칸을 다시 누르면 끝 */
+    if(via==='write'){ ssStop(kind,true); return true; }   /* 칸을 다시 누르면 끝 */
     return !!ssOpenTab(via);   /* 재는 중에 떠들기·타자기를 누르면 그 탭만 더 연다 */
   }
-  ssStart(kind,via); return !!ssOpenTab(via);
+  ssStart(kind,via); const w=!!ssOpenTab(via);
+  if(cfg.sc.start) setTimeout(()=>ssRunCut(cfg.sc.start),0);   /* 새 탭을 연 다음에 부른다 */
+  return w;
 }
 window.ssClick=ssClick;
 
@@ -801,6 +815,7 @@ function ssFormHTML(r){
   const long=(now-a)>=SS_LONG_MS || dayKey(a.getTime())!==dayKey();
   let h=`<div class="evform"><p class="from"><b>${SS_VIA[ssVia(r)]} · ${fmtMin(ssMin(r))}</b> <span class="of">${hm(a)}–${hm(now)}</span></p>`;
   if(long) h+=`<div class="field"><label>실제 시간 (분) — 3시간이 넘었거나 날이 바뀌었습니다. 탭 닫기를 잊었으면 고치세요</label><input class="ss-min" type="number" inputmode="numeric" value="${Math.round(ssMin(r))}"></div>`;
+  if(r.cut&&cfg.sc.end) h+=`<p class="hint">끝·없던 일로를 누르면 ‘${esc(cfg.sc.end)}’ 단축어를 부릅니다.</p>`;
   h+=`<p class="hint"><span id="ssAdv">${esc(ssAdvText(r))}</span>${ssVia(r)==='write'?' <button class="linkish" type="button" onclick="ssRecount()">다시 세기</button>':''}</p>`;
   h+=`<div class="btnrow"><button class="btn solid ss-end">끝</button><button class="btn ss-go">계속 (탭 다시 열기)</button><button class="btn warn ss-drop">없던 일로</button></div></div>`;
   return h;
@@ -815,7 +830,7 @@ function renderSsForms(){
     const q=s=>box.querySelector(s);
     q('.ss-end').onclick=()=>ssFinish(r,q);
     q('.ss-go').onclick=()=>{ ssForm=null; box.innerHTML=''; box.dataset.at=''; ssOpenTab(ssVia(r)); renderToday(); };
-    q('.ss-drop').onclick=()=>{ if(!confirm('이번 '+SS_NAME[kind]+'를 기록에 남기지 않습니다. 괜찮습니까?')) return; r.deleted=true; touchSs(r); ssForm=null; renderToday(); toast('없던 일로 했습니다'); };
+    q('.ss-drop').onclick=()=>{ if(!confirm('이번 '+SS_NAME[kind]+'를 기록에 남기지 않습니다. 괜찮습니까?')) return; r.deleted=true; ssEndCut(r); touchSs(r); ssForm=null; renderToday(); toast('없던 일로 했습니다'); };
     box.querySelectorAll('input').forEach(i=>i.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); ssFinish(r,q); } });
     setTimeout(()=>{ const f=q('.ss-min'); if(f&&!isTouch) f.focus(); box.scrollIntoView({block:'center'}); },30);
   });
@@ -825,6 +840,7 @@ function ssFinish(r,q){
   if(mi){ const v=parseInt(String(mi.value).replace(/[^\d]/g,''),10); if(!(v>=0)){ toast('실제 시간을 분으로 적어 주세요'); mi.focus(); return; } r.min=v; }
   r.adv1=ssAdvToday();
   r.end=new Date().toISOString();
+  ssEndCut(r);
   touchSs(r); ssForm=null; if(document.activeElement) document.activeElement.blur(); renderToday();
   toast(SS_VIA[ssVia(r)]+' '+fmtMin(ssMin(r))+' · 적었습니다');
 }
@@ -2249,6 +2265,10 @@ function renderSet(){
   <p class="note">글쓰기 칸의 하루 목표입니다. 칸을 누른 때부터 끝낼 때까지(떠들기·타자기로 연 것도) 잰 시간을 이 목표와 견줍니다. 분 단위로 적으세요.</p>
   <div class="field"><label>하루 목표 (분)</label><input id="wMin" inputmode="numeric" value="${writeMinGoal()}"></div>
   <div class="btnrow"><button class="btn" id="saveWMin">목표 저장</button></div>
+  <p class="note" style="margin-top:14px">재기 시작할 때와 끝낼 때 부를 애플 단축어 이름입니다(집중 모드·음악). 비우면 부르지 않습니다. 끝낼 때 것은 탭이 닫히는 순간이 아니라 끝내기 칸에서 ‘끝’이나 ‘없던 일로’를 누를 때 부릅니다(사파리는 누른 순간에만 앱을 열어 줍니다). 입력은 넘기지 않으니 분을 묻지 않는 단축어를 쓰세요. 이름은 이 기기에만 저장됩니다.</p>
+  <div class="field"><label>시작할 때 단축어</label><input id="scStart" value="${esc(cfg.sc.start)}" placeholder="예: 글쓰기" autocapitalize="off" spellcheck="false"></div>
+  <div class="field"><label>끝낼 때 단축어</label><input id="scEnd" value="${esc(cfg.sc.end)}" placeholder="예: 글쓰기끝" autocapitalize="off" spellcheck="false"></div>
+  <div class="btnrow"><button class="btn" id="saveSc">단축어 저장</button></div>
 
   <h3>원고</h3>
   <p class="note">오늘 화면에 타이핑의 나아감(완성 전 원고에서 늘어난 글자)으로 최근 30일 하루 평균을 보이고, 이 기준선과 견줍니다. 쉰 날도 나누므로 보태기의 하루 목표보다 낮게 잡아도 됩니다. 매 단위로 적으세요(0.5매까지).</p>
@@ -2315,6 +2335,7 @@ function renderSet(){
   $('copySql').onclick=()=>navigator.clipboard.writeText(MP_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('copyIncSql').onclick=()=>navigator.clipboard.writeText(INC_SQL).then(()=>toast('복사했습니다'),()=>toast('복사하지 못했습니다'));
   $('saveIncGoal').onclick=()=>{ const v=parseFloat(String($('incGoal').value).replace(/[^\d.]/g,'')); if(!(v>0)){ toast('기준선을 만 원 단위 숫자로 적으세요'); return; } touchIncConf({goal:Math.round(v*10000)}); toast('기준선을 '+man(v*10000)+'으로 두었습니다'); renderSet(); };
+  $('saveSc').onclick=()=>{ cfg.sc={start:$('scStart').value.trim(), end:$('scEnd').value.trim()}; saveCfg(); toast(cfg.sc.start||cfg.sc.end?'단축어를 저장했습니다':'단축어를 부르지 않습니다'); };
   $('saveWMin').onclick=()=>{ const v=parseInt(String($('wMin').value).replace(/[^\d]/g,''),10); if(!(v>0&&v<=1440)){ toast('목표를 분 단위 숫자로 적으세요'); return; } touchIncConf({writeMin:v}); toast('글쓰기 하루 목표를 '+fmtMin(v)+'으로 두었습니다'); renderSet(); };
   $('saveWGoal').onclick=()=>{ const v=parseFloat(String($('wGoal').value).replace(/[^\d.]/g,'')); if(!(v>0&&v<=100)){ toast('기준선을 매 단위 숫자로 적으세요'); return; } const g=Math.round(v*2)/2||0.5; touchIncConf({writeGoal:g}); toast('원고 기준선을 '+maeTxt(g)+'매로 두었습니다'); renderSet(); };
   $('savePGoal').onclick=()=>{ const v=parseInt(String($('pGoal').value).replace(/[^\d]/g,''),10); if(!(v>0&&v<=2000)){ toast('기준선을 쪽 단위 숫자로 적으세요'); return; } touchIncConf({readGoal:v}); toast('쪽수 기준선을 '+v+'쪽으로 두었습니다'); renderSet(); renderPgStrip(); };
