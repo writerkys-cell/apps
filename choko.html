@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>초고 공방</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --panel: #ffffff;
+    --ink: #1f1d1a;
+    --muted: #6f6a62;
+    --line: #e3dfd6;
+    --accent: #8a4b2d;
+    --accent-ink: #ffffff;
+    --soft: #f1ece3;
+    --danger: #a33a2a;
+    --pin: #c98a2b;
+    --radius: 10px;
+    --font: -apple-system, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+    --serif: "Apple Myungjo", "Noto Serif KR", "Nanum Myeongjo", Georgia, serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #1b1916; --panel: #242119; --ink: #ece7dc; --muted: #a39d92;
+      --line: #3a362e; --accent: #d08a5e; --accent-ink: #1b1916; --soft: #2d2922;
+      --danger: #e07a6a; --pin: #e0b15a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1b1916; --panel: #242119; --ink: #ece7dc; --muted: #a39d92;
+    --line: #3a362e; --accent: #d08a5e; --accent-ink: #1b1916; --soft: #2d2922;
+    --danger: #e07a6a; --pin: #e0b15a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  .topbar { display: flex; align-items: center; gap: 16px; height: 56px; }
+  .topbar h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .topbar h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+  nav { display: flex; gap: 2px; margin-left: auto; overflow-x: auto; }
+  nav button { background: none; border: 0; padding: 8px 12px; border-radius: 8px; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  nav button.active { background: var(--soft); color: var(--ink); }
+  nav button .n { font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 500; }
+  main { padding: 20px 0 80px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px; }
+  .card h3 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  .hint { color: var(--muted); font-size: 13px; margin: 4px 0 10px; }
+  textarea, input[type=text], input[type=number], select {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; outline: none;
+  }
+  textarea:focus, input:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 72px; line-height: 1.65; }
+  textarea.prose { font-family: var(--serif); font-size: 15.5px; }
+  input[type=number] { width: 80px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .grow { flex: 1 1 200px; }
+  button.btn { font: inherit; font-weight: 600; border-radius: 8px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  button.btn:hover { border-color: var(--accent); }
+  button.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.btn.small { padding: 4px 10px; font-size: 13px; font-weight: 500; }
+  button.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  button.btn.ghost:hover { color: var(--ink); background: var(--soft); }
+  button.btn.danger { color: var(--danger); }
+  button.btn:disabled { opacity: .45; cursor: default; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  .item .body { flex: 1; min-width: 0; white-space: pre-wrap; word-break: break-word; }
+  .item .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .item .acts { display: flex; gap: 2px; flex-shrink: 0; }
+  .item.pinned { border-color: var(--pin); }
+  .pinbtn { color: var(--muted); }
+  .pinbtn.on { color: var(--pin); }
+  .model-text { font-family: var(--serif); font-size: 15.5px; white-space: pre-wrap; line-height: 1.75; }
+  .memo { background: var(--soft); border-radius: 6px; padding: 6px 10px; margin-top: 8px; font-size: 13.5px; }
+  .memo b { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .tag { display: inline-block; font-size: 12px; background: var(--soft); border-radius: 999px; padding: 1px 9px; margin: 6px 4px 0 0; color: var(--muted); }
+  .empty { color: var(--muted); text-align: center; padding: 28px 10px; font-size: 14px; }
+  .step { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .step .num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .step h2 { margin: 0; }
+  .picked { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+  .picked .item { padding: 7px 10px; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  pre.prompt { white-space: pre-wrap; background: var(--soft); border-radius: 8px; padding: 12px; font: 13px/1.6 ui-monospace, Menlo, monospace; max-height: 320px; overflow: auto; margin: 8px 0 0; }
+  .tcard { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-top: 12px; background: var(--panel); }
+  .tcard h3 { color: var(--ink); font-size: 15px; }
+  .modelpick { border-left: 3px solid var(--accent); padding: 8px 12px; margin: 10px 0; background: var(--soft); border-radius: 0 8px 8px 0; }
+  .modelpick .src { font-size: 12.5px; color: var(--muted); }
+  .modelpick .excerpt { font-family: var(--serif); font-size: 14.5px; margin-top: 4px; white-space: pre-wrap; max-height: 120px; overflow: hidden; position: relative; }
+  .modelpick .excerpt.open { max-height: none; }
+  .run { border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 10px; background: var(--panel); }
+  .run > summary { padding: 12px 14px; cursor: pointer; list-style: none; display: flex; gap: 10px; align-items: center; }
+  .run > summary::-webkit-details-marker { display: none; }
+  .run > summary .title { font-weight: 600; flex: 1; }
+  .run > summary .date { color: var(--muted); font-size: 12.5px; }
+  .run .inner { padding: 0 14px 14px; border-top: 1px solid var(--line); }
+  .run .inner h4 { font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  .run .story { font-family: var(--serif); white-space: pre-wrap; line-height: 1.8; font-size: 15px; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 20; }
+  .toast.show { opacity: 1; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } .topbar h1 span { display: none; } }
+  label.lbl { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  .kbd { font: 12px ui-monospace, Menlo, monospace; background: var(--soft); padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap topbar">
+    <h1>초고 공방 <span>아이디어 × 모델 단락 → 트리트먼트 → 이야기</span></h1>
+    <nav id="nav">
+      <button data-tab="ideas">아이디어<span class="n" id="n-ideas"></span></button>
+      <button data-tab="models">모델 단락<span class="n" id="n-models"></span></button>
+      <button data-tab="gen">생성</button>
+      <button data-tab="runs">기록<span class="n" id="n-runs"></span></button>
+      <button data-tab="settings">설정</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 아이디어 -->
+  <section class="tab" id="tab-ideas">
+    <div class="card">
+      <h2>아이디어 넣기</h2>
+      <p class="hint">한 줄짜리로 잘게, 많이. 랜덤 조합은 재료가 많을수록 재미있어집니다. <span class="kbd">Enter</span>로 저장, <span class="kbd">Shift+Enter</span>로 줄바꿈.</p>
+      <div class="row">
+        <textarea id="idea-input" class="grow" rows="2" placeholder="예) 장례식장에서 처음 만난 두 사람이 서로를 고인의 친구라고 믿는다"></textarea>
+        <button class="btn primary" id="idea-add">저장</button>
+      </div>
+    </div>
+    <div class="row between" style="margin-bottom:8px">
+      <input type="text" id="idea-search" placeholder="검색" style="max-width:260px">
+      <span class="hint" style="margin:0">📌 고정한 아이디어는 랜덤 선택 때 항상 포함됩니다</span>
+    </div>
+    <div class="list" id="idea-list"></div>
+  </section>
+
+  <!-- 모델 단락 -->
+  <section class="tab" id="tab-models">
+    <div class="card">
+      <h2>모델 단락 넣기</h2>
+      <p class="hint">서술 방식이 충분히 드러나는 길이로. 메모에는 "왜 이 단락인가", 즉 따라 하고 싶은 지점을 한두 줄로 적어 두면 2차 프롬프트에서 그 지점을 최우선으로 다룹니다.</p>
+      <textarea id="model-text" class="prose" rows="7" placeholder="단락 본문. 줄바꿈 그대로 보존됩니다."></textarea>
+      <label class="lbl">메모 (왜 이 단락인가)</label>
+      <textarea id="model-memo" rows="2" placeholder="예) 감정을 한 번도 직접 말하지 않고 손의 움직임으로만 전달한다. 과거형인데 지금 벌어지는 일처럼 읽힌다."></textarea>
+      <div class="cols">
+        <div><label class="lbl">출처</label><input type="text" id="model-source" placeholder="작가, 작품"></div>
+        <div><label class="lbl">태그 (쉼표로 구분, 선택)</label><input type="text" id="model-tags" placeholder="1인칭, 현재형, 사물 묘사"></div>
+      </div>
+      <div class="row" style="margin-top:12px; justify-content:flex-end">
+        <button class="btn ghost" id="model-cancel" style="display:none">취소</button>
+        <button class="btn primary" id="model-add">저장</button>
+      </div>
+    </div>
+    <div class="row between" style="margin-bottom:8px">
+      <input type="text" id="model-search" placeholder="본문·메모·출처·태그 검색" style="max-width:300px">
+    </div>
+    <div class="list" id="model-list"></div>
+  </section>
+
+  <!-- 생성 -->
+  <section class="tab" id="tab-gen">
+    <div class="card">
+      <div class="step"><span class="num">1</span><h2>아이디어 뽑기 → 1차 프롬프트</h2></div>
+      <div class="row">
+        <label>개수 <input type="number" id="gen-count" min="1" max="20" value="4"></label>
+        <button class="btn primary" id="gen-pick">랜덤으로 뽑기</button>
+        <span class="hint" style="margin:0" id="gen-pick-hint"></span>
+      </div>
+      <div class="picked" id="gen-picked"></div>
+      <div class="row" id="gen-p1-row" style="display:none">
+        <button class="btn" id="gen-copy-p1">1차 프롬프트 복사</button>
+        <details class="grow"><summary>프롬프트 미리보기</summary><pre class="prompt" id="gen-p1-preview"></pre></details>
+      </div>
+    </div>
+
+    <div class="card" id="gen-step2" style="display:none">
+      <div class="step"><span class="num">2</span><h2>클로드의 답(트리트먼트 셋) 붙여넣기</h2></div>
+      <textarea id="gen-paste" rows="6" placeholder="클로드가 준 답 전체를 여기에 붙여넣고 '나누기'를 누르세요. '## 트리트먼트 1' 같은 제목이나 --- 구분선을 기준으로 셋으로 나눕니다."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="gen-split">세 트리트먼트로 나누기</button>
+        <span class="hint" style="margin:0">나눈 뒤에도 각 칸은 직접 고칠 수 있습니다.</span>
+      </div>
+    </div>
+
+    <div id="gen-treatments"></div>
+
+    <div class="card" id="gen-step4" style="display:none">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0">기록에 저장</h2>
+          <p class="hint" style="margin:2px 0 0">어떤 아이디어와 모델 단락에서 어떤 이야기가 나왔는지 묶어서 남깁니다.</p>
+        </div>
+        <div class="row">
+          <button class="btn ghost danger" id="gen-reset">새로 시작</button>
+          <button class="btn primary" id="gen-save">저장</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 기록 -->
+  <section class="tab" id="tab-runs">
+    <div id="run-list"></div>
+  </section>
+
+  <!-- 설정 -->
+  <section class="tab" id="tab-settings">
+    <div class="card">
+      <h2>1차 프롬프트 템플릿</h2>
+      <p class="hint">쓸 수 있는 자리표시자: <span class="kbd">{{n}}</span> 아이디어 개수, <span class="kbd">{{ideas}}</span> 번호 매긴 아이디어 목록</p>
+      <textarea id="set-p1" rows="14"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" id="set-p1-reset">기본값으로</button></div>
+    </div>
+    <div class="card">
+      <h2>2차 프롬프트 템플릿</h2>
+      <p class="hint">자리표시자: <span class="kbd">{{model}}</span> 단락 본문, <span class="kbd">{{source}}</span> 출처, <span class="kbd">{{memo}}</span> 메모, <span class="kbd">{{memo_block}}</span> 메모가 있을 때만 들어가는 블록, <span class="kbd">{{treatment}}</span> 트리트먼트</p>
+      <textarea id="set-p2" rows="18"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn" id="set-p2-reset">기본값으로</button></div>
+    </div>
+    <div class="card">
+      <h2>백업</h2>
+      <p class="hint">모든 데이터는 이 브라우저 안에만 저장됩니다. 가끔 내보내기로 파일을 받아 두세요.</p>
+      <div class="row">
+        <button class="btn" id="set-export">JSON으로 내보내기</button>
+        <button class="btn" id="set-import">JSON 불러오기 (현재 데이터 대체)</button>
+        <input type="file" id="set-import-file" accept="application/json" style="display:none">
+        <span class="grow"></span>
+        <label class="hint" style="margin:0">테마
+          <select id="set-theme" style="width:auto; padding:4px 8px; margin-left:6px">
+            <option value="">시스템</option><option value="light">밝게</option><option value="dark">어둡게</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  // ---------- 기본 프롬프트 ----------
+  const DEFAULT_P1 = `당신은 소설가의 창작 파트너입니다. 아래는 제가 모아 둔 소설 아이디어 메모 가운데 무작위로 뽑은 {{n}}개입니다.
+
+[아이디어]
+{{ideas}}
+
+이 아이디어들을 재료로 서로 다른 트리트먼트 세 가지를 써 주세요.
+
+조건:
+- 각 트리트먼트는 아이디어를 모두 쓸 필요는 없지만, 최소 두 개는 핵심 요소로 결합해야 합니다.
+- 세 트리트먼트는 장르, 주인공의 욕망, 결말의 방향 가운데 최소 하나가 서로 달라야 합니다. 같은 이야기의 변주 세 개가 되지 않게 해 주세요.
+- 각 트리트먼트는 400~700자. 인물, 상황, 갈등, 사건의 흐름, 결말의 방향이 드러나야 합니다. 문체를 꾸미지 말고 사건과 관계 위주로 정리해 주세요.
+- 형식: "## 트리트먼트 1", "## 트리트먼트 2", "## 트리트먼트 3" 제목 아래 본문. 그 밖의 말은 덧붙이지 마세요.`;
+
+  const DEFAULT_P2 = `아래 [모델 단락]은 제가 서술 방식의 본보기로 삼는 소설의 한 부분입니다.{{memo_block}}
+
+[모델 단락]{{source}}
+{{model}}
+
+[트리트먼트]
+{{treatment}}
+
+작업 순서:
+1. 먼저 모델 단락의 서술 방식을 분석하세요. 시점과 서술자의 위치, 시제, 문장 길이와 리듬, 서술자와 인물 사이의 거리, 묘사·사건·대화의 비중, 정보를 드러내거나 숨기는 방식을 봅니다. 작가의 메모가 있으면 그 지점을 최우선으로 다루세요. "## 분석" 제목 아래 300자 안팎으로.
+2. 그 다음 "## 이야기" 제목 아래, 트리트먼트의 내용을 그 서술 방식으로 써 주세요. 1500~2500자. 모델 단락의 문장, 어휘, 소재, 인물을 베끼지 말고 서술하는 방식만 가져오세요. 트리트먼트 전체를 요약하지 말고, 그 서술 방식이 가장 잘 살아나는 장면에서 시작해 이야기를 들려주세요.`;
+
+  const KEY = 'chogo-app-v1';
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const $ = id => document.getElementById(id);
+
+  // ---------- 상태 ----------
+  let S = { ideas: [], models: [], runs: [], settings: { count: 4, p1: DEFAULT_P1, p2: DEFAULT_P2, theme: '' }, draft: null };
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) { const d = JSON.parse(raw); S = { ...S, ...d, settings: { ...S.settings, ...(d.settings || {}) } }; }
+  } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('저장 실패: 브라우저 저장소를 쓸 수 없습니다'); } };
+
+  // ---------- 공용 ----------
+  let toastT;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1800); }
+  async function copy(text) {
+    try { await navigator.clipboard.writeText(text); toast('복사했습니다'); }
+    catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); toast('복사했습니다'); }
+  }
+  const fmtDate = ts => { const d = new Date(ts); const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}.${p(d.getMonth()+1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const sample = (arr, n) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
+  const applyTheme = () => { const t = S.settings.theme; if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; };
+
+  // ---------- 탭 ----------
+  function showTab(name) {
+    document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+    document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+    try { localStorage.setItem(KEY + ':tab', name); } catch (e) {}
+    if (name === 'gen') renderGen();
+    if (name === 'runs') renderRuns();
+  }
+  $('nav').addEventListener('click', e => { const b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
+  function updateCounts() {
+    $('n-ideas').textContent = S.ideas.length || '';
+    $('n-models').textContent = S.models.length || '';
+    $('n-runs').textContent = S.runs.length || '';
+  }
+
+  // ---------- 아이디어 ----------
+  function addIdea() {
+    const t = $('idea-input').value.trim(); if (!t) return;
+    S.ideas.unshift({ id: uid(), text: t, pinned: false, createdAt: Date.now() });
+    $('idea-input').value = ''; save(); renderIdeas(); toast('아이디어 저장');
+  }
+  $('idea-add').onclick = addIdea;
+  $('idea-input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); addIdea(); } });
+  $('idea-search').addEventListener('input', renderIdeas);
+  function renderIdeas() {
+    updateCounts();
+    const q = $('idea-search').value.trim().toLowerCase();
+    const list = S.ideas.filter(i => !q || i.text.toLowerCase().includes(q));
+    const el = $('idea-list');
+    if (!list.length) { el.innerHTML = `<div class="empty">${S.ideas.length ? '검색 결과가 없습니다' : '아직 아이디어가 없습니다. 위에서 한 줄씩 넣어 보세요.'}</div>`; return; }
+    el.innerHTML = list.map(i => `
+      <div class="item ${i.pinned ? 'pinned' : ''}" data-id="${i.id}">
+        <div class="body">${esc(i.text)}<div class="meta">${fmtDate(i.createdAt)}</div></div>
+        <div class="acts">
+          <button class="btn small ghost pinbtn ${i.pinned ? 'on' : ''}" data-act="pin" title="랜덤 선택에 항상 포함">📌</button>
+          <button class="btn small ghost" data-act="edit" title="수정">✎</button>
+          <button class="btn small ghost danger" data-act="del" title="삭제">✕</button>
+        </div>
+      </div>`).join('');
+  }
+  $('idea-list').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const id = b.closest('.item').dataset.id; const it = S.ideas.find(i => i.id === id); if (!it) return;
+    if (b.dataset.act === 'pin') { it.pinned = !it.pinned; }
+    else if (b.dataset.act === 'edit') { const v = prompt('아이디어 수정', it.text); if (v === null) return; it.text = v.trim() || it.text; }
+    else if (b.dataset.act === 'del') { if (!confirm('이 아이디어를 삭제할까요?')) return; S.ideas = S.ideas.filter(i => i.id !== id); }
+    save(); renderIdeas();
+  });
+
+  // ---------- 모델 단락 ----------
+  let editingModel = null;
+  function modelFormReset() {
+    editingModel = null; ['model-text','model-memo','model-source','model-tags'].forEach(id => $(id).value = '');
+    $('model-add').textContent = '저장'; $('model-cancel').style.display = 'none';
+  }
+  $('model-cancel').onclick = modelFormReset;
+  $('model-add').onclick = () => {
+    const text = $('model-text').value.trim(); if (!text) { toast('단락 본문을 넣어 주세요'); return; }
+    const memo = $('model-memo').value.trim(), source = $('model-source').value.trim();
+    const tags = $('model-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    if (editingModel) { const m = S.models.find(x => x.id === editingModel); Object.assign(m, { text, memo, source, tags }); toast('수정했습니다'); }
+    else { S.models.unshift({ id: uid(), text, memo, source, tags, createdAt: Date.now() }); toast('모델 단락 저장'); }
+    save(); modelFormReset(); renderModels();
+  };
+  $('model-search').addEventListener('input', renderModels);
+  function renderModels() {
+    updateCounts();
+    const q = $('model-search').value.trim().toLowerCase();
+    const list = S.models.filter(m => !q || [m.text, m.memo, m.source, (m.tags||[]).join(' ')].join(' ').toLowerCase().includes(q));
+    const el = $('model-list');
+    if (!list.length) { el.innerHTML = `<div class="empty">${S.models.length ? '검색 결과가 없습니다' : '아직 모델 단락이 없습니다.'}</div>`; return; }
+    el.innerHTML = list.map(m => `
+      <div class="item" data-id="${m.id}">
+        <div class="body">
+          <div class="model-text">${esc(m.text)}</div>
+          ${m.memo ? `<div class="memo"><b>메모</b>${esc(m.memo)}</div>` : ''}
+          <div class="meta">${m.source ? esc(m.source) + ' · ' : ''}${fmtDate(m.createdAt)}</div>
+          ${(m.tags||[]).map(t => `<span class="tag">${esc(t)}</span>`).join('')}
+        </div>
+        <div class="acts">
+          <button class="btn small ghost" data-act="edit" title="수정">✎</button>
+          <button class="btn small ghost danger" data-act="del" title="삭제">✕</button>
+        </div>
+      </div>`).join('');
+  }
+  $('model-list').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const id = b.closest('.item').dataset.id; const m = S.models.find(x => x.id === id); if (!m) return;
+    if (b.dataset.act === 'edit') {
+      editingModel = id; $('model-text').value = m.text; $('model-memo').value = m.memo || ''; $('model-source').value = m.source || ''; $('model-tags').value = (m.tags||[]).join(', ');
+      $('model-add').textContent = '수정 저장'; $('model-cancel').style.display = ''; window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (b.dataset.act === 'del') { if (!confirm('이 모델 단락을 삭제할까요?')) return; S.models = S.models.filter(x => x.id !== id); save(); renderModels(); }
+  });
+
+  // ---------- 프롬프트 조립 ----------
+  function buildP1(ideas) {
+    return S.settings.p1.replace(/\{\{n\}\}/g, ideas.length).replace(/\{\{ideas\}\}/g, ideas.map((t, i) => `${i + 1}. ${t}`).join('\n'));
+  }
+  function buildP2(model, treatment) {
+    const memoBlock = model.memo ? `\n그 아래 [작가의 메모]는 제가 이 단락에서 주목하는 점입니다.\n\n[작가의 메모]\n${model.memo}\n` : '';
+    return S.settings.p2
+      .replace(/\{\{memo_block\}\}/g, memoBlock)
+      .replace(/\{\{memo\}\}/g, model.memo || '')
+      .replace(/\{\{source\}\}/g, model.source ? ` (출처: ${model.source})` : '')
+      .replace(/\{\{model\}\}/g, model.text)
+      .replace(/\{\{treatment\}\}/g, treatment);
+  }
+  function splitTreatments(text) {
+    const re = /^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?[ \t]*(?:트리트먼트|treatment)[ \t]*(?:[1-3]|[①②③]|하나|둘|셋)\b[^\n]*$/gim;
+    const idx = []; let m;
+    while ((m = re.exec(text))) idx.push({ start: m.index, end: m.index + m[0].length });
+    let parts = [];
+    if (idx.length >= 3) {
+      for (let i = 0; i < idx.length; i++) parts.push(text.slice(idx[i].end, i + 1 < idx.length ? idx[i + 1].start : undefined).trim());
+    } else {
+      parts = text.split(/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/m).map(s => s.trim()).filter(Boolean);
+    }
+    while (parts.length < 3) parts.push('');
+    return parts.slice(0, 3);
+  }
+
+  // ---------- 생성 ----------
+  function draft() { if (!S.draft) S.draft = { ideaIds: [], treatments: [{ text: '', modelId: null, story: '' }, { text: '', modelId: null, story: '' }, { text: '', modelId: null, story: '' }], paste: '' }; return S.draft; }
+  const ideaById = id => S.ideas.find(i => i.id === id);
+  const modelById = id => S.models.find(m => m.id === id);
+
+  $('gen-count').value = S.settings.count;
+  $('gen-count').addEventListener('change', () => { S.settings.count = Math.max(1, parseInt($('gen-count').value) || 1); save(); });
+
+  function pickIdeas() {
+    const n = Math.max(1, parseInt($('gen-count').value) || 1);
+    const pinned = S.ideas.filter(i => i.pinned), rest = S.ideas.filter(i => !i.pinned);
+    if (!S.ideas.length) { toast('아이디어가 없습니다'); return; }
+    const chosen = pinned.slice(0, n).concat(sample(rest, Math.max(0, n - pinned.length)));
+    const d = draft(); d.ideaIds = chosen.map(i => i.id); save(); renderGen();
+  }
+  $('gen-pick').onclick = pickIdeas;
+  $('gen-copy-p1').onclick = () => { const d = draft(); copy(buildP1(d.ideaIds.map(id => ideaById(id)?.text).filter(Boolean))); };
+  $('gen-paste').addEventListener('input', () => { draft().paste = $('gen-paste').value; save(); });
+  $('gen-split').onclick = () => {
+    const d = draft(); const parts = splitTreatments($('gen-paste').value);
+    if (!parts.some(Boolean)) { toast('나눌 내용이 없습니다'); return; }
+    parts.forEach((p, i) => { d.treatments[i].text = p; if (!d.treatments[i].modelId) d.treatments[i].modelId = randomModelId([]); });
+    save(); renderGen();
+    toast(parts.filter(Boolean).length < 3 ? '셋으로 나누지 못했습니다. 직접 나눠 주세요.' : '셋으로 나눴습니다');
+  };
+  function randomModelId(exclude) {
+    const pool = S.models.filter(m => !exclude.includes(m.id)); const src = pool.length ? pool : S.models;
+    return src.length ? sample(src, 1)[0].id : null;
+  }
+  $('gen-reset').onclick = () => { if (!confirm('현재 작업 내용을 지우고 새로 시작할까요? (기록에 저장한 것은 남습니다)')) return; S.draft = null; save(); renderGen(); };
+  $('gen-save').onclick = () => {
+    const d = draft();
+    if (!d.treatments.some(t => t.text.trim())) { toast('저장할 트리트먼트가 없습니다'); return; }
+    const run = {
+      id: uid(), createdAt: Date.now(),
+      ideas: d.ideaIds.map(id => ideaById(id)).filter(Boolean).map(i => ({ id: i.id, text: i.text })),
+      treatments: d.treatments.map(t => { const m = modelById(t.modelId); return { text: t.text, story: t.story, model: m ? { id: m.id, text: m.text, memo: m.memo, source: m.source } : null }; }),
+    };
+    S.runs.unshift(run); S.draft = null; save(); renderGen(); updateCounts(); toast('기록에 저장했습니다'); showTab('runs');
+  };
+
+  function renderGen() {
+    const d = draft();
+    const ideas = d.ideaIds.map(id => ideaById(id)).filter(Boolean);
+    $('gen-pick-hint').textContent = S.ideas.length ? `아이디어 ${S.ideas.length}개 중 (고정 ${S.ideas.filter(i => i.pinned).length}개)` : '아이디어 탭에서 먼저 재료를 넣어 주세요';
+    $('gen-picked').innerHTML = ideas.map((i, k) => `<div class="item ${i.pinned ? 'pinned' : ''}" data-id="${i.id}"><div class="body">${k + 1}. ${esc(i.text)}</div><div class="acts"><button class="btn small ghost" data-act="reroll" title="이것만 다시 뽑기">🔁</button></div></div>`).join('');
+    $('gen-p1-row').style.display = ideas.length ? '' : 'none';
+    if (ideas.length) $('gen-p1-preview').textContent = buildP1(ideas.map(i => i.text));
+    $('gen-step2').style.display = ideas.length ? '' : 'none';
+    if ($('gen-paste').value !== (d.paste || '')) $('gen-paste').value = d.paste || '';
+
+    const hasT = d.treatments.some(t => t.text.trim());
+    const wrap = $('gen-treatments');
+    if (!hasT) { wrap.innerHTML = ''; $('gen-step4').style.display = 'none'; return; }
+    wrap.innerHTML = d.treatments.map((t, i) => {
+      const m = modelById(t.modelId);
+      return `<div class="card tcard" data-i="${i}">
+        <div class="step"><span class="num">3</span><h3>트리트먼트 ${i + 1} → 2차 프롬프트</h3></div>
+        <textarea class="t-text" rows="6">${esc(t.text)}</textarea>
+        <div class="modelpick">
+          <div class="row between">
+            <div class="src">모델 단락${m ? (m.source ? ' · ' + esc(m.source) : '') : ''}</div>
+            <div class="row"><button class="btn small" data-act="remodel">🔁 다른 단락 뽑기</button><button class="btn small ghost" data-act="toggle">펼치기</button></div>
+          </div>
+          ${m ? `<div class="excerpt">${esc(m.text)}</div>${m.memo ? `<div class="memo"><b>메모</b>${esc(m.memo)}</div>` : ''}` : `<div class="hint" style="margin:6px 0 0">모델 단락이 없습니다. 모델 단락 탭에서 먼저 넣어 주세요.</div>`}
+        </div>
+        <div class="row">
+          <button class="btn primary" data-act="copy2" ${m && t.text.trim() ? '' : 'disabled'}>2차 프롬프트 복사</button>
+          <details class="grow"><summary>프롬프트 미리보기</summary><pre class="prompt">${m ? esc(buildP2(m, t.text)) : ''}</pre></details>
+        </div>
+        <label class="lbl">클로드가 들려준 이야기 (분석 포함 전체를 붙여넣어도 됩니다)</label>
+        <textarea class="t-story prose" rows="8" placeholder="결과를 여기에">${esc(t.story)}</textarea>
+      </div>`;
+    }).join('');
+    $('gen-step4').style.display = '';
+  }
+  $('gen-picked').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act="reroll"]'); if (!b) return;
+    const d = draft(); const id = b.closest('.item').dataset.id;
+    const pool = S.ideas.filter(i => !d.ideaIds.includes(i.id));
+    if (!pool.length) { toast('더 뽑을 아이디어가 없습니다'); return; }
+    d.ideaIds[d.ideaIds.indexOf(id)] = sample(pool, 1)[0].id; save(); renderGen();
+  });
+  $('gen-treatments').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    const card = b.closest('.tcard'); const i = +card.dataset.i; const d = draft(); const t = d.treatments[i];
+    if (b.dataset.act === 'remodel') { const others = d.treatments.filter((_, k) => k !== i).map(x => x.modelId).filter(Boolean); t.modelId = randomModelId(others.concat(t.modelId ? [t.modelId] : [])); save(); renderGen(); }
+    else if (b.dataset.act === 'toggle') { const ex = card.querySelector('.excerpt'); if (ex) { ex.classList.toggle('open'); b.textContent = ex.classList.contains('open') ? '접기' : '펼치기'; } }
+    else if (b.dataset.act === 'copy2') { const m = modelById(t.modelId); if (m) copy(buildP2(m, t.text)); }
+  });
+  $('gen-treatments').addEventListener('input', e => {
+    const card = e.target.closest('.tcard'); if (!card) return; const t = draft().treatments[+card.dataset.i];
+    if (e.target.classList.contains('t-text')) { t.text = e.target.value; const m = modelById(t.modelId); const pre = card.querySelector('pre.prompt'); if (m && pre) pre.textContent = buildP2(m, t.text); card.querySelector('[data-act="copy2"]').disabled = !(m && t.text.trim()); }
+    if (e.target.classList.contains('t-story')) t.story = e.target.value;
+    save();
+  });
+
+  // ---------- 기록 ----------
+  function renderRuns() {
+    updateCounts();
+    const el = $('run-list');
+    if (!S.runs.length) { el.innerHTML = '<div class="empty">아직 기록이 없습니다. 생성 탭에서 한 바퀴 돌려 보세요.</div>'; return; }
+    el.innerHTML = S.runs.map(r => {
+      const title = r.ideas.slice(0, 3).map(i => i.text.length > 24 ? i.text.slice(0, 24) + '…' : i.text).join(' / ') + (r.ideas.length > 3 ? ` 외 ${r.ideas.length - 3}` : '');
+      return `<details class="run" data-id="${r.id}">
+        <summary><span class="title">${esc(title) || '(아이디어 없음)'}</span><span class="date">${fmtDate(r.createdAt)}</span><button class="btn small ghost danger" data-act="del">✕</button></summary>
+        <div class="inner">
+          <h4>아이디어</h4>
+          <div>${r.ideas.map((i, k) => `${k + 1}. ${esc(i.text)}`).join('<br>')}</div>
+          ${r.treatments.map((t, i) => t.text.trim() ? `
+            <h4>트리트먼트 ${i + 1}</h4>
+            <div style="white-space:pre-wrap">${esc(t.text)}</div>
+            ${t.model ? `<div class="modelpick" style="margin-top:8px"><div class="src">모델 단락${t.model.source ? ' · ' + esc(t.model.source) : ''}</div><div class="excerpt open" style="max-height:none">${esc(t.model.text)}</div>${t.model.memo ? `<div class="memo"><b>메모</b>${esc(t.model.memo)}</div>` : ''}</div>` : ''}
+            ${t.story.trim() ? `<h4>이야기 ${i + 1} <button class="btn small ghost" data-act="copystory" data-i="${i}">복사</button></h4><div class="story">${esc(t.story)}</div>` : ''}` : '').join('')}
+          <div class="row" style="margin-top:14px"><button class="btn small" data-act="export1">이 기록을 텍스트로 복사</button></div>
+        </div>
+      </details>`;
+    }).join('');
+  }
+  $('run-list').addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    e.preventDefault();
+    const id = b.closest('.run').dataset.id; const r = S.runs.find(x => x.id === id); if (!r) return;
+    if (b.dataset.act === 'del') { if (!confirm('이 기록을 삭제할까요?')) return; S.runs = S.runs.filter(x => x.id !== id); save(); renderRuns(); }
+    else if (b.dataset.act === 'copystory') copy(r.treatments[+b.dataset.i].story);
+    else if (b.dataset.act === 'export1') {
+      const txt = [`# ${fmtDate(r.createdAt)}`, '', '## 아이디어', ...r.ideas.map((i, k) => `${k + 1}. ${i.text}`), '',
+        ...r.treatments.flatMap((t, i) => t.text.trim() ? [`## 트리트먼트 ${i + 1}`, t.text, '', t.model ? `### 모델 단락${t.model.source ? ' (' + t.model.source + ')' : ''}\n${t.model.text}${t.model.memo ? '\n\n메모: ' + t.model.memo : ''}` : '', '', t.story.trim() ? `### 이야기 ${i + 1}\n${t.story}` : '', ''] : [])].join('\n');
+      copy(txt);
+    }
+  });
+
+  // ---------- 설정 ----------
+  $('set-p1').value = S.settings.p1; $('set-p2').value = S.settings.p2; $('set-theme').value = S.settings.theme || '';
+  $('set-p1').addEventListener('input', () => { S.settings.p1 = $('set-p1').value; save(); });
+  $('set-p2').addEventListener('input', () => { S.settings.p2 = $('set-p2').value; save(); });
+  $('set-p1-reset').onclick = () => { if (!confirm('1차 프롬프트를 기본값으로 되돌릴까요?')) return; S.settings.p1 = DEFAULT_P1; $('set-p1').value = DEFAULT_P1; save(); };
+  $('set-p2-reset').onclick = () => { if (!confirm('2차 프롬프트를 기본값으로 되돌릴까요?')) return; S.settings.p2 = DEFAULT_P2; $('set-p2').value = DEFAULT_P2; save(); };
+  $('set-theme').addEventListener('change', () => { S.settings.theme = $('set-theme').value; save(); applyTheme(); });
+  $('set-export').onclick = () => {
+    const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `chogo-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $('set-import').onclick = () => $('set-import-file').click();
+  $('set-import-file').addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const d = JSON.parse(await f.text());
+      if (!d || !Array.isArray(d.ideas) || !Array.isArray(d.models)) throw new Error('형식');
+      if (!confirm(`아이디어 ${d.ideas.length}개, 모델 단락 ${d.models.length}개, 기록 ${(d.runs||[]).length}개를 불러옵니다. 현재 데이터는 대체됩니다. 계속할까요?`)) return;
+      S = { ideas: d.ideas, models: d.models, runs: d.runs || [], settings: { ...S.settings, ...(d.settings || {}) }, draft: d.draft || null };
+      save(); location.reload();
+    } catch (err) { toast('불러오지 못했습니다. 이 앱에서 내보낸 JSON 파일인지 확인해 주세요.'); }
+    e.target.value = '';
+  });
+
+  // ---------- 시작 ----------
+  applyTheme(); renderIdeas(); renderModels(); updateCounts();
+  let last = 'ideas'; try { last = localStorage.getItem(KEY + ':tab') || 'ideas'; } catch (e) {}
+  showTab(last);
+})();
+</script>
+</body>
+</html>
