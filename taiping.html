@@ -980,7 +980,7 @@ h2:first-child{margin-top:0}
 
       <h2>400자</h2>
       <div class="row"><label for="tpStep">한 번에 늘리는 분량</label><input type="number" id="tpStep" min="50" max="5000" step="50"><span class="unit">자</span></div>
-      <p class="note">교열 탭 여백의 숫자를 누르면 그 원고가 400자 탭으로 옵니다. 원고의 글이 왼쪽에 놓이고, 목표는 그 길이보다 큰 배수 가운데 가장 작은 수입니다. 1,423자면 1,600자, 꼭 1,600자면 2,000자. 목표를 채워 보내면 쓴 글이 교열 원고의 본문이 되고, 스크리브너에 아직 없는 글로 표시됩니다. 쓰는 칸 아래 목표 옆 화살표로 목표를 한 단계씩 낮출 수 있습니다. 판본은 원고마다 따로 쌓이고, 교열·아이폰·곁에서 원고가 바뀌면 그 글이 새 판본으로 들어옵니다.</p>
+      <p class="note">이 분량은 개정 작품에만 씁니다. 초고 작품의 원고는 목표 없이 쓰고 아무 때나 보냅니다. 교열 탭 여백의 숫자를 누르면 그 원고가 400자 탭으로 옵니다. 원고의 글이 왼쪽에 놓이고, 목표는 그 길이보다 큰 배수 가운데 가장 작은 수입니다. 1,423자면 1,600자, 꼭 1,600자면 2,000자. 목표를 채워 보내면 쓴 글이 교열 원고의 본문이 되고, 스크리브너에 아직 없는 글로 표시됩니다. 쓰는 칸 아래 목표 옆 화살표로 목표를 한 단계씩 낮출 수 있습니다. 판본은 원고마다 따로 쌓이고, 교열·아이폰·곁에서 원고가 바뀌면 그 글이 새 판본으로 들어옵니다.</p>
       <div class="row"><label for="ifz">쓰는 칸 글자 크기</label><input type="number" id="ifz" min="12" max="28" step="1"><span class="unit">px</span></div>
       <div class="row"><label for="ilh">쓰는 칸 줄 간격</label><input type="number" id="ilh" min="1.2" max="3" step="0.1"><span class="unit">배</span></div>
       <div class="row"><label for="tpDim">한 줄씩 쓰기에서 쓰지 않는 줄 흐리기</label><input type="checkbox" id="tpDim"></div>
@@ -1095,12 +1095,16 @@ function newMs(title, workId, order){
            doneAt:null, sentAt:null, editedAt:null, focusMs:0, workId:workId || null, order:order || 1 };
 }
 /* 작품 — 2,667자 원고(조각)들을 묶는 한 편의 글. 종류와 목표 매수를 가지고, 컴파일한 날 완성한다 */
-var KINDS = ["장편","중편","단편","산문","청탁","개정"];
+/* 종류 — 초고와 개정 둘(2026년 11월 14일). 예전의 장편·중편·단편·산문·청탁·정하지 않음은 모두 초고가 되고, 예전 종류는 작품의 oldKind에 남는다.
+   초고 — 장·부 없이 원고를 순서와 상관없이 쌓는다. 400자 탭은 길이 제한 없이 쓰고, 교열 창은 지금 원고 하나만 보인다.
+   개정 — 예전 그대로(부·장, 400자씩, 교열 창에 작품의 모든 원고) */
+var KINDS = ["초고","개정"];
+function normKind(k){ return k === "개정" ? "개정" : "초고"; }
 var REV_OPTS = [["개정", "개정 · 있던 글을 고침"], ["새 글", "새 글"]];
 /* 스스로 써서 쌓는 글이 아닌 종류 — 원고 평균·예상·효율에서는 뺀다(하루 기록에는 넣는다) */
 var NOT_OWN = { "청탁":1, "개정":1 };
 /* 계산에 쓰는 종류 — 개정 작품의 새 글은 '새 글의 종류'(기본 산문)로 센다. 책 고치기는 원고가 아니다 */
-function effKind(m){ var w = workOf(m); if(!w) return ""; if(isRevMs(m)) return "개정"; return w.kind === "개정" ? (w.newKind || "산문") : (w.kind || ""); }
+function effKind(m){ var w = workOf(m); if(!w) return ""; if(isRevMs(m)) return "개정"; return w.kind === "개정" ? "초고" : (w.kind || ""); }
 /* 개정 작품의 원고 — '개정'(있던 글을 고침)과 '새 글'. 개정 원고와 합친 장 원고는 원고 계산(순증·나아감·도장·평균·예상)에서 빠지고 시간만 든다 */
 function isRevMs(m){ var w = m ? workOf(m) : null; return !!(w && w.kind === "개정" && (m.merged || m.rev === "개정")); }
 function revName(m){ return isRevMs(m) ? "개정" : "새 글"; }
@@ -1115,7 +1119,7 @@ function bookWork(id){ return /^book:/.test(id || "") ? workById(id.slice(5)) : 
 /* 교열 — 원고가 아니라 작품에 쌓는 시간. 기록장의 ms_id는 gyo:<작품 id> */
 function gyoWork(id){ return /^gyo:/.test(id || "") ? workById(id.slice(4)) : null; }
 function newWork(title, kind, targetMae){
-  return { id:uid(), title:title, kind:kind || "", targetMae:targetMae || null, createdAt:Date.now(),
+  return { id:uid(), title:title, kind:normKind(kind), targetMae:targetMae || null, createdAt:Date.now(),
            units:null, due:"", doneDue:"",
            finishedAt:null, finalChars:null, sumChars:null,
            actMae:null, acts:[],              /* 장편·중편 — 장의 참고 매수(actMae). acts는 예전 막 기록(쓰지 않음) */
@@ -1125,7 +1129,7 @@ function newWork(title, kind, targetMae){
 }
 /* ---------- 장 — 장편·중편. 이름과 순서를 가진 그릇. 장 완성 때 그 장의 원고들을 원고 하나로 합친다 ---------- */
 /* 장(과 부)을 쓰는 작품 — 장편·중편·개정. 장 완성은 셋 다, 초고 완성·장 가늠은 장편·중편만(isNovel) */
-function hasChapters(w){ return !!w && (w.kind === "장편" || w.kind === "중편" || w.kind === "개정"); }
+function hasChapters(w){ return !!w && w.kind === "개정"; }   /* 초고는 장·부를 쓰지 않는다 — 예전 장편·중편의 장 자료는 지우지 않고 감춰 둔다 */
 function isNovel(w){ return !!w && (w.kind === "장편" || w.kind === "중편"); }
 /* 단편·산문 — 초고 완성 때 원고들을 하나로 합친다 */
 function mergesDraft(w){ return !!w && (w.kind === "단편" || w.kind === "산문"); }
@@ -1337,6 +1341,7 @@ function load(){
   });
   d.works.forEach(function(w){
     if(w.kind === "칼럼") w.kind = "청탁";
+    if(w.kind !== "개정" && w.kind !== "초고"){ w.oldKind = w.kind || ""; w.kind = "초고"; }   /* 2026년 11월 14일 — 초고·개정 둘로 */
     if(!Array.isArray(w.acts)) w.acts = [];
     if(!Array.isArray(w.chapters)) w.chapters = [];
     if(!Array.isArray(w.parts)) w.parts = [];
@@ -1836,7 +1841,8 @@ function renderPrev(keepScroll){
   /* 교열 칸이 열려 있으면 다시 그리지 않는다 — 칸을 닫을 때 한 번에 그린다 */
   if(gy && gy.box && elPrev.contains(gy.box)){ gy.pending = true; return; }
   /* 작품의 원고들을 순서대로 이어, 원고 사이는 한 줄만 띄운다. 여백의 작은 숫자가 원고의 경계 */
-  var w = workOf(cur()), us = w ? unitsOf(w) : [cur()], st = elPrev.scrollTop;
+  /* 초고는 지금 원고 하나만 — 개정은 작품의 원고들을 다 잇는다 */
+  var w = workOf(cur()), us = w && isRevision(w) ? unitsOf(w) : [cur()], st = elPrev.scrollTop;
   var any = us.some(function(m){ return lines(m).length || hasReview(m); });
   if(!any){
     elPrev.classList.add("empty");
@@ -1848,7 +1854,7 @@ function renderPrev(keepScroll){
   us.forEach(function(m, ui){
     var list = lines(m);
     /* 여백의 숫자 — 합친 장 원고는 'n장', 나머지는 차례 */
-    var mc = m.merged === "ch" && w ? chById(w, m.chId) : null, lab = mc ? chNo(w, mc) + "장" : String(ui + 1);
+    var mc = m.merged === "ch" && w && hasChapters(w) ? chById(w, m.chId) : null, lab = mc ? chNo(w, mc) + "장" : String(w && !isRevision(w) ? unitsOf(w).indexOf(m) + 1 : ui + 1);
     if(ui > 0){ var gp = document.createElement("p"); gp.className = "gap"; gp.textContent = "\u200b"; elPrev.appendChild(gp); }
     if(gy && gy.id === m.id){ elPrev.appendChild(gyBox(m, lab)); return; }
     if(m.phoneAt){
@@ -2002,7 +2008,7 @@ function jumpMenu(anchor, list, us, kind){
   document.addEventListener("keydown", jumpKey, true);
 }
 function renderStrip(){
-  var w = workOf(cur()), us = w ? unitsOf(w) : [cur()];
+  var w = workOf(cur()), us = w && isRevision(w) ? unitsOf(w) : [cur()];
   elSelInfo.innerHTML = "";
   elSelInfo.classList.remove("sel");
   var fn = us.filter(finished).length, pn = us.filter(function(m){ return m.phoneAt; }).length;
@@ -2325,7 +2331,7 @@ function loadTteo(){
 }
 function tteoOf(w){ return (TTEO && w && TTEO.byWork[w.id]) || 0; }
 /* 떠들기 시간이 들어가는 장르 — 개정 작품은 새 글의 종류로 */
-function tteoKind(w){ return !w ? "" : w.kind === "개정" ? (w.newKind || "산문") : (w.kind || ""); }
+function tteoKind(w){ return !w ? "" : w.kind === "개정" ? "초고" : (w.kind || ""); }
 /* 떠들기까지 넣은 1매당 시간(분) — 떠들기 시간이 없으면 null */
 function withTteo(ms, extra, chars){ return extra > 0 && ms >= 0 && chars > 0 ? (ms + extra) / 60000 / (chars / 200) : null; }
 /* 같은 장르에서 완성한 원고들의 1매당 시간에, 그 원고들의 작품에 이어 둔 떠들기 시간을 더해서 */
@@ -3571,7 +3577,7 @@ function patternBlock(){
       '<td>' + (t && p ? m1(p / hrs3) + '쪽' : '—') + '</td><td>' + (t && p ? '1쪽에 ' + Math.round(t / 60000 / p) + '분' : '—') + '</td>' +
       (hasD ? '<td>' + (d && p ? '1쪽에 ' + Math.round((t + d) / 60000 / p) + '분' : '—') + '</td>' : '') + '</tr>';
   }
-  var own = ["장편","중편","단편","산문","미분류"], other = ["청탁","개정","글쓰기"], rows = [];
+  var own = ["초고","장편","중편","단편","산문","미분류"], other = ["청탁","개정","글쓰기"], rows = [];
   own.forEach(function(k){ if(byK[k]) rows.push(tr(k, byK[k].t, byK[k].c, '', byK[k].d)); });
   rows.push(tr('모두', tAll, cAll, 'all', dAll));
   var oth = other.filter(function(k){ return byK[k]; });
@@ -3663,7 +3669,7 @@ function dialog(title, fields, onOk){
   setTimeout(function(){ if(firstIn) firstIn.focus(); }, 30);
 }
 var NEW_KINDS = [["산문","산문"],["장편","장편"],["중편","중편"],["단편","단편"]];
-function kindOpts(blankLabel){ return [["", blankLabel || "정하지 않음"]].concat(KINDS.map(function(k){ return [k, k]; })); }
+function kindOpts(){ return KINDS.map(function(k){ return [k, k === "초고" ? "초고 · 장 없이, 길이 제한 없이" : "개정 · 부·장, 400자씩"]; }); }
 function maeNum(v){ var n = parseFloat(String(v).replace(/[^0-9.]/g, "")); return n > 0 ? n : null; }
 
 /* 조각(원고) 하나를 다듬어 마침 — 스크리브너에서 확인한 그 조각의 최종 글자 수를 받는다 */
@@ -3688,28 +3694,21 @@ function newMsFlow(after){
   dialog("새 원고", [
     { id:"work", label:"작품", type:"select", options:opts, value: curW && !workDone(curW) ? curW.id : "__new" },
     { id:"title", label:"새 작품 이름", type:"text", when:["work","__new"], placeholder:"작품 이름" },
-    { id:"kind", label:"종류", type:"select", options:kindOpts(), when:["work","__new"] },
-    { id:"target", label:"목표 분량(매)", type:"number", when:[["work","__new"],["kind","청탁",1]], placeholder:"비워도 됩니다" },
-    { id:"cheong", label:"청탁 매수", type:"number", when:[["work","__new"],["kind","청탁"]], placeholder:"예: 16" },
-    { id:"chName", label:"첫 장 이름", type:"text", when:[["work","__new"],["kind",["장편","중편"]]], placeholder:"이름을 적어 주세요" },
+    { id:"kind", label:"종류", type:"select", options:kindOpts(), value:"초고", when:["work","__new"] },
+    { id:"target", label:"목표 분량(매)", type:"number", when:[["work","__new"],["kind","초고"]], placeholder:"비워도 됩니다" },
     { id:"revCh", label:"첫 장 이름 (비우면 원고 없이 쪽수만)", type:"text", when:[["work","__new"],["kind","개정"]], placeholder:"예: 소설가의 일" },
     { id:"rev", label:"첫 원고", type:"select", options:REV_OPTS, value:"개정", when:[["work","__new"],["kind","개정"]] },
-    { id:"actMae", label:"장 하나(참고, 매)", type:"number", when:[["work","__new"],["kind",["장편","중편"]]], placeholder:"비우면 완성한 장들의 평균" },
     { id:"pages", label:"전체 쪽수", type:"number", when:[["work","__new"],["kind","개정"]], placeholder:"책이나 프린트한 원고" },
-    { id:"newKind", label:"새 글의 종류", type:"select", options:NEW_KINDS, value:"산문", when:[["work","__new"],["kind","개정"]] },
     { id:"due", label:"마감일(넘기는 날)", type:"date", when:["work","__new"] },
     { id:"doneDue", label:"완료일(출판사)", type:"date", when:["work","__new"] }
   ], function(v){
     var w;
     if(v.work === "__new"){
       if(!v.title.trim()){ toast("작품 이름을 적어주세요"); return false; }
-      if(v.kind === "청탁" && !maeNum(v.cheong)){ toast("청탁 매수를 적어주세요"); return false; }
-      if((v.kind === "장편" || v.kind === "중편") && !v.chName.trim()){ toast("첫 장의 이름을 적어주세요"); return false; }
-      w = newWork(v.title.trim(), v.kind, v.kind === "청탁" ? maeNum(v.cheong) : maeNum(v.target));
+      w = newWork(v.title.trim(), v.kind, v.kind === "개정" ? null : maeNum(v.target));
       w.due = v.due || ""; w.doneDue = v.doneDue || "";
-      if(isNovel(w)){ w.actMae = maeNum(v.actMae); var c1 = newChapter(v.chName.trim()); c1.order = 1; w.chapters.push(c1); }
       if(v.kind === "개정"){
-        var pg = parseInt(v.pages, 10); w.newKind = v.newKind || "산문";
+        var pg = parseInt(v.pages, 10);
         if(pg > 0) w.revs.push({ no:1, total:pg, from:0, log:[{ t:w.createdAt, p:0 }], startedAt:w.createdAt, doneAt:null, chars0:0 });
         if(v.revCh.trim()){ var c2 = newChapter(v.revCh.trim()); c2.order = 1; w.chapters.push(c2); }
       }
@@ -3735,29 +3734,24 @@ function editWork(w){
   var shown0 = plannedUnits(w) || "";
   dialog("작품", [
     { id:"title", label:"이름", type:"text", value:w.title },
-    { id:"kind", label:"종류", type:"select", options:kindOpts(), value:w.kind || "" },
-    { id:"target", label:"목표 분량(매)", type:"number", value:w.kind !== "청탁" && w.kind !== "개정" ? (w.targetMae || "") : "", placeholder:"비워도 됩니다", when:[["kind","청탁",1],["kind","개정",1]] },
+    { id:"kind", label:"종류", type:"select", options:kindOpts(), value:normKind(w.kind) },
+    { id:"target", label:"목표 분량(매)", type:"number", value:w.kind !== "개정" ? (w.targetMae || "") : "", placeholder:"비워도 됩니다", when:["kind","초고"] },
     { id:"newMae", label:"새 글 참고 분량(매)", type:"number", value:w.kind === "개정" ? (w.targetMae || "") : "", placeholder:"비우면 쪽수만 가늠", when:["kind","개정"] },
-    { id:"cheong", label:"청탁 매수", type:"number", value:w.kind === "청탁" ? (w.targetMae || "") : "", placeholder:"예: 16", when:["kind","청탁"] },
-    { id:"units", label:"원고 개수", type:"number", value:plannedUnits(w) || "", when:["kind","청탁",1], placeholder:"비우면 매수로 계산" },
-    { id:"actMae", label:"장 하나(참고, 매)", type:"number", value:w.actMae || "", when:["kind",["장편","중편"]], placeholder:"비우면 완성한 장들의 평균" },
+    { id:"units", label:"원고 개수", type:"number", value:plannedUnits(w) || "", placeholder:"비우면 매수로 계산" },
     { id:"pages", label:(curRev(w) ? revLabel(curRev(w)) + " " : "") + "전체 쪽수", type:"number", value:curRev(w) ? (curRev(w).total || "") : "", when:["kind","개정"], placeholder:curRev(w) ? "" : "책이나 프린트한 원고 · 적으면 1차 시작" },
-    { id:"newKind", label:"새 글의 종류", type:"select", options:NEW_KINDS, value:w.newKind || "산문", when:["kind","개정"] },
     { id:"due", label:"마감일(넘기는 날)", type:"date", value:w.due || "" },
     { id:"doneDue", label:"완료일(출판사)", type:"date", value:w.doneDue || "" }
   ], function(v){
     if(!v.title.trim()){ toast("작품 이름을 적어주세요"); return false; }
-    if(v.kind === "청탁" && !maeNum(v.cheong)){ toast("청탁 매수를 적어주세요"); return false; }
-    var fam = isNovel(w) ? { "장편":1, "중편":1 } : isRevision(w) ? { "개정":1 } : { "단편":1, "산문":1 };
+    var fam = isRevision(w) ? { "개정":1 } : { "초고":1 };
     if(allOf(w).some(function(m){ return m.merged; }) && !fam[v.kind]){
       toast(isRevision(w) ? "장을 합친 개정 작품이라 종류를 바꿀 수 없습니다" : "원고를 합친 작품이라 " + (isNovel(w) ? "장편·중편" : "단편·산문") + " 사이에서만 종류를 바꿀 수 있습니다"); return false;
     }
     var oldTarget = w.targetMae, wasCh = hasChapters(w);
-    w.title = v.title.trim(); w.kind = v.kind; w.targetMae = v.kind === "청탁" ? maeNum(v.cheong) : v.kind === "개정" ? maeNum(v.newMae) : maeNum(v.target);
+    w.title = v.title.trim(); w.kind = normKind(v.kind); w.targetMae = v.kind === "개정" ? maeNum(v.newMae) : maeNum(v.target);
     w.due = v.due || ""; w.doneDue = v.doneDue || "";
-    w.actMae = (v.kind === "장편" || v.kind === "중편") ? maeNum(v.actMae) : w.actMae;
     if(v.kind === "개정"){
-      var pg = parseInt(v.pages, 10); w.newKind = v.newKind || "산문";
+      var pg = parseInt(v.pages, 10);
       if(curRev(w)){ if(pg > 0) curRev(w).total = pg; }
       else if(pg > 0 && !lastRev(w)){ var t0 = Date.now(); w.revs.push({ no:1, total:pg, from:0, log:[{ t:t0, p:0 }], startedAt:t0, doneAt:null, chars0:workChars(w) }); }
     }
@@ -3770,7 +3764,8 @@ function editWork(w){
         ps0.forEach(function(m){ m.chId = cN.id; m.dirty = true; });
       }
     }else if(wasCh){
-      w.chapters = []; w.parts = []; allOf(w).forEach(function(m){ delete m.chId; m.dirty = true; });
+      /* 개정에서 초고로 — 장·부 자료는 지우지 않고 감춘다(다시 개정으로 바꾸면 그대로 돌아온다) */
+      allOf(w).forEach(function(m){ m.dirty = true; });
     }
     /* 원고 개수 — 목표 매수로 계산한 값과 같으면 따로 적어두지 않고(매수를 고치면 함께 따라온다), 다르면 적어둔다 */
     var un = parseInt(v.units, 10);
@@ -3792,12 +3787,12 @@ function moveUnit(m){
     { id:"work", label:"작품", type:"select", options:opts },
     { id:"title", label:"새 작품 이름", type:"text", when:["work","__new"] },
     { id:"kind", label:"종류", type:"select", options:kindOpts(), when:["work","__new"] },
-    { id:"chName", label:"첫 장 이름", type:"text", when:[["work","__new"],["kind",["장편","중편","개정"]]], placeholder:"이름을 적어 주세요" }
+    { id:"chName", label:"첫 장 이름", type:"text", when:[["work","__new"],["kind","개정"]], placeholder:"이름을 적어 주세요" }
   ], function(v){
     var w, c = null;
     if(v.work === "__new"){
       if(!v.title.trim()){ toast("작품 이름을 적어주세요"); return false; }
-      if((v.kind === "장편" || v.kind === "중편" || v.kind === "개정") && !v.chName.trim()){ toast("첫 장의 이름을 적어주세요"); return false; }
+      if(v.kind === "개정" && !v.chName.trim()){ toast("첫 장의 이름을 적어주세요"); return false; }
       w = newWork(v.title.trim(), v.kind, null);
       if(hasChapters(w)){ c = newChapter(v.chName.trim()); c.order = 1; w.chapters.push(c); }
       S.works.push(w);
@@ -3822,7 +3817,7 @@ function moveUnit(m){
   });
 }
 function shiftUnit(m, dir){
-  var us = unitsOf(workOf(m)).filter(function(x){ return x.chId === m.chId; }), i = us.indexOf(m), j = i + dir;
+  var w0 = workOf(m), us = unitsOf(w0).filter(function(x){ return !hasChapters(w0) || x.chId === m.chId; }), i = us.indexOf(m), j = i + dir;
   if(j < 0 || j >= us.length) return;
   us.forEach(function(x, k){ x.order = k + 1; });
   var t = us[i].order; us[i].order = us[j].order; us[j].order = t;
@@ -6172,7 +6167,14 @@ function tpHashNew(q, loud){
   var link = q["소설"] && q["카드"] ? STORYM_URL + "#소설=" + encodeURIComponent(q["소설"]) + "&카드=" + encodeURIComponent(q["카드"]) : "";
   var ws = S.works.filter(function(w){ return String(w.title || "").trim() === wt; });
   var w = ws.filter(workActive)[0] || ws[0];
-  if(!w){ if(loud) toast("타이핑에 '" + wt + "' 작품이 없습니다 — 원고 탭에서 같은 이름의 작품을 먼저 만드세요", 5000); return false; }
+  var madeW = false;
+  if(!w){
+    if(!loud) return false;   /* 수파베이스에서 받은 뒤에 한 번 더 본다 */
+    if(!wt || !confirm("타이핑에 '" + wt + "' 작품이 없습니다.\n\n'" + wt + "' 초고 작품을 새로 만들고 '" + name + "' 원고를 넣을까요?")){
+      toast("타이핑에 '" + wt + "' 작품이 없습니다 — 원고 탭에서 같은 이름의 작품을 먼저 만드세요", 5000); return false;
+    }
+    w = newWork(wt, "초고", null); S.works.push(w); dropStubs(w.id); madeW = true;
+  }
   var done = function(m, made){
     if(link && !m.storyLink){ m.storyLink = link; save(); }
     /* 주소를 그 원고의 주소로 바꿔 둔다 — 새로 고쳐도 다시 묻지 않게 */
@@ -6192,7 +6194,7 @@ function tpHashNew(q, loud){
     c = defaultChapter(w, c);
     if(!c){ toast("'" + w.title + "'에 열린 장이 없습니다 — 원고 탭에서 장을 먼저 만드세요", 5000); return true; }
   }
-  if(!confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\nstoryM의 카드와 이름이 같아 저절로 이어집니다. 만들까요?")){
+  if(!madeW && !confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\nstoryM의 카드와 이름이 같아 저절로 이어집니다. 만들까요?")){
     try{ history.replaceState(null, "", location.href.replace(/#.*$/, "")); }catch(e){}
     return true;
   }
@@ -6202,6 +6204,7 @@ function tpHashNew(q, loud){
   if(link) m.storyLink = link;
   clockIn(); S.current = m.id; S.sel = null;
   save(); renderHead(); renderWrite(); renderList();
+  if(madeW) shareWorks();
   done(m, true);
   return true;
 }
@@ -6239,10 +6242,13 @@ function tpStash(){
 }
 
 /* ---- 목표 ---- */
+/* 초고 작품의 원고 — 목표 없이 쓰고 아무 때나 보낸다. 개정 작품만 400자씩 */
+function tpFree(m){ var w = workOf(m || tpMs()); return !(w && isRevision(w)); }
 function tpAutoGoal(u){ var last = tpLast(u); var n = last ? len(last.text) : 0; return (Math.floor(n / TP.step) + 1) * TP.step; }
 function tpGoal(u){ var a = tpAutoGoal(u); if(typeof u.cut === "number" && u.cut >= TP.step && u.cut < a) return u.cut; return a; }
 function tpIsCut(u){ return tpGoal(u) < tpAutoGoal(u); }
 function tpCutGoal(dir){
+  if(tpFree()) return;
   var u = tpUnit(), g = tpGoal(u), a = tpAutoGoal(u), next = g + dir * TP.step;
   if(next < TP.step || next > a) return;
   if(next >= a) delete u.cut; else u.cut = next;
@@ -6304,7 +6310,7 @@ function tpRenderStrip(){
   tpEl.nums.innerHTML = ""; tpEl.when.textContent = "";
   var title = "<b>" + esc(m.title) + "</b>";
   if(u.fix){
-    tpEl.tally.innerHTML = title + ' · <span class="piece">고쳐쓰기 중</span> · ' + (v.length ? v.length + "번째 판본 뒤" : "첫 판본 앞") + " · 돌아가면 목표 " + fmt(g) + "자";
+    tpEl.tally.innerHTML = title + ' · <span class="piece">고쳐쓰기 중</span> · ' + (v.length ? v.length + "번째 판본 뒤" : "첫 판본 앞") + (tpFree(m) ? "" : " · 돌아가면 목표 " + fmt(g) + "자");
     if(u.fixText){
       var fn = document.createElement("span"); fn.className = "fixn"; fn.textContent = "고쳐쓰기 " + u.fixN + "번째";
       tpEl.strip.insertBefore(fn, tpEl.when);
@@ -6317,13 +6323,13 @@ function tpRenderStrip(){
   tpEl.nums.classList.remove("hide");
   tpEl.versBtn.disabled = false;
   if(!v.length){
-    tpEl.tally.innerHTML = title + " · 첫 판본 · 목표 " + fmt(g) + "자";
+    tpEl.tally.innerHTML = title + " · 첫 판본" + (tpFree(m) ? " · 길이 제한 없음" : " · 목표 " + fmt(g) + "자");
     return;
   }
   var ci = tpShownIdx(u), last = len(v[v.length-1].text);
   tpEl.tally.innerHTML = title + " · " + v.length + "번째 " + fmt(last) + "자"
     + (tpIsPiece(last) ? ' <span class="piece">· 한 편</span>' : "")
-    + " · 다음 목표 " + fmt(g) + "자" + (tpIsCut(u) ? ' <span class="piece">낮춤</span>' : "");
+    + (tpFree(m) ? "" : " · 다음 목표 " + fmt(g) + "자" + (tpIsCut(u) ? ' <span class="piece">낮춤</span>' : ""));
   var from = Math.max(0, v.length - 10);
   for(var i = from; i < v.length; i++){
     (function(i){
@@ -6352,7 +6358,7 @@ function tpRenderPrev(){
     var x = tpShown(u);
     if(!x){
       tpEl.prev.classList.add("empty");
-      tpEl.prev.innerHTML = "아직 글이 없는 원고입니다.<br>" + tpSideHere() + " 첫 " + fmt(TP.step) + "자를 쓰고 " + tpSideTo() + " 보내세요.";
+      tpEl.prev.innerHTML = "아직 글이 없는 원고입니다.<br>" + tpSideHere() + (tpFree() ? " 길이 상관없이 쓰고 " : " 첫 " + fmt(TP.step) + "자를 쓰고 ") + tpSideTo() + " 보내세요.";
       return;
     }
     text = x.text;
@@ -6374,7 +6380,7 @@ function tpRenderVers(){
   var s = document.createElement("div"); s.className = "sum";
   var last = v.length ? len(v[v.length-1].text) : 0, total = 0;
   v.forEach(function(x){ total += len(x.text); });
-  s.innerHTML = '<span class="nm">' + esc(m.title) + '</span>판본 <b>' + v.length + '</b>개 · 최종 <b>' + fmt(last) + '</b>자(' + mae(last) + '매) · 지금까지 친 글자 <b>' + fmt(total) + '</b>자 · 다음 목표 <b>' + fmt(tpGoal(u)) + '</b>자';
+  s.innerHTML = '<span class="nm">' + esc(m.title) + '</span>판본 <b>' + v.length + '</b>개 · 최종 <b>' + fmt(last) + '</b>자(' + mae(last) + '매) · 지금까지 친 글자 <b>' + fmt(total) + '</b>자' + (tpFree(m) ? '' : ' · 다음 목표 <b>' + fmt(tpGoal(u)) + '</b>자');
   w.appendChild(s);
   if(!v.length){ var e = document.createElement("p"); e.className = "blank"; e.textContent = "이 원고에 쌓인 판본이 없습니다."; w.appendChild(e); return; }
   v.slice().reverse().forEach(function(x){
@@ -6486,6 +6492,12 @@ function tpRenderCount(){
     tpEl.send.disabled = !n; tpEl.send.textContent = "고쳐쓰기";
     return;
   }
+  if(tpFree(m)){
+    /* 초고 — 목표 없이. 쓴 만큼 보낸다 */
+    tpEl.cur.innerHTML = n ? "<b>" + fmt(n) + "</b>자 · " + mae(n) + "매" + (tpIsPiece(n) ? ' · <span class="piece">한 편</span>' : "") : "길이 제한 없음";
+    tpEl.send.disabled = !n; tpEl.send.textContent = tpSideTo() + " 보내기";
+    return;
+  }
   var g = tpGoal(u), a = tpAutoGoal(u), cut = tpIsCut(u), ok = n >= g, left = g - n;
   var arrows = '<button type="button" class="arr" data-g="-1" title="목표를 ' + fmt(TP.step) + '자 낮추기"' + (g - TP.step < TP.step ? ' disabled' : '') + '>◂</button>'
              + '<button type="button" class="arr" data-g="1" title="목표를 ' + fmt(TP.step) + '자 올리기"' + (g + TP.step > a ? ' disabled' : '') + '>▸</button>';
@@ -6558,7 +6570,7 @@ function tpToRight(){
   save(); tpRenderBtns(); tpRenderMode(); tpRenderCount();
   tpEl.input.focus(); tpFollowCaret();
   var g = tpGoal(u), c = len(tpOutgoing());
-  toast("글을 옮겼습니다 · " + (c < g ? "목표 " + fmt(g) + "자까지 " + fmt(g - c) + "자" : "목표 " + fmt(g) + "자를 채웠습니다"), 3200);
+  toast("글을 옮겼습니다 · " + (tpFree() ? "이어서 쓰세요" : c < g ? "목표 " + fmt(g) + "자까지 " + fmt(g - c) + "자" : "목표 " + fmt(g) + "자를 채웠습니다"), 3200);
 }
 
 /* ---- 보내기 — 새 판본이 되고, 교열 원고의 본문이 된다 ---- */
@@ -6567,7 +6579,7 @@ function tpSend(){
   if(u.fix){ tpFixOnce(); return; }
   var t = tpOutgoing(); if(!t) return;
   var g = tpGoal(u), n = len(t);
-  if(n < g){ toast("목표 " + fmt(g) + "자까지 " + fmt(g - n) + "자 남았습니다"); return; }
+  if(!tpFree(m) && n < g){ toast("목표 " + fmt(g) + "자까지 " + fmt(g - n) + "자 남았습니다"); return; }
   /* 그 사이 원고가 다른 데서 바뀌었으면(아이폰·곁·교열) 먼저 왼쪽에 받아 두고 묻는다 */
   if(tpTake(m)){
     save(); tpRender();
@@ -6584,7 +6596,7 @@ function tpSend(){
   renderWrite(true);   /* 교열 화면도 바로 새 글로 — 탭을 옮겼을 때 옛 글이 남지 않게 */
   writeGoto = m.id;    /* 교열 탭으로 가면 이 원고가 맨 위에 */
   tpRender();
-  toast(u.versions.length + "번째 판본 · 원고 " + fmt(len(m.text)) + "자 · 다음 목표 " + fmt(tpGoal(u)) + "자", 3200);
+  toast(u.versions.length + "번째 판본 · 원고 " + fmt(len(m.text)) + "자" + (tpFree(m) ? "" : " · 다음 목표 " + fmt(tpGoal(u)) + "자"), 3200);
   tpEl.input.focus();
 }
 
