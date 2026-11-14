@@ -1365,14 +1365,19 @@ async function rest(path,opt={}){const tok=await sbToken();if(!tok)throw new Err
 function setSyncMsg(m,err){sync.msg=m;sync.err=!!err;document.querySelectorAll('.syncstat').forEach(e=>{e.textContent=m;e.classList.toggle('err',!!err);});}
 function fmtTime(ts){const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 function markDirty(id){if(!id)return;sync.dirty.add(id);if(!sess)return;clearTimeout(sync.timer);sync.timer=setTimeout(flushSync,1500);}
-async function pushStories(ids){
+/* 보내기 — 평소에는 보통 요청으로. keepalive(창을 닫아도 끝까지 보내기)는 브라우저가 한 번에 64KB까지만 허락해,
+   카드가 늘어 소설이 64KB를 넘자 사파리가 보내기 전에 막았다("Load failed", 2026년 11월 14일). 창을 닫을 때(unloading)만,
+   그리고 60,000바이트 이하일 때만 keepalive를 쓴다. 닫을 때 못 보낸 것은 저장소에 남고, 다음에 열 때 받기가 이쪽이 새것임을 알고 다시 보낸다 */
+const KEEPALIVE_MAX=60000;
+async function pushStories(ids,unloading){
   const rows=[];for(const id of ids){const l=db.stories.find(x=>x.id===id);if(l)rows.push({id:l.id,user_id:sess.user,data:l,updated_at:l.updatedAt||Date.now(),deleted:false});else{const d=(db.deleted||[]).find(x=>x.id===id);if(d)rows.push({id,user_id:sess.user,data:{},updated_at:d.at,deleted:true});}}
   if(!rows.length)return;
-  await rest(`/${SB_TABLE}?on_conflict=user_id,id`,{method:'POST',keepalive:true,headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+  const body=JSON.stringify(rows);const keepalive=!!unloading&&new Blob([body]).size<=KEEPALIVE_MAX;
+  await rest(`/${SB_TABLE}?on_conflict=user_id,id`,{method:'POST',keepalive,headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body});
 }
-async function flushSync(){
+async function flushSync(unloading){
   if(!sess||sync.busy)return;const ids=[...sync.dirty];if(!ids.length)return;sync.dirty.clear();sync.busy=true;
-  try{await pushStories(ids);sync.last=Date.now();setSyncMsg(`동기화됨 ${fmtTime(sync.last)}`);}
+  try{await pushStories(ids,unloading===true);sync.last=Date.now();setSyncMsg(`동기화됨 ${fmtTime(sync.last)}`);}
   catch(e){ids.forEach(i=>sync.dirty.add(i));setSyncMsg('보내기 실패: '+e.message,true);}
   finally{sync.busy=false;}
 }
@@ -1426,7 +1431,7 @@ app.addEventListener('click',async e=>{
 });
 window.addEventListener('focus',()=>{pullStories(false);const l=cur();if(l&&ui.view==='editor')tpLoad(l).then(()=>tpPaint(l));});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')pullStories(false);else if(sync.dirty.size)flushSync();});
-window.addEventListener('beforeunload',()=>{if(sync.dirty.size)flushSync();});
+window.addEventListener('beforeunload',()=>{if(sync.dirty.size)flushSync(true);});
 
 /* ---------- 밖에서 오기 — #소설=ID&카드=ID, #소설제목=제목, 거기에 &찾기=말 (타이핑의 "카드 찾기") ---------- */
 let hashPending=false;
