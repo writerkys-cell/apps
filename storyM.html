@@ -494,7 +494,7 @@ function sideHtml(l){
   const k=gCounts(l);const r=rCur(l);const t=tCur(l);const g=ui.pane==='guide';const nf=freshRounds(l).length;
   return `<div class="srow ${ui.pane==='scratch'?'sel':''}" data-act="scratch" title="떠오르는 생각과 플롯을 바퀴마다 적습니다. 트리트먼트의 재료입니다"><span>생각 모으기</span><span class="c" style="color:var(--muted)">${l.rounds.length}차${chars(r.text)?` · ${chars(r.text)}자`:''}</span></div>
     <div class="srow ${ui.pane==='treat'?'sel':''}" data-act="treat" title="생각을 모아 받은 줄거리. 고칠 수 있고, 새 생각이 쌓이면 새 판을 받습니다"><span>트리트먼트</span><span class="c" style="color:${nf&&tHas(l)?'var(--warn)':'var(--muted)'}">${tHas(l)?`${tNo(l,t)}판${nf?` · 새 생각 ${nf}`:''}`:'없음'}</span></div>
-    <div class="srow ${g&&ui.gview!=='shelf'?'sel':''}" data-act="guide" title="트리트먼트에서 뽑은 집필 카드. 부·장별로 보입니다"><span>카드</span><span class="c q">${k.n||''}${k.tp?` <span style="color:var(--muted)">· 타이핑 ${k.tp}</span>`:''}${k.src?` <span style="color:var(--muted)">· 자료 ${k.src}</span>`:''}</span></div>
+    <div class="srow ${g&&ui.gview!=='shelf'?'sel':''}" data-act="guide" title="트리트먼트에서 뽑은 집필 카드. 부·장별로 보입니다"><span>카드</span><span class="c q">${k.n||''}${k.tp?` <span style="color:var(--muted)" title="타이핑 원고가 이어진 카드 ${k.tp}장 · 모두 ${fmtN(tpTotal(l).n)}자">· 타이핑 ${k.tp} · ${maeTxt(tpTotal(l).n)}</span>`:''}${k.src?` <span style="color:var(--muted)">· 자료 ${k.src}</span>`:''}</span></div>
     <div class="srow ${g&&ui.gview==='shelf'?'sel':''}" data-act="shelf" title="쓰지 않기로 한 카드"><span>서랍</span><span class="c" style="color:var(--muted)">${k.shelf||''}</span></div>`;
 }
 function renderDerived(){const l=cur();if(!l)return;const s=document.getElementById('side');if(s)s.innerHTML=sideHtml(l);}
@@ -561,6 +561,13 @@ const gGlyph=(l,c)=>{const r=tpRowFor(c,l);return r?((r.handed||r.unit_done)?'�
 const gCls=(l,c)=>{const r=tpRowFor(c,l);return r?((r.handed||r.unit_done)?'f':'w'):'';};
 const gFirst=c=>(c.text||'').split('\n')[0].trim();
 const gRest=c=>(c.text||'').split('\n').slice(1).join('\n').trim();
+/* 타이핑 분량 — 카드에서는 글자 수, 부·장·전체로 모을 때는 200자 원고지 매수(글자 수 ÷ 200, 소수 한 자리). 같은 원고는 한 번만 센다 */
+const fmtN=n=>Number(n).toLocaleString('ko-KR');
+const maeTxt=n=>(n/200).toFixed(1)+'매';
+function tpSum(l,cs){const seen=new Set();let n=0,hit=0;const walk=c=>{const r=tpRowFor(c,l);if(r&&!seen.has(r.id)){seen.add(r.id);hit++;n+=chars(r.text);}gKids(l,c.id).forEach(walk);};cs.forEach(walk);return{n,hit};}
+/* 그 부·장(아래 장까지)의 맨 위 카드들 */
+const secRoots=(l,s)=>gKids(l,null).filter(c=>{const x=c.sec||'';return x===s||(!!s&&x.startsWith(s+' › '));});
+function tpTotal(l){const seen=new Set();let n=0,hit=0;gCards(l).forEach(c=>{const r=tpRowFor(c,l);if(r&&!seen.has(r.id)){seen.add(r.id);hit++;n+=chars(r.text);}});return{n,hit};}
 function gCounts(l){const cs=gCards(l);let tpn=0;cs.forEach(c=>{if(tpRowFor(c,l))tpn++;});return{n:cs.length,tp:tpn,shelf:gShelfRoots(l).length,src:srcCards(l).length};}
 /* 나이는 세는 나이(태어난 해를 한 살로). 주인공 생년(guide.born)이 있을 때만 */
 const gAge=(l,c)=>(c.year!=null&&l.guide.born)?`${c.year-l.guide.born+1}살`:'';
@@ -577,7 +584,7 @@ const secShort=s=>{const p=String(s||'').split(' › ');return p[p.length-1]||''
 function gRowHtml(l,c,d){
   const kids=gKids(l,c.id);const open=ui.cardOpen===c.id;
   const lk=gLinks(l,c).length,sn=srcN(c);const r=tpRowFor(c,l);const tu=tpUrlFor(c,l);
-  const meta=[gYearTxt(l,c),c.round?`${c.round}차`:'',(c.leads||[]).length?'<span title="클로드가 찾아온 실마리가 있습니다. 확인 전입니다">찾은 것</span>':'',lk?`<span title="이어진 카드 ${lk}장">⇄${lk}</span>`:'',c.dt?`<a href="${esc(c.dt)}"${tgt(c.dt)} title="${openTip(c.dt)}${sn>1?` (자료 ${sn}개 가운데 첫째)`:''}">↗${sn>1?sn:''}</a>`:'',r?`<span title="${tpState(r)}">타이핑 ${chars(r.text)}자</span>`:'',tu?`<a class="tpgo" href="${esc(tu)}" target="_blank" rel="noopener" title="타이핑의 그 원고 400자 탭을 엽니다">쓰기 ↗</a>`:''].filter(Boolean).join(' · ');
+  const meta=[gYearTxt(l,c),c.round?`${c.round}차`:'',(c.leads||[]).length?'<span title="클로드가 찾아온 실마리가 있습니다. 확인 전입니다">찾은 것</span>':'',lk?`<span title="이어진 카드 ${lk}장">⇄${lk}</span>`:'',c.dt?`<a href="${esc(c.dt)}"${tgt(c.dt)} title="${openTip(c.dt)}${sn>1?` (자료 ${sn}개 가운데 첫째)`:''}">↗${sn>1?sn:''}</a>`:'',r?`<span title="${tpState(r)}">타이핑 ${fmtN(chars(r.text))}자</span>`:'',tu?`<a class="tpgo" href="${esc(tu)}" target="taiping" data-win="taiping" title="타이핑의 그 원고 400자 탭을 엽니다">쓰기 ↗</a>`:''].filter(Boolean).join(' · ');
   return `<div class="gnode ${gCls(l,c)}" style="--d:${d}"><div class="grow ${open?'open':''}" data-act="gOpen" data-id="${c.id}">
     <span class="fold" data-act="gFold" data-id="${c.id}" title="${kids.length?'가지 접기/펼치기':''}">${kids.length?(c.fold?'▸':'▾'):''}</span>
     <span class="glyph" data-glyph="${c.id}" title="${r?tpState(r):'이어진 타이핑 원고 없음'}">${gGlyph(l,c)}</span>
@@ -652,13 +659,14 @@ function renderGuide(){
       <div class="glist gshelf">${rs.map(row).join('')||'<div class="muted small" style="padding:8px">서랍이 비어 있습니다. 카드를 열어 "서랍에 넣기"를 누르면 여기에 옵니다.</div>'}</div>`;
   }else{
     const hs=treatHeads(l);const secs=gSecs(l);
-    const block=(s,rs)=>{if(!rs.length&&s&&secs.some(o=>o!==s&&o.startsWith(s+' › ')))return '';return `<div class="gsec"><span>${s?`<b>${esc(s)}</b>`:'<b>부·장 없음</b> <span class="muted">트리트먼트의 어느 부·장에도 걸리지 않은 카드</span>'}${hs.includes(s)||!s?'':' <span class="muted">· 지금 트리트먼트에는 없는 부·장</span>'}</span><button data-act="addGuideSec" data-sec="${esc(s)}" title="이 부·장에 카드를 하나 더 만듭니다">+ 카드</button></div><div class="gtree">${rs.map(c=>gRowHtml(l,c,0)).join('')||'<div class="muted small gnone">이 부·장의 카드가 아직 없습니다.</div>'}</div>`;};
+    const secMae=s=>{const t=tpSum(l,s?secRoots(l,s):roots.filter(c=>!(c.sec||'')));return t.hit?` <span class="muted" title="이 ${s?'부·장(아래 장까지)':'묶음'}에 이어진 타이핑 원고 ${t.hit}개 · ${fmtN(t.n)}자">· 타이핑 ${maeTxt(t.n)}</span>`:'';};
+    const block=(s,rs)=>{if(!rs.length&&s&&secs.some(o=>o!==s&&o.startsWith(s+' › ')))return `<div class="gsec"><span><b>${esc(s)}</b>${secMae(s)}</span></div>`;return `<div class="gsec"><span>${s?`<b>${esc(s)}</b>${secMae(s)}`:'<b>부·장 없음</b>'+secMae('')+' <span class="muted">트리트먼트의 어느 부·장에도 걸리지 않은 카드</span>'}${hs.includes(s)||!s?'':' <span class="muted">· 지금 트리트먼트에는 없는 부·장</span>'}</span><button data-act="addGuideSec" data-sec="${esc(s)}" title="이 부·장에 카드를 하나 더 만듭니다">+ 카드</button></div><div class="gtree">${rs.map(c=>gRowHtml(l,c,0)).join('')||'<div class="muted small gnone">이 부·장의 카드가 아직 없습니다.</div>'}</div>`;};
     const none=roots.filter(c=>!(c.sec||''));
     body=`<p class="muted small" style="margin:0 0 12px">트리트먼트에서 뽑은 집필 카드를 부·장 순서로 봅니다. 카드 한 장이 소설을 쓰는 데 필요한 것 하나입니다. 카드를 열어 메모를 적고, 자료를 걸고, 타이핑 원고를 잇습니다. □는 이어진 원고가 없는 카드, ✎는 쓰는 중, ■는 완성입니다.</p>
       ${secs.map(s=>block(s,roots.filter(c=>(c.sec||'')===s))).join('')}${none.length||!secs.length?block('',none):''}
       <button class="addcard" data-act="addGuide" style="margin-top:14px">+ 카드 추가</button>`;
   }
-  d.innerHTML=`<div class="ghead"><div class="ttl">${v==='shelf'?'서랍':v==='src'?'자료':'카드'} <span class="muted small" style="font-weight:400">${v==='src'?(k.src?`모두 ${k.src}장`:''):k.n?`모두 ${k.n}장${k.tp?` · 타이핑 원고 이어짐 ${k.tp}장`:''}`:''}</span></div>${sw}</div>${body}`;
+  d.innerHTML=`<div class="ghead"><div class="ttl">${v==='shelf'?'서랍':v==='src'?'자료':'카드'} <span class="muted small" style="font-weight:400">${v==='src'?(k.src?`모두 ${k.src}장`:''):k.n?`모두 ${k.n}장${k.tp?` · 타이핑 원고 이어짐 ${k.tp}장`:''}${k.tp?` · <b title="이어진 타이핑 원고의 글자 수를 모두 더해 200으로 나눈 원고지 매수 · ${fmtN(tpTotal(l).n)}자">전체 ${maeTxt(tpTotal(l).n)}</b>`:''}`:''}</span></div>${sw}</div>${body}`;
   d.querySelectorAll('textarea').forEach(autogrow);
   if((v==='tree'||v==='src')&&ui.cardOpen){const ta=d.querySelector(`textarea[data-id="${ui.cardOpen}"]`);if(ta){if(ui.focusCard){ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);ui.focusCard=false;}ta.closest('.gnode')?.scrollIntoView({block:'nearest'});}}
 }
@@ -722,13 +730,13 @@ function tpNewUrlFor(c,l){l=l||cur();const name=gFirst(c),wt=l?(l.title||'').tri
   const q=[['작품',wt],['새원고',name],['소설',l.id],['카드',c.id]];if(c.sec)q.push(['장',c.sec]);
   return tpConf.base.split('#')[0]+'#'+q.map(x=>x[0]+'='+encodeURIComponent(x[1])).join('&');}
 const TP_LINK_STYLE='white-space:nowrap;color:var(--accent);text-decoration:none;font-size:13px;align-self:center';
-const tpLinkHtml=(c,l)=>{const u=tpUrlFor(c,l);if(u)return `<a href="${esc(u)}" target="_blank" rel="noopener" style="${TP_LINK_STYLE}" title="타이핑의 그 원고 400자 탭을 엽니다">타이핑에서 이어 쓰기 ↗</a>`;
-  const n=tpNewUrlFor(c,l);return n?`<a href="${esc(n)}" target="_blank" rel="noopener" style="${TP_LINK_STYLE}" title="타이핑에 이 카드 이름의 원고를 만들고(물어봅니다) 그 400자 탭을 엽니다. 같은 이름의 원고가 이미 있으면 그것을 엽니다. 이름이 같아 저절로 이어집니다. 타이핑에 소설 제목과 같은 이름의 작품이 있어야 합니다">타이핑에서 쓰기 시작 ↗</a>`:'';};
+const tpLinkHtml=(c,l)=>{const u=tpUrlFor(c,l);if(u)return `<a href="${esc(u)}" target="taiping" data-win="taiping" style="${TP_LINK_STYLE}" title="타이핑의 그 원고 400자 탭을 엽니다">타이핑에서 이어 쓰기 ↗</a>`;
+  const n=tpNewUrlFor(c,l);return n?`<a href="${esc(n)}" target="taiping" data-win="taiping" style="${TP_LINK_STYLE}" title="타이핑에 이 카드 이름의 원고를 만들고(물어봅니다) 그 400자 탭을 엽니다. 같은 이름의 원고가 이미 있으면 그것을 엽니다. 이름이 같아 저절로 이어집니다. 타이핑에 소설 제목과 같은 이름의 작품이 있어야 합니다">타이핑에서 쓰기 시작 ↗</a>`:'';};
 const tpState=r=>r.handed?'스크리브너로 넘김':r.unit_done?'원고 완성':'쓰는 중';
 function tpWhen(r){const d=new Date(r.updated_at||r.phone_at||0);if(isNaN(d)||!d.getTime())return '';return `${d.getMonth()+1}월 ${d.getDate()}일 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')} 고침`;}
 function tpInfoHtml(l,c){const r=tpRowFor(c,l);const re=`<button class="ghost" data-act="tpReload" data-id="${c.id}" title="보태기 수파베이스에서 다시 읽습니다">다시 읽기</button>`;
   if(!tpConf.on)return '<span class="muted">타이핑 읽기가 꺼져 있습니다 (설정)</span>';
-  if(r)return `<span>${chars(r.text)}자 · ${tpState(r)}${r.phone_at?' · 스크리브너에 아직 없는 글':''}${tpWhen(r)?' · '+tpWhen(r):''}${tpId(c.tp)?'':' · 이름으로 이음'}</span><button class="ghost" data-act="tpShow" data-id="${c.id}">${ui.tpShow===c.id?'본문 접기':'본문 보기'}</button>${re}`;
+  if(r)return `<span>${fmtN(chars(r.text))}자 · ${tpState(r)}${r.phone_at?' · 스크리브너에 아직 없는 글':''}${tpWhen(r)?' · '+tpWhen(r):''}${tpId(c.tp)?'':' · 이름으로 이음'}</span><button class="ghost" data-act="tpShow" data-id="${c.id}">${ui.tpShow===c.id?'본문 접기':'본문 보기'}</button>${re}`;
   return `<span class="muted">${tp.busy?'읽는 중…':tp.msg?esc(tp.msg):tp.loaded?'이어진 원고 없음. 타이핑에서 원고 이름을 카드 첫 줄과 같게 하거나, 원고 주소를 위에 넣습니다':''}</span>${re}`;}
 function tpTextHtml(l,c){const r=tpRowFor(c,l);return (r&&ui.tpShow===c.id)?`<div class="tptext">${esc(r.text||'')||'<span class="muted">(빈 원고)</span>'}</div>`:'';}
 /* 읽은 뒤 화면에 반영 — 카드 화면이면 다시 그린다. 카드 패널에서 글을 치는 중이면 그 카드의 타이핑 줄만 바꾼다 */
@@ -1433,6 +1441,12 @@ function applyHash(){const q=readHash();if(!q||(!q.story&&!q.title))return false
   else{ui.pane=defaultPane(l);}
   render();return true;}
 window.addEventListener('hashchange',()=>{applyHash();});
+/* 창 하나로(2026년 11월 14일 밤) — 타이핑을 늘 같은 창으로 연다. 두 앱이 자기 창 이름을 'appwin.<앱>'에 적고(이름이 없으면 앱 이름. 시작이 연 창은 sijak_write 그대로),
+   data-win 링크는 누르는 순간 상대 앱의 그 창 이름으로 연다. 내 창 이름과 같으면 앱 이름으로(나 자신을 덮지 않게) */
+function winMine(){try{if(!window.name||window.name==='taiping')window.name='storyM';localStorage.setItem('appwin.storyM',window.name);}catch(e){}}
+function winOf(app){let n='';try{n=localStorage.getItem('appwin.'+app)||'';}catch(e){}if(!n||n===window.name)n=app;return n===window.name?app+'2':n;}
+winMine();window.addEventListener('focus',winMine);
+document.addEventListener('click',e=>{const a=e.target&&e.target.closest?e.target.closest('a[data-win]'):null;if(a){a.target=winOf(a.dataset.win);a.removeAttribute('rel');}},true);
 render();
 hashPending=!!readHash()&&!applyHash();
 if(sess){setSyncMsg('동기화 확인 중…');pullStories(true);}

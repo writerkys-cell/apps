@@ -846,8 +846,8 @@ h2:first-child{margin-top:0}
         <span class="when" id="tpWhen"></span>
         <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
         <button class="lnk" id="tpVersBtn" type="button" title="이 원고에 쌓인 판본 목록">판본</button>
-        <a class="lnk" id="tpCard" hidden target="_blank" rel="noopener" href="#" title="storyM에서 이 원고에 이어진 집필 카드를 바로 엽니다">카드 ↗</a>
-        <a class="lnk" id="tpStory" hidden target="_blank" rel="noopener" href="#" title="storyM에서 카드 찾기 — 막혔을 때">카드 찾기 ↗</a>
+        <a class="lnk" id="tpCard" hidden target="storyM" data-win="storyM" href="#" title="storyM에서 이 원고에 이어진 집필 카드를 바로 엽니다">카드 ↗</a>
+        <a class="lnk" id="tpStory" hidden target="storyM" data-win="storyM" href="#" title="storyM에서 카드 찾기 — 막혔을 때">카드 찾기 ↗</a>
         <button class="lnk" id="tpBack" type="button" title="교열 탭에서 이 원고 보기">교열로</button>
       </div>
       <div class="tprev empty" id="tpPrev"></div>
@@ -1439,16 +1439,24 @@ var frozen = false;
 /* 저장 도장(KEY:stamp) — 같은 저장소를 쓰는 창이 둘이면(크롬 창과 PWA 창, 오래 열어 둔 탭) 뒤에 저장한 창이 앞의 것을 통째로 덮었다(2026년 11월 14일).
    저장할 때마다 도장을 찍고, 다른 창이 그 뒤에 찍었으면 숨은 창은 저장하지 않고(staleWin), 앞으로 올 때 다시 읽는다(visibilitychange).
    보이는 창끼리 번갈아 쓰는 건 막지 못한다 — 알리기만 한다 */
-var STAMP = KEY + ":stamp", myStamp = storedStamp(), staleWin = false, stampWarned = false;
+var STAMP = KEY + ":stamp", myStamp = storedStamp(), staleWin = false, stampWarned = false, lastJs = null;
 function storedStamp(){ try{ return +localStorage.getItem(STAMP) || 0; }catch(e){ return 0; } }
 function othersWrote(){ return storedStamp() > myStamp; }
+/* 창끼리 맞추기(2026년 11월 14일 밤) — 화면에 함께 떠 있는 창도 '보이는 창'이라 서로 덮었다(storyM이 타이핑을 새 창으로 열 때마다 창이 늘어,
+   카드 링크처럼 구름에 없는 것이 사라졌다). 이제 다른 창이 뒤에 저장했으면, 포커스가 없는 창은 저장하지 않고(staleHere)
+   포커스를 받는 순간 다시 읽는다. 포커스를 잃을 때는 먼저 저장해 다음 창이 그것을 읽게 한다 */
+function staleHere(){ return othersWrote() && !document.hasFocus(); }
 function save(){
   if(frozen) return;
   if(othersWrote()){
-    if(document.visibilityState !== "visible"){ staleWin = true; return; }   /* 숨은 창 — 옛 상태로 덮지 않는다. 보이면 다시 읽는다 */
+    if(document.visibilityState !== "visible" || !document.hasFocus()){ staleWin = true; return; }   /* 숨은 창·포커스 없는 창 — 옛 상태로 덮지 않는다. 앞으로 오면 다시 읽는다 */
     if(!stampWarned){ stampWarned = true; toast("다른 창도 이 저장소에 쓰고 있습니다 — 타이핑은 한 창만 쓰세요", 6000); }
   }
-  try{ myStamp = Date.now(); localStorage.setItem(KEY, JSON.stringify(S)); localStorage.setItem(STAMP, String(myStamp)); }
+  try{
+    var js = JSON.stringify(S);
+    if(js === lastJs && !othersWrote()) return;   /* 바뀐 것이 없으면 도장을 찍지 않는다 — 창을 오갈 때마다 다른 창이 다시 읽지 않게 */
+    myStamp = Date.now(); localStorage.setItem(KEY, js); localStorage.setItem(STAMP, String(myStamp)); lastJs = js;
+  }
   catch(e){ toast("저장 공간이 모자랍니다. 백업을 내보내 주세요"); }
 }
 
@@ -1542,6 +1550,7 @@ function openNotesWin(m){
 }
 /* 의견 창이 적어 둔 '마침'을 처리한다 */
 function takeNoteReqs(){
+  if(frozen || staleHere()) return;   /* 옛 상태의 창은 '마침'을 받지 않는다 — 포커스를 받은 창이 받는다 */
   var q = null; try{ q = JSON.parse(localStorage.getItem(NOTEREQ) || "null"); }catch(e){}
   if(!q || !q.ids || !q.ids.length) return;
   try{ localStorage.removeItem(NOTEREQ); }catch(e){}
@@ -1864,11 +1873,32 @@ function renderPrev(keepScroll){
       var cp = document.createElement("button"); cp.type = "button"; cp.textContent = "원고 복사";
       var nr = m.scrivLink ? null : nearLink(m);
       cp.title = m.scrivLink ? "서식 없는 글로 복사하고 스크리브너 문서를 엽니다 — ⌘A, ⌘V. 누르면 반영한 것으로 봅니다"
-               : nr ? "서식 없는 글로 복사하고, 링크가 없어 '" + nr.title + "'의 스크리브너 문서를 엽니다 — 새 문서를 만들어 붙인 뒤 돌아와 링크를 넣어주세요"
-               : "서식 없는 글로 복사합니다 — 링크가 없어 스크리브너는 열지 않습니다. 붙여 넣은 뒤 링크를 넣어주세요";
+               : nr ? "맨 위에 제목 줄을 붙여 복사하고, 링크가 없어 '" + nr.title + "'의 스크리브너 문서를 엽니다 — 새 문서에 붙여 첫 줄을 제목으로 옮긴 뒤 링크를 넣어주세요"
+               : "맨 위에 제목 줄을 붙여 복사합니다 — 링크가 없어 스크리브너는 열지 않습니다. 새 문서에 붙여 첫 줄을 제목으로 옮긴 뒤 링크를 넣어주세요";
       cp.onclick = function(){ phoneCopy(m); };
       pb.appendChild(cp);
+      if(!m.scrivLink){
+        var lk = document.createElement("button"); lk.type = "button"; lk.textContent = "링크 넣기";
+        lk.title = "스크리브너 문서의 링크를 붙여 넣어 이 원고와 잇습니다";
+        lk.onclick = function(){ putLink(m); };
+        pb.appendChild(lk);
+      }
       elPrev.appendChild(pb);
+    }else if(m.linkWait && !m.scrivLink){
+      /* 복사는 했고 링크는 아직 — 스크리브너 새 문서의 링크를 넣을 때까지 남는다 */
+      var wb = document.createElement("p"); wb.className = "urv";
+      wb.appendChild(document.createTextNode(lab + " · 스크리브너에 붙였으면 문서 링크를 넣어 주세요"));
+      var wl = document.createElement("button"); wl.type = "button"; wl.textContent = "링크 넣기";
+      wl.title = "스크리브너에서 복사한 문서 링크를 붙여 넣습니다";
+      wl.onclick = function(){ putLink(m); };
+      var wc = document.createElement("button"); wc.type = "button"; wc.textContent = "다시 복사";
+      wc.title = "제목 줄과 본문을 다시 복사합니다";
+      wc.onclick = function(){ phoneCopy(m); };
+      var wx = document.createElement("button"); wx.type = "button"; wx.textContent = "닫기";
+      wx.title = "링크 없이 둡니다 · 원고 탭의 '링크 넣기'로 나중에 이을 수 있습니다";
+      wx.onclick = function(){ delete m.linkWait; save(); renderWrite(true); };
+      wb.appendChild(wl); wb.appendChild(wc); wb.appendChild(wx);
+      elPrev.appendChild(wb);
     }
     if(hasReview(m)){
       /* 아이폰에서 손본 자국 — 그 원고 앞에서 넣거나 버린다 */
@@ -3294,16 +3324,22 @@ function nearLink(m){
   for(k = i + 1; k < us.length; k++) if(us[k].scrivLink) return { link:us[k].scrivLink, title:us[k].title };
   return null;
 }
+/* 원고 복사 — 스크리브너 링크가 없는 원고(새 문서에 처음 붙일 원고)는 맨 위에 제목 한 줄과 빈 줄을 붙인다.
+   붙여 넣은 뒤 첫 줄을 잘라 문서 제목으로 쓴다. 링크가 있는 원고는 ⌘A, ⌘V로 덮으니 본문만.
+   링크가 없으면 링크를 넣을 때까지 교열 창에 '링크 넣기' 줄을 남긴다(linkWait, 이 저장소에만) */
 function phoneCopy(m){
-  var text = lines(m).join("\n");
-  if(!text){ toast("복사할 원고가 없습니다"); return; }
+  var body = lines(m).join("\n");
+  if(!body){ toast("복사할 원고가 없습니다"); return; }
   var own = m.scrivLink || "", nr = own ? null : nearLink(m), link = own || (nr && nr.link) || "";
+  var tt = own ? "" : String(m.title || "").replace(/\s+/g, " ").trim();
+  var text = tt ? tt + "\n\n" + body : body;
   copyThen(text, function(){
     m.phoneAt = null; m.phoneBase = null; m.dirty = true;
+    if(!own) m.linkWait = true;
     save(); cloudPush(m); renderWrite(true); renderList();
     if(own) toast("복사했습니다 · 스크리브너 문서에서 ⌘A, ⌘V", 3500);
-    else if(nr) toast("복사했습니다 · 링크가 없어 '" + nr.title + "'의 문서를 엽니다. 새 문서를 만들어 붙인 뒤 돌아와 링크를 넣어주세요", 6000);
-    else toast("복사했습니다 · 스크리브너에 붙여 넣은 뒤 링크를 넣어주세요", 4000);
+    else if(nr) toast("복사했습니다 · 맨 위 줄이 제목입니다. '" + nr.title + "'의 문서를 엽니다 — 새 문서에 붙이고 첫 줄을 제목으로 옮긴 뒤, 문서 링크를 복사해 '링크 넣기'를 눌러 주세요", 8000);
+    else toast("복사했습니다 · 맨 위 줄이 제목입니다. 스크리브너 새 문서에 붙이고 첫 줄을 제목으로 옮긴 뒤, 문서 링크를 복사해 '링크 넣기'를 눌러 주세요", 8000);
     if(link) setTimeout(function(){ try{ window.location.href = link; }catch(e){} }, 150);
   });
 }
@@ -3337,8 +3373,9 @@ function putStoryLink(m){
 function putLink(m){
   var link = askLink(m, "스크리브너 링크를 붙여넣으세요.");
   if(link === null) return;
-  m.scrivLink = link; save(); renderHead(); renderWrite(); renderList();
-  if(link) toast("링크를 넣었습니다");
+  m.scrivLink = link; if(link) delete m.linkWait;
+  save(); renderHead(); renderWrite(); renderList();
+  if(link) toast("링크를 넣었습니다 · 다음부터 '원고 복사'가 이 문서를 엽니다");
 }
 /* 인쇄 제목 밑 줄 — "2026년 9월 3일 ~ 10월 6일(34일) · 12.3매".
    같은 날이면 "2026년 10월 6일(1일)", 해가 다르면 끝 날짜에도 연도 */
@@ -4346,7 +4383,7 @@ function renderList(){
       }
       top.appendChild(wr);
       /* 줄거리 — storyM 장면으로. 막혔을 때 가는 길 */
-      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "_blank"; sl.rel = "noopener"; sl.textContent = "카드"; sl.title = m.storyLink ? "storyM에서 이 원고에 건 카드 열기" : "storyM에서 이 작품의 카드 열기"; top.appendChild(sl);
+      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "storyM"; sl.dataset.win = "storyM"; sl.textContent = "카드"; sl.title = m.storyLink ? "storyM에서 이 원고에 건 카드 열기" : "storyM에서 이 작품의 카드 열기"; top.appendChild(sl);
     }
     var gap = document.createElement("span"); gap.className = "gap"; top.appendChild(gap);
     if(m.doneAt && !isRevMs(m)){ var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "한 편"; top.appendChild(bd); }
@@ -6095,6 +6132,11 @@ $("#impFile").addEventListener("change", function(){
 })();
 
 window.addEventListener("beforeunload", function(){ clockIn(); save(); });
+window.addEventListener("focus", function(){
+  if(frozen) return;
+  if(staleWin || othersWrote()){ frozen = true; location.reload(); }   /* 다른 창이 그 사이 저장했다 — 이 창의 옛 상태를 버리고 다시 읽는다 */
+});
+window.addEventListener("blur", function(){ if(!frozen && !othersWrote()) save(); });
 document.addEventListener("visibilitychange", function(){
   /* 숨어 있는 동안 다른 창이 저장했으면 — 이 창의 옛 상태를 버리고 다시 읽는다 */
   if(document.visibilityState === "visible" && (staleWin || othersWrote())){ frozen = true; location.reload(); return; }   /* frozen — 다시 읽는 동안 beforeunload의 save()가 옛 상태를 쓰지 않게 */
@@ -6724,16 +6766,32 @@ tpRender();
 restore(); tick(); setInterval(tick, 250);
 var hashDone = tpHashOpen(false);
 cloudPull().then(function(){ if(!hashDone) tpHashOpen(true); });
-window.addEventListener("hashchange", function(){ tpHashOpen(true); });
+window.addEventListener("hashchange", function(){
+  /* storyM이 이 창에 새 주소를 보냈는데 그 사이 다른 창이 저장했으면 — 다시 읽고, 다시 읽은 뒤 주소의 원고를 연다 */
+  if(staleWin || othersWrote()){ frozen = true; location.reload(); return; }
+  tpHashOpen(true);
+});
+/* 창 하나로(2026년 11월 14일 밤) — storyM과 타이핑이 서로를 새 창(_blank)으로 열어 타이핑 창이 늘었다.
+   두 앱이 자기 창 이름을 'appwin.<앱>'에 적어 두고(이름이 없으면 앱 이름을 붙인다. 시작이 연 창은 sijak_write 그대로),
+   상대 앱을 여는 링크(data-win)는 누르는 순간 그 이름의 창으로 연다. 내 창 이름과 같으면 앱 이름으로(나 자신을 덮지 않게) */
+/* 같은 창이 storyM에서 타이핑으로 넘어오면 이름 'storyM'이 남는다 — 그때는 이 창을 'taiping'으로 고쳐 부른다 */
+function winMine(){ try{ if(!window.name || window.name === "storyM") window.name = "taiping"; localStorage.setItem("appwin.taiping", window.name); }catch(e){} }
+function winOf(app){ var n = ""; try{ n = localStorage.getItem("appwin." + app) || ""; }catch(e){} if(!n || n === window.name) n = app; return n === window.name ? app + "2" : n; }
+winMine();
+window.addEventListener("focus", winMine);
+document.addEventListener("click", function(e){
+  var a = e.target && e.target.closest ? e.target.closest("a[data-win]") : null;
+  if(a){ a.target = winOf(a.getAttribute("data-win")); a.removeAttribute("rel"); }
+}, true);
 /* 의견 창이 적어 둔 '마침' — 바로(storage 사건), 그리고 2초마다 */
 takeNoteReqs();
 window.addEventListener("storage", function(e){ if(!e.key || e.key === NOTEREQ) takeNoteReqs(); });
 setInterval(takeNoteReqs, 2000);
-setInterval(function(){ if(document.visibilityState === "visible") cloudPull(); }, 60000);
+setInterval(function(){ if(document.visibilityState === "visible" && !staleHere()) cloudPull(); }, 60000);
 /* 곁의 '지금 도는 것'은 자주 본다 — 교열을 시작하기 전에 곁이 도는지 알도록(한 줄만 읽는다) */
-setInterval(function(){ if(document.visibilityState === "visible") readNow(); }, 15000);
+setInterval(function(){ if(document.visibilityState === "visible" && !staleHere()) readNow(); }, 15000);
 window.addEventListener("focus", function(){ readNow(); });
-window.addEventListener("online", function(){ cloudPull(); });
+window.addEventListener("online", function(){ if(!staleHere()) cloudPull(); });
 document.addEventListener("visibilitychange", function(){
   if(document.visibilityState === "visible"){ cloudPull(); tick(); if(S.sess && S.sess.pending && !cutWaitT) armFocusCut(); }
 });
