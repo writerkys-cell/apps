@@ -10,12 +10,17 @@
 <link rel="manifest" href="taiping.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Gowun+Dodum&family=Nanum+Myeongjo&display=swap" rel="stylesheet">
 <style>
 /* 맥에 깔린 중명조 — 서체 목록 이름 'a중명조', PostScript 이름 'KoreanMJ-B' */
 @font-face{
   font-family:"JungMJ";
   src:local("KoreanMJ-B"), local("a중명조"), local("a중명조 Regular");
+}
+/* 문체부 바탕체 — 웹 글꼴로 올릴 수 없는 라이선스라(누리집 밖 배포·변환 금지) 맥에 설치한 것을 이름으로 부른다 */
+@font-face{
+  font-family:"MCSTBatang";
+  src:local("문체부 바탕체"), local("문체부 바탕체 Regular"), local("MCSTBatang"), local("MCST Batang"), local("MCSTBatang-Regular");
 }
 :root{
   --hanji:#efe9dc;
@@ -1019,8 +1024,13 @@ h2:first-child{margin-top:0}
       <p class="note">A5 세로, 위아래 2cm·좌우 3cm 여백으로 찍습니다. 첫머리에 제목, 그 아래에 인쇄하는 날짜와 원고 매수(200자 기준), 한 편 분량에 대한 완료 퍼센트가 들어갑니다. 인쇄 창에서 용지가 A5로 잡혀 있는지 한 번 확인하세요.</p>
 
       <h2>글꼴</h2>
+      <div class="row">
+        <label for="bodyFont">본문 글꼴</label>
+        <select id="bodyFont"><option value="jung">중명조</option><option value="gowun">고운바탕</option><option value="nanum">나눔명조</option><option value="mcst">문체부 바탕체</option></select>
+      </div>
       <p class="fontcheck">가을 햇살 아래, 나는 다섯 매를 더 썼다.</p>
-      <p class="note">이 문장이 중명조로 보이면 제대로 잡힌 것입니다. 다른 명조로 보이면 서체 관리자에서 a중명조가 켜져 있는지 확인하세요.</p>
+      <p class="note" id="fontNote"></p>
+      <p class="note">교열 원고, 400자 쓰는 칸, 의견 창, 인쇄가 모두 이 글꼴을 씁니다. 고운바탕과 나눔명조는 인터넷에서 받아 오는 글꼴이라 처음 한 번은 연결이 필요하고, 그다음부터는 저장해 둔 것을 씁니다. 중명조와 문체부 바탕체는 이 맥에 설치된 것을 씁니다.</p>
 
       <h2>단축어</h2>
       <p class="note">몰입과 타이핑, 휴식은 스크리브너 안의 '보태기 곁'이 맡고, 교열은 보태기 머리줄에서 잽니다. 곁은 아무것도 기억하지 않으니, 곁이 부를 단축어의 이름과 휴식 시간은 여기서 정합니다.</p>
@@ -1272,6 +1282,7 @@ function fresh(){
     smart:true,
     focusMin:15,
     restMin:15,
+    bodyFont:"jung",   /* 본문 글꼴 — FONTS의 열쇠 */
     pfz:16, plh:1.9, ppad:48, pind:1, pmax:0, ifz:16, ilh:1.9,
     nwfz:16, nwlh:1.9,   /* 의견 창 */
     wide:true,
@@ -1680,8 +1691,17 @@ function applySplit(){
   S.split = v;
   document.getElementById("write").style.setProperty("--split", v+"%");
 }
+/* 본문 글꼴 — 설정 '글꼴'. 없는 글꼴이면 다음 것으로 넘어간다 */
+var FONTS = {
+  jung:  { name:"중명조",       css:'"JungMJ","a중명조","AppleMyungjo",serif' },
+  gowun: { name:"고운바탕",     css:'"Gowun Batang","JungMJ","AppleMyungjo",serif' },
+  nanum: { name:"나눔명조",     css:'"Nanum Myeongjo","JungMJ","AppleMyungjo",serif' },
+  mcst:  { name:"문체부 바탕체", css:'"MCSTBatang","문체부 바탕체","JungMJ","AppleMyungjo",serif' }
+};
+function bodyFontKey(){ return FONTS[S.bodyFont] ? S.bodyFont : "jung"; }
 function applyStyle(){
   var r = document.documentElement.style;
+  r.setProperty("--body", FONTS[bodyFontKey()].css);
   r.setProperty("--pfz", S.pfz+"px");
   r.setProperty("--plh", String(S.plh));
   r.setProperty("--ppad", S.ppad+"px");
@@ -5332,6 +5352,7 @@ function renderSet(){
   $("#smart").checked = S.smart !== false;
   $("#tpStep").value = S.tp.step; $("#tpDim").checked = S.tp.dim !== false;
   $("#ipos").value = S.inputPos === "top" ? "top" : "mid";
+  $("#bodyFont").value = bodyFontKey(); drawFontNote();
   drawPiece();
   $("#sburl").value = S.sbUrl || "";
   $("#sbkey").value = S.sbKey || "";
@@ -6016,6 +6037,30 @@ elLm.addEventListener("click", function(){
   save(); renderMode(); renderCount();
   toast(S.lineMode ? "한 줄씩 집중해서 씁니다" : "보통 입력창으로 씁니다 — 엔터가 그대로 남습니다");
   elInput.focus();
+});
+function drawFontNote(){
+  var k = bodyFontKey(), el = $("#fontNote");
+  var tip = {
+    jung:"이 문장이 중명조로 보이면 제대로 잡힌 것입니다. 다른 명조로 보이면 서체 관리자에서 a중명조가 켜져 있는지 확인하세요.",
+    gowun:"이 문장이 고운바탕으로 보이면 제대로 잡힌 것입니다. 중명조로 보이면 아직 글꼴을 받지 못한 것이니 인터넷 연결을 확인하세요.",
+    nanum:"이 문장이 나눔명조로 보이면 제대로 잡힌 것입니다. 중명조로 보이면 아직 글꼴을 받지 못한 것이니 인터넷 연결을 확인하세요.",
+    mcst:"문체부 바탕체는 (사)세종대왕기념사업회 누리집에서 내려받아 맥에 설치해야 보입니다. 설치하지 않았으면 중명조로 보입니다."
+  }[k];
+  el.textContent = tip;
+  if(document.fonts && document.fonts.check){
+    var fam = FONTS[k].css.split(",")[0];
+    var miss = function(){
+      if(bodyFontKey() !== k) return;
+      if(!document.fonts.check("16px " + fam, "가")) el.textContent = "지금은 " + FONTS[k].name + " 글꼴을 찾지 못해 다른 명조로 보이고 있습니다. " + tip;
+    };
+    document.fonts.load("16px " + fam, "가").then(miss, miss);
+  }
+}
+$("#bodyFont").addEventListener("change", function(){
+  S.bodyFont = FONTS[this.value] ? this.value : "jung";
+  save(); applyStyle(); drawFontNote();
+  padInput(); renderMirror(); followCaret();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ padInput(); renderMirror(); });
 });
 $("#ipos").addEventListener("change", function(){
   S.inputPos = this.value === "top" ? "top" : "mid";
