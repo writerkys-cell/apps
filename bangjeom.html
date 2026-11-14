@@ -261,7 +261,8 @@ ol.list li .body{flex:1;padding:.42rem .3rem .5rem 0;line-height:1.6}
 }
 ol.list li.done .body{color:var(--ink-faint);text-decoration:line-through;text-decoration-color:var(--seal-soft);text-decoration-thickness:1px}
 ol.list li.act .body{font-weight:700}
-ol.list li.repdone .body{color:var(--ink-faint)}   /* 반복 일: 오늘 치를 끝냈다 */
+ol.list li.repdone .body{color:var(--ink-faint)}   /* 반복 일: 오늘 차례가 아니다 */
+ol.list li.restrow .body{text-align:left;font-size:.82rem;color:var(--ink-faint);letter-spacing:.03em;border-bottom:1px dotted var(--rule);padding-bottom:1px;flex:none}
 ol.list li .del,ol.list li .mv,ol.list li .ed,ol.list li .up,ol.list li .dn,ol.list li .pg{color:var(--ink-faint);font-size:.85rem;padding:.45rem .3rem;visibility:hidden;flex:none}
 ol.list li .dn{color:var(--ink)}
 ol.list li .pg{color:var(--seal)}
@@ -857,13 +858,25 @@ const WD = ['일','월','화','수','목','금','토'], WD_ORDER = [1,2,3,4,5,6,
 const isRep = t => !!(t && t.rep && !t.done);
 const keyDiff = (a, b) => Math.round((parseKey(b) - parseKey(a)) / 86400000);
 const repDoneToday = t => !!(t && t.rep && t.repLast === dayKey());
-function repDue(t){
-  const r = t && t.rep, k = dayKey();
+function repDue(t, k){
+  const r = t && t.rep; k = k || dayKey();
   if(!r || t.done || t.repLast === k) return false;
   if(r.type === 'week') return (r.days || []).includes(parseKey(k).getDay());
   if(r.type === 'days') return !t.repLast || keyDiff(t.repLast, k) >= (+r.n || 1);
   return true;
 }
+// 다음 차례 날('YYYY-MM-DD'). 오늘 끝냈으면 내일부터 센다(2026년 11월 15일)
+function repNext(t){
+  if(!t || !t.rep) return null;
+  const d = parseKey(dayKey());
+  if(repDoneToday(t)) d.setDate(d.getDate() + 1);
+  for(let i = 0; i < 400; i++, d.setDate(d.getDate() + 1)){ const k = keyOf(d); if(repDue(t, k)) return k; }
+  return null;
+}
+const nextLabel = k => { if(!k) return ''; const d = parseKey(k), n = keyDiff(dayKey(), k); return n === 1 ? '내일' : `다음 ${d.getMonth()+1}/${d.getDate()} ${WD[d.getDay()]}`; };
+// 목록에서 숨기는 반복 일: 오늘 차례가 아닌 것(오늘 끝낸 것 포함). 차례가 되는 날 다시 보인다
+const repResting = t => isRep(t) && !repDue(t);
+let showResting = false;                   // 「보기」로 펼쳤나. 그 창에서만 기억한다
 const repCycle = t => { const r = t.rep; return r.type === 'week' ? ((r.days || []).length >= 7 ? '매일' : WD_ORDER.filter(d => (r.days || []).includes(d)).map(d => WD[d]).join('·')) : r.type === 'days' ? `${r.n}일마다` : '매일'; };
 const repLabel = t => `${(BLOCKS[t.rep.block] || BLOCKS.pm).name} · ${repCycle(t)}`;
 const repTag = t => isRep(t) ? '<span class="kind rep">반복</span>' : '';
@@ -1498,22 +1511,25 @@ function renderList(){
     : '';
   const act = S.pick ? S.pick.id : null;
   if(editOpen && !S.tasks.some(t => t.id === editOpen && !t.done)) editOpen = null;
-  $('#listBox').innerHTML = S.tasks.map(t => {
+  const resting = live.filter(t => repResting(t) && t.id !== editOpen);
+  const shown = showResting ? S.tasks : S.tasks.filter(t => !resting.includes(t));
+  const restRow = resting.length ? `<li class="restrow"><span class="gutter"></span><button class="body" data-resting>${showResting ? `쉬는 반복 일 ${resting.length}개 · 접기` : `쉬는 반복 일 ${resting.length}개 · 보기`}</button></li>` : '';
+  $('#listBox').innerHTML = (shown.map(t => {
     const dot = t.id === act && !t.done ? '<span class="dot"></span>' : (t.done ? '<span class="ord">✓</span>' : '');
     const mv = t.done ? (t.echo ? '' : `<button class="mv" data-revive="${t.id}">되살리기</button>`) : `<button class="mv" data-end="${t.id}">끝으로</button>`;
     const up = t.done || t.rep ? '' : (t.today ? `<button class="up" data-unurg="${t.id}">오늘에서 빼기</button>` : `<button class="up" data-urg="${t.id}">오늘로</button>`);
     const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">고치기</button>`;
     const pg = t.done ? '' : `<button class="pg" data-page="${t.id}">페이지</button>`;
     const dn = t.done ? '' : `<button class="dn" data-done="${t.id}">끝냈다</button>`;
-    const ri = isRep(t) ? `<span class="repinfo">${esc(repLabel(t))}${repDoneToday(t) ? ' · 오늘 함' : ''}</span>` : '';
-    return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${repDoneToday(t)?'repdone':''}">
+    const ri = isRep(t) ? `<span class="repinfo">${esc(repLabel(t))}${repDoneToday(t) ? ' · 오늘 함' : ''}${repResting(t) ? ' · ' + nextLabel(repNext(t)) : ''}</span>` : '';
+    return `<li class="${t.done?'done':''} ${t.id===act?'act':''} ${repResting(t)?'repdone':''}">
       <span class="gutter">${dot}</span>
       <span class="body">${urgTag(t)}${kindTag(t.kind)}${repTag(t)}${esc(t.text)}${linkTag(t.url)}${t.done ? '' : dueTag(t)}${ri}${t.note
         ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}"${t.done ? '' : ' title="누르면 페이지가 열립니다"'}>${fmtNote(t.note)}</span>` : ''}</span>
       ${pg}${dn}${ed}${up}${mv}
       <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
     </li>` + (editOpen === t.id ? editorHtml(t) : '');
-  }).join('') || `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`;
+  }).join('') || (resting.length ? '' : `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`)) + restRow;
   wireEditor();
 }
 
@@ -1943,6 +1959,7 @@ document.addEventListener('click', e => {
   if(kr){ if(!e.target.closest('a')) openSheetRow(knotRows[+kr.dataset.knot]); return; }
   const pg = e.target.closest('[data-page]');
   if(pg){ openSheet(pg.dataset.page); return; }
+  if(e.target.closest('[data-resting]')){ showResting = !showResting; renderList(); return; }
   const nt = e.target.closest('[data-note]');
   if(nt){
     const id = nt.dataset.note, t = byId(id);

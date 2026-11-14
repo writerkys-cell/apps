@@ -129,6 +129,15 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const pad = n => String(n).padStart(2,'0');
 const localDate = (d = new Date()) => d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+// 오늘 차례가 아닌 반복 일(오늘 끝낸 것 포함)은 보여 주지 않는다. 방점과 같은 규칙, 하루는 자정에 바뀐다(2026년 11월 15일)
+function repResting(t){
+  const r = t && t.rep; if(!r) return false;
+  const now = new Date(), k = localDate(now);
+  if(t.repLast === k) return true;
+  if(r.type === 'week') return !(r.days || []).includes(now.getDay());
+  if(r.type === 'days' && t.repLast){ const [y,m,d] = t.repLast.split('-').map(Number); return Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(y, m-1, d)) / 86400000) < (+r.n || 1); }
+  return false;
+}
 let toastTimer;
 const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200); };
 const LS = { get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} } };
@@ -238,7 +247,7 @@ function render(){
   // 고른 일이 끝났거나 사라졌으면 칸을 비운다
   const pickedTask = pick && pick.kind !== 'fixed' ? tasks.find(t => t.id === pick.id && !t.done) : null;
   if(pick && !pickedTask){ pick = null; savePick(); }
-  const live = tasks.filter(t => !t.done && t !== pickedTask).sort((a,b) => key(a.id) - key(b.id));
+  const live = tasks.filter(t => !t.done && t !== pickedTask && !repResting(t)).sort((a,b) => key(a.id) - key(b.id));
   const doneToday = tasks.filter(t => t.done && t.doneAt && localDate(new Date(t.doneAt)) === today);
 
   const items = [];
