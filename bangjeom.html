@@ -697,14 +697,14 @@ const blank = () => ({v:4, rev:0, tasks:[], pick:null, skip:{}, log:[], outbox:[
 let S = Object.assign(blank(), JSON.parse(LS.get('bangjeom.state') || 'null') || {});
 
 /* ══════════ 날 ══════════ */
-// 하루는 새벽 4시에 바뀐다. 보태기·서가·시작과 같다
-const DAY_H = 4;
+// 하루는 자정에 바뀐다. 보태기·서가·시작·달리기와 같다
+const DAY_H = 0;   // 2026년 11월 15일부터 자정(전에는 새벽 4시)
 const pad2 = n => String(n).padStart(2,'0');
 const keyOf = d => d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate());
 const dayKey = t => keyOf(new Date((t == null ? Date.now() : t) - DAY_H*3600000));
 const dateOf = iso => dayKey(iso ? Date.parse(iso) : null);           // 끝낸 시각이 어느 날인가
 const parseKey = k => { const [y,m,d] = k.split('-').map(Number); return new Date(y, m-1, d); };
-// 오늘(4시 기준)의 시작과 끝 시각
+// 오늘의 시작과 끝 시각
 function dayRange(){
   const key = dayKey(), d = parseKey(key);
   return {key, s:new Date(d.getFullYear(), d.getMonth(), d.getDate(), DAY_H), e:new Date(d.getFullYear(), d.getMonth(), d.getDate()+1, DAY_H)};
@@ -841,7 +841,7 @@ const toggleLine = (note, i) => (note || '').split('\n').map((l, k) => {
 const KINDS = {write:'쓰기', read:'읽기'};   // 쉬는일(rest)은 2026년 11월 13일에 없앴다. 되풀이는 반복되는 일(rep)이 맡는다
 
 /* ══════════ 시간대 (2026년 11월 13일) ══════════ */
-// 하루를 셋으로: 오전(0~12시)은 쓰기, 오후(12~18시)는 쓰기·읽기가 아닌 일, 저녁(18~24시)은 읽기. 시계의 시각 그대로다(하루 경계 4시와 따로)
+// 하루를 셋으로: 오전(0~12시)은 쓰기, 오후(12~18시)는 쓰기·읽기가 아닌 일, 저녁(18~24시)은 읽기. 시계의 시각 그대로다(하루 경계와 따로)
 const BLOCKS = {
   am: {name:'오전', kind:'write', what:'쓰기',      why:'오전은 쓰기 시간',   pk:'write', end:'정오'},
   pm: {name:'오후', kind:'',      what:'그 밖의 일', why:'오후는 그 밖의 일', pk:'other', end:'저녁 6시'},
@@ -851,7 +851,7 @@ const BLOCK_ORDER = ['am','pm','eve'];
 const blockOf = ms => { const h = new Date(ms == null ? Date.now() : ms).getHours(); return h < 12 ? 'am' : h < 18 ? 'pm' : 'eve'; };
 
 /* ══════════ 반복되는 일 (2026년 11월 13일) ══════════ */
-// rep: {block:'am'|'pm'|'eve', type:'daily'|'week'|'days', days:[0~6](week), n(days)}. repLast: 끝낸 날(4시 기준 'YYYY-MM-DD').
+// rep: {block:'am'|'pm'|'eve', type:'daily'|'week'|'days', days:[0~6](week), n(days)}. repLast: 끝낸 날('YYYY-MM-DD').
 // 끝나도 done이 되지 않고 목록에 남는다. 제 시간대에만, 그 시간대의 본래 종류보다 먼저 뜬다. 놓친 날 것은 쌓이지 않는다
 const WD = ['일','월','화','수','목','금','토'], WD_ORDER = [1,2,3,4,5,6,0];
 const isRep = t => !!(t && t.rep && !t.done);
@@ -967,7 +967,7 @@ const sgProj = () => cfg.sgUrl && cfg.sgKey ? {url:cfg.sgUrl, key:cfg.sgKey} : (
 const G = {write:null, read:null, err:{write:'', read:''}, at:0};
 // 글쓰기 시간(2026년 11월 12일부터): 시작이 잰다. 시작_인계.md의 ‘글쓰기 세션’과 같은 기준이니 그쪽이 바뀌면 여기도 고칠 것.
 //   미래 프로젝트(서가와 같은 곳)의 sijak_sessions: kind 'write', 지우지 않은 줄. end가 있으면 끝난 세션(min이 있으면 그 값, 없으면 end - start),
-//   end가 없으면 재는 중. 하루는 시작 시각의 4시 기준. 여기에 떠들기(botaegi_sessions의 source 'tteodeulgi')를 더한다.
+//   end가 없으면 재는 중. 하루는 시작 시각 기준. 여기에 떠들기(botaegi_sessions의 source 'tteodeulgi')를 더한다.
 //   타이핑·보태기의 몰입·타이핑·교열은 세지 않는다(둘 다 세면 두 번 센다). 목표는 보태기 프로젝트의 conf, 못 읽으면 180분.
 async function loadWriteGoal(){
   const ps = sgProj(), pb = btProj();
@@ -975,7 +975,7 @@ async function loadWriteGoal(){
   const {key, s, e} = dayRange();
   const enc = encodeURIComponent;
   try{
-    const since = new Date(s.getTime() - 24*3600000).toISOString();     // 4시를 넘겨 이어지는 세션도 보려고 하루 앞에서부터
+    const since = new Date(s.getTime() - 24*3600000).toISOString();     // 자정을 넘겨 이어지는 세션도 보려고 하루 앞에서부터
     const [rows, tteo, kv] = await Promise.all([
       restGet(ps, 'sijak_sessions?select=data&data->>kind=eq.write&data->>start=gte.' + enc(since)),
       pb ? restGet(pb, 'botaegi_sessions?select=type,start_at,end_at,source&source=eq.tteodeulgi&start_at=gte.' + enc(s.toISOString()) + '&start_at=lt.' + enc(e.toISOString())).catch(() => null) : null,

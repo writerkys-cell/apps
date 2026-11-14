@@ -506,9 +506,9 @@ pre.sql{background:var(--paper-2);border:1px solid var(--line);padding:12px;font
    글쓰기(보태기)·독서(서가)·할 일(방점)·운동(달리기)의 오늘 상태를 읽기만 하고,
    일지(하루 종일 수시로 적는 기록과 그것을 다시 읽는 리뷰. 2026년 10월 12일까지는 아침의 모닝페이지)·달력 일정·수입(월별 합계)·메모·레퍼런스·프로젝트(단계 일정과 판정)만 스스로 적는다.
    레퍼런스(잠시 다녀올 곳의 링크)는 이 기기에만 둔다.
-   하루는 새벽 4시에 바뀐다. */
+   하루는 자정에 바뀐다(2026년 11월 15일, 전에는 새벽 4시). */
 
-const DAY_H = 4;
+const DAY_H = 0;   /* 2026년 11월 15일부터 자정(전에는 새벽 4시) */
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,'0');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -669,7 +669,7 @@ function readRunning(){
    한 세션 = sijak_sessions 한 줄(미래 프로젝트, 시작의 표). data: { id, kind:'write', start, end(끝내기 전엔 null),
    min(실제 시간을 고쳤을 때만, 분), adv0, adv1(시작·끝 때 그날 나아감 — 타이핑의 days 줄), device, updatedAt, deleted }.
    via는 어느 링크로 열었나('write' 타이핑 · 'chogo' 초고 · 'tteo' 떠들기 · 'typewriter' 타자기, 2026년 11월 13일). 넷 다 글쓰기 시간이다.
-   어느 글인지는 적지 않는다. 단축어는 설정에 이름을 적었을 때만(cfg.sc.start·end, 2026년 11월 13일) — 시작할 때 것은 칸을 누른 그 클릭에서, 끝낼 때 것은 끝내기 칸의 단추 클릭에서. cut은 시작 단축어를 불렀다는 표시. 2분 안에 끝내면 없던 일로(단, 시작 단축어를 불렀는데 탭 닫힘으로 끝나면 끝내기 칸을 띄운다). 3시간을 넘기거나 새벽 4시를 지나면 실제 시간을 묻는다.
+   어느 글인지는 적지 않는다. 단축어는 설정에 이름을 적었을 때만(cfg.sc.start·end, 2026년 11월 13일) — 시작할 때 것은 칸을 누른 그 클릭에서, 끝낼 때 것은 끝내기 칸의 단추 클릭에서. cut은 시작 단축어를 불렀다는 표시. 2분 안에 끝내면 없던 일로(단, 시작 단축어를 불렀는데 탭 닫힘으로 끝나면 끝내기 칸을 띄운다). 3시간을 넘기거나 자정을 지나면 실제 시간을 묻는다.
    기기 사이에 하나의 세션을 이어받아 끝낼 수 있다. SS_SINCE부터 오늘의 글쓰기 시간은 이 표와 떠들기만 센다(타이핑의 몰입·타이핑·교열은 세지 않는다 — 둘 다 세면 두 번 센다).
    글자는 그대로 타이핑의 days 줄(타이핑에서 보내기를 눌러야 올라온다).
    독서는 서가가 잰다 — 11월 12일에 하루 동안 독서도 여기서 쟀다가 되돌렸다(서가 안에서 코멘트·쪽을 다루는 흐름이 읽기 시작에 묶여 있어서). kind:'read' 줄이 남아 있어도 쓰지 않는다. */
@@ -1158,7 +1158,7 @@ editor.addEventListener('input',()=>{
   clearTimeout(saveT); saveT=setTimeout(saveToday,500);
 });
 function saveToday(){
-  const k=mpDay; /* 적기 시작한 날에 붙인다 — 4시를 넘겨도 이어 적던 일지로 */
+  const k=mpDay; /* 적기 시작한 날에 붙인다 — 자정을 넘겨도 이어 적던 일지로 */
   if(!MP.entries[k]) MP.entries[k]={text:'',annotations:[]};
   const e=MP.entries[k];
   e.text=editor.value; e.words=countWords(e.text);
@@ -1374,7 +1374,7 @@ $('annSave').onclick=()=>{
 /* ═════════ 달력 — 일정을 적고, 오늘 화면에 매일 일정과 다가오는 일정을 보인다 ═════════
    일정 하나 = cal_events 한 줄. data: { id, title, date, time, place, memo,
    repeat:'none'|'daily'|'weekly'|'monthly', until, done:{날짜키:1|0}, deleted, updatedAt, device }
-   달력 칸은 실제 날짜, ‘오늘’과 매일 일정의 체크는 새벽 4시 기준. */
+   달력 칸은 실제 날짜, ‘오늘’과 매일 일정의 체크는 자정 기준. */
 const CAL_KEY='sijak.cal';
 let CAL=Object.assign({events:{}, dirty:{}, since:''}, lsGet(CAL_KEY,{}));
 if(!CAL.events) CAL.events={}; if(!CAL.dirty) CAL.dirty={};
@@ -1729,7 +1729,7 @@ document.addEventListener('keydown',ev=>{
            state:'open'|'answered', history:[{on, from, to, text?}], answeredOn?, result?, answeredAt?,
            updatedAt, device, deleted? }
    - 열리는 날 전에는 어디에도 보이지 않는다(달력·오늘·리뷰). 잊는 것이 이 장치의 일이다.
-   - 열린 날(새벽 4시 기준)부터 처리할 때까지 오늘 화면의 ‘기도’에 남는다.
+   - 열린 날(자정 기준)부터 처리할 때까지 오늘 화면의 ‘기도’에 남는다.
    - 해결: 결과를 적으면 해결한 날의 달력에 기록으로 남는다(처음 적은 날·바란 해결·다시 기도한 횟수·결과).
    - 다시 기도: 같은 줄의 열리는 날을 미루고 history에 쌓는다. 해결책을 고쳐 쓰면 이전 문장도 history에 남는다.
    - 아이폰 단축어는 한 줄을 넣기만 한다(메모 단축어와 같은 방식). asked가 없으면 createdAt의 날로 본다. 시각이 '+09:00' 꼴이어도 받을 때 고른다. */
@@ -1899,7 +1899,7 @@ window.openPrayToday=openPrayToday;
    2026년 10월 12일까지는 ‘메모’ 탭(일정·할 일·글·조사로 옮기기)이었다. 탭과 화면은 없애고 표(memo_notes)와 올리고 받는 코드는 남겼다.
    메모 하나 = memo_notes 한 줄(미래 프로젝트, 시작의 표). data: { id, text, createdAt, updatedAt, device, state:'open'|'done', doneAt?, to?, deleted? }
    단축어가 올린 줄은 시각이 '+09:00' 꼴이라 받을 때 Z 꼴로 고른다. 받으면 foldMemos가 state 'open'인 것을 적은 시각 순서로
-   그날(새벽 4시 기준) 일지 끝에 ‘HH:MM’ 한 줄과 본문으로 붙이고, 메모는 state 'done'·to 'ilji'로 접어 다시 올린다. */
+   그날(자정 기준) 일지 끝에 ‘HH:MM’ 한 줄과 본문으로 붙이고, 메모는 state 'done'·to 'ilji'로 접어 다시 올린다. */
 const MEMO_KEY='sijak.memo';
 let MEMO=Object.assign({notes:{}, dirty:{}, since:''}, lsGet(MEMO_KEY,{}));
 if(!MEMO.notes) MEMO.notes={}; if(!MEMO.dirty) MEMO.dirty={};
@@ -2317,7 +2317,7 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="expRef">목록 내보내기</button><button class="btn" id="impRef">파일에서 가져오기</button><input type="file" id="impRefFile" accept=".json" hidden></div>
 
   <h3>일지</h3>
-  <p class="note">하루는 새벽 4시에 바뀝니다. 이 기기 이름은 ‘${esc(myDevice())}’입니다. 하루 종일 수시로 적고, 그날 처음 적거나 30분 넘게 쉬었다가 다시 적으면 시각이 찍힙니다. 맥과 아이폰에서 같은 날 적으면 뒤에 덧붙인 것끼리 합쳐집니다.</p>
+  <p class="note">하루는 자정에 바뀝니다. 이 기기 이름은 ‘${esc(myDevice())}’입니다. 하루 종일 수시로 적고, 그날 처음 적거나 30분 넘게 쉬었다가 다시 적으면 시각이 찍힙니다. 맥과 아이폰에서 같은 날 적으면 뒤에 덧붙인 것끼리 합쳐집니다.</p>
   <p class="note"><b>지나간 기록 잠그기</b>(${MP.lockOn===false?'꺼짐':'켜짐'}): 마지막 시각 줄 뒤의 현재 기록은 시각 줄까지 마음대로 고치고, 그 앞은 고칠 수 없습니다. 시각 줄을 지우면 그 앞 기록이 열립니다(지운 시각은 ‘14:32’처럼 한 줄로 직접 치면 되살아납니다). 끄면 두 기기에서 같은 기록을 함께 고쳤을 때 합치지 못하고 둘 다 남깁니다. <b>타자기 모드</b>(${MP.typewriter?'켜짐':'꺼짐'}): 적는 동안 최근 다섯 줄만 보이고 그 위는 종이로 스밉니다. 두 스위치는 기기마다 따로 둡니다.</p>
   <div class="btnrow">
     <button class="btn" id="lockBtn">${MP.lockOn===false?'지나간 기록 잠그기 켜기':'지나간 기록 잠그기 끄기'}</button>
@@ -2512,7 +2512,7 @@ function renderIncStrip(){
 const mae1=c=>(c/200).toFixed(1);
 function kLabel(k){ const d=parseKey(k); return (d.getMonth()+1)+'월 '+d.getDate()+'일'; }
 function kLabelY(k){ return k.slice(0,4)+'년 '+kLabel(k); }
-/* 오늘(4시 기준)을 넣은 최근 30일. 쉰 날도 나눈다. 기록(first)이 30일이 안 되면 있는 날만큼으로 */
+/* 오늘을 넣은 최근 30일. 쉰 날도 나눈다. 기록(first)이 30일이 안 되면 있는 날만큼으로 */
 function avgN(map,first,end){
   const k0=end||dayKey(); let sum=0, days=0, n=0;
   for(let i=0;i<30;i++){ const k=addDays(k0,-i); if(first&&k<first) break; const v=+map[k]||0; sum+=v; n++; if(v>0) days++; }
@@ -2721,7 +2721,7 @@ function renderPg(){
 async function openPg(){ renderPg(); await loadReads(true); if(view==='pg') renderPg(); }
 
 /* ═════════ 운동·거리 — 달리기(dalligi.html)의 run_log를 읽기만 한다 ═════════
-   act 줄: { kind:'run'|'walk', day(4시 기준), km, sec(러닝 시간), deleted }. conf 줄: { goal(거리 기준선 km), timeGoal(하루 운동 시간 목표, 분) }.
+   act 줄: { kind:'run'|'walk', day, km, sec(러닝 시간), deleted }. conf 줄: { goal(거리 기준선 km), timeGoal(하루 운동 시간 목표, 분) }.
    운동 칸 = 오늘 운동한 시간(러닝 시간의 합). 거리 칸 = 최근 30일 하루 평균 거리(달리기+걷기, 쉰 날 포함). 목표와 기준선은 달리기 앱에서 바꾼다 */
 const RUN_DEF_TIME=60, RUN_DEF_KM=4, C_WALK='#8597a4';
 let RN=null, RNerr='', RNat=0;
@@ -2796,7 +2796,7 @@ function renderDist(){
     <div class="sub">달리기 ${a.run.toFixed(2)}km · 걷기 ${a.walk.toFixed(2)}km · 하루 평균 ${fmtMin(a.min)}</div>
     <div class="now">${+cur.slice(5)}월에는 지금까지 ${mK.toFixed(1)}km(달리기 ${mR.toFixed(1)}km) · ${fmtMin(mS/60)} · 운동한 날 ${mD}일</div>
   </div>
-  <p class="note">달리기 앱의 기록으로 셉니다. 달리기와 걷기를 합친 거리이고, 쉰 날도 나눕니다. 하루는 새벽 4시에 바뀝니다.</p>`;
+  <p class="note">달리기 앱의 기록으로 셉니다. 달리기와 걷기를 합친 거리이고, 쉰 날도 나눕니다. 하루는 자정에 바뀝니다.</p>`;
   /* 최근 30일 날마다 */
   const items=[]; for(let i=29;i>=0;i--){ const k=addDays(k0,-i), dt=parseKey(k), r=run[k]||0, t=km[k]||0, before=k<first;
     items.push({a:r, b:Math.max(0,t-r), hi:k===k0, lab:(i===29||dt.getDate()===1)?(dt.getMonth()+1)+'/'+dt.getDate():(i%(window.innerWidth<520?7:5)===0&&i>2?String(dt.getDate()):''),

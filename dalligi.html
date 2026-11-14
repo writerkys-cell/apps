@@ -221,9 +221,9 @@ details.old[open] summary::before{content:'▾ '}
    나이키 런 클럽에서 잰 달리기·걷기를 옮겨 적고, 흐름을 본다.
    - 적는 것: 운동(act), 몸무게(weight), 코스(course), 신발(shoe), 기준선(conf). 모두 미래 프로젝트의 run_log 표 한 곳에.
    - '나에 대해'(나이·키·목적 같은 것)는 이 기기의 localStorage에만 둔다. 표에도, 이 파일에도 적지 않는다.
-   - 하루는 새벽 4시에 바뀐다(시작·서가·미래·보태기와 같음). 운동의 하루(day)는 시작 시각으로 정한다. */
+   - 하루는 자정에 바뀐다(2026년 11월 15일부터, 시작·서가·보태기·방점과 같음). 운동의 하루(day)는 시작 시각으로 정한다. */
 
-const DAY_H = 4;
+const DAY_H = 0;   /* 2026년 11월 15일부터 자정(전에는 새벽 4시) */
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,'0');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -320,7 +320,7 @@ function setDot(part,state,msg){
 }
 
 /* ═════════ 저장 — run_log 한 줄 = 하나. 나중에 고친 쪽이 이기고, 이 기기에서 못 올린 줄은 덮지 않는다 ═════════
-   act    : { id:'a…', type:'act', kind:'run'|'walk', date(화면의 날짜), start, end, day(4시 기준), km, sec(러닝 시간), elapsed(경과 시간),
+   act    : { id:'a…', type:'act', kind:'run'|'walk', date(화면의 날짜), start, end, day(자정 기준), km, sec(러닝 시간), elapsed(경과 시간),
             best(최고 페이스, 초/km), kcal, cad, up, down, hrA, hrM, splits:[{n, km, pace, elev}], rpe, course, shoe, temp, weather, memo }
    weight : { id:'w'+날짜, type:'weight', date, kg }
    course : { id:'c…', type:'course', name, km }
@@ -428,7 +428,7 @@ function parsePaste(text){
   return {ok:seen>=2, header, f, splits};
 }
 function splitsText(sp){ return (sp||[]).map(s=>(s.km>=0.999?s.n:s.km)+' '+fmtPace(s.pace).replace(/"$/,'').replace("'",':')+(s.elev!=null?' '+s.elev:'')).join('\n'); }
-/* 화면 날짜와 시작 시각으로 4시 기준의 하루를 정한다 */
+/* 화면 날짜와 시작 시각으로 자정 기준의 하루를 정한다 */
 function dayOf(date,start){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')) return '';
   const m=/^(\d{1,2}):(\d{2})/.exec(start||'');
@@ -448,7 +448,7 @@ function dayMap(list){
   return m;
 }
 function firstDay(){ const a=acts(); return a.length?a[0].day:null; }
-/* 오늘(4시 기준)을 넣은 최근 30일. 쉰 날도 나눈다. 기록이 30일이 안 되면 있는 날만큼 */
+/* 오늘을 넣은 최근 30일. 쉰 날도 나눈다. 기록이 30일이 안 되면 있는 날만큼 */
 function avg30(m,first,end){
   const k0=end||dayKey(); let run=0,walk=0,days=0,n=0;
   for(let i=0;i<30;i++){ const k=addDays(k0,-i); if(first&&k<first) break; const d=m[k]; n++;
@@ -619,7 +619,7 @@ function refreshCalc(){
   el.innerHTML = p ? `평균 페이스 ${fmtPace(p)} <small>/km</small> · 시속 ${km1(s)}km` : `<small>거리와 러닝 시간을 넣으면 평균 페이스와 속도를 셉니다.</small>`;
   if(p&&draft.srcPace&&Math.abs(draft.srcPace-p)>2) w.push(`나이키 앱의 평균 페이스는 ${fmtPace(draft.srcPace)}인데, 거리와 러닝 시간으로 세면 ${fmtPace(p)}입니다. 거리나 시간을 잘못 옮겼는지 보세요.`);
   if(a.splits.length&&a.km>0){ const t=a.splits.reduce((x,y)=>x+y.km,0); if(Math.abs(t-a.km)>0.06) w.push(`구간 거리를 더하면 ${fmtKm(t)}km인데, 거리는 ${fmtKm(a.km)}km입니다.`); }
-  if(a.day&&a.date&&a.day!==a.date) w.push(`새벽 4시 전에 시작해서 ${kLabel(a.day)}의 운동으로 셉니다.`);
+  if(a.day&&a.date&&a.day!==a.date) w.push(`자정 전에 시작해서 ${kLabel(a.day)}의 운동으로 셉니다.`);
   if(a.shoe&&ST.rows[a.shoe]){ const sh=ST.rows[a.shoe]; if(shoeNear(sh)) w.push(`${esc(sh.name)}은(는) ${Math.round(shoeKm(sh))}km를 신었습니다. 바꿀 때(${+sh.limit||SHOE_LIMIT}km)가 가깝습니다.`); }
   const dup=acts().find(x=>x.id!==draft.editId&&x.day===a.day&&x.kind===a.kind&&((a.start&&x.start===a.start)||(!a.start&&a.km&&Math.abs(x.km-a.km)<0.005)));
   if(dup) w.push(`${kLabel(dup.day)}에 같은 ${KIND[a.kind]} 기록(${fmtKm(dup.km)}km${dup.start?', '+dup.start+' 시작':''})이 이미 있습니다.`);
@@ -737,7 +737,7 @@ function renderFlow(){
     <div class="sub">달리기 ${fmtKm(a.run)}km · 걷기 ${fmtKm(a.walk)}km · ${Math.abs(cmp)<0.005?'기준선 '+g+'km와 같습니다':'기준선 '+g+'km보다 '+fmtKm(Math.abs(cmp))+'km '+(cmp>0?'많습니다':'적습니다')}</div>
     <div class="now">이번 주(${kLabel(w0)}부터) 지금까지 달리기 ${fmtKm(tw.run)}km${tw.walk?' · 걷기 '+fmtKm(tw.walk)+'km':''}</div>
   </div>
-  <p class="note">하루 평균은 쉰 날도 나눕니다. 새벽 4시에 하루가 바뀝니다.</p>`;
+  <p class="note">하루 평균은 쉰 날도 나눕니다. 자정에 하루가 바뀝니다.</p>`;
 
   /* 최근 30일 날마다 */
   const items=[]; for(let i=29;i>=0;i--){ const k=addDays(k0,-i), d=m[k]||{run:0,walk:0,runSec:0,walkSec:0}, dt=parseKey(k);
@@ -928,7 +928,7 @@ function advicePrompt(nw){
 
 ## 기록 설명
 - 기간: ${from}~${k0} (최근 ${nw}주)
-- 각 줄은 한 번의 운동이다. 날짜는 새벽 4시 기준.
+- 각 줄은 한 번의 운동이다. 날짜는 자정 기준.
 - 칸: 날짜 | 종류 | 거리km | 러닝시간 | 평균페이스(분'초"/km) | 케이던스(걸음/분) | 고도상승m | 평균심박 | 힘든정도(1 아주 쉬움~10 최대) | 코스 | 신발 | 구간페이스(1km마다, 짧은 마지막 구간은 거리 표시) | 메모
 - 빈 칸은 재지 않은 것이지 0이 아니다.
 
