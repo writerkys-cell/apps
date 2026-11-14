@@ -579,6 +579,11 @@ function gShelve(l,c,why){c.shelved=true;c.why=why||'';c.shelfAt=Date.now();gDes
 function gUnshelve(l,c){c.shelved=false;gDesc(l,c).forEach(k=>{k.shelved=false;});if(c.parent&&(!gById(l,c.parent)||gById(l,c.parent).shelved))c.parent=null;}
 function gMove(l,c,dir){const sib=gSiblings(l,c);const i=sib.indexOf(c);const j=i+dir;if(j<0||j>=sib.length)return false;const arr=l.guide.cards;const a=arr.indexOf(c),b=arr.indexOf(sib[j]);[arr[a],arr[b]]=[arr[b],arr[a]];return true;}
 const dtSearchUrl=c=>'x-devonthink://search?query='+encodeURIComponent(gFirst(c));
+/* 자료 찾기 — 검색어 창을 띄운다(2026년 11월 14일). 처음엔 카드 첫 줄, 다음부터는 그 카드에서 마지막으로 찾은 말(c.dtq)을 미리 넣는다.
+   데본씽크 주소는 앱으로 넘어가므로 잠깐 만든 링크를 눌러 연다(storyM 화면은 그대로) */
+function dtFind(l,c){const q=prompt('데본씽크에서 찾을 말',c.dtq||gFirst(c));if(q===null)return;const t=q.trim();if(!t)return;
+  if(c.dtq!==t){c.dtq=t;save();}
+  const a=document.createElement('a');a.href='x-devonthink://search?query='+encodeURIComponent(t);document.body.appendChild(a);a.click();a.remove();}
 const gAddr=(l,c)=>location.href.split('#')[0]+'#소설='+encodeURIComponent(l.id)+'&카드='+encodeURIComponent(c.id);
 const secShort=s=>{const p=String(s||'').split(' › ');return p[p.length-1]||'';};
 function gRowHtml(l,c,d){
@@ -599,7 +604,7 @@ function gSrcPanelHtml(l,c){
   return `<div class="gpanel">
     <textarea data-gf="text" data-id="${c.id}" placeholder="첫 줄은 자료의 이름(책·문서·사료 하나). 둘째 줄부터는 메모 — 무엇이 들어 있는지, 어디에 쓸지">${esc(c.text)}</textarea>
     <div class="grid">
-      <span>자료</span><div class="srcs">${srcRowsHtml(c)}<div class="with"><button type="button" data-act="gSrcAdd" data-id="${c.id}" title="링크를 하나 더 겁니다">+ 자료 링크</button><a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크를 검색합니다. 찾은 자료의 링크를 위 칸에 붙이세요"><button type="button" tabindex="-1">자료 찾기</button></a></div></div>
+      <span>자료</span><div class="srcs">${srcRowsHtml(c)}<div class="with"><button type="button" data-act="gSrcAdd" data-id="${c.id}" title="링크를 하나 더 겁니다">+ 자료 링크</button><button type="button" data-act="dtFind" data-id="${c.id}" title="검색어를 넣어 데본씽크를 검색합니다. 찾은 자료의 링크를 위 칸에 붙이세요">자료 찾기</button></div></div>
       <span>이어진 카드</span><div class="lks">${linkRowsHtml(l,c)}<div class="with"><input data-lkq="${c.id}" placeholder="이 자료를 쓸 집필 카드를 말로 찾아 잇기" autocomplete="off"></div><div class="lkres" id="lkres-${c.id}"></div></div>
     </div>
     <div class="tools"><button data-act="gAddr" data-id="${c.id}" title="타이핑 원고의 '카드 링크 넣기'나 데본씽크 항목의 URL 칸에 붙여 두면 거기서 이 카드로 옵니다">주소 복사</button><button class="danger" data-act="gDel" data-id="${c.id}">지우기</button></div>
@@ -613,7 +618,7 @@ function gPanelHtml(l,c){
     <div class="grid">
       <span>부·장</span><select data-gf="sec" data-id="${c.id}" title="이 카드가 놓이는 트리트먼트의 부·장">${secOptionsHtml(l,c)}</select>
       <span>해</span><input type="number" data-gf="year" data-id="${c.id}" value="${c.year??''}" placeholder="연도 (비워도 됨)">
-      <span>자료</span><div class="srcs">${srcRowsHtml(c)}<div class="with"><button type="button" data-act="gSrcAdd" data-id="${c.id}" title="이 카드를 쓰는 데 필요한 자료를 하나 더 겁니다">+ 자료 링크</button><a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크를 검색합니다. 찾은 자료의 링크를 위 칸에 붙이세요"><button type="button" tabindex="-1">자료 찾기</button></a></div></div>
+      <span>자료</span><div class="srcs">${srcRowsHtml(c)}<div class="with"><button type="button" data-act="gSrcAdd" data-id="${c.id}" title="이 카드를 쓰는 데 필요한 자료를 하나 더 겁니다">+ 자료 링크</button><button type="button" data-act="dtFind" data-id="${c.id}" title="검색어를 넣어 데본씽크를 검색합니다. 찾은 자료의 링크를 위 칸에 붙이세요">자료 찾기</button></div></div>
       <span>이어진 카드</span><div class="lks">${linkRowsHtml(l,c)}<div class="with"><input data-lkq="${c.id}" placeholder="이을 카드를 말로 찾기 (가지와 달리 여러 카드와 서로 잇습니다)" autocomplete="off"></div><div class="lkres" id="lkres-${c.id}"></div></div>
       <span>타이핑 원고</span><div class="tpbox"><div class="with"><input data-gf="tp" data-id="${c.id}" value="${esc(c.tp||'')}" placeholder="타이핑 원고 주소나 원고 id. 비워 두면 작품 이름·원고 이름이 소설 제목·카드 첫 줄과 같은 것을 찾습니다"><span id="tpgo-${c.id}">${tpLinkHtml(c,l)}</span></div><div class="tpinfo" id="tpi-${c.id}">${tpInfoHtml(l,c)}</div><div id="tpx-${c.id}">${tpTextHtml(l,c)}</div></div>
     </div>
@@ -637,7 +642,7 @@ function linkRowsHtml(l,c){const ls=gLinks(l,c);return ls.length?`<div class="lk
 /* 목록 줄 — 찾기 · 연표에서 함께 쓴다 */
 function gPath(l,c){const p=[];let x=c.parent?gById(l,c.parent):null;let n=0;while(x&&n++<20){p.unshift(gFirst(x)||'빈 카드');x=x.parent?gById(l,x.parent):null;}return p.join(' › ');}
 function gItemHtml(l,c,o){o=o||{};const path=o.noPath?'':gPath(l,c);const r=tpRowFor(c,l);
-  return `<div class="gi ${gCls(l,c)}" data-act="gGo" data-id="${c.id}" title="카드에서 열기">${o.lead||''}${isSrc(c)?'<span class="kd src">자료</span>':`<span class="glyph" title="${r?tpState(r):'이어진 타이핑 원고 없음'}">${gGlyph(l,c)}</span>`}${c.sec&&!o.noSec&&!isSrc(c)?`<span class="kd sec" title="${esc(c.sec)}">${esc(secShort(c.sec))}</span>`:''}<span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}${path?`<div class="muted small">${esc(path)}</div>`:''}</span>${(c.leads||[]).length?'<span class="em lead" title="클로드가 찾아온 실마리가 있습니다. 확인 전입니다">찾은 것 있음</span>':''}${c.dt?`<a href="${esc(c.dt)}"${tgt(c.dt)} title="${openTip(c.dt)}">↗</a>`:`<a href="${esc(dtSearchUrl(c))}" title="카드 첫 줄로 데본씽크 검색">찾기</a>`}</div>`;}
+  return `<div class="gi ${gCls(l,c)}" data-act="gGo" data-id="${c.id}" title="카드에서 열기">${o.lead||''}${isSrc(c)?'<span class="kd src">자료</span>':`<span class="glyph" title="${r?tpState(r):'이어진 타이핑 원고 없음'}">${gGlyph(l,c)}</span>`}${c.sec&&!o.noSec&&!isSrc(c)?`<span class="kd sec" title="${esc(c.sec)}">${esc(secShort(c.sec))}</span>`:''}<span class="gt">${esc(gFirst(c))||'빈 카드'}${gRest(c)?`<div class="muted small">${esc(gRest(c))}</div>`:''}${path?`<div class="muted small">${esc(path)}</div>`:''}</span>${(c.leads||[]).length?'<span class="em lead" title="클로드가 찾아온 실마리가 있습니다. 확인 전입니다">찾은 것 있음</span>':''}${c.dt?`<a href="${esc(c.dt)}"${tgt(c.dt)} title="${openTip(c.dt)}">↗</a>`:`<a href="#" data-act="dtFind" data-id="${c.id}" title="검색어를 넣어 데본씽크 검색">찾기</a>`}</div>`;}
 function renderGuide(){
   const l=cur();const d=document.getElementById('detail');if(!l||!d)return;const k=gCounts(l);const roots=gKids(l,null);const v=ui.gview||'tree';
   const sw=`<div class="gsw"><button class="${v==='tree'?'on':''}" data-act="gView" data-v="tree">부·장</button><button class="${v==='time'?'on':''}" data-act="gView" data-v="time">연표</button><button class="${v==='src'?'on':''}" data-act="gView" data-v="src" title="손으로 적어 두는 자료 카드. 집필 카드와 따로, 적은 순서대로">자료${k.src?` ${k.src}`:''}</button><button class="${v==='shelf'?'on':''}" data-act="gView" data-v="shelf">서랍${k.shelf?` ${k.shelf}`:''}</button><label title="주인공이 태어난 해. 적으면 카드의 해마다 세는 나이가 붙습니다">생년 <input type="number" data-gb="born" value="${l.guide.born??''}" placeholder="해"></label></div>`;
@@ -795,6 +800,7 @@ app.addEventListener('click',e=>{
     case 'gUnshelve':{const c=gById(l,id);if(!c)break;gUnshelve(l,c);ui.gview='tree';ui.cardOpen=c.id;save();renderDetail();toast('부·장 보기로 꺼냈습니다');break;}
     case 'gWhy':{const c=gById(l,id);if(!c)break;const why=prompt('뺀 까닭',c.why||'');if(why===null)break;c.why=why.trim();save();renderGuide();break;}
     case 'gShelfDel':{const c=gById(l,id);if(!c)break;const n=gDesc(l,c).length;if(!confirm(`서랍에서 아주 지웁니다${n?` (가지 ${n}장도 함께)`:''}. 되돌릴 수 없습니다. 지울까요?`))break;const del=new Set([c,...gDesc(l,c)]);l.guide.cards=l.guide.cards.filter(x=>!del.has(x));save();renderDetail();break;}
+    case 'dtFind':{e.preventDefault();e.stopPropagation();const c=gById(l,id);if(c)dtFind(l,c);break;}
     case 'gAddr':{const c=gById(l,id);if(!c)break;copyText(gAddr(l,c)).then(ok=>toast(ok?'카드 주소를 복사했습니다. 타이핑 원고의 "카드 링크 넣기"나 데본씽크 항목의 URL 칸에 붙여 두면 거기서 이 카드로 옵니다.':'복사하지 못했습니다.'));break;}
     case 'gGo':{if(e.target.closest('a'))break;ui.pane='guide';ui.gview=isSrc(gById(l,id))?'src':'tree';ui.cardOpen=id;{const c0=gById(l,id);let p=c0&&c0.parent;let n=0;while(p&&n++<20){const pp=gById(l,p);if(!pp)break;pp.fold=false;p=pp.parent;}}renderDetail();break;}
     case 'tpReload':tpLoad(l,true).then(()=>tpPaint(l));{const c=gById(l,id);const i=c&&document.getElementById('tpi-'+c.id);if(i)i.innerHTML=tpInfoHtml(l,c);}break;
