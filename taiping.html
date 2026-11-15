@@ -739,6 +739,8 @@ h2:first-child{margin-top:0}
     text-indent:1em;text-align:justify;text-justify:inter-character;word-break:break-all;
     orphans:2;widows:2;
   }
+  /* 개정 작품 — 원고와 원고 사이 가운데 구분자 */
+  #sheet p.sep{margin:1.2em 0;font-size:var(--prfz);line-height:var(--prlh);text-indent:0;text-align:center;break-after:avoid;page-break-after:avoid}
   /* 장이 있는 작품 — 제목 쪽, 부 제목 쪽, 장은 새 쪽에서 */
   /* 뒤따르는 부·장·기록 장이 모두 새 쪽에서 시작하므로 제목 쪽과 부 제목 쪽은 저절로 한 쪽을 차지한다 */
   #sheet .titlep{padding-top:9em}
@@ -3464,7 +3466,14 @@ function prMetaText(start, end, chars){
 function firstAt(ms, fallback){ return ms.reduce(function(a, m){ return Math.min(a, m.createdAt || a); }, fallback || Date.now()); }
 /* 인쇄의 끝 날짜 — 완성한 작품은 작품 완성 날, 아니면 오늘 */
 function prEnd(w){ return workDone(w) ? w.finishedAt : Date.now(); }
-/* 작품 전체를 이어서 인쇄 — 원고 사이는 한 줄 띄움 */
+/* 작품 전체를 이어서 인쇄 — 원고 사이는 초고는 한 줄 띄움, 개정은 가운데 * * * */
+var PR_SEP = "\u0000sep";
+function prLine(line){
+  var p = document.createElement("p");
+  if(line === PR_SEP){ p.className = "sep"; p.textContent = "* * *"; }
+  else{ p.className = "b"; p.textContent = line || "\u00a0"; }
+  return p;
+}
 /* 인쇄 범위 — 없어진 부·장이면 전체로 */
 function prScopeOf(w){
   var v = (S.prScope || {})[w.id] || "all";
@@ -3486,8 +3495,8 @@ function printChaptered(w, scope){
   function chStart(c){ return firstAt(chPieces(w, c).concat(chMerged(w, c) ? [chMerged(w, c)] : []), c.createdAt); }
   function body(el, us){
     var all = [];
-    us.forEach(function(m){ var ls = lines(m); if(!ls.length) return; if(all.length) all.push(""); all = all.concat(ls); });
-    all.forEach(function(line){ var p = document.createElement("p"); p.className = "b"; p.textContent = line || "\u00a0"; el.appendChild(p); });
+    us.forEach(function(m){ var ls = lines(m); if(!ls.length) return; if(all.length) all.push(PR_SEP); all = all.concat(ls); });
+    all.forEach(function(line){ el.appendChild(prLine(line)); });
     return all.length;
   }
   function hasText(c){ return chUnits(w, c).some(function(m){ return m.text.trim(); }); }
@@ -3533,7 +3542,8 @@ function printWork(w){
   if(!w){ printMs(cur()); return; }
   if(hasChapters(w) && chaptersOf(w).length){ printChaptered(w, prScopeOf(w)); return; }
   var us = unitsOf(w), all = [];
-  us.forEach(function(m, i){ var ls = lines(m); if(!ls.length) return; if(all.length) all.push(""); all = all.concat(ls); });
+  var gap = hasChapters(w) ? PR_SEP : "";
+  us.forEach(function(m, i){ var ls = lines(m); if(!ls.length) return; if(all.length) all.push(gap); all = all.concat(ls); });
   if(!all.length){ toast("인쇄할 원고가 없습니다"); return; }
   var sh = $("#sheet");
   sh.innerHTML = "";
@@ -3541,10 +3551,7 @@ function printWork(w){
   var mt = document.createElement("p"); mt.className = "m";
   mt.textContent = prMetaText(firstAt(cntPieces(w), w.createdAt), prEnd(w), workChars(w));
   sh.appendChild(t); sh.appendChild(mt);
-  all.forEach(function(line){
-    var p = document.createElement("p"); p.className = "b"; p.textContent = line || "\u00a0";
-    sh.appendChild(p);
-  });
+  all.forEach(function(line){ sh.appendChild(prLine(line)); });
   if(S.printRecord !== false){
     var rp = document.createElement("div"); rp.className = "recp";
     rp.innerHTML = recordPage(w);
