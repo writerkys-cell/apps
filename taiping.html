@@ -741,6 +741,26 @@ h2:first-child{margin-top:0}
   }
   /* 개정 작품 — 원고와 원고 사이 가운데 구분자 */
   #sheet p.sep{margin:1.2em 0;font-size:var(--prfz);line-height:var(--prlh);text-indent:0;text-align:center;break-after:avoid;page-break-after:avoid}
+  /* 첫 장 — 오늘의 한 장. 이번 주 일정과 할 일. 한 쪽을 차지하고 원고는 다음 쪽부터 */
+  #sheet .cover{break-after:page;page-break-after:always;font-family:var(--ui);font-size:calc(var(--prfz) * .8);line-height:1.5;color:#111}
+  #sheet .cover .cd{font-size:calc(var(--prfz) * 1.3);margin:0;line-height:1.4;color:#000}
+  #sheet .cover .cw{color:#555;margin:.15em 0 0}
+  #sheet .cover h3{display:flex;justify-content:space-between;align-items:baseline;font-size:1em;font-weight:400;color:#555;margin:1.5em 0 .35em;border-bottom:.5pt solid #999;padding-bottom:.15em}
+  #sheet .cover h3 span{font-size:.92em;color:#888}
+  #sheet .cover .cr{display:flex;gap:.7em;margin:0;padding:.14em 0;border-bottom:.3pt solid #ddd;break-inside:avoid}
+  #sheet .cover .cr .d{flex:none;width:3.1em;color:#555;font-variant-numeric:tabular-nums}
+  #sheet .cover .cr .e{flex:1;min-width:0}
+  #sheet .cover .cr .e>span{display:block}
+  #sheet .cover .cr .tm{font-variant-numeric:tabular-nums;margin-right:.45em}
+  #sheet .cover .cr .pl{color:#666}
+  #sheet .cover .cr.past{color:#999}
+  #sheet .cover .cr.past .d,#sheet .cover .cr.past .pl{color:#aaa}
+  #sheet .cover .cr.today .d{color:#000;font-weight:600}
+  #sheet .cover .none{color:#bbb}
+  #sheet .cover .ck{margin:0;padding:.12em 0 .12em 1.5em;text-indent:-1.5em;break-inside:avoid}
+  #sheet .cover .ck.sub{margin-top:.5em;padding-left:0;text-indent:0;color:#777}
+  #sheet .cover .tg{color:#666;font-size:.9em;margin-left:.45em;white-space:nowrap}
+  #sheet .cover .dim{color:#888}
   /* 장이 있는 작품 — 제목 쪽, 부 제목 쪽, 장은 새 쪽에서 */
   /* 뒤따르는 부·장·기록 장이 모두 새 쪽에서 시작하므로 제목 쪽과 부 제목 쪽은 저절로 한 쪽을 차지한다 */
   #sheet .titlep{padding-top:9em}
@@ -1016,6 +1036,7 @@ h2:first-child{margin-top:0}
       </div>
       <h2>인쇄</h2>
       <div class="row"><label for="prRec">인쇄할 때 기록 장 붙이기</label><input type="checkbox" id="prRec"></div>
+      <div class="row"><label for="prCover" title="인쇄의 맨 앞에 한 장을 더 붙입니다. 오늘 날짜, 이번 주 일정(시작의 달력), 할 일(방점의 오늘 표시한 일과 끝내지 않은 일), 메모 칸이 실립니다">인쇄할 때 첫 장에 일정과 할 일 붙이기</label><input type="checkbox" id="prCover"></div>
       <p class="note">작품을 인쇄하면 마지막 장에 그 작품의 기록과 최근 30일의 글쓰기 패턴을 붙입니다. 완성하기 전에는 앞으로 얼마나 더 들지를 조심스럽게 가늠하고, 완성한 뒤에는 지나온 길만 돌아봅니다.</p>
       <div class="row"><label for="prfz">글자 크기</label><input type="number" id="prfz" min="7" max="16" step="0.5"><span class="unit">pt</span></div>
       <div class="row"><label for="prlh">줄 간격</label><input type="number" id="prlh" min="1.2" max="3" step="0.1"><span class="unit">배</span></div>
@@ -1310,6 +1331,8 @@ function fresh(){
     goalH:3, goalM:0,
     daily:1000,
     piece:2667,
+    printCover:true,   /* 인쇄의 첫 장에 이번 주 일정과 할 일을 붙인다(2026년 11월 16일) */
+    printRecord:true,  /* 인쇄의 마지막에 기록 장을 붙인다. 이 열쇠가 여기 없어서 꺼도 다시 열면 켜졌다(load가 fresh의 열쇠만 받는다, 2026년 11월 16일에 고침) */
     pieceMode:"step",
     dayStart:0, dayMid:true,   /* 2026년 11월 15일: 하루가 자정에 바뀜(시작·서가·달리기·방점과 같게) */
     prfz:10, prlh:1.8,
@@ -3511,6 +3534,101 @@ function putLink(m){
   save(); renderHead(); renderWrite(); renderList();
   if(link) toast("링크를 넣었습니다 · 다음부터 '원고 복사'가 이 문서를 엽니다");
 }
+/* ---------- 인쇄의 첫 장 — 오늘의 한 장 (2026년 11월 16일) ----------
+   인쇄한 원고를 들고 다니며 교정하고 메모하므로, 맨 앞 장에 오늘 날짜, 이번 주 일정, 할 일, 메모 칸을 싣는다.
+   설정의 "인쇄할 때 첫 장에 일정과 할 일 붙이기"로 켜고 끈다(S.printCover). 원고의 쪽들은 그대로이고 앞에 한 장이 더 붙을 뿐이다.
+   일정은 시작의 달력(저장소 sijak.cal), 할 일은 방점의 목록(저장소 bangjeom.state)에서 읽기만 한다. 세 앱이 같은 주소·같은 저장소에 있어야 보인다.
+   되풀이 일정의 규칙은 시작의 occursOn, 반복되는 일의 규칙은 방점의 repDue와 같다. 한 주는 시작의 달력처럼 일요일에 시작한다 */
+var CV_WD = ["일","월","화","수","목","금","토"];
+function cvRead(key){ try{ return JSON.parse(localStorage.getItem(key) || "null"); }catch(e){ return null; } }
+function cvEvents(){
+  var c = cvRead("sijak.cal"); if(!c || !c.events) return null;
+  return Object.keys(c.events).map(function(k){ return c.events[k]; }).filter(function(e){ return e && !e.deleted && e.date && e.title; });
+}
+function cvOccurs(ev, k){
+  if(k < ev.date) return false;
+  if(ev.until && k > ev.until) return false;
+  var r = ev.repeat || "none";
+  if(r === "none") return k === ev.date;
+  if(r === "daily") return true;
+  var d = keyDate(k), s = keyDate(ev.date);
+  if(r === "weekly") return d.getDay() === s.getDay();
+  if(r === "monthly") return d.getDate() === Math.min(s.getDate(), new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate());
+  return false;
+}
+function cvByTime(a, b){ var x = a.time || "99:99", y = b.time || "99:99"; return x < y ? -1 : x > y ? 1 : 0; }
+function cvEvHtml(e, box){
+  return "<span>" + (box ? box + " " : "") + (e.time ? '<span class="tm">' + esc(e.time) + "</span>" : "") + esc(e.title) + (e.place ? '<span class="pl"> · ' + esc(e.place) + "</span>" : "") + "</span>";
+}
+/* 방점의 반복되는 일이 그날 차례인가 */
+function cvRepDue(t, k){
+  var r = t && t.rep; if(!r || t.done || t.repLast === k) return false;
+  if(r.type === "week") return (r.days || []).indexOf(keyDate(k).getDay()) >= 0;
+  if(r.type === "days") return !t.repLast || Math.round((keyDate(k) - keyDate(t.repLast)) / 86400000) >= (+r.n || 1);
+  return true;
+}
+function cvDueTag(t, today){
+  if(!t.due) return "";
+  var n = Math.round((keyDate(t.due) - keyDate(today)) / 86400000);
+  return '<span class="tg">' + (n === 0 ? "마감 오늘" : n < 0 ? "마감 " + (-n) + "일 지남" : "~" + (+t.due.slice(5, 7)) + "/" + (+t.due.slice(8, 10))) + "</span>";
+}
+function coverHtml(title){
+  var now = new Date(), today = dayKey(Date.now()), td = keyDate(today), h = [];
+  h.push('<p class="cd">' + fullDate(td) + " " + CV_WD[td.getDay()] + "요일</p>");
+  if(title) h.push('<p class="cw">' + esc(title) + "</p>");
+
+  /* 이번 주 일정 — 일요일부터 토요일까지. 매일 되풀이되는 일정은 맨 위에 한 번만 */
+  var evs = cvEvents(), lines = 0;
+  var sun = addDays(today, -td.getDay()), sat = addDays(sun, 6), a = keyDate(sun), b = keyDate(sat);
+  h.push("<h3>이번 주 일정<span>" + (a.getMonth() + 1) + "월 " + a.getDate() + "일 ~ " + (a.getMonth() === b.getMonth() ? "" : (b.getMonth() + 1) + "월 ") + b.getDate() + "일</span></h3>");
+  if(!evs){
+    h.push('<p class="cr"><span class="e dim">시작의 달력을 이 브라우저에서 읽지 못했습니다.</span></p>'); lines += 1;
+  }else{
+    var daily = evs.filter(function(e){ return e.repeat === "daily" && cvOccurs(e, today); }).sort(cvByTime);
+    if(daily.length){
+      h.push('<p class="cr"><span class="d">매일</span><span class="e">' + daily.map(function(e){ return cvEvHtml(e, e.done && e.done[today] ? "■" : "□"); }).join("") + "</span></p>");
+      lines += daily.length;
+    }
+    for(var i = 0; i < 7; i++){
+      var k = addDays(sun, i), d = keyDate(k);
+      var es = evs.filter(function(e){ return e.repeat !== "daily" && cvOccurs(e, k); }).sort(cvByTime);
+      h.push('<p class="cr' + (k < today ? " past" : k === today ? " today" : "") + '"><span class="d">' + CV_WD[d.getDay()] + " " + d.getDate() + (k === today ? " ·" : "") + '</span><span class="e">' +
+             (es.length ? es.map(function(e){ return cvEvHtml(e, ""); }).join("") : '<span class="none">–</span>') + "</span></p>");
+      lines += Math.max(1, es.length);
+    }
+  }
+
+  /* 할 일 — 방점에서 오늘 표시한 것(과 오늘 차례인 반복되는 일), 그리고 끝내지 않은 나머지. 한 쪽에 들어가게 나머지는 줄 수를 맞춰 자른다 */
+  var st = cvRead("bangjeom.state"), tasks = st && Array.isArray(st.tasks) ? st.tasks.filter(function(t){ return t && t.id && (t.text || "").trim(); }) : null;
+  var KN = { write:"쓰기", read:"읽기" }, BL = { am:"오전", pm:"오후", eve:"저녁" };
+  h.push("<h3>할 일</h3>");
+  if(!tasks){
+    h.push('<p class="ck sub">방점의 목록을 이 브라우저에서 읽지 못했습니다.</p>');
+  }else{
+    var item = function(t, tag){ return '<p class="ck">□ ' + esc(String(t.text).replace(/\s+/g, " ").trim()) + (tag ? '<span class="tg">' + tag + "</span>" : "") + cvDueTag(t, today) + "</p>"; };
+    var tod = tasks.filter(function(t){ return !t.done && !t.rep && t.today; });
+    var reps = tasks.filter(function(t){ return cvRepDue(t, today); });
+    var rest = tasks.filter(function(t){ return !t.done && !t.rep && !t.today && t.kind !== "rest"; });
+    rest = rest.filter(function(t){ return t.due; }).sort(function(x, y){ return x.due < y.due ? -1 : x.due > y.due ? 1 : 0; }).concat(rest.filter(function(t){ return !t.due; }));
+    tod.forEach(function(t){ h.push(item(t, "오늘" + (KN[t.kind] ? " · " + KN[t.kind] : ""))); });
+    reps.forEach(function(t){ h.push(item(t, "되풀이" + (t.rep && BL[t.rep.block] ? " · " + BL[t.rep.block] : ""))); });
+    /* A5 한 쪽(본문 높이 170mm)에 일정과 할 일을 합쳐 스물두 줄쯤 들어간다. 메모 칸이 남게 나머지 할 일을 자른다 */
+    var room = Math.max(3, 22 - lines - tod.length - reps.length), show = rest.slice(0, room);
+    if((tod.length || reps.length) && show.length) h.push('<p class="ck sub">끝내지 않은 일</p>');
+    show.forEach(function(t){ h.push(item(t, KN[t.kind] || "")); });
+    if(rest.length > show.length) h.push('<p class="ck sub">그 밖에 ' + (rest.length - show.length) + "개가 방점에 더 있습니다.</p>");
+    if(!tod.length && !reps.length && !rest.length) h.push('<p class="ck sub">끝내지 않은 일이 없습니다.</p>');
+  }
+  h.push("<h3>메모</h3>");
+  return h.join("");
+}
+/* 인쇄할 것을 다 채운 뒤에 부른다 — 켜져 있으면 맨 앞에 첫 장을 끼운다 */
+function prCover(sh, title){
+  if(S.printCover === false) return;
+  var d = document.createElement("div"); d.className = "cover";
+  try{ d.innerHTML = coverHtml(title); }catch(e){ return; }
+  sh.insertBefore(d, sh.firstChild);
+}
 /* 인쇄 제목 밑 줄 — "2026년 9월 3일 ~ 10월 6일(34일) · 12.3매".
    같은 날이면 "2026년 10월 6일(1일)", 해가 다르면 끝 날짜에도 연도 */
 function prMetaText(start, end, chars){
@@ -3593,6 +3711,7 @@ function printChaptered(w, scope){
     }
   }
   if(!printed){ toast("인쇄할 원고가 없습니다"); return; }
+  prCover(sh, w.title + (scope.indexOf("c:") === 0 ? " · " + chLabel(w, chById(w, scope.slice(2))) : scope.indexOf("p:") === 0 ? " · " + partLabel(w, partById(w, scope.slice(2))) : ""));
   setTimeout(function(){ window.print(); }, 60);
 }
 function printWork(w){
@@ -3614,6 +3733,7 @@ function printWork(w){
     rp.innerHTML = recordPage(w);
     sh.appendChild(rp);
   }
+  prCover(sh, w.title);
   setTimeout(function(){ window.print(); }, 60);
 }
 /* ---------- 인쇄의 마지막 장 ---------- */
@@ -3780,6 +3900,7 @@ function printMs(m){
     var p = document.createElement("p"); p.className = "b"; p.textContent = line || "\u00a0";
     sh.appendChild(p);
   });
+  prCover(sh, m.title);
   setTimeout(function(){ window.print(); }, 60);
 }
 
@@ -5461,6 +5582,7 @@ function renderSet(){
   $("#rightOn").checked = S.rightOn !== false;
   $("#focuscut").value = S.focusCut || "";
   $("#prRec").checked = S.printRecord !== false;
+  $("#prCover").checked = S.printCover !== false;
   $("#focus1cut").value = S.focus1Cut || "";
   $("#rest1cut").value = S.rest1Cut || "";
   $("#gyocut").value = S.gyoCut || "";
@@ -6246,6 +6368,7 @@ $("#sbSql").addEventListener("click", function(){ copyThen(SQL, function(){ toas
 $("#smart").addEventListener("change", function(){ S.smart = this.checked; save(); renderCount(); });
 $("#focuscut").addEventListener("change", function(){ S.focusCut = this.value; save(); });
 $("#prRec").addEventListener("change", function(){ S.printRecord = this.checked; save(); });
+$("#prCover").addEventListener("change", function(){ S.printCover = this.checked; save(); });
 $("#focus1cut").addEventListener("change", function(){ S.focus1Cut = this.value; save(); });
 $("#rest1cut").addEventListener("change", function(){ S.rest1Cut = this.value; save(); });
 $("#gyocut").addEventListener("change", function(){ S.gyoCut = this.value.trim(); save(); });
