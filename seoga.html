@@ -210,6 +210,15 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 .clock-sub.done{color:var(--seal)}
 .markbox{margin-top:40px}
 .detail .markbox{margin-top:16px}
+/* 자료로 읽기(2026년 11월 18일) — writerKYS에서 연 책. 순서와 읽은 시간에 들지 않고 멈춘 쪽만 기억한다 */
+.sidebox{margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--deep);background:var(--paper)}
+.sidebox>label{display:block;font-size:13px;color:var(--ink-soft)}
+.sidebox .from{font-size:17px;margin-top:4px}
+.sidebox .last{font-size:13.5px;color:var(--ink-soft);margin-top:6px;line-height:1.6}
+.sidebox .row2{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;font-size:14px}
+.sidebox .row2 input{width:5.5em;padding:6px 8px;border:1px solid var(--line);border-radius:var(--radius);background:none;font:inherit}
+.sidebox .row2 button{background:none;border:1px solid var(--line);padding:6px 12px;border-radius:var(--radius);font-size:14px}
+.sidebox .row2 button.go{border-color:var(--deep);color:var(--deep)}
 .markbox>label,.scanbox>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
 .markrow{display:flex;gap:10px;align-items:flex-end}
 .markrow .pg{flex:0 0 64px}
@@ -1006,24 +1015,48 @@ function copyMarks(id){
     ...ms.map(x=>(x.page?x.page+'쪽':'쪽 없음')+(x.kind==='scan'?' · 스캔 · 애플 메모 ‘'+(R.settings.scanFolder||'스캔')+'’ 폴더':'')+'\n'+(x.text||'코멘트 없음')+'\n')].join('\n').trim();
   navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
 }
+/* 자료로 읽기(2026년 11월 18일) — 주소 #책=…로 온 책(writerKYS의 책 링크)은 목록의 펼친 자리에서 읽는다.
+   다음 읽을 책 순서(S.order)를 건드리지 않고, 읽기 기록(kind:'read')·읽는 중(R.active)·단축어를 쓰지 않아 서가와 시작의 읽은 시간에 들지 않는다.
+   남는 것은 멈춘 쪽(b.page)과 코멘트(이미 있는 '코멘트 적기')뿐. sideId는 메모리에만 있고 다른 탭으로 가면(go) 풀린다. */
+let sideId=null;
+function sideBlock(b){
+  if(sideId!==b.id||b.discarded) return '';
+  const ms=R.reads.filter(x=>!x.gone&&x.bookId===b.id&&(x.kind==='mark'||x.kind==='scan')&&x.text).sort((a,z)=>(a.at||'').localeCompare(z.at||''));
+  const last=ms[ms.length-1];
+  const enter="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();sideClose('"+b.id+"')}";
+  return `<div class="sidebox" onclick="event.stopPropagation()"><label>자료로 읽기 · 읽는 순서와 읽은 시간에 들어가지 않습니다</label>
+    <div class="from">${b.page?b.page+'쪽부터':'처음부터'}${b.total?' <span style="font-size:13px;color:var(--ink-soft)">전체 '+b.total+'쪽</span>':''}</div>
+    ${last?`<div class="last">지난 코멘트${last.page?' · '+last.page+'쪽':''} — ${esc(last.text)}</div>`:''}
+    <div class="row2"><input type="number" inputmode="numeric" id="sd-page" value="${b.page||''}" placeholder="쪽" aria-label="몇 쪽까지" onkeydown="${enter}"><span>쪽까지 읽고</span>
+      <button class="go" onclick="sideClose('${b.id}')">덮기</button>
+      <button onclick="toggleMarkAdd('${b.id}')">${markAdd===b.id?'적기 접기':'코멘트 적기'}</button></div></div>`;
+}
+function sideClose(id){
+  const b=book(id); if(!b) return;
+  const to=pageVal('sd-page'); if(!to){ toast('몇 쪽까지 읽었는지 적어주세요'); const el=document.getElementById('sd-page'); if(el) el.focus(); return; }
+  if(to!==b.page){ b.page=to; b.pageAt=today(); touch(b); save(); }
+  sideId=null; markAdd=null; openId=null;
+  toast(to+'쪽까지 · 다음에 여기서 엽니다');
+  if(view==='list') refreshList(); else render();
+}
 function detailHTML(b){
-  if(b.discarded) return `<div class="detail">
+  if(b.discarded) return `<div class="detail">${sideBlock(b)}
     <div class="meta">${stateLabel(b)}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button onclick="restore('${b.id}')">되살리기</button>
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}</div>`;
-  if(b.held) return `<div class="detail">
+  if(b.held) return `<div class="detail">${sideBlock(b)}
     <div class="meta">${stateLabel(b)}${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.heldReason?'<br>'+esc(b.heldReason):''}${b.note?'<br>'+esc(b.note):''}</div>
     ${b.borrowed?`<div class="meta">${esc(libText(b))}${b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':''}</div>`:''}
     <div class="acts"><button onclick="unHold('${b.id}')">${b.borrowed?'다시 빌림':'되살리기'}</button>${needScan(b)?`<button onclick="askScan('${b.id}')">코멘트 스캔 ${unscanned(b).length}</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}${markAddBtn(b)}
       <button class="warn" onclick="del('${b.id}')">기록까지 지우기</button></div>${linesBlock(b)}${marksBlock(b)}${markAddBlock(b)}</div>`;
-  if(inBin(b)) return `<div class="detail">
+  if(inBin(b)) return `<div class="detail">${sideBlock(b)}
     <div class="meta">폐기 서가에 둔 지 ${daysBetween(b.binAt,today())}일째${b.prevLocation?' · 원래 자리 '+esc(b.prevLocation):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts"><button class="warn" onclick="outOne('${b.id}')">내놓았다</button>${needScan(b)?`<button onclick="askScan('${b.id}')">코멘트 스캔 ${unscanned(b).length}</button>`:''}
       <button onclick="unBin('${b.id}')">되살리기</button>
       <button onclick="edit('${b.id}')">고치기</button>${linesBtn(b)}${marksBtn(b)}${markAddBtn(b)}</div>${linesBlock(b)}${marksBlock(b)}${markAddBlock(b)}</div>`;
-  return `<div class="detail">
+  return `<div class="detail">${sideBlock(b)}
     <div class="meta">${stateLabel(b)}${b.gift?' · 증정본'+(b.received?' '+esc(b.received)+' 받음':''):''} · ${b.location?esc(b.location):(b.borrowed?'집에 둔 자리 없음':'가지고 있지 않음')}${b.page?' · '+b.page+'쪽까지':''}${b.borrowed?'<br>'+esc(libText(b))+(b.returnedAt?' · '+esc(mdLabel(b.returnedAt))+' 반납':'')+(isLate(b)?' · 반납일 지남':''):''}${isRecord(b)&&traceText(b)?'<br>기록 · '+traceText(b):''}${b.note?'<br>'+esc(b.note):''}</div>
     <div class="acts">
       ${b.category?`<button onclick="reRank('${b.id}')">견주기</button>`:''}
@@ -1996,7 +2029,7 @@ function sbOff(){
 /* 읽기 전용 화면에서 다른 탭이 필요한 동작(다른 책 고르기, 견주기 끝 등)을 하면 같은 자리에서 원래 서가로 넘어간다. */
 function leaveSolo(){ SOLO=false; document.body.classList.remove('solo');
   try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} }
-function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null; cq=''; cShown=20; hiMark=null; markAdd=null;
+function go(v,tab){ view=v; if(tab) listTab=tab; openId=null; shown=PAGE; jarLast=null; cq=''; cShown=20; hiMark=null; markAdd=null; sideId=null;
   if(v==='add'&&!draft.title) draft=blankDraft(draft.location); render(true); }
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
 function onSearch(t){
@@ -2016,6 +2049,23 @@ window.addEventListener('beforeunload',()=>{ try{ localStorage.setItem(KEY,JSON.
 activeSig=JSON.stringify(R.active||null);
 adjustTarget();
 render();
+/* 책 주소(2026년 11월 18일) — seoga.html#책=<책 제목 또는 id>로 오면 목록에서 그 책을 펼친다(writerKYS의 책 링크가 쓴다).
+   제목이 똑같은 책을 먼저, 없으면 제목에 그 말이 든 책. 펼친 뒤에는 주소에서 지워 새로 고쳐도 다시 뛰지 않는다. 동기화로 책이 늦게 오는 기기에서는 못 찾을 수 있다. */
+function hashBook(){
+  let k=''; try{ const m=/^#책=(.+)$/.exec(decodeURIComponent(location.hash)); if(m) k=m[1].replace(/\s+/g,' ').trim(); }catch(e){}
+  if(!k) return;
+  const n=t=>String(t||'').replace(/\s+/g,' ').trim();
+  const b=book(k)||S.books.find(x=>n(x.title)===k)||S.books.find(x=>n(x.title).includes(k));
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  if(!b){ toast('서가에서 ‘'+k+'’을 찾지 못했습니다'); return; }
+  if(SOLO) leaveSolo();
+  /* findBook은 폐기 서가에 놓인 책처럼 탭 목록에 없는 책을 못 펼친다 — goMark처럼 제목 검색으로 연다(검색에는 어느 상태의 책이든 나온다) */
+  view='list'; q=b.title; shown=PAGE; openId=b.id; hiMark=null; cq=''; cShown=20;
+  sideId=b.discarded?null:b.id; markAdd=null;   /* 자료로 읽기 칸을 연다 — 내놓은 책은 기록만 보여 준다 */
+  render(true);
+}
+hashBook();
+window.addEventListener('hashchange',hashBook);
 setInterval(updClock,1000);
 if(sbCfg.url&&sbCfg.key) sbConnect(false);
 window.addEventListener('online',()=>{ if(sbCfg.url) syncAll(); });
