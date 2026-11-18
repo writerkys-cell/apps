@@ -54,6 +54,7 @@ button.place{font-family:inherit;cursor:pointer;line-height:inherit}
 button.place:active{border-color:var(--seal)}
 .badge{font-size:11.5px;padding:1px 5px;border-radius:var(--radius);margin-left:7px;white-space:nowrap;vertical-align:2px;border:1px solid}
 .b-gift{border-color:var(--moss);color:var(--moss)}
+.b-ref{border-color:var(--ink);color:var(--ink)}
 .b-read{border-color:var(--deep);color:var(--deep)}
 .b-cand{border-color:var(--seal);color:var(--seal)}
 .b-keep{border-color:var(--deep);color:var(--deep)}
@@ -125,6 +126,7 @@ input:focus,textarea:focus{outline:none;border-bottom-color:var(--seal)}
 .choice.on[data-c=best]{background:var(--seal)}
 .choice.on[data-c=next]{background:var(--deep)}
 .choice.on[data-c=gift]{background:var(--moss)}
+.choice.on[data-c=ref]{background:var(--ink)}
 .choice.on[data-c=undecided],.choice.on[data-c=none],.choice.on[data-c=remove],.choice.on[data-c=gone],.choice.on[data-c=hold]{background:var(--void)}
 .choice.on[data-c=wait],.choice.on[data-c=bin]{background:var(--seal)}
 .choice.on[data-c=keep],.choice.on[data-c=borrow]{background:var(--deep)}
@@ -323,6 +325,7 @@ function load(){
 function normBook(b){
     if(b.category==='gift'){ b.category=''; b.gift=true; }
     if(typeof b.gift!=='boolean') b.gift=!!b.received;
+    if(typeof b.ref!=='boolean') b.ref=false;   /* 자료 딱지(2026년 11월 18일) — 글쓰기 자료로 읽는 책. 분류·순위와 따로 붙는다 */
     if(b.category!=='best'&&b.category!=='next') b.category='';
     if(typeof b.discarded!=='boolean') b.discarded=false;
     b.toDiscard=false;
@@ -373,8 +376,20 @@ function live(){ return S.books.filter(b=>!b.jar&&!b.discarded&&!b.held); }
 function heldBooks(){ return S.books.filter(b=>b.held).sort((a,b)=>(b.heldAt||'').localeCompare(a.heldAt||'')||(b.updated||'').localeCompare(a.updated||'')); }
 function holdLine(b){ if(!b.total) return 0; return b.total>=300?100:Math.ceil(b.total/3); }
 /* 병렬독서 중: 다음 읽을 책 가운데 1위가 아니면서 멈춘 쪽이 있는 책. 읽다가 다른 책으로 갈아탔지만 보류하지 않은 책이다. */
-function isParallel(b){ return b.category==='next'&&!b.discarded&&!b.held&&!b.binAt&&b.page>0&&rankOf(b)>1; }
-function parallelBooks(){ return ordered('next').slice(1).filter(b=>b.page>0); }
+function isParallel(b){ return b.category==='next'&&!b.ref&&!b.discarded&&!b.held&&!b.binAt&&b.page>0&&rankOf(b)>1; }   /* 자료 책은 멈춘 쪽이 있어도 병렬독서로 치지 않는다 */
+function parallelBooks(){ return ordered('next').slice(1).filter(b=>b.page>0&&!b.ref); }
+/* 자료 딱지가 붙은 책(2026년 11월 18일) — 살아 있는 책 가운데 ref인 것. 최근에 읽은(멈춘 쪽을 적은) 순서 */
+function refs(){ return live().filter(b=>b.ref).sort((a,b)=>(b.pageAt||'').localeCompare(a.pageAt||'')||(a.title||'').localeCompare(b.title||'')); }
+/* 자료 책을 폐기·내놓기 전에 한 번 더 묻는다 */
+function refOK(b,what){
+  if(!b||!b.ref) return true;
+  const n=R.reads.filter(x=>!x.gone&&x.bookId===b.id&&(x.kind==='mark'||x.kind==='scan')).length;
+  return confirm('‘'+b.title+'’은 글쓰기 자료로 읽은 책입니다'+(b.page?' · '+b.page+'쪽까지':'')+(n?' · 코멘트 '+n+'개':'')+'.\n\n그래도 '+what+'?');
+}
+function toggleRef(id){
+  const b=book(id); if(!b) return;
+  b.ref=!b.ref; touch(b); save(); toast(b.ref?'자료로 표시했습니다':'자료 표시를 뗐습니다'); render();
+}
 function gifts(){ return live().filter(b=>b.gift).sort((a,b)=>(b.received||'').localeCompare(a.received||'')||(b.added||'').localeCompare(a.added||'')); }
 function undecided(){ return live().filter(b=>!b.category).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 /* 빌린 책: 도서관에서 빌려 와 집에 둔 책. 가진 책이 아니므로 폐기 판단에 끼지 않는다. 반납하면 자리를 비우고 기록으로 남는다. */
@@ -437,6 +452,7 @@ function badges(b,rank){
   if(rank===1&&b.category==='next'&&!b.discarded) s+='<span class="badge b-read">지금 읽는 책</span>';
   else if(isParallel(b)) s+='<span class="badge b-read">병렬독서 중</span>';
   if(b.gift) s+='<span class="badge b-gift">증정본</span>';
+  if(b.ref) s+='<span class="badge b-ref">자료</span>';
   if(b.borrowed) s+=`<span class="badge b-lib">${b.returnedAt?'빌려 읽음':'빌린 책'}</span>`;
   if(b.discarded) s+='<span class="badge b-gone">폐기함</span>';
   else if(b.held) s+='<span class="badge b-gone">보류</span>';
@@ -675,9 +691,10 @@ function judgeCard(){
   return `<section class="judge" style="margin-bottom:34px">
     <h2 class="sec"><span class="tagdot d-none"></span>판단을 기다리는 책 · ${w.length}권 중 1</h2>
     <div class="now-book">
-      <div class="now-t">${esc(b.title)}${b.gift?'<span class="badge b-gift">증정본</span>':''}</div>
+      <div class="now-t">${esc(b.title)}${b.gift?'<span class="badge b-gift">증정본</span>':''}${b.ref?'<span class="badge b-ref">자료</span>':''}</div>
       <div class="now-a">${[b.author,b.publisher].filter(Boolean).map(esc).join(' · ')}</div>
-      <div class="now-p"><span class="place">${esc(b.location)}</span><span class="pagemark">${esc(info)}</span></div></div>
+      <div class="now-p"><span class="place">${esc(b.location)}</span><span class="pagemark">${esc(info)}</span></div>
+      ${b.ref?`<div class="meta" style="margin-top:6px">글쓰기 자료로 읽은 책입니다${b.page?' · '+b.page+'쪽까지':''}${markItems(b.id).length?' · 코멘트 '+markItems(b.id).length+'개':''} — 폐기하기 전에 한 번 더 묻습니다.</div>`:''}</div>
     <div class="acts" style="margin-top:14px"><button class="warn" onclick="toBin('${b.id}')">폐기</button>
       <button onclick="keepBook('${b.id}')">보관</button>
       ${w.length>1?`<button class="linkish" style="border:none" onclick="judgeLater('${b.id}')">나중에</button>`:''}</div>
@@ -821,9 +838,10 @@ function addSave(again,readIt){
 }
 
 /* 목록 */
-const TABS=[['best','베스트'],['next','다음 읽을 책'],['gift','증정본'],['borrow','빌린 책'],['undecided','미정'],['none','자리 없음'],['wait','판단 대기'],['keep','보관본'],['bin','폐기 서가'],['remove','지울 책'],['hold','보류'],['record','기록'],['gone','폐기함']];
+const TABS=[['best','베스트'],['next','다음 읽을 책'],['gift','증정본'],['ref','자료'],['borrow','빌린 책'],['undecided','미정'],['none','자리 없음'],['wait','판단 대기'],['keep','보관본'],['bin','폐기 서가'],['remove','지울 책'],['hold','보류'],['record','기록'],['gone','폐기함']];
 function tabList(c){
   if(c==='gift') return gifts();
+  if(c==='ref') return refs();
   if(c==='borrow') return borrowBooks();
   if(c==='record') return recordBooks();
   if(c==='undecided') return undecided();
@@ -1020,7 +1038,8 @@ function copyMarks(id){
    남는 것은 멈춘 쪽(b.page)과 코멘트(이미 있는 '코멘트 적기')뿐. sideId는 메모리에만 있고 다른 탭으로 가면(go) 풀린다. */
 let sideId=null;
 function sideBlock(b){
-  if(sideId!==b.id||b.discarded) return '';
+  /* 주소로 온 책, 또는 자료 딱지가 붙은 책(서가에서 바로 펼쳐도 쪽을 적을 수 있게 — 보류·폐기 서가의 책은 빼고) */
+  if(b.discarded||!(sideId===b.id||(b.ref&&!b.held&&!inBin(b)))) return '';
   const ms=R.reads.filter(x=>!x.gone&&x.bookId===b.id&&(x.kind==='mark'||x.kind==='scan')&&x.text).sort((a,z)=>(a.at||'').localeCompare(z.at||''));
   const last=ms[ms.length-1];
   const enter="if(event.key==='Enter'&&!event.isComposing){event.preventDefault();sideClose('"+b.id+"')}";
@@ -1034,9 +1053,10 @@ function sideBlock(b){
 function sideClose(id){
   const b=book(id); if(!b) return;
   const to=pageVal('sd-page'); if(!to){ toast('몇 쪽까지 읽었는지 적어주세요'); const el=document.getElementById('sd-page'); if(el) el.focus(); return; }
-  if(to!==b.page){ b.page=to; b.pageAt=today(); touch(b); save(); }
+  const firstRef=!b.ref;
+  if(to!==b.page||firstRef){ b.page=to; b.pageAt=today(); b.ref=true; touch(b); save(); }
   sideId=null; markAdd=null; openId=null;
-  toast(to+'쪽까지 · 다음에 여기서 엽니다');
+  toast(to+'쪽까지 · 다음에 여기서 엽니다'+(firstRef?' · 자료로 표시했습니다':''));
   if(view==='list') refreshList(); else render();
 }
 function detailHTML(b){
@@ -1067,6 +1087,7 @@ function detailHTML(b){
       ${b.category?`<button onclick="moveTo('${b.id}','')">분류 미루기</button>`:''}
       ${borrowedNow(b)&&b.category==='best'?`<button onclick="returnBook('${b.id}')">반납했다</button>`:''}
       ${b.borrowed?`<button onclick="unBorrow('${b.id}')">빌린 책 표시 떼기</button>`:`<button class="gift" onclick="toggleGiftOn('${b.id}')">${b.gift?'증정본 표시 떼기':'증정본으로 표시'}</button>`}
+      <button onclick="toggleRef('${b.id}')">${b.ref?'자료 표시 떼기':'자료로 표시'}</button>
       ${isWaiting(b)?`<button onclick="keepBook('${b.id}')">보관</button>`:''}
       ${b.keep&&outOfRank(b)?`<button onclick="unKeep('${b.id}')">보관 라벨 떼기</button>`:''}
       <button onclick="edit('${b.id}')">고치기</button>
@@ -1094,6 +1115,7 @@ function toggleGiftOn(id){
 }
 function toBin(id,force){
   const b=book(id); if(!b||!b.location) return;
+  if(!force&&!refOK(b,'폐기 서가로 옮길까요')) return;
   if(!force&&needScan(b)){ askScan(id,'bin'); return; }
   b.prevLocation=b.location; b.location=binName(); b.binAt=today(); b.keep=false;
   touch(b); removeFromOrder(id); delete skipQ[id]; saveSkip(); save(); openId=null;
@@ -1104,11 +1126,13 @@ function unKeep(id){ const b=book(id); b.keep=false; touch(b); save(); toast('�
 function judgeLater(id){ skipQ[id]=new Date().toISOString(); saveSkip(); render(); }
 function saveSkip(){ Object.keys(skipQ).forEach(k=>{ const b=book(k); if(!b||!isWaiting(b)) delete skipQ[k]; }); try{ localStorage.setItem('seoga.skip',JSON.stringify(skipQ)); }catch(e){} }
 function doDiscard(b){ b.discarded=true; b.discardedAt=today(); b.toDiscard=false; b.keep=false; b.binAt=''; b.location=''; touch(b); removeFromOrder(b.id); }
-function outOne(id,force){ const b=book(id); if(!b) return; if(!force&&needScan(b)){ askScan(id,'out'); return; }
+function outOne(id,force){ const b=book(id); if(!b) return; if(!force&&!refOK(b,'내놓은 것으로 적을까요')) return; if(!force&&needScan(b)){ askScan(id,'out'); return; }
   doDiscard(b); save(); openId=null; toast('내놓았습니다 · 폐기함에 기록이 남습니다'); render(); }
-function outAll(){ const list=dueBooks(); if(!list.length) return;
+function outAll(){ const all=dueBooks(), list=all.filter(b=>!b.ref); if(!all.length) return;
+  /* 자료 책은 한꺼번에 내놓지 않는다 — 하나씩 내놓으며 다시 본다 */
+  if(!list.length){ alert('남은 '+all.length+'권은 모두 자료 책입니다. 하나씩 펼쳐서 내놓으세요.'); return; }
   const ns=list.filter(needScan).length;
-  if(!confirm('폐기 서가에 7일 넘게 있는 '+list.length+'권을 내놓은 것으로 적습니다.'+(ns?'\n\n그중 '+ns+'권에 스캔하지 않은 코멘트가 있습니다. 스캔하려면 그 책을 하나씩 내놓으세요.':''))) return;
+  if(!confirm('폐기 서가에 7일 넘게 있는 '+list.length+'권을 내놓은 것으로 적습니다.'+(all.length>list.length?'\n\n자료 책 '+(all.length-list.length)+'권은 빼 두었습니다. 하나씩 펼쳐서 내놓으세요.':'')+(ns?'\n\n그중 '+ns+'권에 스캔하지 않은 코멘트가 있습니다. 스캔하려면 그 책을 하나씩 내놓으세요.':''))) return;
   list.forEach(doDiscard); save(); openId=null; toast(list.length+'권을 내놓았습니다'); render(); }
 function removeAll(){ const list=removables(); if(!list.length) return;
   if(!confirm('자리 없이 순위 밖으로 밀려난 '+list.length+'권을 목록에서 아주 지웁니다. 되돌릴 수 없습니다.')) return;
@@ -1373,7 +1397,7 @@ function impJSON(inp){
   r.readAsText(f); inp.value='';
 }
 function expText(){
-  const line=b=>`${b.title}${b.author?' / '+b.author:''}${b.publisher?' / '+b.publisher:''} — ${b.location||'자리 없음'}${b.gift?' [증정본'+(b.received?' '+b.received:'')+']':''}`;
+  const line=b=>`${b.title}${b.author?' / '+b.author:''}${b.publisher?' / '+b.publisher:''} — ${b.location||'자리 없음'}${b.gift?' [증정본'+(b.received?' '+b.received:'')+']':''}${b.ref?' [자료]':''}`;
   const t=['[베스트]',...ordered('best').map((b,i)=>(i+1)+'. '+line(b)),'',
            '[다음 읽을 책]',...ordered('next').map((b,i)=>(i+1)+'. '+line(b)),'',
            '[증정본 · 받은 날짜순]',...gifts().map(b=>(b.received||'')+' '+line(b)),'',
