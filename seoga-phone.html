@@ -50,6 +50,11 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 .pg input{width:5.2em;font-size:30px;text-align:center;font-variant-numeric:tabular-nums}
 .pg span{color:var(--ink-soft)}
 textarea{resize:none;line-height:1.6}
+.seg{display:flex;margin-bottom:8px}
+.seg button{background:none;border:1px solid var(--line);padding:6px 18px;font-size:14.5px;color:var(--ink-soft);border-radius:var(--radius)}
+.seg button+button{margin-left:-1px}
+.seg button.on{background:var(--deep);border-color:var(--deep);color:var(--paper)}
+.seg button.on.q{background:var(--seal);border-color:var(--seal)}
 .toggle{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);padding:8px 14px;border-radius:var(--radius);font-size:14.5px;color:var(--ink-soft);background:none;margin-top:18px}
 .toggle.on{border-color:var(--moss);color:var(--moss)}
 .toggle .box{width:13px;height:13px;border:1px solid currentColor;display:inline-block;border-radius:1px}
@@ -77,13 +82,14 @@ a.linkish{display:inline-block}
      · 쪽수 기록: seoga_reads의 kind:'page' {id, kind, bookId, title, date, at, from, page, updated}. 같은 날 같은 책은 한 줄(id 'pg-<책id>-<날짜>')을 덮어쓴다.
        끝 표시(end)가 붙은 줄은 덮어쓰지 않고 새 줄을 만든다.
      · 코멘트: seoga_reads의 kind:'mark'(스캔을 켜면 'scan') {id, kind, bookId, title, page, text, date, at, updated}
+     · 밑줄: 코멘트와 같은 줄에 quote:true만 더 붙는다(책의 문장). 서가 한눈에 탭의 밑줄 뽑기에 나온다.
    서가의 규칙을 바꾸면 이 파일의 apply()도 함께 고친다.
    연결 정보는 서가와 같은 localStorage 'seoga.sb'({url,key})를 쓴다. 적을 것은 먼저 'seoga.phone.out'에 담아 두고 보낸다(끊겨 있으면 이어질 때 보낸다). */
 const SBKEY='seoga.sb', OUTKEY='seoga.phone.out', CACHEKEY='seoga.phone.cache';
 const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
 const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
 let cfg=lsGet(SBKEY,{}), out=lsGet(OUTKEY,[]), C=lsGet(CACHEKEY,{reading:[],wait:[],at:''});
-let view='list', cur=null, draft=null, scanOn=null, setup=false, busy=false, loading=false, state='';
+let view='list', cur=null, draft=null, scanOn=null, quoteOn=false, setup=false, busy=false, loading=false, state='';
 
 const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -148,7 +154,7 @@ async function apply(it){
     x.at=at; x.updated=now; rows.push(x);
     b.page=to; b.pageAt=d; b.updated=now;
   }
-  if(it.text) rows.push({id:it.mid,kind:it.scan?'scan':'mark',bookId:b.id,title:b.title,page:to,text:it.text,date:d,at,updated:now});
+  if(it.text){ const m={id:it.mid,kind:it.scan?'scan':'mark',bookId:b.id,title:b.title,page:to,text:it.text,date:d,at,updated:now}; if(it.quote) m.quote=true; rows.push(m); }
   if(rows.length) await upsert('seoga_reads',rows.map(x=>({id:x.id,data:x,updated_at:now})));
   if(setPage) await upsert('seoga_books',[{id:b.id,data:b,updated_at:now}]);
 }
@@ -220,15 +226,18 @@ function bookHTML(){
   const b=findB(cur); if(!b){ view='list'; return listHTML(); }
   return `<div class="bt">${esc(b.title)}</div><div class="ba">${[b.author,b.page?'지금 '+b.page+'쪽':'아직 적은 쪽이 없습니다'].filter(Boolean).map(esc).join(' · ')}</div>
     <div class="field"><label for="pg">몇 쪽</label><div class="pg"><input type="number" inputmode="numeric" id="pg" value="${b.page||''}" placeholder="쪽"><span>쪽</span></div></div>
-    <div class="field"><label for="tx">코멘트 · 비워도 됩니다</label><textarea id="tx" rows="4" placeholder="이 쪽에 대한 코멘트"></textarea></div>
+    <div class="field"><div class="seg"><button class="${quoteOn?'':'on'}" onclick="setQuote(false)">코멘트</button><button class="${quoteOn?'on q':''}" onclick="setQuote(true)">밑줄</button></div>
+      <textarea id="tx" rows="4" placeholder="${quoteOn?'책의 문장':'이 쪽에 대한 코멘트 · 비워도 됩니다'}" aria-label="${quoteOn?'밑줄':'코멘트'}"></textarea></div>
     <button class="toggle${scanWanted(b)?' on':''}" onclick="toggleScan()"><span class="box"></span>이 쪽을 스캔한다${b.lent?' · 빌린 책':''}</button>
     <div class="rowbtns"><button class="primary" onclick="save()">적기</button><button class="linkish" onclick="back()">뒤로</button></div>
-    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 코멘트만 적으면 그 쪽의 코멘트로 남습니다. 코멘트와 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다.</p>`;
+    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다.</p>`;
 }
-function openBook(id){ cur=id; view='book'; scanOn=null; render(); window.scrollTo(0,0); }
+function openBook(id){ cur=id; view='book'; scanOn=null; quoteOn=false; render(); window.scrollTo(0,0); }
 function back(){ view='list'; cur=null; render(); window.scrollTo(0,0); }
-function toggleScan(){ const p=document.getElementById('pg').value, t=document.getElementById('tx').value;
-  scanOn=!scanWanted(findB(cur)); render(); document.getElementById('pg').value=p; document.getElementById('tx').value=t; }
+function keepInputs(fn){ const p=document.getElementById('pg').value, t=document.getElementById('tx').value; fn(); render(); document.getElementById('pg').value=p; document.getElementById('tx').value=t; }
+function toggleScan(){ keepInputs(()=>{ scanOn=!scanWanted(findB(cur)); }); }
+/* 코멘트 / 밑줄: 코멘트가 기본. 밑줄은 책의 문장이고 서가의 밑줄 뽑기에 나온다. 적고 나면 코멘트로 돌아간다. */
+function setQuote(on){ keepInputs(()=>{ quoteOn=!!on; }); document.getElementById('tx').focus(); }
 function scanName(){ const r=lsGet('seoga.read.v1',null); return (r&&r.settings&&r.settings.sc&&r.settings.sc.scan)||'스캔'; }
 function save(){
   const b=findB(cur); if(!b) return;
@@ -236,12 +245,13 @@ function save(){
   const scan=!!text&&scanWanted(b), was=b.page||0, setPage=to>0&&to!==was&&(to>was||!text);
   if(!text&&!setPage){ toast(to?'쪽이 그대로입니다 · 코멘트를 적거나 쪽을 바꿔 주세요':'쪽이나 코멘트를 적어주세요'); return; }
   const now=new Date().toISOString();
-  out.push({bookId:b.id,mid:uid(),to,text,scan,date:today(),at:now}); lsSet(OUTKEY,out);
+  const quote=!!text&&quoteOn; quoteOn=false;
+  out.push({bookId:b.id,mid:uid(),to,text,scan,quote,date:today(),at:now}); lsSet(OUTKEY,out);
   /* 화면은 먼저 고쳐 둔다 */
   if(setPage) b.page=to; b.last=now;
   C.wait=C.wait.filter(x=>x.id!==b.id||!(x.page>0)); if(b.page>0&&!C.reading.includes(b)) C.reading.push(b);
   C.reading.sort((a,z)=>z.last.localeCompare(a.last)); lsSet(CACHEKEY,C);
-  toast([setPage?to+'쪽':'',text?'코멘트를 적었습니다':''].filter(Boolean).join(' · '));
+  toast([setPage?to+'쪽':'',text?(quote?'밑줄을 적었습니다':'코멘트를 적었습니다'):''].filter(Boolean).join(' · '));
   /* 적은 뒤에도 그 책의 화면에 머문다(이어서 다음 쪽·다음 코멘트를 적는다). 쪽 칸은 새 현재 쪽, 코멘트 칸은 비운다. 목록은 '뒤로'로 간다. */
   render(); window.scrollTo(0,0);
   setState('busy'); flush().then(()=>load(),()=>setState('err'));

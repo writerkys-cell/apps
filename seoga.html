@@ -259,6 +259,9 @@ ul.rlist li.rpanel{display:block;cursor:default;background:rgba(0,0,0,.015);padd
 .rrow input{width:5.5em;text-align:center}
 .rrow .ghost{padding:7px 16px}
 .rpanel .markbox{margin-top:22px}
+.choices.seg{gap:0;margin-bottom:10px}
+.choices.seg .choice{padding:6px 16px;font-size:14px}
+.choices.seg .choice+.choice{margin-left:-1px}
 .rpanel .acts{margin-top:22px}
 .lines{list-style:none;margin:12px 0 0;padding:0;border-top:1px solid var(--line)}
 .lines li{padding:10px 2px;border-bottom:1px solid var(--line)}
@@ -552,13 +555,15 @@ function render(reset){
 /* 한눈에 */
 /* 밑줄 뽑기: 한눈에 탭 날짜 아래. 저장하지 않는다(뽑힌 것은 메모리에만). 『밑줄들』의 밑줄만 뽑는다(책에 적은 코멘트는 뽑지 않는다, 2026-11-03). */
 let drawId=null;
-function drawPool(){ return R.reads.filter(x=>x.kind==='mark'&&x.bookId===JAR&&!x.gone&&(x.text||'').trim()); }
+/* 2026년 11월 19일: 책에 적으며 ‘밑줄’로 고른 것(quote:true — 읽기 탭과 아이폰 앱 ‘쪽 적기’의 코멘트/밑줄 선택)도 함께 뽑는다. 책에 붙은 밑줄은 제목·지은이·쪽이 함께 나온다. */
+function isQuote(x){ return !!x.quote&&(x.kind==='mark'||x.kind==='scan'); }
+function drawPool(){ return R.reads.filter(x=>((x.kind==='mark'&&x.bookId===JAR)||isQuote(x))&&!x.gone&&(x.text||'').trim()); }
 function drawHTML(){
   const pool=drawPool(); if(!pool.length){ drawId=null; return ''; }
   const x=drawId&&pool.find(m=>m.id===drawId);
   if(!x){ drawId=null; return `<section class="draw"><button class="ghost" onclick="drawMark()">밑줄 뽑기</button></section>`; }
   const b=book(x.bookId);
-  const meta=mdLabel(x.date);
+  const meta=x.bookId===JAR?mdLabel(x.date):[esc(b?b.title:(x.title||'')),b&&b.author?esc(b.author):'',x.page?x.page+'쪽':'',mdLabel(x.date)].filter(Boolean).join(' · ');
   return `<section class="draw"><p class="dq">${esc(x.text.trim()).replace(/\n/g,'<br>')}</p><div class="dm">${meta}</div>
     <div class="drawbtns"><button class="ghost" onclick="drawMark()">다시 뽑기</button>
     <button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}',true)">지우기</button></div></section>`;
@@ -602,7 +607,7 @@ function addJar(){
 /* 코멘트 찾기: 내가 쓴 글(코멘트·스캔한 코멘트·한 줄)만 찾는다. 『밑줄들』은 빼고, 책 글자(제목·지은이)도 보지 않는다. 결과는 코멘트가 주인이고 그 아래 책·자리·쪽 한 줄. 누르면 목록에서 그 책이 펼쳐져 그 기록이 표시된다. */
 let cq='', cShown=20, hiMark=null;
 function cfHits(k){ if(!k) return [];
-  return R.reads.filter(x=>!x.gone&&x.bookId!==JAR&&((x.kind==='read'&&x.memory)||((x.kind==='mark'||x.kind==='scan')&&x.text)))
+  return R.reads.filter(x=>!x.gone&&x.bookId!==JAR&&!x.quote&&((x.kind==='read'&&x.memory)||((x.kind==='mark'||x.kind==='scan')&&x.text)))
     .filter(x=>((x.kind==='read'?x.memory:x.text)||'').toLowerCase().includes(k))
     .sort((a,z)=>((z.at||z.start||z.date||'')).localeCompare(a.at||a.start||a.date||'')); }
 function cfPlace(b){ if(!b) return '<span class="place none">책 없음</span>';
@@ -958,7 +963,7 @@ function copyLines(id){
 let marksFor=null;
 function marksBtn(b){ const n=markItems(b.id).length; return n?`<button onclick="toggleMarks('${b.id}')">${marksFor===b.id?'코멘트 접기':'코멘트 '+n+'개'}</button>`:''; }
 function marksBlock(b){ return marksFor===b.id? marksList(b) : ''; }
-function markHead(x){ return (x.page?x.page+'쪽 · ':'')+(x.kind==='scan'?'스캔 · ':'')+mdLabel(x.date); }
+function markHead(x){ return (x.page?x.page+'쪽 · ':'')+(x.quote?'밑줄 · ':'')+(x.kind==='scan'?'스캔 · ':'')+mdLabel(x.date); }
 /* 스캔한 코멘트: 스캔 자체는 애플 메모에 있다. 어느 폴더, 어느 태그, 몇 쪽인지 알려준다. */
 function scanTag(title){ return (title||'').replace(/[^\p{L}\p{N}_-]/gu,''); }
 function scanWhere(x){ if(x.kind!=='scan') return ''; const b=book(x.bookId);
@@ -1008,7 +1013,7 @@ function addMarkTo(id){
 }
 function editMark(rid){
   const x=R.reads.find(r=>r.id===rid); if(!x) return;
-  const v=prompt((x.bookId===JAR?'밑줄 고치기':x.kind==='scan'?'스캔한 코멘트 고치기':'코멘트 고치기')+(x.page?' · '+x.page+'쪽':''),x.text||''); if(v===null) return;
+  const v=prompt((x.bookId===JAR||x.quote?'밑줄 고치기':x.kind==='scan'?'스캔한 코멘트 고치기':'코멘트 고치기')+(x.page?' · '+x.page+'쪽':''),x.text||''); if(v===null) return;
   const t=v.trim(); if(!t&&x.kind==='mark'){ dropMark(rid); return; }
   if(x.bookId!==JAR){ const pv=prompt('쪽 번호',x.page?String(x.page):'');
     if(pv!==null){ const n=parseInt(pv,10); x.page=n>0?n:0; } }
@@ -1018,7 +1023,7 @@ function editMark(rid){
 function dropMark(rid,fromDraw){
   const x=R.reads.find(r=>r.id===rid); if(!x) return;
   const msg=x.kind==='scan'?'이 스캔한 코멘트를 지웁니다. 애플 메모에 저장된 스캔은 그대로 남습니다.'
-    :x.bookId===JAR?'이 밑줄을 지웁니다.':'이 코멘트를 지웁니다.';
+    :x.bookId===JAR||x.quote?'이 밑줄을 지웁니다.':'이 코멘트를 지웁니다.';
   if(!confirm(msg)) return;
   x.gone=true; x.updated=new Date().toISOString(); saveR(); toast('지웠습니다');
   if(fromDraw){ drawId=null; if(drawPool().length){ drawMark(); return; } }
@@ -1030,7 +1035,7 @@ function copyMarks(id){
   if(b&&b.jar){ navigator.clipboard.writeText(['#밑줄들','',...ms.map(x=>x.text+'\n('+x.date+')\n')].join('\n').trim())
     .then(()=>toast(ms.length+'개를 복사했습니다'),()=>toast('복사할 수 없습니다')); return; }
   const t=['#'+title.replace(/[^\p{L}\p{N}_-]/gu,''), title+(b&&b.author?' / '+b.author:''), '',
-    ...ms.map(x=>(x.page?x.page+'쪽':'쪽 없음')+(x.kind==='scan'?' · 스캔 · 애플 메모 ‘'+(R.settings.scanFolder||'스캔')+'’ 폴더':'')+'\n'+(x.text||'코멘트 없음')+'\n')].join('\n').trim();
+    ...ms.map(x=>(x.page?x.page+'쪽':'쪽 없음')+(x.quote?' · 밑줄':'')+(x.kind==='scan'?' · 스캔 · 애플 메모 ‘'+(R.settings.scanFolder||'스캔')+'’ 폴더':'')+'\n'+(x.text||'코멘트 없음')+'\n')].join('\n').trim();
   navigator.clipboard.writeText(t).then(()=>toast('복사했습니다'),()=>toast('복사할 수 없습니다'));
 }
 /* 책 주소 #책=…로 온 책(writerKYS의 책 링크)은 펼친 자리 맨 위에 쪽수 칸이 뜬다. 2026년 11월 19일부터 여기서 적는 쪽도 여느 쪽수 기록과 같아서
@@ -1576,7 +1581,7 @@ function readingBooks(){ const m=lastActs(), k=b=>m.get(b.id)||b.pageAt||'';
 /* 읽기 대기: 읽을 책 가운데 아직 쪽이 없는 책. 읽고 싶은 책 견주기의 순위대로. */
 function waitBooks(){ return ordered('next').filter(b=>!(b.page>0)&&!isRef(b)); }
 
-let readOpen=null, readScan=null, waitShown=20, leaveAsk=null; /* leaveAsk: 완독·그만 읽기 시트 {id, kind:'done'|'quit', step:'ask'|'loc'|'ref'} */
+let readOpen=null, readScan=null, readQuote=false, waitShown=20, leaveAsk=null; /* leaveAsk: 완독·그만 읽기 시트 {id, kind:'done'|'quit', step:'ask'|'loc'|'ref'} */
 function vRead(){
   const rs=readingBooks(), ws=waitBooks();
   let out=soloSbHTML();
@@ -1602,16 +1607,20 @@ function readPanel(b,reading){
     <div class="rrow"><label for="rp-page">쪽수 적기</label>
       <input type="number" inputmode="numeric" id="rp-page" value="${b.page||''}" placeholder="쪽" aria-label="현재 쪽" onkeydown="${ent('readSetPage')}"><span>쪽</span>
       <button class="ghost" onclick="readSetPage('${b.id}')">적기</button></div>
-    <div class="markbox"><label>코멘트 적기</label>
+    <div class="markbox"><div class="choices seg"><button class="choice${readQuote?'':' on'}" data-c="next" onclick="setReadQuote(false)">코멘트</button><button class="choice${readQuote?' on':''}" data-c="best" onclick="setReadQuote(true)">밑줄</button></div>
       <div class="markrow"><div class="pg"><input type="number" inputmode="numeric" id="rm-page" placeholder="쪽" aria-label="쪽"></div>
-        <div class="tx"><textarea id="rm-text" rows="2" placeholder="이 쪽에 대한 코멘트" aria-label="코멘트" onkeydown="${ent('readAddMark')}"></textarea></div></div>
+        <div class="tx"><textarea id="rm-text" rows="2" placeholder="${readQuote?'책의 문장':'이 쪽에 대한 코멘트'}" aria-label="${readQuote?'밑줄':'코멘트'}" onkeydown="${ent('readAddMark')}"></textarea></div></div>
       <div class="markfoot"><div class="hint">적은 쪽이 현재 쪽보다 뒤이면 현재 쪽도 함께 올라갑니다</div>
         <button class="ghost" style="padding:7px 16px" onclick="readAddMark('${b.id}')">적기</button></div>
       <div class="markscan"><button class="toggle${readScanWanted(b)?' on':''}" onclick="toggleReadScan('${b.id}')"><span class="box"></span>이 쪽을 스캔한다${borrowedNow(b)?' · 빌린 책':''}</button></div></div>
     ${reading?`<div class="acts"><button onclick="finishRead('${b.id}')">완독</button><button onclick="quitRead('${b.id}')">그만 읽기</button></div>`:''}
   </li>`;
 }
-function toggleRead(id){ readOpen=readOpen===id?null:id; readScan=null; render(); }
+function toggleRead(id){ readOpen=readOpen===id?null:id; readScan=null; readQuote=false; render(); }
+/* 코멘트 / 밑줄 선택(2026년 11월 19일): 밑줄은 책의 문장이다. 같은 기록(kind:'mark'|'scan')에 quote:true만 더 붙고, 한눈에 탭의 밑줄 뽑기에 나온다. 적고 나면 코멘트로 돌아간다. */
+function keepReadInputs(fn){ const p=document.getElementById('rm-page'), t=document.getElementById('rm-text'), pv=p?p.value:'', tv=t?t.value:''; fn();
+  const p2=document.getElementById('rm-page'), t2=document.getElementById('rm-text'); if(p2) p2.value=pv; if(t2){ t2.value=tv; t2.focus(); } }
+function setReadQuote(on){ keepReadInputs(()=>{ readQuote=!!on; render(); }); }
 function readSetPage(id){
   const b=book(id), el=document.getElementById('rp-page'); if(!b||!el) return;
   const v=parseInt(el.value,10), to=v>0?v:0;
@@ -1628,13 +1637,15 @@ function toggleReadScan(id){
    목록 탭에서 적는 코멘트(addMarkTo)는 지금처럼 쪽을 건드리지 않는다(훑으며 적는 것은 독서가 아니다). */
 function readAddMark(id){
   const b=book(id), i=document.getElementById('rm-text'); if(!b||!i) return; const t=i.value.trim();
-  if(!t){ toast('코멘트를 적어주세요'); i.focus(); return; }
+  const qt=readQuote, what=qt?'밑줄':'코멘트';
+  if(!t){ toast(qt?'밑줄 문장을 적어주세요':'코멘트를 적어주세요'); i.focus(); return; }
   const page=pageVal('rm-page'), now=new Date().toISOString(), scan=readScanWanted(b);
-  R.reads.push({id:uid(),kind:scan?'scan':'mark',bookId:b.id,title:b.title,page,text:t,date:today(),at:now,updated:now});
+  const rec={id:uid(),kind:scan?'scan':'mark',bookId:b.id,title:b.title,page,text:t,date:today(),at:now,updated:now}; if(qt) rec.quote=true;
+  R.reads.push(rec); readQuote=false;
   if(page>(b.page||0)){ logPage(b,page); save(); }
   saveR(); render();
-  if(!scan){ toast('코멘트를 책에 저장했습니다'); return; }
-  toast('코멘트를 저장했습니다 · 스캔 단축어를 엽니다');
+  if(!scan){ toast(what+'을 책에 저장했습니다'); return; }
+  toast(what+'을 저장했습니다 · 스캔 단축어를 엽니다');
   runShortcut(R.settings.sc.scan||'스캔',scanTag(b.title)+'|'+(page||''));
 }
 /* 완독 · 그만 읽기: 읽는 중 목록에서 빼면서 남기기와 처분 가운데 하나를 묻는다.
