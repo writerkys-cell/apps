@@ -42,7 +42,7 @@ details summary{font-size:14.5px;color:var(--ink-soft);letter-spacing:.12em;padd
 .ba{font-size:14px;color:var(--ink-soft)}
 .field{margin-top:24px}
 .field label{display:block;font-size:13px;color:var(--ink-soft);letter-spacing:.08em;margin-bottom:5px}
-input[type=text],input[type=number],input[type=password],textarea{width:100%;background:transparent;border:none;border-bottom:1px solid var(--line);padding:8px 2px;font-size:18px;border-radius:0}
+input[type=text],input[type=number],input[type=password],input[type=date],textarea{width:100%;background:transparent;border:none;border-bottom:1px solid var(--line);padding:8px 2px;font-size:18px;border-radius:0}
 input:focus,textarea:focus{outline:none;border-bottom-color:var(--seal)}
 input[type=number]{-moz-appearance:textfield}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
@@ -83,7 +83,7 @@ const SBKEY='seoga.sb', OUTKEY='seoga.phone.out', CACHEKEY='seoga.phone.cache';
 const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
 const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
 let cfg=lsGet(SBKEY,{}), out=lsGet(OUTKEY,[]), C=lsGet(CACHEKEY,{reading:[],wait:[],at:''});
-let view='list', cur=null, scanOn=null, setup=false, busy=false, loading=false, state='';
+let view='list', cur=null, draft=null, scanOn=null, setup=false, busy=false, loading=false, state='';
 
 const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -119,18 +119,22 @@ async function load(){
     const slim=b=>({id:b.id,title:b.title||'',author:b.author||'',page:b.page||0,total:b.total||0,lent:!!b.borrowed&&!b.returnedAt,last:last.get(b.id)||b.pageAt||''});
     const reading=books.filter(b=>b.page>0).map(slim).sort((a,z)=>z.last.localeCompare(a.last)||a.title.localeCompare(z.title,'ko'));
     const ord=((mt&&mt[0]&&mt[0].data&&mt[0].data.next)||[]), by=new Map(books.map(b=>[b.id,b]));
-    const wait=ord.map(id=>by.get(id)).filter(b=>b&&b.category==='next'&&!(b.page>0)&&!b.keep&&!b.ref).map(slim);
-    C={reading,wait,at:new Date().toISOString()}; lsSet(CACHEKEY,C);
+    /* 순위에 아직 없는 읽을 책(이 앱에서 막 담은 책)은 맨 아래에 붙인다 — 서가의 reconcile과 같다 */
+    const inOrd=new Set(ord), tail=books.filter(b=>b.category==='next'&&!inOrd.has(b.id)).sort((a,z)=>(a.added||'').localeCompare(z.added||''));
+    const wait=ord.map(id=>by.get(id)).concat(tail).filter(b=>b&&b.category==='next'&&!(b.page>0)&&!b.keep&&!b.ref).map(slim);
+    const titles=bk.map(r=>r.data).filter(b=>b&&!b.purged&&!b.jar&&b.title).map(b=>({t:b.title.trim(),s:b.discarded?'폐기함':b.held?'보류':b.category==='best'?'베스트':b.category==='next'?'읽을 책':'미정'}));
+    C={reading,wait,titles,at:new Date().toISOString()}; lsSet(CACHEKEY,C);
     setState('on');
   }catch(e){ setState('err'); }
   loading=false;
-  const ae=document.activeElement;
-  if(view==='list'||!(ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName))) render();
+  if(view==='list') render();   /* 책 화면에서는 다시 그리지 않는다 — 적던 글이 지워지지 않게 */
 }
 
 /* ── 적기: 적을 것 하나 {bookId, mid, to, text, scan, date, at}. 서가의 쪽수 적기·코멘트 적기와 같은 줄을 남긴다 ──
    쪽이 현재 쪽과 다르면 현재 쪽을 그 쪽으로 고친다. 다만 코멘트와 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둔다(앞쪽에 단 코멘트). */
 async function apply(it){
+  if(it.type==='add'){ const now=new Date().toISOString(); it.book.updated=now;   /* 새 책 한 줄. 순위(seoga_meta의 order)는 건드리지 않는다 — 서가가 받아서 읽기 대기 맨 아래에 붙인다 */
+    await upsert('seoga_books',[{id:it.book.id,data:it.book,updated_at:now}]); return; }
   const got=await rest('seoga_books?select=id,data&id=eq.'+enc(it.bookId));
   const b=got&&got[0]&&got[0].data; if(!b||b.purged) return;          /* 그사이 지워진 책 */
   const now=new Date().toISOString(), d=it.date, at=it.at||now, was=b.page||0, to=it.to||0, rows=[];
@@ -158,7 +162,7 @@ async function flush(){
 function render(){
   const el=document.getElementById('view');
   if(setup||!cfg.url||!cfg.key){ el.innerHTML=setupHTML(); return; }
-  el.innerHTML=view==='book'&&cur?bookHTML():listHTML();
+  el.innerHTML=view==='add'&&draft?addHTML():view==='book'&&cur?bookHTML():listHTML();
   setState(state);
 }
 function setupHTML(){
@@ -178,7 +182,37 @@ function listHTML(){
   return `<section><h2 class="sec"><span class="dot"></span>읽는 중${r.length?' · '+r.length+'권':''}</h2>
       ${r.length?`<ul class="books">${r.map(b=>li(b,true)).join('')}</ul>`:`<div class="empty">${C.at?'쪽수를 적기 시작한 책이 여기에 놓입니다.':'책을 받아오는 중입니다.'}</div>`}</section>
     ${w.length?`<details><summary>읽기 대기 · ${w.length}권</summary><ul class="books">${w.map(b=>li(b,false)).join('')}</ul></details>`:''}
+    <div class="rowbtns"><button class="ghost" onclick="openAdd()">새 책 담기</button></div>
     <div class="foot"><a class="linkish" href="./seoga.html#read">서가 열기 · 완독은 서가에서</a><button class="linkish" onclick="load()">다시 받기</button><button class="linkish" onclick="setup=true;render()">연결 고치기</button></div>`;
+}
+/* ── 새 책 담기: 읽을 책으로, 자리 없이. 서가의 addSave가 만드는 책과 같은 모양이다. 견주기는 하지 않고 읽기 대기 맨 아래에 놓인다(순위는 서가에서 '견주기'로).
+   증정본·빌린 책 표시는 서가처럼 함께 켤 수 없다. 읽은 책·자료는 서가에서 담는다. ── */
+function plusDays(n){ const d=new Date(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function openAdd(){ draft={title:'',author:'',publisher:'',total:'',gift:false,received:today(),borrowed:false,library:'',due:plusDays(14)}; view='add'; render(); window.scrollTo(0,0); }
+function dupHint(){ const t=(draft.title||'').trim(); if(!t) return ''; const h=(C.titles||[]).find(x=>x.t===t); return h?'이미 ‘'+h.t+'’('+h.s+')이 담겨 있습니다.':''; }
+function addHTML(){
+  const d=draft, f=(id,k,label,type,ph)=>`<div class="field"><label for="${id}">${label}</label><input type="${type||'text'}"${type==='number'?' inputmode="numeric"':''} id="${id}" value="${esc(String(d[k]||''))}" placeholder="${ph||''}" oninput="draft.${k}=this.value${k==='title'?";document.getElementById('a-dup').textContent=dupHint()":''}"></div>`;
+  return `<h2 class="sec">새 책 담기 · 읽을 책</h2>
+    ${f('a-title','title','제목','text','표지에 적힌 그대로')}<div class="hint" id="a-dup" style="color:var(--seal)">${esc(dupHint())}</div>
+    ${f('a-author','author','지은이','text','옮긴이가 있으면 함께')}${f('a-pub','publisher','펴낸곳')}${f('a-total','total','총 쪽수','number','비워둬도 됩니다')}
+    <div><button class="toggle${d.gift?' on':''}" onclick="draft.gift=!draft.gift;if(draft.gift)draft.borrowed=false;render()"><span class="box"></span>증정본으로 받은 책</button></div>
+    ${d.gift?f('a-recv','received','받은 날짜','date'):''}
+    <div><button class="toggle${d.borrowed?' on':''}" onclick="draft.borrowed=!draft.borrowed;if(draft.borrowed)draft.gift=false;render()"><span class="box"></span>도서관에서 빌린 책</button></div>
+    ${d.borrowed?f('a-lib','library','도서관','text','예: 마두도서관')+f('a-due','due','반납일','date'):''}
+    <div class="rowbtns"><button class="primary" onclick="saveAdd()">담기</button><button class="linkish" onclick="draft=null;back()">뒤로</button></div>
+    <p class="hint">자리 없이 읽기 대기 맨 아래에 담깁니다. 순위는 서가에서 그 책을 펼쳐 ‘견주기’로 정합니다. 담으면 바로 쪽을 적을 수 있습니다.</p>`;
+}
+function saveAdd(){
+  const d=draft, title=(d.title||'').trim(); if(!title){ toast('제목을 적어주세요'); const t=document.getElementById('a-title'); if(t) t.focus(); return; }
+  const now=new Date().toISOString();
+  const b={id:uid(),title,author:(d.author||'').trim(),publisher:(d.publisher||'').trim(),category:'next',ref:false,
+    gift:!!d.gift,received:d.gift?(d.received||today()):'',location:'',
+    borrowed:!!d.borrowed,library:d.borrowed?(d.library||'').trim():'',due:d.borrowed?(d.due||''):'',returnedAt:'',
+    discarded:false,toDiscard:false,discardedAt:'',page:0,pageAt:'',total:Math.max(0,parseInt(d.total,10)||0),added:now,updated:now,note:''};
+  out.push({type:'add',book:b}); lsSet(OUTKEY,out);
+  C.wait.push({id:b.id,title:b.title,author:b.author,page:0,total:b.total,lent:b.borrowed,last:''}); (C.titles=C.titles||[]).push({t:title,s:'읽을 책'}); lsSet(CACHEKEY,C);
+  draft=null; toast('담았습니다 · 읽기 대기 맨 아래'); openBook(b.id);
+  setState('busy'); flush().then(()=>load(),()=>setState('err'));
 }
 function findB(id){ return C.reading.find(b=>b.id===id)||C.wait.find(b=>b.id===id); }
 function scanWanted(b){ return scanOn===null? !!(b&&b.lent) : scanOn; }
@@ -208,7 +242,8 @@ function save(){
   C.wait=C.wait.filter(x=>x.id!==b.id||!(x.page>0)); if(b.page>0&&!C.reading.includes(b)) C.reading.push(b);
   C.reading.sort((a,z)=>z.last.localeCompare(a.last)); lsSet(CACHEKEY,C);
   toast([setPage?to+'쪽':'',text?'코멘트를 적었습니다':''].filter(Boolean).join(' · '));
-  view='list'; cur=null; render(); window.scrollTo(0,0);
+  /* 적은 뒤에도 그 책의 화면에 머문다(이어서 다음 쪽·다음 코멘트를 적는다). 쪽 칸은 새 현재 쪽, 코멘트 칸은 비운다. 목록은 '뒤로'로 간다. */
+  render(); window.scrollTo(0,0);
   setState('busy'); flush().then(()=>load(),()=>setState('err'));
   if(scan){ /* 서가와 같은 입력: 띄어쓰기·문장부호를 뺀 제목|쪽 */
     const tag=(b.title||'').replace(/[^\p{L}\p{N}_-]/gu,'');
