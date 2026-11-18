@@ -229,7 +229,7 @@
     <button id="recordsBtn">기록</button> ·
     <button id="scBtn">단축어</button> ·
     <button id="bjBtn">방점</button>
-    <div class="ver">FV 3.7 · 15분 · 기록 · 단축어 · 방점 · 2026-11-18</div>
+    <div class="ver">FV 3.8 · 15분 · 기록 · 단축어 · 방점 · 2026-11-18</div>
   </div>
 </div>
 
@@ -314,7 +314,7 @@
       <li>도중에 방해를 받으면 <b>방해</b>를 누르세요. 15분이 처음부터 다시 시작됩니다. 끊기지 않은 15분을 채워야 다음으로 넘어갑니다.</li>
       <li>시작 전에는 <b>미결</b>과 <b>링크</b>만 누를 수 있습니다. 지금 15분을 낼 수 없는 일이면 미결로 미루세요.</li>
       <li>타이머는 실제 시계로 흐릅니다. 링크를 눌러 다른 앱에서 일해도, 앱을 껐다 켜도 이어집니다.</li>
-      <li><b>끝</b> — 완료. 줄이 그어집니다.</li>
+      <li><b>끝</b> — 완료. 줄이 그어집니다. 15분이 다 되기 전에 일을 마쳤으면 그때 눌러도 됩니다(쓴 시간만 적립됩니다).</li>
       <li><b>계속</b> — 끝내지 못했을 때. 줄을 긋고 리스트 맨 끝에 다시 적습니다. 이름을 바꿔 넣어도 됩니다.</li>
       <li><b>미결</b> — 다음에 다시 생각해볼 일. 노란 형광펜이 칠해지고 나중에 '비활성 할 일'로 옮겨집니다.</li>
       <li>체인을 다 처리하면 <b>처음부터 다시</b> 고릅니다.</li>
@@ -958,7 +958,8 @@ function act(action){
   const it=currentTask();
   if(!it)return;
   const ts=timerState();
-  if(ts==='running'){toast('15분이 끝나야 누를 수 있습니다');return;}
+  /* 15분이 흐르는 중에도 '끝'만은 누를 수 있다(2026년 11월 18일) — 시간 전에 일을 마쳤을 때. 쓴 시간만 적립한다. 계속·미결은 15분 뒤에 */
+  if(ts==='running'&&action!=='done'){toast('15분이 끝나야 누를 수 있습니다');return;}
   if(ts==='idle'&&action!=='dismiss'){toast('먼저 시작을 눌러 15분을 채우세요');return;}
   snap();
   const hadSession=!!timerFor();
@@ -1330,8 +1331,8 @@ function renderPanel(){
       const r=remainMs();
       clock='<span class="clock" id="clock">'+fmtClock(r)+'</span>'
         +'<span class="bar"><i id="barfill" style="width:'+(100*(FOCUS_MS-r)/FOCUS_MS).toFixed(1)+'%"></i></span>';
-      note='끝날 때까지 이 일에만 머무세요. 방해를 받으면 아래를 누르고 처음부터 다시.';
-      btns='<button data-a="interrupt">방해</button>'+lk;
+      note='끝날 때까지 이 일에만 머무세요. 방해를 받으면 방해를 누르고 처음부터 다시. 시간 전에 일을 마쳤으면 끝.';
+      btns='<button data-a="done">끝</button><button data-a="interrupt">방해</button>'+lk;
     }else if(ts==='fin'){
       clock='<span class="clock fin">15분 완료 ✓</span>';
       note='더 해도 되고, 여기서 정리해도 됩니다.';
@@ -1340,7 +1341,7 @@ function renderPanel(){
         +'<button data-a="dismiss">미결</button>'+lk;
     }else{
       clock='<span class="clock idle">15:00</span>';
-      note='시작을 누르면 15분 동안 이 일에만 머뭅니다. 다 채워야 끝·계속을 누를 수 있어요.';
+      note='시작을 누르면 15분 동안 이 일에만 머뭅니다. 다 채워야 계속을 누를 수 있어요. 일찍 마쳤으면 끝.';
       btns='<button data-a="start">시작</button>'
         +'<button data-a="dismiss">미결</button>'+lk;
     }
