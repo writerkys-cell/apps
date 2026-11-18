@@ -116,7 +116,7 @@ section>h2{font-size:13.5px;font-weight:400;color:var(--ink-soft);margin:0 0 10p
 /* ---------- 저장소 ----------
    writerKYS.v1 — 이 앱의 설정만. 진행 상황은 저장하지 않고 열 때마다 타이핑에서 읽는다.
    works:[{name, unit:'mae'|'page', target}]  이름은 타이핑의 작품 이름과 같아야 한다. unit은 매수(글자 수 ÷ 200) 또는 쪽수(타이핑의 개정 회차 기록)
-   apps·books·refs:[{name, url}]  책의 url을 비우면 서가의 그 책(seoga.html#책=이름 — 서가에서 '자료로 읽기'로 열린다) */
+   apps·books·refs:[{name, url}]  책의 url을 비우면 서가의 그 책(seoga.html#책=이름 — 서가에서 그 책이 펼쳐지고 쪽수를 적을 수 있다) */
 const KEY='writerKYS.v1', TP_KEY='taiping-v1', SM_KEY='storyM.v1', IDEA_IN='storyM.ideas.in';
 const DEF={
   works:[],
@@ -145,9 +145,9 @@ function num(n,d){ return (+n.toFixed(d==null?1:d)).toLocaleString('ko-KR'); }
 
 /* ---------- 타이핑 읽기(읽기만 한다. 계산은 타이핑과 같게) ---------- */
 function readTp(){ try{ const s=JSON.parse(localStorage.getItem(TP_KEY)); return s&&typeof s==='object'?s:null; }catch(e){ return null; } }
-/* 서가에서 자료 딱지(ref)가 붙은 책 — 설정에서 책을 더할 때 고르게 한다. 서가 저장소(seoga.v1)는 읽기만 한다 */
+/* 서가에 담긴 책(내놓지 않은 것) — 설정에서 책 이름을 적을 때 제목으로 찾게 한다(2026년 11월 19일: 자료 딱지와 상관없이 모든 책). 서가 저장소(seoga.v1)는 읽기만 한다 */
 function seogaRefs(){
-  try{ const d=JSON.parse(localStorage.getItem('seoga.v1')); return ((d&&d.books)||[]).filter(b=>b&&b.ref&&!b.discarded&&norm(b.title)).map(b=>({title:norm(b.title),author:norm(b.author),page:b.page||0})); }
+  try{ const d=JSON.parse(localStorage.getItem('seoga.v1')); return ((d&&d.books)||[]).filter(b=>b&&!b.jar&&!b.discarded&&norm(b.title)).map(b=>({title:norm(b.title),author:norm(b.author),page:b.page||0})); }
   catch(e){ return []; }
 }
 function readSm(){ try{ const d=JSON.parse(localStorage.getItem(SM_KEY)); return d&&Array.isArray(d.stories)?d.stories:[]; }catch(e){ return []; } }
@@ -306,13 +306,12 @@ function rowHTML(sec,x,i,S){
 function setHTML(){
   const S=readTp();
   let h='<div class="set"><datalist id="tpWorks">'+((S&&S.works)||[]).filter(workActive).map(w=>'<option value="'+esc(w.title)+'">').join('')+'</datalist>';
-  const refs=seogaRefs(), have=cfg.books.map(b=>norm(b.name)), more=refs.filter(r=>!have.includes(r.title));
+  const refs=seogaRefs();
   h+='<datalist id="sgRefs">'+refs.map(r=>'<option value="'+esc(r.title)+'">').join('')+'</datalist>';
   SECS.forEach(([sec,name,note])=>{
     h+='<h3>'+name+'</h3><p class="note">'+esc(note)+'</p>'+cfg[sec].map((x,i)=>rowHTML(sec,x,i,S)).join('')
       +'<div class="add"><button class="btn" data-act="add" data-sec="'+sec+'">'+name+' 더하기</button></div>';
-    if(sec==='books') h+=more.length?'<p class="note" style="margin-top:14px">서가에서 자료로 정한 책 · 누르면 더합니다</p><div class="chips" style="margin-top:6px">'+more.map(r=>'<button class="btn" data-act="pick" data-sec="books" data-name="'+esc(r.title)+'">'+esc(r.title)+(r.author?' <small style="color:var(--void)">'+esc(r.author)+'</small>':'')+'</button>').join('')+'</div>'
-      :'<p class="note" style="margin-top:14px">'+(refs.length?'서가에서 자료로 정한 책 '+refs.length+'권이 모두 들어 있습니다.':'서가에 자료로 정한 책이 없습니다 — 서가에서 책을 담을 때 \'자료\'를 고르거나, 펼친 책에서 \'자료로 표시\'를 누르면 여기서 고를 수 있습니다.')+'</p>';
+    if(sec==='books') h+='<p class="note" style="margin-top:14px">책 이름 칸에 제목을 적으면 서가에 담긴 책 '+refs.length+'권에서 찾아 줍니다.</p>';
   });
   h+='<h3>주소</h3><p class="note">원고 이름을 누르면 여는 타이핑, 책을 여는 서가의 주소. 깃허브 apps/에 함께 올려 두면 그대로 두면 됩니다.</p>'
     +'<div class="srow"><input class="nm" value="타이핑" disabled><input class="url" data-top="taipingUrl" value="'+esc(cfg.taipingUrl)+'" autocapitalize="off" spellcheck="false"></div>'

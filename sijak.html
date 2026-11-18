@@ -645,17 +645,14 @@ function writeRunning(){
 async function loadRead(k){
   if(!mrOn()){ R=null; Rerr='setup'; return; }
   try{
-    const [rows,meta]=await Promise.all([
-      rest(cfg.mr,'seoga_reads?select=data&data->>kind=eq.read&data->>date=eq.'+enc(k)),
-      rest(cfg.mr,'seoga_meta?select=id,data&id=in.(active,settings)')
-    ]);
-    let min=0; const titles=[];
-    (rows||[]).forEach(r=>{ const d=r.data||{}; if(d.gone) return; min+=(+d.minutes||0); if(d.title&&!titles.includes(d.title)) titles.push(d.title); });
-    const act=(meta||[]).find(x=>x.id==='active'), st=(meta||[]).find(x=>x.id==='settings');
-    R={min, titles, goal:(st&&st.data&&+st.data.target)||120, active:act&&act.data&&act.data.active||null};
+    /* 2026년 11월 19일: 서가가 독서 시간을 재지 않는다. 오늘 날짜의 옛 read 줄과 새 page 줄만 받아 쪽을 센다(pgBuild — 쪽수 칸과 같은 계산). seoga_meta(active·settings.target)는 더 읽지 않는다 */
+    const rows=await rest(cfg.mr,'seoga_reads?select=data&data->>kind=in.(read,page)&data->>date=eq.'+enc(k));
+    const b=pgBuild((rows||[]).map(r=>{ const d=r.data||{}; return {kind:d.kind, gone:d.gone, date:d.date, fp:d.fromPage, tp:d.toPage, pf:d.from, pt:d.page, title:d.title}; }));
+    R={pages:+b.pages[k]||0, titles:b.titles[k]||[]};
     Rerr='';
   }catch(er){ Rerr=missingTable(er)?'Supabase에 서가 표가 없습니다. 서가에서 동기화를 먼저 켜세요.':(er.message||'불러오지 못했습니다'); }
 }
+/* 2026년 11월 19일부터 부르는 곳이 없다(서가에 ‘읽는 중’이 없어졌다). R.active도 더 채우지 않는다 */
 function readRunning(){
   const a=R&&R.active; if(!a) return null;
   if(a.closing) return {min:0, label:(a.device&&a.device!==myDevice()?a.device+'에서 ':'')+'읽기를 끝냄 · 쪽을 적어야 합니다', title:a.title};
@@ -980,12 +977,13 @@ function renderToday(){
   if(Rerr==='setup'){ sr.removeAttribute('href'); sr.innerHTML=`<div class="strip-head"><span class="strip-name">독서</span></div><div class="strip-sub">${setupMsg()}</div>`; sr.classList.remove('met'); }
   else if(!R){ sr.innerHTML=`<div class="strip-head"><span class="strip-name">독서</span></div><div class="strip-sub">${Rerr?'<span class="err">'+esc(Rerr)+'</span>':'불러오는 중'}</div>`; }
   else{
-    const run=readRunning(), tot=R.min+(run?run.min:0), met=tot>=R.goal;
-    let sub = run ? `<span class="live">${esc(run.label)}${run.min>=1?' · '+fmtMin(run.min)+'째':''}</span>${run.title?' · 『'+esc(run.title)+'』':''}`
-      : (R.titles.length? R.titles.map(t=>'『'+esc(t)+'』').join(' ')+'을 읽었습니다' : '아직 읽지 않았습니다');
+    /* 2026년 11월 19일: 오늘 읽은 쪽수만 보인다(시간·목표·게이지·읽는 중 없음). 쪽은 서가의 옛 read 줄과 새 page 줄의 합 */
+    let sub = R.titles.length? R.titles.map(t=>'『'+esc(t)+'』').join(' ')+'을 읽었습니다' : '아직 읽지 않았습니다';
     if(Rerr) sub+=` <span class="err">· ${esc(Rerr)}</span>`;
-    sr.innerHTML=stripHTML('독서', R.min, run?run.min:0, R.goal, sub, met, 'avgR');
-    sr.classList.toggle('met',met);
+    sr.innerHTML=`<div class="strip-head"><span class="strip-lead"><span class="strip-name">독서</span><span class="avg" id="avgR"></span></span>
+    <span class="strip-num">${Math.round(R.pages).toLocaleString('ko-KR')}쪽</span></div>
+    <div class="strip-sub">${sub}</div>`;
+    sr.classList.remove('met');
   }
 
   renderPgStrip();
@@ -2254,7 +2252,7 @@ function renderSet(){
   <div class="btnrow"><button class="btn" id="copyRefSql">SQL 복사</button></div>
 
   <h3>글쓰기 표</h3>
-  <p class="note">오늘 화면의 글쓰기 칸이 재는 세션을 담습니다(${kLabelY(SS_SINCE)}부터). 칸이나 떠들기·타자기 링크를 누르면 재기 시작하고 그 앱은 열기만 합니다. 다시 누르거나 연 탭을 닫으면 끝내기 칸이 뜹니다. 어느 글인지는 적지 않고, 단축어도 부르지 않습니다. 글자는 타이핑에서 보내기를 누를 때 셉니다. 독서는 서가가 재고 시작은 읽기만 합니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
+  <p class="note">오늘 화면의 글쓰기 칸이 재는 세션을 담습니다(${kLabelY(SS_SINCE)}부터). 칸이나 떠들기·타자기 링크를 누르면 재기 시작하고 그 앱은 열기만 합니다. 다시 누르거나 연 탭을 닫으면 끝내기 칸이 뜹니다. 어느 글인지는 적지 않고, 단축어도 부르지 않습니다. 글자는 타이핑에서 보내기를 누를 때 셉니다. 독서는 서가에 적은 쪽수를 시작이 읽기만 합니다. 처음 한 번 미래 프로젝트의 SQL Editor에서 실행하세요.</p>
   <pre class="sql">${esc(SS_SQL)}</pre>
   <div class="btnrow"><button class="btn" id="copySsSql">SQL 복사</button></div>
   <p class="note" style="margin-top:10px">끝낸 세션 ${ssLive().filter(r=>r.end).length}개가 있고, ${Object.keys(SS.dirty).length?Object.keys(SS.dirty).length+'개를 아직 올리지 못했습니다':'모두 올라가 있습니다'}.</p>
@@ -2621,49 +2619,61 @@ function renderAdv(){
 async function openAdv(){ renderAdv(); if(btOn()){ await loadWrite(dayKey()); if(view==='adv') renderAdv(); } }
 
 /* ═════════ 쪽수 — 서가의 읽기 기록(seoga_reads)을 읽기만 한다 ═════════
-   한 읽기의 쪽 = max(0, toPage − fromPage). 읽은 날 = 그날의 읽은 시간이 있는 날.
-   시작 쪽이 0(서가에 쪽이 적히지 않은 책)인데 한 번에 너무 많이 나온 읽기는 중간부터 읽은 책을 처음부터 센 것일 수 있어 뺀다 */
-const PG_DEF_GOAL=100, PG_SUSPECT={pages:150, perMin:3};
+   2026년 11월 19일부터 서가는 독서 시간을 재지 않고 쪽만 적는다. 시작도 시간(minutes)은 읽지 않는다.
+   옛 줄(kind 'read')의 쪽 = max(0, toPage − fromPage). 새 줄(kind 'page')의 쪽 = page − from(잘못 적은 쪽을 낮춰 고치면 음수).
+   하루 읽은 쪽 = max(0, 그날 옛 줄의 쪽 합 + 새 줄의 쪽 합). 읽은 날 = 그 값이 0보다 큰 날.
+   옛 줄 가운데 시작 쪽이 0(서가에 쪽이 적히지 않은 책)인데 한 번에 너무 많이 나온 읽기는 중간부터 읽은 책을 처음부터 센 것일 수 있어 뺀다 */
+const PG_DEF_GOAL=100, PG_SUSPECT={pages:150};
 let RD=null, RDerr='', RDat=0;
 function readGoal(){ const c=INC.rows.conf; return (c&&+c.readGoal>0)?+c.readGoal:PG_DEF_GOAL; }
-function pgSuspect(x){ return x.fp===0 && x.pages>0 && (x.pages>PG_SUSPECT.pages || x.pages/Math.max(1,x.min)>PG_SUSPECT.perMin); }
+function pgSuspect(x){ return x.fp===0 && x.pages>PG_SUSPECT.pages; }
+/* 서가의 한 줄 → {date, title, kind, fp, tp, pages, cut}. 지운 줄(gone)·날짜 없는 줄·모르는 종류·쪽이 숫자가 아닌 page 줄은 null */
+function pgRow(r){
+  if(!r||r.gone===true||r.gone==='true'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')) return null;
+  const x={date:r.date, title:r.title||'', kind:r.kind, fp:0, tp:0, pages:0, cut:false};
+  if(r.kind==='page'){ const a=parseFloat(r.pf), b=parseFloat(r.pt); if(!isFinite(a)||!isFinite(b)) return null; x.fp=a; x.tp=b; x.pages=b-a; }
+  else if(r.kind==='read'){ x.fp=+r.fp||0; x.tp=+r.tp||0; x.pages=Math.max(0,x.tp-x.fp); x.cut=pgSuspect(x); }
+  else return null;
+  return x;
+}
+/* 줄들 → 날짜별 쪽(하루 합은 0 아래로 내려가지 않는다)·읽은 책·뺀 읽기·첫 날. 오늘의 독서 칸(loadRead)과 쪽수 칸(rdBuild)이 함께 쓴다 */
+function pgBuild(rows){
+  const pages={}, titles={}, cut=[]; let first='';
+  (rows||[]).forEach(r=>{
+    const x=pgRow(r); if(!x) return;
+    if(!first||x.date<first) first=x.date;
+    if(x.pages>0){ (titles[x.date]=titles[x.date]||[]); if(x.title&&!titles[x.date].includes(x.title)) titles[x.date].push(x.title); }
+    if(x.cut){ cut.push(x); return; }
+    pages[x.date]=(pages[x.date]||0)+x.pages;
+  });
+  Object.keys(pages).forEach(k=>{ pages[k]=Math.max(0,pages[k]); });
+  cut.sort((a,b)=>b.date.localeCompare(a.date));
+  return {pages, titles, cut, first};
+}
 async function loadReads(force){
   if(!mrOn()){ RD=null; RDerr='setup'; return; }
   if(!force && RD && Date.now()-RDat<20000) return;
   try{
     const all=[], step=1000;
     for(let off=0; off<50000; off+=step){
-      const rows=await rest(cfg.mr,'seoga_reads?select=id,date:data->>date,fp:data->>fromPage,tp:data->>toPage,min:data->>minutes,title:data->>title,gone:data->>gone&data->>kind=eq.read&order=id&limit='+step+'&offset='+off);
+      const rows=await rest(cfg.mr,'seoga_reads?select=id,kind:data->>kind,date:data->>date,fp:data->>fromPage,tp:data->>toPage,pf:data->>from,pt:data->>page,title:data->>title,gone:data->>gone&data->>kind=in.(read,page)&order=id&limit='+step+'&offset='+off);
       all.push(...(rows||[])); if(!rows||rows.length<step) break;
     }
     RDraw=all; rdBuild(); RDat=Date.now(); RDerr='';
   }catch(er){ RDerr=missingTable(er)?'Supabase에 서가 표가 없습니다.':(er.message||'불러오지 못했습니다'); }
 }
-/* 받아 둔 서가의 읽기 기록(RDraw)으로 날짜별 쪽·시간을 짠다. (2026년 11월 12일에 하루 동안 시작의 독서 세션을 이어 붙였다가, 독서는 서가가 재는 것으로 되돌렸다.) */
+/* 받아 둔 서가의 읽기 기록(RDraw)으로 날짜별 쪽을 짠다(2026년 11월 19일부터 시간은 짜지 않는다). (2026년 11월 12일에 하루 동안 시작의 독서 세션을 이어 붙였다가, 독서는 서가가 재는 것으로 되돌렸다.) */
 let RDraw=null;
 function rdBuild(){
   if(!RDraw) return;
-  const pages={}, mins={}, titles={}, cut=[]; let first='';
-  const add=x=>{
-    x.pages=Math.max(0,x.tp-x.fp);
-    if(!first||x.date<first) first=x.date;
-    mins[x.date]=(mins[x.date]||0)+x.min;
-    (titles[x.date]=titles[x.date]||[]); if(x.title&&!titles[x.date].includes(x.title)) titles[x.date].push(x.title);
-    if(pgSuspect(x)){ cut.push(x); return; }
-    pages[x.date]=(pages[x.date]||0)+x.pages;
-  };
-  RDraw.forEach(r=>{
-    if(r.gone==='true'||!/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')) return;
-    add({date:r.date, fp:+r.fp||0, tp:+r.tp||0, min:+r.min||0, title:r.title||''});
-  });
-  cut.sort((a,b)=>b.date.localeCompare(a.date));
-  RD={pages, mins, titles, cut, first:first||dayKey(), n:RDraw.length};
+  const {pages, titles, cut, first}=pgBuild(RDraw);
+  RD={pages, titles, cut, first:first||dayKey(), n:RDraw.length};
   if(view==='today') renderPgStrip();
 }
-/* 최근 30일 하루 평균 쪽·시간, 읽은 날(시간이 있는 날) */
+/* 최근 30일 하루 평균 쪽, 읽은 날(쪽이 0보다 큰 날) */
 function pgAvg(end){
-  const a=avgN(RD.pages,RD.first,end), m=avgN(RD.mins,RD.first,end);
-  return {pg:a.v, min:m.v, days:m.days, n:a.n, from:a.from, to:a.to};
+  const a=avgN(RD.pages,RD.first,end);
+  return {pg:a.v, days:a.days, n:a.n, from:a.from, to:a.to};
 }
 function pgStripHTML(){
   const head=num=>`<div class="strip-head"><span class="strip-name">쪽수</span>${num||''}</div>`;
@@ -2672,7 +2682,7 @@ function pgStripHTML(){
   const a=pgAvg(), g=readGoal(), met=a.pg>=g;
   return {met, h:head(`<span class="strip-num">${Math.round(a.pg)}쪽 <span class="of">/ ${g}쪽</span></span>`)
     +`<div class="gauge"><i class="done" style="width:${Math.max(0,Math.min(100,a.pg/g*100))}%"></i></div>`
-    +`<div class="strip-sub">최근 ${a.n}일 하루 평균 · 읽은 날 ${a.days}일 · 하루 ${fmtMin(a.min)}${RDerr?' <span class="err">· '+esc(RDerr)+'</span>':''}</div>`
+    +`<div class="strip-sub">최근 ${a.n}일 하루 평균 · 읽은 날 ${a.days}일${RDerr?' <span class="err">· '+esc(RDerr)+'</span>':''}</div>`
     +(met?'<span class="stamp">채움</span>':'')};
 }
 function renderPgStrip(){ const el=$('stripP'); if(!el) return; const s=pgStripHTML(); el.innerHTML=s.h; el.classList.toggle('met',s.met); renderPairAvgs(); }
@@ -2695,27 +2705,26 @@ function renderPg(){
   const host=$('pgHost'), open=`<p class="note" style="margin-top:28px"><a class="linkish" href="${esc(linkFor('read'))}" target="sijak_read" rel="opener">서가 열기</a></p>`;
   if(RDerr==='setup'){ host.innerHTML=`<p class="empty">${setupMsg()}</p>`; return; }
   if(!RD){ host.innerHTML=`<p class="empty">${RDerr?'<span class="err">'+esc(RDerr)+'</span>':'불러오는 중'}</p>`; return; }
-  const {pages,mins,titles,first,cut}=RD, g=readGoal(), a=pgAvg(), k0=dayKey(), cur=k0.slice(0,7);
-  let mP=0, mM=0, mD=0; for(let k=cur+'-01'; k<=k0; k=addDays(k,1)){ mP+=+pages[k]||0; mM+=+mins[k]||0; if(+mins[k]>0) mD++; }
-  const fi=v=>String(Math.round(v)), perH=a.min>0?Math.round(a.pg/a.min*60):0;
+  const {pages,titles,first,cut}=RD, g=readGoal(), a=pgAvg(), k0=dayKey(), cur=k0.slice(0,7);
+  let mP=0, mD=0; for(let k=cur+'-01'; k<=k0; k=addDays(k,1)){ mP+=+pages[k]||0; if(+pages[k]>0) mD++; }
+  const fi=v=>String(Math.round(v));
   let h=`<div class="inc-top${a.pg>=g?' met':''}">
     <div class="lbl">최근 ${a.n}일 하루 평균</div>
     <div class="big">${Math.round(a.pg)}쪽<small>읽은 날 ${a.days}일</small></div>
     <div class="sub">${kLabel(a.from)}–${kLabel(a.to)} · ${goalCompare(a.pg,g,fi,'쪽')}</div>
-    <div class="sub">하루 평균 ${fmtMin(a.min)}${perH?' · 한 시간에 약 '+perH+'쪽':''}</div>
-    <div class="now">${+cur.slice(5)}월에는 지금까지 ${mP.toLocaleString('ko-KR')}쪽 · ${fmtMin(mM)} · 읽은 날 ${mD}일</div>
+    <div class="now">${+cur.slice(5)}월에는 지금까지 ${mP.toLocaleString('ko-KR')}쪽 · 읽은 날 ${mD}일</div>
   </div>
-  <p class="note">서가의 읽기 기록으로 셉니다. 한 번의 읽기는 끝난 쪽에서 시작한 쪽을 뺀 만큼이고, 쉰 날도 나눕니다. 중간부터 읽는 책은 읽기를 시작하기 전에 서가에서 “지금 몇 쪽”을 적어 두면 정확해집니다.</p>`;
-  h+=`<h3>최근 30일 날마다</h3><div class="incchart">${barsSVG(pages,first,{div:1, fmt:fi, tip:(k,before)=>{ const p=+pages[k]||0, m=+mins[k]||0; if(before) return kLabel(k)+' · 기록 전'; if(!p&&!m) return kLabel(k)+' · 읽지 않음'; return kLabel(k)+' · '+p+'쪽 · '+fmtMin(m)+((titles[k]||[]).length?' · '+titles[k].map(t=>'『'+t+'』').join(' '):''); }})}</div>`;
+  <p class="note">서가에 적은 쪽으로 셉니다. 쪽을 적을 때마다 적은 뒤 쪽에서 적기 전 쪽을 뺀 만큼이 그날에 더해지고(잘못 적은 쪽을 낮춰 고치면 그만큼 빠집니다), 쉰 날도 나눕니다. 읽은 날은 읽은 쪽이 있는 날입니다.</p>`;
+  h+=`<h3>최근 30일 날마다</h3><div class="incchart">${barsSVG(pages,first,{div:1, fmt:fi, tip:(k,before)=>{ const p=+pages[k]||0; if(before) return kLabel(k)+' · 기록 전'; if(!p) return kLabel(k)+' · 읽지 않음'; return kLabel(k)+' · '+p+'쪽'+((titles[k]||[]).length?' · '+titles[k].map(t=>'『'+t+'』').join(' '):''); }})}</div>`;
   h+=`<h3>평균의 흐름</h3><div class="incchart">${flowSVG(pages,first,g,{div:1, unit:'쪽', fmt:fi, fmtG:fi})}</div>`;
-  const ms=monthsOf(pages,first,mins);
-  h+=monthTable(ms,'<th>달</th><th>읽은 쪽</th><th>읽은 시간</th><th>하루 평균</th>',
-    r=>`<tr${r.part?' class="part"':''}><td>${monthLabel(r.m)}${r.part?' (진행 중)':''}</td><td>${r.sum.toLocaleString('ko-KR')}쪽</td><td>${fmtMin(r.ex)}</td><td class="${!r.part&&r.sum/r.n>=g?'hi':''}">${Math.round(r.sum/Math.max(1,r.n))}쪽</td></tr>`);
+  const ms=monthsOf(pages,first);
+  h+=monthTable(ms,'<th>달</th><th>읽은 쪽</th><th>읽은 날</th><th>하루 평균</th>',
+    r=>`<tr${r.part?' class="part"':''}><td>${monthLabel(r.m)}${r.part?' (진행 중)':''}</td><td>${r.sum.toLocaleString('ko-KR')}쪽</td><td>${r.days}일</td><td class="${!r.part&&r.sum/r.n>=g?'hi':''}">${Math.round(r.sum/Math.max(1,r.n))}쪽</td></tr>`);
   h+=monthNote(first);
   if(cut.length){
     h+=`<details class="advold"><summary>평균에서 뺀 읽기 ${cut.length}건</summary>
-      <p class="note">시작 쪽이 비어(0) 있는데 한 번에 ${PG_SUSPECT.pages}쪽이 넘거나 1분에 ${PG_SUSPECT.perMin}쪽이 넘게 나온 읽기입니다. 중간부터 읽은 책을 처음부터 센 것일 수 있어 쪽은 빼고, 시간은 그대로 셉니다.</p>
-      <ul class="inclist">${cut.map(x=>`<li><span class="d">${kLabelY(x.date)}</span><span>${x.title?'『'+esc(x.title)+'』 ':''}0 → ${x.tp}쪽</span><span class="a">${fmtMin(x.min)}</span></li>`).join('')}</ul></details>`;
+      <p class="note">시작 쪽이 비어(0) 있는데 한 번에 ${PG_SUSPECT.pages}쪽이 넘게 나온 옛 읽기 기록입니다. 중간부터 읽은 책을 처음부터 센 것일 수 있어 쪽에서 뺍니다.</p>
+      <ul class="inclist">${cut.map(x=>`<li><span class="d">${kLabelY(x.date)}</span><span>${x.title?'『'+esc(x.title)+'』 ':''}0 → ${x.tp}쪽</span></li>`).join('')}</ul></details>`;
   }
   host.innerHTML=h+open;
 }
@@ -3346,7 +3355,7 @@ window.go=go;
 document.querySelectorAll('.tri').forEach(b=>b.onclick=e=>{ e.preventDefault(); e.stopPropagation();
   const k=b.dataset.pair; PAIRS[k]=!PAIRS[k]; lsSet('sijak.pairs',PAIRS); applyPairs(); });
 applyPairs();
-/* 글쓰기 칸: 누르면 시작이 재기 시작하고 타이핑을 연다, 재는 중에 누르면 끝내기 칸. ⌘·가운데 클릭은 그냥 링크. 독서 칸은 링크 그대로(서가가 잰다) */
+/* 글쓰기 칸: 누르면 시작이 재기 시작하고 타이핑을 연다, 재는 중에 누르면 끝내기 칸. ⌘·가운데 클릭은 그냥 링크. 독서 칸은 링크 그대로(서가에서 쪽을 적는다) */
 $('stripW').addEventListener('click',e=>{ if(Werr==='setup'||e.target.closest('button')||e.metaKey||e.ctrlKey) return; if(ssClick('write','write')) e.preventDefault(); });
 /* 타이핑 링크: 글쓰기 칸과 같이 누르면 재기 시작하고 타이핑을 연다. 타이핑 탭을 닫으면 끝내기 칸 */
 $('typingLink').addEventListener('click',e=>{ if(Werr==='setup'||e.metaKey||e.ctrlKey) return; if(ssClick('write','typing')) e.preventDefault(); });
