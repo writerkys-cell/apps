@@ -170,13 +170,23 @@ function manualChanged(stories,m){
   return !!(c&&c.tpChanged&&!c.dropped);
 }
 /* 다른 앱의 창 이름 — 타이핑과 storyM은 자기 창 이름을 appwin.<앱>에 적어 둔다. 그 창을 다시 써야 타이핑 창이 둘이 되어 서로 덮는 일이 없다 */
-function winName(app){ let n=''; try{ n=localStorage.getItem('appwin.'+app)||''; }catch(e){} return n||app; }
+function winName(app){ let n=''; try{ n=localStorage.getItem('appwin.'+app)||''; }catch(e){} if(!n||n===window.name) n=app; return n===window.name?app+'2':n; }
+/* 대시보드는 늘 떠 있어야 한다(2026년 11월 18일) — 시작이 이 창을 닫는 때로 글쓰기 끝을 잡는다. 그래서 여기서 여는 것은 모두 다른 창으로 간다.
+   시작은 '글쓰기' 링크를 sijak_write라는 창에 여는데, 전에는 그 창에 storyM이나 타이핑이 떠서 appwin.<앱>에 그 이름이 남아 있을 수 있다.
+   그대로 두면 타이핑·storyM을 여는 링크(여기서든, 두 앱이 서로를 부를 때든)가 이 창을 차지해 대시보드가 사라진다. 이 창 이름과 같은 appwin.<앱>은 지운다. */
+function claimWin(){
+  try{
+    if(!window.name) window.name='writerKYS';
+    ['taiping','storyM'].forEach(a=>{ if(localStorage.getItem('appwin.'+a)===window.name) localStorage.removeItem('appwin.'+a); });
+    localStorage.setItem('appwin.writerKYS',window.name);
+  }catch(e){}
+}
 function targetFor(url,i){
   if(!/^(https?:|\.\/|\.\.\/|\/)/.test(url)) return '';                /* 데본씽크·씽즈·단축어 같은 주소 — 창을 만들지 않는다 */
   if(/taiping\.html/.test(url)) return winName('taiping');
   if(/storyM\.html/.test(url)) return winName('storyM');
-  if(/seoga\.html/.test(url)) return 'wk_seoga';
-  return 'wk_'+i;
+  if(/seoga\.html/.test(url)) return window.name==='wk_seoga'?'wk_seoga2':'wk_seoga';
+  const n='wk_'+i; return n===window.name?n+'_2':n;
 }
 function aTag(url,cls,inner,i){ const t=targetFor(url,i); return '<a class="'+cls+'" href="'+esc(url)+'"'+(t?' target="'+esc(t)+'" rel="opener"':'')+'>'+inner+'</a>'; }
 
@@ -331,10 +341,10 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{ if(e.target.id==='ideaText') ideaDraft=e.target.value; });
 document.addEventListener('keydown',e=>{ if(e.target.id==='ideaText'&&e.key==='Enter'&&!e.isComposing){ e.preventDefault(); sendIdea(); } });
-window.addEventListener('focus',refreshTop);
+window.addEventListener('focus',()=>{ claimWin(); refreshTop(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') refreshTop(); });
 window.addEventListener('storage',e=>{ if(e.key===TP_KEY||e.key===SM_KEY) refreshTop(); else if(e.key===KEY){ cfg=loadCfg(); render(); } });
-try{ if(!window.name) window.name='writerKYS'; }catch(e){}
+claimWin();
 render();
 </script>
 </body>
