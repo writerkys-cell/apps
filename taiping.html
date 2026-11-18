@@ -1036,7 +1036,7 @@ h2:first-child{margin-top:0}
       </div>
       <h2>인쇄</h2>
       <div class="row"><label for="prRec">인쇄할 때 기록 장 붙이기</label><input type="checkbox" id="prRec"></div>
-      <div class="row"><label for="prCover" title="인쇄의 맨 앞에 한 장을 더 붙입니다. 오늘 날짜, 이번 주 일정(시작의 달력), 할 일(방점의 오늘 표시한 일과 끝내지 않은 일), 메모 칸이 실립니다">인쇄할 때 첫 장에 일정과 할 일 붙이기</label><input type="checkbox" id="prCover"></div>
+      <div class="row"><label for="prCover" title="인쇄의 맨 앞에 한 장을 더 붙입니다. 오늘 날짜, 이번 주 일정(시작의 달력, 오늘부터 이레), 할 일(방점의 오늘 표시한 일과 끝내지 않은 일)이 실립니다. 일정은 오늘부터 이레, 지나간 것은 빼고">인쇄할 때 첫 장에 일정과 할 일 붙이기</label><input type="checkbox" id="prCover"></div>
       <p class="note">작품을 인쇄하면 마지막 장에 그 작품의 기록과 최근 30일의 글쓰기 패턴을 붙입니다. 완성하기 전에는 앞으로 얼마나 더 들지를 조심스럽게 가늠하고, 완성한 뒤에는 지나온 길만 돌아봅니다.</p>
       <div class="row"><label for="prfz">글자 크기</label><input type="number" id="prfz" min="7" max="16" step="0.5"><span class="unit">pt</span></div>
       <div class="row"><label for="prlh">줄 간격</label><input type="number" id="prlh" min="1.2" max="3" step="0.1"><span class="unit">배</span></div>
@@ -3577,9 +3577,11 @@ function coverHtml(title){
   h.push('<p class="cd">' + fullDate(td) + " " + CV_WD[td.getDay()] + "요일</p>");
   if(title) h.push('<p class="cw">' + esc(title) + "</p>");
 
-  /* 이번 주 일정 — 일요일부터 토요일까지. 매일 되풀이되는 일정은 맨 위에 한 번만 */
+  /* 이번 주 일정 — 오늘부터 이레(오늘을 넣어 일곱 날). 지나간 날은 싣지 않고, 오늘 것도 시각이 지난 일정은 뺀다(2026년 11월 18일, 전에는 일요일~토요일).
+     매일 되풀이되는 일정은 맨 위에 한 번만 — 이레 내내 있는 일이라 시각이 지났어도 둔다 */
   var evs = cvEvents(), lines = 0;
-  var sun = addDays(today, -td.getDay()), sat = addDays(sun, 6), a = keyDate(sun), b = keyDate(sat);
+  var sun = today, sat = addDays(sun, 6), a = keyDate(sun), b = keyDate(sat);
+  var hm = z2(now.getHours()) + ":" + z2(now.getMinutes());
   h.push("<h3>이번 주 일정<span>" + (a.getMonth() + 1) + "월 " + a.getDate() + "일 ~ " + (a.getMonth() === b.getMonth() ? "" : (b.getMonth() + 1) + "월 ") + b.getDate() + "일</span></h3>");
   if(!evs){
     h.push('<p class="cr"><span class="e dim">시작의 달력을 이 브라우저에서 읽지 못했습니다.</span></p>'); lines += 1;
@@ -3591,7 +3593,7 @@ function coverHtml(title){
     }
     for(var i = 0; i < 7; i++){
       var k = addDays(sun, i), d = keyDate(k);
-      var es = evs.filter(function(e){ return e.repeat !== "daily" && cvOccurs(e, k); }).sort(cvByTime);
+      var es = evs.filter(function(e){ return e.repeat !== "daily" && cvOccurs(e, k) && !(k === today && e.time && e.time < hm); }).sort(cvByTime);
       h.push('<p class="cr' + (k < today ? " past" : k === today ? " today" : "") + '"><span class="d">' + CV_WD[d.getDay()] + " " + d.getDate() + (k === today ? " ·" : "") + '</span><span class="e">' +
              (es.length ? es.map(function(e){ return cvEvHtml(e, ""); }).join("") : '<span class="none">–</span>') + "</span></p>");
       lines += Math.max(1, es.length);
@@ -3612,14 +3614,13 @@ function coverHtml(title){
     rest = rest.filter(function(t){ return t.due; }).sort(function(x, y){ return x.due < y.due ? -1 : x.due > y.due ? 1 : 0; }).concat(rest.filter(function(t){ return !t.due; }));
     tod.forEach(function(t){ h.push(item(t, "오늘" + (KN[t.kind] ? " · " + KN[t.kind] : ""))); });
     reps.forEach(function(t){ h.push(item(t, "되풀이" + (t.rep && BL[t.rep.block] ? " · " + BL[t.rep.block] : ""))); });
-    /* A5 한 쪽(본문 높이 170mm)에 일정과 할 일을 합쳐 스물두 줄쯤 들어간다. 메모 칸이 남게 나머지 할 일을 자른다 */
-    var room = Math.max(3, 22 - lines - tod.length - reps.length), show = rest.slice(0, room);
+    /* A5 한 쪽(본문 높이 170mm)에 일정과 할 일만 싣는다(메모 칸은 2026년 11월 18일에 없앴다). 한 장을 넘지 않게 나머지 할 일을 스물여섯 줄에서 자른다 */
+    var room = Math.max(3, 26 - lines - tod.length - reps.length), show = rest.slice(0, room);
     if((tod.length || reps.length) && show.length) h.push('<p class="ck sub">끝내지 않은 일</p>');
     show.forEach(function(t){ h.push(item(t, KN[t.kind] || "")); });
     if(rest.length > show.length) h.push('<p class="ck sub">그 밖에 ' + (rest.length - show.length) + "개가 방점에 더 있습니다.</p>");
     if(!tod.length && !reps.length && !rest.length) h.push('<p class="ck sub">끝내지 않은 일이 없습니다.</p>');
   }
-  h.push("<h3>메모</h3>");
   return h.join("");
 }
 /* 인쇄할 것을 다 채운 뒤에 부른다 — 켜져 있으면 맨 앞에 첫 장을 끼운다 */
