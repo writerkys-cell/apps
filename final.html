@@ -227,8 +227,9 @@
     <button id="importBtn">가져오기</button>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
     <button id="recordsBtn">기록</button> ·
-    <button id="scBtn">단축어</button>
-    <div class="ver">FV 3.6 · 15분 · 기록 · 단축어 · 2026-08-11</div>
+    <button id="scBtn">단축어</button> ·
+    <button id="bjBtn">방점</button>
+    <div class="ver">FV 3.7 · 15분 · 기록 · 단축어 · 방점 · 2026-11-18</div>
   </div>
 </div>
 
@@ -252,6 +253,22 @@
     <div class="sheet-acts">
       <button id="contCancel" hidden>취소</button>
       <button class="primary" id="contAdd">다시 넣기</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="bjSheet">
+  <div class="sheet">
+    <h3>방점과 잇기</h3>
+    <p>방점에 새로 생긴 할 일이 이 리스트 끝에 들어오고, 방점에서 끝낸 일은 여기서 줄이 그어집니다. 여기서 적은 새 할 일과 <b>끝</b>은 방점으로 갑니다. 점·순서·15분·기록은 오가지 않습니다.</p>
+    <input id="bjUrl" type="text" placeholder="수파베이스 주소 (방점 설정의 동기화 주소)" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <input id="bjKeyIn" type="text" placeholder="키" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:10px">
+    <input id="bjList" type="text" placeholder="목록 이름 (비우면 bangjeom)" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:10px">
+    <p id="bjNote" style="margin-top:14px"></p>
+    <div class="sheet-acts">
+      <button id="bjOff">끊기</button>
+      <button id="bjClose">닫기</button>
+      <button class="primary" id="bjSaveBtn">잇기</button>
     </div>
   </div>
 </div>
@@ -333,6 +350,13 @@
       <li>아래 <b>단축어 켬/끔</b>으로 연동을 끌 수 있습니다.</li>
       <li>단축어가 실행되면 잠시 앱 밖으로 나갑니다. 그동안 15분 타이머는 시계 기준으로 계속 흐르지만, <b>비프음이 늦게 울릴 수 있습니다.</b> 알림이 중요하면 단축어 쪽에 15분 타이머를 함께 넣어 두세요.</li>
     </ul>
+    <h4>방점 동기화</h4>
+    <ul>
+      <li>아래 <b>방점</b>에서 방점의 동기화 주소와 키를 넣으면 이어집니다. 처음 이을 때 이 리스트는 비워지고 방점의 목록으로 시작합니다. 기록은 남습니다.</li>
+      <li>방점에 <b>새로 생긴 일</b>은 마지막 페이지 끝에 들어오고, 방점에서 <b>끝냈거나 버린 일</b>은 줄이 그어집니다. 반복되는 일은 오늘 차례인 것만 들어옵니다.</li>
+      <li>여기서 적은 <b>새 할 일</b>과 <b>끝</b>은 방점으로 갑니다. 방점(또는 시작)이 어느 기기에서든 열릴 때 반영됩니다.</li>
+      <li><b>계속·미결</b>, 점, 순서, 15분, 기록은 방점에 알리지 않습니다. 비활성에서 삭제한 일은 방점에는 남고 여기에만 다시 나오지 않습니다.</li>
+    </ul>
     <h4>데이터</h4>
     <ul>
       <li>이 기기에 자동 저장됩니다. Safari에서 <b>공유 → 홈 화면에 추가</b>를 하면 앱처럼 쓸 수 있어요.</li>
@@ -387,7 +411,7 @@ function undo(){
   if(pendingCheck){clearTimeout(pendingCheck);pendingCheck=null;}
   state=JSON.parse(undoSnap);undoSnap=null;
   closeModal(contModal);closeModal(linkModal);
-  animSet.clear();dotAnim.clear();save();render();
+  animSet.clear();dotAnim.clear();bjReconcile();save();render();
   toast('되돌렸습니다');
 }
 
@@ -633,6 +657,181 @@ function backToSelect(quiet){
   if(!quiet)toast('체인 완료 — 처음부터 다시 고르세요');
 }
 
+/* ---------- 방점 동기화(2026년 11월 18일) ----------
+   방점(bangjeom.html)의 목록과 '새 할 일'·'완료'만 맞춘다. 점·순서·쪽·15분·기록은 이 앱 것 그대로.
+   · 받기: 수파베이스 bangjeom 표의 한 줄(data.tasks)을 읽기만 한다. 끝나지 않은 일(반복되는 일은 오늘 차례인 것)이
+     이 리스트에 없으면 맨 끝에 넣고(it.bj = 방점의 id), 방점에서 끝났거나 사라진 일은 줄을 긋는다.
+   · 보내기: 방점 주머니와 같은 요청 표 bangjeom_act에 넣기만 한다 — add(새 일, target이 새 id)·done(끝). 방점이 열릴 때 받아 처리한다.
+     방점의 목록 줄에는 절대 쓰지 않는다.
+   · 연결·대기열은 state 밖(final.bj)에 둔다 — 내보내기·되돌리기에 섞이지 않게. */
+const BJ_KEY='final.bj';
+let BJ=(function(){
+  const d={url:'',key:'',list:'bangjeom',on:false,started:false,out:[],pendAdd:{},pendDone:{},hide:{},last:0,err:''};
+  try{return Object.assign(d,JSON.parse(localStorage.getItem(BJ_KEY))||{});}catch(e){return d;}
+})();
+let bjFlushT=null,bjBusy=false;
+function bjSave(){try{localStorage.setItem(BJ_KEY,JSON.stringify(BJ));}catch(e){}}
+function bjOn(){return !!(BJ.on&&BJ.url&&BJ.key);}
+async function bjRest(path,opt){
+  opt=opt||{};
+  const r=await fetch(BJ.url.replace(/\/+$/,'')+'/rest/v1/'+path,{method:opt.method||'GET',body:opt.body,
+    headers:Object.assign({apikey:BJ.key,Authorization:'Bearer '+BJ.key,'Content-Type':'application/json'},opt.headers||{})});
+  const t=await r.text();
+  if(!r.ok){let m=t;try{const j=JSON.parse(t);m=j.message||j.hint||t;}catch(e){}throw new Error(m||('HTTP '+r.status));}
+  return t?JSON.parse(t):null;
+}
+// 방점의 반복되는 일이 그날 차례인가(방점의 repDue와 같게)
+function bjRepDue(t,k){
+  const r=t&&t.rep;if(!r||t.done||t.repLast===k)return false;
+  const day=x=>{const p=String(x).split('-');return new Date(+p[0],+p[1]-1,+p[2]);};
+  if(r.type==='week')return (r.days||[]).includes(day(k).getDay());
+  if(r.type==='days')return !t.repLast||Math.round((day(k)-day(t.repLast))/86400000)>=(+r.n||1);
+  return true;
+}
+// 이 리스트가 붙들고 있는 방점 id — 아직 살아 있는 줄(활성·미결)과 비활성
+function bjHeld(){
+  const s=new Set();
+  flat().forEach(f=>{if(f.it.bj&&(f.it.status==='active'||f.it.status==='dismissed'))s.add(f.it.bj);});
+  state.inactive.forEach(t=>{if(t.bj)s.add(t.bj);});
+  return s;
+}
+function bjLocalAdd(it){
+  if(!bjOn()||!it)return;
+  it.bj=uid();
+  BJ.pendAdd[it.bj]=Date.now();
+  BJ.out.push({kind:'add',target:it.bj,text:JSON.stringify({t:it.text,u:it.link||''})});
+  bjSave();bjFlushSoon(1500);
+}
+function bjLocalDone(it){
+  if(!bjOn()||!it||!it.bj)return;
+  const i=BJ.out.findIndex(a=>a.kind==='add'&&a.target===it.bj);
+  if(i>=0){BJ.out.splice(i,1);delete BJ.pendAdd[it.bj];bjSave();return;}   // 방점에 가기도 전에 끝낸 일 — 보낼 것이 없다
+  BJ.pendDone[it.bj]=Date.now();
+  BJ.out.push({kind:'done',target:it.bj});
+  bjSave();bjFlushSoon(6000);   // 되돌리기를 누를 틈을 준다
+}
+function bjHideId(id){if(id&&bjOn()){BJ.hide[id]=1;bjSave();}}
+// 되돌린 뒤 — 아직 보내지 않은 요청 가운데 없던 일이 된 것을 거둔다
+function bjReconcile(){
+  if(!bjOn())return;
+  const active=new Set();flat().forEach(f=>{if(f.it.bj&&f.it.status==='active')active.add(f.it.bj);});
+  const held=bjHeld();
+  BJ.out=BJ.out.filter(a=>{
+    if(a.kind==='done'&&active.has(a.target)){delete BJ.pendDone[a.target];return false;}
+    if(a.kind==='add'&&!held.has(a.target)){delete BJ.pendAdd[a.target];return false;}
+    return true;
+  });
+  bjSave();
+}
+function bjFlushSoon(ms){clearTimeout(bjFlushT);bjFlushT=setTimeout(bjFlush,ms||0);}
+async function bjFlush(){
+  if(!bjOn()||bjBusy||!BJ.out.length)return;
+  bjBusy=true;
+  try{
+    while(BJ.out.length){
+      const a=BJ.out[0];
+      await bjRest('bangjeom_act',{method:'POST',headers:{Prefer:'return=minimal'},
+        body:JSON.stringify({list:BJ.list||'bangjeom',kind:a.kind,target:a.target,text:a.text||null,device:'final'})});
+      BJ.out.shift();bjSave();
+    }
+    BJ.err='';
+  }catch(e){BJ.err='보내지 못했습니다 · '+(e.message||'');clearTimeout(bjFlushT);bjFlushT=setTimeout(bjFlush,30000);}
+  bjBusy=false;bjSave();bjLabel();
+}
+async function bjPull(loud){
+  if(!bjOn())return false;
+  let tasks=null;
+  try{
+    const rows=await bjRest('bangjeom?id=eq.'+encodeURIComponent(BJ.list||'bangjeom')+'&select=data');
+    if(!rows||!rows.length||!rows[0].data||!Array.isArray(rows[0].data.tasks))throw new Error("방점의 목록 '"+(BJ.list||'bangjeom')+"'을 찾지 못했습니다");
+    tasks=rows[0].data.tasks.filter(t=>t&&t.id&&String(t.text||'').trim());
+  }catch(e){BJ.err='받지 못했습니다 · '+(e.message||'');bjSave();bjLabel();if(loud)toast(BJ.err);return false;}
+  BJ.err='';BJ.last=Date.now();
+  const changed=bjMerge(tasks);
+  bjSave();bjLabel();
+  if(changed){
+    if(state.phase==='run'&&!dotted().length)backToSelect(true);
+    else{ensureFirstDot();cleanupPages();save();render();}
+  }
+  if(loud)toast('방점과 맞췄습니다');
+  return true;
+}
+function bjMerge(tasks){
+  const today=todayStr(),all=new Map(tasks.map(t=>[t.id,t]));
+  const raw=tasks.filter(t=>!t.done&&(!t.rep||bjRepDue(t,today)));
+  const rawIds=new Set(raw.map(t=>t.id));
+  Object.keys(BJ.pendDone).forEach(id=>{if(!rawIds.has(id))delete BJ.pendDone[id];});     // 방점이 끝낸 것으로 받았다
+  Object.keys(BJ.pendAdd).forEach(id=>{if(all.has(id))delete BJ.pendAdd[id];});            // 방점이 새 일로 받았다
+  Object.keys(BJ.hide).forEach(id=>{if(!rawIds.has(id))delete BJ.hide[id];});
+  const want=raw.filter(t=>!BJ.pendDone[t.id]&&!BJ.hide[t.id]),wantIds=new Set(want.map(t=>t.id));
+  let changed=false;
+  if(!BJ.started){           // 처음 이을 때 — 이 리스트를 비우고 방점의 목록으로 시작한다(기록·날짜별 집계는 남긴다)
+    clearTimer();state.pages=[];state.inactive=[];state.phase='select';cur=0;backCur=0;undoSnap=null;
+    BJ.started=true;BJ.pendAdd={};BJ.pendDone={};BJ.hide={};BJ.out=[];changed=true;
+  }
+  // 방점에서 끝났거나 사라진 일 — 줄을 긋는다. 지금 15분을 재고 있는 일은 다음 번에
+  const tm=state.timer;
+  flat().forEach(f=>{
+    const it=f.it;
+    if(!it.bj||(it.status!=='active'&&it.status!=='dismissed')||wantIds.has(it.bj)||BJ.pendAdd[it.bj]||BJ.hide[it.bj])return;
+    if(tm&&tm.id===it.id)return;
+    it.status='done';it.bjGone=true;delete it.dot;changed=true;
+  });
+  for(let i=state.inactive.length-1;i>=0;i--){
+    const t=state.inactive[i];
+    if(t.bj&&!wantIds.has(t.bj)&&!BJ.pendAdd[t.bj]){state.inactive.splice(i,1);changed=true;}
+  }
+  // 방점에 새로 생긴 일 — 맨 끝에
+  const held=bjHeld();
+  want.forEach(t=>{
+    if(held.has(t.id))return;
+    pushToEnd(String(t.text).replace(/\s+/g,' ').trim(),t.url||'',{bj:t.id});
+    changed=true;
+  });
+  return changed;
+}
+function bjLabel(){
+  const b=document.getElementById('bjBtn');if(!b)return;
+  const wait=BJ.out.length+Object.keys(BJ.pendAdd).length+Object.keys(BJ.pendDone).length;
+  b.textContent=!bjOn()?'방점':BJ.err?'방점 · 끊김':wait?'방점 · 대기 '+wait:'방점 · 이어짐';
+  const n=document.getElementById('bjNote');
+  if(n&&!document.getElementById('bjSheet').classList.contains('hidden')){
+    const d=BJ.last?new Date(BJ.last):null;
+    n.textContent=!bjOn()?'이어져 있지 않습니다.':(BJ.err?BJ.err:'이어져 있습니다'+(d?' · 마지막으로 받은 때 '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'):''))
+      +(wait?' · 방점이 아직 받지 않은 것 '+wait+'개(방점이나 시작이 열리면 받습니다)':'');
+  }
+}
+function bjOpen(){
+  let u=BJ.url,k=BJ.key,l=BJ.list;
+  if(!u||!k){try{const c=JSON.parse(localStorage.getItem('bangjeom.cfg')||'{}');if(c.url&&c.key){u=c.url;k=c.key;l=c.list||l;}}catch(e){}}   // 같은 브라우저에 방점의 연결이 있으면 빌려 채운다
+  document.getElementById('bjUrl').value=u||'';
+  document.getElementById('bjKeyIn').value=k||'';
+  document.getElementById('bjList').value=l&&l!=='bangjeom'?l:'';
+  document.getElementById('bjOff').hidden=!bjOn();
+  document.getElementById('bjSheet').classList.remove('hidden');
+  bjLabel();
+}
+async function bjConnect(){
+  const u=document.getElementById('bjUrl').value.trim(),k=document.getElementById('bjKeyIn').value.trim(),l=document.getElementById('bjList').value.trim()||'bangjeom';
+  if(!u||!k){toast('주소와 키를 넣어 주세요');return;}
+  const fresh=!BJ.started||u!==BJ.url||l!==BJ.list;
+  if(fresh){
+    const n=flat().filter(f=>f.it.status==='active'||f.it.status==='dismissed').length+state.inactive.length;
+    if(n&&!confirm('이 리스트에 있는 할 일 '+n+'개를 비우고 방점의 목록으로 시작합니다.\n완료 기록은 남습니다. 남기고 싶으면 먼저 내보내기를 하세요.\n\n이을까요?'))return;
+  }
+  const keep=JSON.stringify(BJ);
+  BJ.url=u;BJ.key=k;BJ.list=l;BJ.on=true;if(fresh)BJ.started=false;
+  const ok=await bjPull(false);
+  if(!ok){const e=BJ.err;BJ=JSON.parse(keep);BJ.err='';bjSave();bjLabel();document.getElementById('bjNote').textContent=e||'잇지 못했습니다.';return;}   // 못 이으면 리스트를 건드리지 않고 그대로 둔다
+  bjSave();document.getElementById('bjOff').hidden=false;bjLabel();toast('방점과 이었습니다');
+}
+function bjDisconnect(){
+  if(!confirm('방점과 끊습니다. 이 리스트의 할 일은 그대로 남습니다.'))return;
+  BJ.on=false;BJ.err='';BJ.out=[];BJ.pendAdd={};BJ.pendDone={};bjSave();
+  document.getElementById('bjOff').hidden=true;bjLabel();toast('방점과 끊었습니다');
+}
+function bjSync(){if(!bjOn()||document.hidden)return;bjFlush().then(()=>bjPull(false));}
+
 /* ---------- 링크 ---------- */
 const APPS=[
   {re:/^x-devonthink(-item)?:/i,name:'DEVONthink',ic:'◆'},
@@ -718,6 +917,7 @@ function pushToEnd(text,link,carry){
     if(carry.workedMs)it.workedMs=carry.workedMs;
     if(carry.interrupts)it.interrupts=carry.interrupts;
     if(carry.heldMs)it.heldMs=carry.heldMs;
+    if(carry.bj)it.bj=carry.bj;
   }
   lp.push(it);
   return it;
@@ -730,7 +930,8 @@ function carryOf(it,extraHeldMs){
     firstStartedAt:it.firstStartedAt||0,
     workedMs:it.workedMs||0,
     interrupts:it.interrupts||0,
-    heldMs:(it.heldMs||0)+(extraHeldMs||0)
+    heldMs:(it.heldMs||0)+(extraHeldMs||0),
+    bj:it.bj||''             // 방점의 할 일 id — 계속·되살리기에도 따라간다
   };
 }
 function addFromBox(){
@@ -739,7 +940,7 @@ function addFromBox(){
   const raw=addLinkInput.value.trim();
   const link=normLink(raw);
   if(raw&&!link){toast('링크 형식을 확인해 주세요');return;}
-  pushToEnd(v,link);
+  bjLocalAdd(pushToEnd(v,link));
   addInput.value='';addLinkInput.value='';
   setLinkRow(false);
   ensureFirstDot();
@@ -768,6 +969,7 @@ function act(action){
   if(action==='done'){
     it.status='done';state.doneCount=(state.doneCount||0)+1;
     addRecord(it);
+    bjLocalDone(it);
     save();render();toast('완료! — '+fmtDur(it.workedMs||0)+' 투여',true);
     runShortcut(SC_END);
     afterAct();
@@ -814,6 +1016,7 @@ function cleanupPages(){
         if(t.workedMs)o.workedMs=t.workedMs;
         if(t.interrupts)o.interrupts=t.interrupts;
         if(t.heldMs)o.heldMs=t.heldMs;
+        if(t.bj)o.bj=t.bj;
         o.dismissedAt=t.dismissedAt||Date.now();
         state.inactive.push(o);
       });
@@ -960,6 +1163,7 @@ function deleteInactive(id){
   if(i<0)return;
   if(!confirm('이 할 일을 완전히 삭제할까요?'))return;
   snap();
+  bjHideId(state.inactive[i].bj);
   state.inactive.splice(i,1);
   save();render();toast('삭제됨',true);
 }
@@ -1396,6 +1600,10 @@ document.getElementById('linkInput').addEventListener('keydown',e=>{
 linkModal.addEventListener('click',e=>{if(e.target===linkModal){linkEditId=null;closeModal(linkModal);}});
 
 document.getElementById('scBtn').addEventListener('click',toggleShortcuts);
+document.getElementById('bjBtn').addEventListener('click',bjOpen);
+document.getElementById('bjSaveBtn').addEventListener('click',bjConnect);
+document.getElementById('bjOff').addEventListener('click',bjDisconnect);
+document.getElementById('bjClose').addEventListener('click',()=>closeModal(document.getElementById('bjSheet')));
 
 const recSheet=document.getElementById('recSheet');
 document.getElementById('recordsBtn').addEventListener('click',openRecords);
@@ -1454,6 +1662,11 @@ main.addEventListener('touchend',e=>{
     ensureAudio();tick();
   });
   window.addEventListener('focus',()=>{if(checkNewDay())render();tick();});
+  // 방점과 맞추기 — 열 때, 앞으로 올 때, 켜 둔 동안 1분마다
+  bjLabel();bjSync();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)bjSync();});
+  window.addEventListener('online',bjSync);
+  setInterval(bjSync,60000);
 
   // 15분 카운트다운
   tickTimer=setInterval(tick,250);
