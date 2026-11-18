@@ -309,7 +309,7 @@ let SOLO=location.hash==='#solo';
 let view=(SOLO||location.hash==='#read'||R.active||matchMedia('(max-width:600px)').matches)?'read':'home',openId=null,listTab='best',q='',sq='',shown=PAGE,cmp=null,editId=null,composing=false;
 let openShelves=new Set(), homeOpen=false, pageFor=null;
 let draft=blankDraft();
-function blankDraft(loc){ return {title:'',author:'',publisher:'',total:'',category:null,gift:false,received:today(),borrowed:false,library:'',due:'',location:loc||'',step:1}; }
+function blankDraft(loc){ return {title:'',author:'',publisher:'',total:'',category:null,ref:false,gift:false,received:today(),borrowed:false,library:'',due:'',location:loc||'',step:1}; }
 
 /* ── 저장 ── */
 function load(){
@@ -391,7 +391,8 @@ function toggleRef(id){
   b.ref=!b.ref; touch(b); save(); toast(b.ref?'자료로 표시했습니다':'자료 표시를 뗐습니다'); render();
 }
 function gifts(){ return live().filter(b=>b.gift).sort((a,b)=>(b.received||'').localeCompare(a.received||'')||(b.added||'').localeCompare(a.added||'')); }
-function undecided(){ return live().filter(b=>!b.category).sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
+function undecided(){ return live().filter(b=>!b.category&&!b.ref)   /* 자료로 정한 책은 미정이 아니다 */
+ .sort((a,b)=>(b.added||'').localeCompare(a.added||'')); }
 /* 빌린 책: 도서관에서 빌려 와 집에 둔 책. 가진 책이 아니므로 폐기 판단에 끼지 않는다. 반납하면 자리를 비우고 기록으로 남는다. */
 function borrowedNow(b){ return !!b.borrowed&&!b.returnedAt; }
 function plusDays(n){ const d=dayDate(); d.setDate(d.getDate()+n); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -444,7 +445,7 @@ function stateLabel(b){
   if(inBin(b)) return `<span class="tagdot d-none"></span>${esc(binName())} · ${esc(b.binAt)}`;
   if(b.discarded) return `<span class="tagdot d-none"></span>폐기함${b.discardedAt?' · '+esc(b.discardedAt):''}`;
   if(b.held) return `<span class="tagdot d-none"></span>보류${b.heldAt?' · '+esc(b.heldAt):''}${b.heldPage?' · '+b.heldPage+'쪽에서':''}`;
-  if(!b.category) return '<span class="tagdot d-none"></span>분류 미정';
+  if(!b.category) return '<span class="tagdot d-none"></span>'+(b.ref?'자료 · 순위 없음':'분류 미정');
   return `<span class="tagdot ${CAT[b.category].dot}"></span>${CAT[b.category].name} ${rankOf(b)}위`;
 }
 function badges(b,rank){
@@ -716,9 +717,10 @@ function vAdd(){
     <div class="choices">
       <button class="choice ${d.category==='best'?'on':''}" data-c="best" onclick="pickCat('best')">읽은 책</button>
       <button class="choice ${d.category==='next'?'on':''}" data-c="next" onclick="pickCat('next')">읽을 책</button>
-      <button class="choice ${d.category===''?'on':''}" data-c="undecided" onclick="pickCat('')">아직 정하지 않음</button>
+      <button class="choice ${d.category===''&&d.ref?'on':''}" data-c="ref" onclick="pickCat('ref')">자료</button>
+      <button class="choice ${d.category===''&&!d.ref?'on':''}" data-c="undecided" onclick="pickCat('')">아직 정하지 않음</button>
     </div>
-    <div class="hint">읽은 책은 <b>베스트</b>로, 읽을 책은 <b>다음 읽을 책</b>으로 들어가 견주기로 순서를 정합니다.</div>
+    <div class="hint">읽은 책은 <b>베스트</b>로, 읽을 책은 <b>다음 읽을 책</b>으로 들어가 견주기로 순서를 정합니다. <b>자료</b>는 글쓰기 자료로 읽는 책 — 순위 없이 자료 탭에 들어가고, 다 읽으면 읽은 책으로 옮겨 견줍니다.</div>
     ${d.readNow?'<div class="hint"><b>읽을 책</b>으로 두면 견주지 않고 곧바로 지금 읽는 책이 됩니다.</div>':''}
     <div style="margin-top:18px">
       <button class="toggle ${d.gift?'on':''}" onclick="toggleGift()"><span class="box"></span>증정본으로 받은 책</button>
@@ -754,7 +756,7 @@ function vAdd(){
 function summary(){
   const d=draft;
   return `<div style="border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:18px">
-    <div class="title">${esc(d.title)||'(제목 없음)'}${d.gift?'<span class="badge b-gift">증정본</span>':''}${d.borrowed?'<span class="badge b-lib">빌린 책</span>':''}</div>
+    <div class="title">${esc(d.title)||'(제목 없음)'}${d.ref&&d.category===''?'<span class="badge b-ref">자료</span>':''}${d.gift?'<span class="badge b-gift">증정본</span>':''}${d.borrowed?'<span class="badge b-lib">빌린 책</span>':''}</div>
     <div class="meta">${[d.author,d.publisher,parseInt(d.total,10)>0?parseInt(d.total,10)+'쪽':''].filter(Boolean).map(esc).join(' · ')||'&nbsp;'}</div>
     <button class="linkish" onclick="draft.step=1;render()">고치기</button></div>`;
 }
@@ -808,7 +810,8 @@ function bindEdit(){
   attachSuggest('e-lib',()=>fieldValues('library'),()=>{});
 }
 function addStep1(){ if(!draft.title.trim()) return; draft.step=2; render(); }
-function pickCat(c){ draft.category=c; if(draft.step===2) draft.step=3; render(); }
+/* '자료'는 분류가 아니라 딱지다 — 분류는 비워 두고(순위·견주기 없음) ref만 붙인다(2026년 11월 18일) */
+function pickCat(c){ if(c==='ref'){ draft.category=''; draft.ref=true; } else { draft.category=c; draft.ref=false; } if(draft.step===2) draft.step=3; render(); }
 function toggleGift(){ draft.gift=!draft.gift; if(draft.gift){ draft.borrowed=false; if(!draft.received) draft.received=today(); } render(); }
 function toggleBorrow(){ draft.borrowed=!draft.borrowed; if(draft.borrowed){ draft.gift=false; if(!draft.due) draft.due=plusDays(14); } render(); }
 function setLoc(l){ draft.location=l; const e=document.getElementById('f-loc'); if(e) e.value=l; }
@@ -817,7 +820,7 @@ function addSave(again,readIt){
   if(!d.title.trim()||d.category===null){ toast('제목과 분류가 필요합니다'); return; }
   const now=new Date().toISOString();
   const b={id:uid(),title:d.title.trim(),author:d.author.trim(),publisher:d.publisher.trim(),
-    category:d.category,gift:d.gift,received:d.gift?(d.received||today()):'',location:d.location.trim(),
+    category:d.category,ref:!!d.ref&&!d.category,gift:d.gift,received:d.gift?(d.received||today()):'',location:d.location.trim(),
     borrowed:!!d.borrowed,library:d.borrowed?d.library.trim():'',due:d.borrowed?(d.due||''):'',returnedAt:'',
     discarded:false,toDiscard:false,discardedAt:'',page:0,pageAt:'',total:Math.max(0,parseInt(d.total,10)||0),added:now,updated:now,note:''};
   S.books.push(b);

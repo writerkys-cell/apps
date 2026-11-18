@@ -145,6 +145,11 @@ function num(n,d){ return (+n.toFixed(d==null?1:d)).toLocaleString('ko-KR'); }
 
 /* ---------- 타이핑 읽기(읽기만 한다. 계산은 타이핑과 같게) ---------- */
 function readTp(){ try{ const s=JSON.parse(localStorage.getItem(TP_KEY)); return s&&typeof s==='object'?s:null; }catch(e){ return null; } }
+/* 서가에서 자료 딱지(ref)가 붙은 책 — 설정에서 책을 더할 때 고르게 한다. 서가 저장소(seoga.v1)는 읽기만 한다 */
+function seogaRefs(){
+  try{ const d=JSON.parse(localStorage.getItem('seoga.v1')); return ((d&&d.books)||[]).filter(b=>b&&b.ref&&!b.discarded&&norm(b.title)).map(b=>({title:norm(b.title),author:norm(b.author),page:b.page||0})); }
+  catch(e){ return []; }
+}
 function readSm(){ try{ const d=JSON.parse(localStorage.getItem(SM_KEY)); return d&&Array.isArray(d.stories)?d.stories:[]; }catch(e){ return []; } }
 function tpDayKey(S,t){ const d=new Date(t); if(d.getHours()<(S.dayStart||0)) d.setDate(d.getDate()-1); return ymd(d); }
 function len(t){ return (t||'').replace(/\n/g,'').length; }                 /* 공백 포함, 줄바꿈은 뺀다(타이핑의 len) */
@@ -295,15 +300,19 @@ function rowHTML(sec,x,i,S){
       +'<select data-sec="works" data-i="'+i+'" data-k="unit" aria-label="세는 법"><option value="mae"'+(x.unit!=='page'?' selected':'')+'>매수</option><option value="page"'+(x.unit==='page'?' selected':'')+'>쪽수</option></select>'
       +'<input class="tg" type="number" min="0" inputmode="numeric" placeholder="목표" value="'+esc(x.target||'')+'" data-sec="works" data-i="'+i+'" data-k="target">'+mv+st+'</div>';
   }
-  return '<div class="srow"><input class="nm" placeholder="'+(sec==='books'?'책 이름':'이름')+'" value="'+esc(x.name||'')+'" data-sec="'+sec+'" data-i="'+i+'" data-k="name">'
+  return '<div class="srow"><input class="nm"'+(sec==='books'?' list="sgRefs"':'')+' placeholder="'+(sec==='books'?'책 이름':'이름')+'" value="'+esc(x.name||'')+'" data-sec="'+sec+'" data-i="'+i+'" data-k="name">'
     +'<input class="url" placeholder="'+(sec==='books'?'주소(비우면 서가)':'주소')+'" value="'+esc(x.url||'')+'" data-sec="'+sec+'" data-i="'+i+'" data-k="url" autocapitalize="off" autocorrect="off" spellcheck="false">'+mv+'</div>';
 }
 function setHTML(){
   const S=readTp();
   let h='<div class="set"><datalist id="tpWorks">'+((S&&S.works)||[]).filter(workActive).map(w=>'<option value="'+esc(w.title)+'">').join('')+'</datalist>';
+  const refs=seogaRefs(), have=cfg.books.map(b=>norm(b.name)), more=refs.filter(r=>!have.includes(r.title));
+  h+='<datalist id="sgRefs">'+refs.map(r=>'<option value="'+esc(r.title)+'">').join('')+'</datalist>';
   SECS.forEach(([sec,name,note])=>{
     h+='<h3>'+name+'</h3><p class="note">'+esc(note)+'</p>'+cfg[sec].map((x,i)=>rowHTML(sec,x,i,S)).join('')
       +'<div class="add"><button class="btn" data-act="add" data-sec="'+sec+'">'+name+' 더하기</button></div>';
+    if(sec==='books') h+=more.length?'<p class="note" style="margin-top:14px">서가에서 자료로 정한 책 · 누르면 더합니다</p><div class="chips" style="margin-top:6px">'+more.map(r=>'<button class="btn" data-act="pick" data-sec="books" data-name="'+esc(r.title)+'">'+esc(r.title)+(r.author?' <small style="color:var(--void)">'+esc(r.author)+'</small>':'')+'</button>').join('')+'</div>'
+      :'<p class="note" style="margin-top:14px">'+(refs.length?'서가에서 자료로 정한 책 '+refs.length+'권이 모두 들어 있습니다.':'서가에 자료로 정한 책이 없습니다 — 서가에서 책을 담을 때 \'자료\'를 고르거나, 펼친 책에서 \'자료로 표시\'를 누르면 여기서 고를 수 있습니다.')+'</p>';
   });
   h+='<h3>주소</h3><p class="note">원고 이름을 누르면 여는 타이핑, 책을 여는 서가의 주소. 깃허브 apps/에 함께 올려 두면 그대로 두면 됩니다.</p>'
     +'<div class="srow"><input class="nm" value="타이핑" disabled><input class="url" data-top="taipingUrl" value="'+esc(cfg.taipingUrl)+'" autocapitalize="off" spellcheck="false"></div>'
@@ -326,7 +335,8 @@ document.addEventListener('click',e=>{
   if(b.id==='ideaSend'){ sendIdea(); return; }
   if(b.id==='setDone'){ view='home'; render(); window.scrollTo(0,0); return; }
   const act=b.dataset.act, sec=b.dataset.sec, i=+b.dataset.i; if(!act||!cfg[sec]) return;
-  if(act==='add') cfg[sec].push(sec==='works'?{name:'',unit:'mae',target:''}:{name:'',url:''});
+  if(act==='pick'){ if(!cfg.books.some(x=>norm(x.name)===norm(b.dataset.name))) cfg.books.push({name:b.dataset.name,url:''}); }
+  else if(act==='add') cfg[sec].push(sec==='works'?{name:'',unit:'mae',target:''}:{name:'',url:''});
   else if(act==='del'){ const x=cfg[sec][i]; if(x&&(norm(x.name)||norm(x.url))&&!confirm("'"+(x.name||x.url)+"'을(를) 뺍니다.")) return; cfg[sec].splice(i,1); }
   else if(act==='up'&&i>0){ const t=cfg[sec][i-1]; cfg[sec][i-1]=cfg[sec][i]; cfg[sec][i]=t; }
   saveCfg(); render();
@@ -343,7 +353,7 @@ document.addEventListener('input',e=>{ if(e.target.id==='ideaText') ideaDraft=e.
 document.addEventListener('keydown',e=>{ if(e.target.id==='ideaText'&&e.key==='Enter'&&!e.isComposing){ e.preventDefault(); sendIdea(); } });
 window.addEventListener('focus',()=>{ claimWin(); refreshTop(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') refreshTop(); });
-window.addEventListener('storage',e=>{ if(e.key===TP_KEY||e.key===SM_KEY) refreshTop(); else if(e.key===KEY){ cfg=loadCfg(); render(); } });
+window.addEventListener('storage',e=>{ if(e.key===TP_KEY||e.key===SM_KEY) refreshTop(); else if(e.key==='seoga.v1'&&view==='set'&&!(document.activeElement&&/INPUT|SELECT/.test(document.activeElement.tagName))) render(); else if(e.key===KEY){ cfg=loadCfg(); render(); } });
 claimWin();
 render();
 </script>
