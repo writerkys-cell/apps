@@ -81,6 +81,7 @@ textarea.paste{min-height:4.2em;margin-top:12px;font-size:13.5px;line-height:1.5
 .kinds button+button{border-left:none}
 .kinds button.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .kinds button.on.walk{background:var(--deep);border-color:var(--deep)}
+.kinds button.on.mix{background:var(--gold);border-color:var(--gold)}
 .fgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 12px;margin-top:16px}
 .fgrid .w2{grid-column:span 2}.fgrid .w4{grid-column:1/-1}
 .fgrid .sep{grid-column:1/-1;border-top:1px dotted var(--line);margin:6px 0 0;padding-top:4px;font-size:13px;color:var(--ink-soft);letter-spacing:.06em}
@@ -137,6 +138,7 @@ details.old[open] summary::before{content:'▾ '}
 .act .d{font-size:14px;color:var(--ink-soft)}
 .act .k{font-size:13.5px;letter-spacing:.1em}
 .act .k.walk{color:var(--deep)}
+.act .k.mix{color:var(--gold)}
 .act .m{font-size:16px}
 .act .m small{font-size:13px;color:var(--ink-soft);margin-left:6px}
 .act .p{font-size:14.5px;color:var(--ink-soft);text-align:right}
@@ -146,6 +148,7 @@ details.old[open] summary::before{content:'▾ '}
 .one-head .s{font-size:14.5px;color:var(--ink-soft)}
 .one-head .k{display:inline-block;font-size:13px;letter-spacing:.2em;padding:1px 10px;border:1px solid var(--ink);margin-left:8px;vertical-align:4px}
 .one-head .k.walk{border-color:var(--deep);color:var(--deep)}
+.one-head .k.mix{border-color:var(--gold);color:var(--gold)}
 .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:18px;border-top:1px solid var(--line)}
 .nums div{padding:12px 4px 10px;border-bottom:1px solid var(--line)}
 .nums b{display:block;font-weight:400;font-size:22px;line-height:1.3;font-variant-numeric:tabular-nums}
@@ -272,14 +275,26 @@ const km1 = v => (Math.round(v*10)/10).toFixed(1);
 function paceOf(a){ return a&&a.km>0&&a.sec>0 ? a.sec/a.km : null; }
 function speedOf(a){ return a&&a.km>0&&a.sec>0 ? a.km/(a.sec/3600) : null; }
 function secDiff(v){ v=Math.round(Math.abs(v)); return v<60?v+'초':Math.floor(v/60)+'분 '+v%60+'초'; }
-/* 걷기인지 달리기인지 — 케이던스가 있으면 140걸음/분, 없으면 1km 8분을 가른다 */
-const WALK_CAD=140, WALK_PACE=480;
+/* 걷기 · 섞어서(걷다가 뛰다가) · 달리기 (섞어서는 2026년 11월 19일 — 걷기에서 달리기로 넘어가는 과정을 가르려고).
+   케이던스가 있으면: 125걸음/분 아래는 걷기, 150부터는 달리기, 그 사이는 섞어서(다만 최고 페이스가 1km 8분보다 느리면 한 번도 뛰지 않은 것이니 걷기).
+   케이던스가 없으면: 평균 페이스가 1km 8분 안이면 달리기, 넘으면 걷기 — 넘는데 최고 페이스가 7분 30초 안이면 섞어서. */
+const WALK_CAD=125, RUN_CAD=150, WALK_PACE=480, MIX_BEST=450;
 function guessKind(a){
-  if(a.cad>0) return {kind:a.cad<WALK_CAD?'walk':'run', why:'케이던스 '+Math.round(a.cad)};
-  const p=paceOf(a); if(p) return {kind:p>WALK_PACE?'walk':'run', why:'평균 페이스 '+fmtPace(p)};
+  if(a.cad>0){ const c=Math.round(a.cad);
+    if(a.cad<WALK_CAD) return {kind:'walk', why:'케이던스 '+c};
+    if(a.cad>=RUN_CAD) return {kind:'run', why:'케이던스 '+c};
+    if(a.best>WALK_PACE) return {kind:'walk', why:'케이던스 '+c+', 최고 페이스 '+fmtPace(a.best)};
+    return {kind:'mix', why:'케이던스 '+c+(a.best?', 최고 페이스 '+fmtPace(a.best):'')}; }
+  const p=paceOf(a); if(p){
+    if(p<=WALK_PACE) return {kind:'run', why:'평균 페이스 '+fmtPace(p)};
+    if(a.best>0&&a.best<=MIX_BEST) return {kind:'mix', why:'평균 페이스 '+fmtPace(p)+', 최고 페이스 '+fmtPace(a.best)};
+    return {kind:'walk', why:'평균 페이스 '+fmtPace(p)}; }
   return null;
 }
-const KIND = {run:'달리기', walk:'걷기'};
+const KIND = {run:'달리기', mix:'섞어서', walk:'걷기'};
+const kindOf = a => KIND[a&&a.kind]?a.kind:'run';      /* 종류가 없는 옛 줄은 달리기 */
+const isRun = a => kindOf(a)==='run';
+const kindCls = a => kindOf(a)==='run'?'':kindOf(a);
 const RPE_TXT = ['','아주 쉬움','쉬움','쉬움','조금 편함','보통','조금 힘듦','힘듦','꽤 힘듦','아주 힘듦','최대'];
 
 /* ─────────── 설정(연결) ─────────── */
@@ -320,7 +335,7 @@ function setDot(part,state,msg){
 }
 
 /* ═════════ 저장 — run_log 한 줄 = 하나. 나중에 고친 쪽이 이기고, 이 기기에서 못 올린 줄은 덮지 않는다 ═════════
-   act    : { id:'a…', type:'act', kind:'run'|'walk', date(화면의 날짜), start, end, day(자정 기준), km, sec(러닝 시간), elapsed(경과 시간),
+   act    : { id:'a…', type:'act', kind:'run'|'mix'|'walk', date(화면의 날짜), start, end, day(자정 기준), km, sec(러닝 시간), elapsed(경과 시간),
             best(최고 페이스, 초/km), kcal, cad, up, down, hrA, hrM, splits:[{n, km, pace, elev}], rpe, course, shoe, temp, weather, memo }
    weight : { id:'w'+날짜, type:'weight', date, kg }
    course : { id:'c…', type:'course', name, km }
@@ -440,21 +455,25 @@ function acts(){ return live('act').filter(a=>a.day&&a.km>0).sort((a,b)=>(a.day+
 function courses(){ return live('course').sort((a,b)=>a.name.localeCompare(b.name,'ko')); }
 function shoes(){ return live('shoe').sort((a,b)=>(a.retired?1:0)-(b.retired?1:0)||a.name.localeCompare(b.name,'ko')); }
 function nameOf(id){ const r=id&&ST.rows[id]; return r&&!r.deleted?r.name:''; }
-/* 날마다: { day: {run, walk, runSec, walkSec} } */
+/* 날마다: { day: {run, mix, walk, runSec, mixSec, walkSec} } */
+const DAY0=()=>({run:0,mix:0,walk:0,runSec:0,mixSec:0,walkSec:0});
+const dayKm = d => d?d.run+d.mix+d.walk:0, daySec = d => d?d.runSec+d.mixSec+d.walkSec:0;
+/* '달리기 1.20km · 섞어서 4.96km · 걷기 2.00km' — 0인 것은 뺀다. f: 값 → 글 */
+function kindParts(o,f){ return ['run','mix','walk'].filter(k=>o[k]>0).map(k=>KIND[k]+' '+f(o[k],k)).join(' · '); }
 function dayMap(list){
   const m={};
-  (list||acts()).forEach(a=>{ const d=m[a.day]||(m[a.day]={run:0,walk:0,runSec:0,walkSec:0});
-    if(a.kind==='walk'){ d.walk+=a.km; d.walkSec+=a.sec||0; } else { d.run+=a.km; d.runSec+=a.sec||0; } });
+  (list||acts()).forEach(a=>{ const d=m[a.day]||(m[a.day]=DAY0()), kd=kindOf(a);
+    d[kd]+=a.km; d[kd+'Sec']+=a.sec||0; });
   return m;
 }
 function firstDay(){ const a=acts(); return a.length?a[0].day:null; }
 /* 오늘을 넣은 최근 30일. 쉰 날도 나눈다. 기록이 30일이 안 되면 있는 날만큼 */
 function avg30(m,first,end){
-  const k0=end||dayKey(); let run=0,walk=0,days=0,n=0;
+  const k0=end||dayKey(); let run=0,mix=0,walk=0,days=0,n=0;
   for(let i=0;i<30;i++){ const k=addDays(k0,-i); if(first&&k<first) break; const d=m[k]; n++;
-    if(d){ run+=d.run; walk+=d.walk; if(d.run+d.walk>0) days++; } }
+    if(d){ run+=d.run; mix+=d.mix; walk+=d.walk; if(dayKm(d)>0) days++; } }
   n=Math.max(1,n);
-  return {v:(run+walk)/n, run:run/n, walk:walk/n, days, n, from:addDays(k0,-(n-1)), to:k0};
+  return {v:(run+mix+walk)/n, run:run/n, mix:mix/n, walk:walk/n, days, n, from:addDays(k0,-(n-1)), to:k0};
 }
 function shoeKm(s){ return (+s.startKm||0)+acts().filter(a=>a.shoe===s.id).reduce((t,a)=>t+a.km,0); }
 function shoeNear(s){ const lim=+s.limit||SHOE_LIMIT; return shoeKm(s)>=lim-100; }
@@ -520,7 +539,7 @@ function renderWrite(){
   const v=draft.v, opt=(list,sel,blank,lab)=>`<option value="">${blank}</option>`+list.map(x=>`<option value="${esc(x.id)}"${x.id===sel?' selected':''}>${esc(lab(x))}</option>`).join('');
   const shoeList=shoes().filter(s=>!s.retired||s.id===v.fShoe);
   let h=`<div class="today"><span class="d">${kLabel(k)}</span><span class="w">${WD[parseKey(k).getDay()]}요일</span>
-    <span class="s">${td?'오늘 '+[td.run?'달리기 '+fmtKm(td.run)+'km':'', td.walk?'걷기 '+fmtKm(td.walk)+'km':''].filter(Boolean).join(' · ')+' · '+fmtDurK(td.runSec+td.walkSec)+' / 목표 '+fmtDurK(timeGoal()*60):'오늘은 아직 적은 운동이 없습니다 · 목표 '+fmtDurK(timeGoal()*60)}</span></div>`;
+    <span class="s">${td?'오늘 '+kindParts(td,v=>fmtKm(v)+'km')+' · '+fmtDurK(daySec(td))+' / 목표 '+fmtDurK(timeGoal()*60):'오늘은 아직 적은 운동이 없습니다 · 목표 '+fmtDurK(timeGoal()*60)}</span></div>`;
   if(edit) h+=`<p class="alert">${kLabel(ST.rows[draft.editId].day)}의 ${KIND[ST.rows[draft.editId].kind]} 기록을 고치는 중입니다. <button class="linkish" id="cancelEdit">그만 고치기</button></p>`;
   else h+=`<div class="import">
     <ol>
@@ -533,7 +552,7 @@ function renderWrite(){
     <div class="pasteMsg" id="pasteMsg"></div>
   </div>`;
   h+=`<div class="kinds" role="group" aria-label="종류">
-      <button data-kind="run" class="${draft.kind==='run'?'on':''}">달리기</button><button data-kind="walk" class="walk ${draft.kind==='walk'?'on':''}">걷기</button></div>
+      <button data-kind="run" class="${draft.kind==='run'?'on':''}">달리기</button><button data-kind="mix" class="mix ${draft.kind==='mix'?'on':''}" title="걷다가 뛰다가">섞어서</button><button data-kind="walk" class="walk ${draft.kind==='walk'?'on':''}">걷기</button></div>
     <div class="kindWhy" id="kindWhy"></div>
     <div class="fgrid">
       <div class="field w2 keep"><label for="fDate">날짜</label><input id="fDate" type="date" value="${esc(v.fDate||'')}"></div>
@@ -592,7 +611,7 @@ function fillFromPaste(text){
   ['kcal:fKcal','cad:fCad','up:fUp','down:fDown','hrA:fHrA','hrM:fHrM'].forEach(p=>{ const [a,id]=p.split(':'); const n=parseNum(f[a]); set(id, n==null?'':String(n)); });
   set('fSplits', splitsText(r.splits));
   draft.kindSet=false;
-  if(f.kind&&/걷/.test(f.kind)){ draft.kind='walk'; draft.kindSet=true; } else if(f.kind&&/달|뛰|run/i.test(f.kind)){ draft.kind='run'; draft.kindSet=true; }
+  if(f.kind&&/섞|mix/i.test(f.kind)){ draft.kind='mix'; draft.kindSet=true; } else if(f.kind&&/걷/.test(f.kind)){ draft.kind='walk'; draft.kindSet=true; } else if(f.kind&&/달|뛰|run/i.test(f.kind)){ draft.kind='run'; draft.kindSet=true; }
   draft.srcPace=parseDur(f.pace)||null;
   saveDraft(); renderWrite();
   const notes=[];
@@ -650,20 +669,21 @@ function editAct(id){
 }
 
 /* ═════════ 그림 ═════════ */
-const C_RUN='#23201c', C_WALK='#8597a4', C_SEAL='#9b3b32', C_LINE='#d6ccb6', C_SOFT='#736a59';
+const C_RUN='#23201c', C_MIX='#b8904a', C_WALK='#8597a4', C_SEAL='#9b3b32', C_LINE='#d6ccb6', C_SOFT='#736a59';
 const narrow=()=>window.innerWidth<520;
-/* 쌓은 막대 — items: [{a(달리기), b(걷기), tip, lab, hi}] */
+/* 쌓은 막대 — items: [{a(달리기), c(섞어서), b(걷기), tip, lab, hi}]. 아래부터 달리기·섞어서·걷기 */
 function stackSVG(items,o){
   const W_=narrow()?360:640, H=o.h||(narrow()?150:165), L=4, R=o.r||4, T=16, B=26, w=W_-L-R, h=H-T-B, bw=w/items.length;
-  const top=Math.max(o.min||0.1, ...items.map(x=>x.a+x.b), o.ref||0)*1.15;
+  const top=Math.max(o.min||0.1, ...items.map(x=>x.a+(x.c||0)+x.b), o.ref||0)*1.15;
   let s=`<svg viewBox="0 0 ${W_} ${H}" role="img" aria-label="${esc(o.label)}"><line x1="${L}" x2="${L+w}" y1="${T+h}" y2="${T+h}" stroke="${C_LINE}"/>`;
   items.forEach((it,i)=>{ const x=L+i*bw, bx=x+bw*(o.gap||0.18), bwid=bw*(1-2*(o.gap||0.18));
-    const ha=it.a/top*h, hb=it.b/top*h;
+    const ha=it.a/top*h, hc=(it.c||0)/top*h, hb=it.b/top*h;
     if(it.a>0) s+=`<rect x="${bx}" y="${T+h-ha}" width="${bwid}" height="${Math.max(1.5,ha)}" fill="${it.hi?C_SEAL:C_RUN}"/>`;
-    if(it.b>0) s+=`<rect x="${bx}" y="${T+h-ha-hb}" width="${bwid}" height="${Math.max(1.5,hb)}" fill="${C_WALK}"/>`;
+    if(it.c>0) s+=`<rect x="${bx}" y="${T+h-ha-hc}" width="${bwid}" height="${Math.max(1.5,hc)}" fill="${C_MIX}"/>`;
+    if(it.b>0) s+=`<rect x="${bx}" y="${T+h-ha-hc-hb}" width="${bwid}" height="${Math.max(1.5,hb)}" fill="${C_WALK}"/>`;
     s+=`<rect x="${x}" y="${T}" width="${bw}" height="${h}" fill="transparent"><title>${esc(it.tip)}</title></rect>`;
     if(it.lab) s+=`<text x="${x+bw/2}" y="${H-8}" font-size="11.5" fill="${C_SOFT}" text-anchor="middle">${esc(it.lab)}</text>`;
-    if(it.top) s+=`<text x="${x+bw/2}" y="${T+h-ha-hb-4}" font-size="11" fill="${C_SOFT}" text-anchor="middle">${esc(it.top)}</text>`;
+    if(it.top) s+=`<text x="${x+bw/2}" y="${T+h-ha-hc-hb-4}" font-size="11" fill="${C_SOFT}" text-anchor="middle">${esc(it.top)}</text>`;
   });
   if(o.ref>0){ const y=T+h-o.ref/top*h; s+=`<line x1="${L}" x2="${L+w}" y1="${y}" y2="${y}" stroke="${C_SEAL}" stroke-dasharray="4 4"/>`;
     if(o.refLab) s+=`<text x="${L+w+6}" y="${y+4}" font-size="11.5" fill="${C_SEAL}">${esc(o.refLab)}</text>`; }
@@ -686,7 +706,7 @@ function lineSVG(pts,o){
   s+=`<text x="${x(pts.length-1)+8}" y="${ly+4}" font-size="13" fill="${C_RUN}">${esc(o.fmt(lp.v))}</text>`;
   return s+'</svg>';
 }
-const legend=(walk)=>`<div class="legend"><span><i style="background:${C_RUN}"></i>달리기</span>${walk?`<span><i style="background:${C_WALK}"></i>걷기</span>`:''}<span><i style="background:${C_SEAL}"></i>오늘</span></div>`;
+const legend=(walk,mix)=>`<div class="legend"><span><i style="background:${C_RUN}"></i>달리기</span>${mix?`<span><i style="background:${C_MIX}"></i>섞어서</span>`:''}${walk?`<span><i style="background:${C_WALK}"></i>걷기</span>`:''}<span><i style="background:${C_SEAL}"></i>오늘</span></div>`;
 
 /* ═════════ 흐름 ═════════ */
 let barMode=lsGet('dalligi.barMode','km');
@@ -694,8 +714,9 @@ function weekRows(n){
   const all=acts(), k0=dayKey(), w0=weekOf(k0), out=[];
   for(let i=n-1;i>=0;i--){ const ws=addDays(w0,-7*i), we=addDays(ws,6);
     const xs=all.filter(a=>a.day>=ws&&a.day<=we);
-    out.push({ws, we, run:xs.filter(a=>a.kind!=='walk').reduce((t,a)=>t+a.km,0), walk:xs.filter(a=>a.kind==='walk').reduce((t,a)=>t+a.km,0),
-      runSec:xs.filter(a=>a.kind!=='walk').reduce((t,a)=>t+(a.sec||0),0), part:we>=k0}); }
+    const km=kd=>xs.filter(a=>kindOf(a)===kd).reduce((t,a)=>t+a.km,0);
+    out.push({ws, we, run:km('run'), mix:km('mix'), walk:km('walk'),
+      runSec:xs.filter(isRun).reduce((t,a)=>t+(a.sec||0),0), part:we>=k0}); }
   return out;
 }
 /* 달리기 주간 거리가 앞선 4주 평균보다 10% 넘게 늘었나 — 지난주(끝난 주)와 이번 주(지금까지)를 본다 */
@@ -708,7 +729,7 @@ function weekWarn(){
   return res;
 }
 function sameEffort(){
-  const k0=dayKey(), runs=acts().filter(a=>a.kind!=='walk'&&a.rpe&&a.sec>0);
+  const k0=dayKey(), runs=acts().filter(a=>isRun(a)&&a.rpe&&a.sec>0);
   const bands=[['쉬움 (1–4)',1,4],['보통 (5–6)',5,6],['힘듦 (7–10)',7,10]];
   return bands.map(([name,lo,hi])=>{
     const xs=runs.filter(a=>a.rpe>=lo&&a.rpe<=hi), pick=(a,b)=>xs.filter(x=>x.day>addDays(k0,-a)&&x.day<=addDays(k0,-b));
@@ -719,7 +740,7 @@ function sameEffort(){
 }
 function courseStats(){
   const k0=dayKey();
-  return courses().map(c=>{ const xs=acts().filter(a=>a.course===c.id&&a.kind!=='walk'&&a.sec>0);
+  return courses().map(c=>{ const xs=acts().filter(a=>a.course===c.id&&isRun(a)&&a.sec>0);
     if(!xs.length) return {c, n:0};
     let best=xs[0]; xs.forEach(a=>{ if(paceOf(a)<paceOf(best)) best=a; });
     const rec=xs.slice(-5), rp=rec.reduce((t,a)=>t+a.sec,0)/rec.reduce((t,a)=>t+a.km,0);
@@ -734,18 +755,18 @@ function renderFlow(){
   let h=`<div class="top-num${met?' met':''}">
     <div class="lbl">최근 ${a.n}일 하루 평균</div>
     <div class="big">${fmtKm(a.v)}km<small>운동한 날 ${a.days}일</small></div>
-    <div class="sub">달리기 ${fmtKm(a.run)}km · 걷기 ${fmtKm(a.walk)}km · ${Math.abs(cmp)<0.005?'기준선 '+g+'km와 같습니다':'기준선 '+g+'km보다 '+fmtKm(Math.abs(cmp))+'km '+(cmp>0?'많습니다':'적습니다')}</div>
-    <div class="now">이번 주(${kLabel(w0)}부터) 지금까지 달리기 ${fmtKm(tw.run)}km${tw.walk?' · 걷기 '+fmtKm(tw.walk)+'km':''}</div>
+    <div class="sub">달리기 ${fmtKm(a.run)}km${a.mix>0?' · 섞어서 '+fmtKm(a.mix)+'km':''} · 걷기 ${fmtKm(a.walk)}km · ${Math.abs(cmp)<0.005?'기준선 '+g+'km와 같습니다':'기준선 '+g+'km보다 '+fmtKm(Math.abs(cmp))+'km '+(cmp>0?'많습니다':'적습니다')}</div>
+    <div class="now">이번 주(${kLabel(w0)}부터) 지금까지 달리기 ${fmtKm(tw.run)}km${tw.mix?' · 섞어서 '+fmtKm(tw.mix)+'km':''}${tw.walk?' · 걷기 '+fmtKm(tw.walk)+'km':''}</div>
   </div>
   <p class="note">하루 평균은 쉰 날도 나눕니다. 자정에 하루가 바뀝니다.</p>`;
 
   /* 최근 30일 날마다 */
-  const items=[]; for(let i=29;i>=0;i--){ const k=addDays(k0,-i), d=m[k]||{run:0,walk:0,runSec:0,walkSec:0}, dt=parseKey(k);
-    const A=barMode==='km'?d.run:d.runSec/60, B=barMode==='km'?d.walk:d.walkSec/60;
-    items.push({a:A, b:B, hi:k===k0&&A>0, lab:(i===29||dt.getDate()===1)?(dt.getMonth()+1)+'/'+dt.getDate():(i%(narrow()?7:5)===0&&i>2?String(dt.getDate()):''),
-      tip:kLabelW(k)+' · '+(d.run||d.walk?[d.run?'달리기 '+fmtKm(d.run)+'km '+fmtDurK(d.runSec):'', d.walk?'걷기 '+fmtKm(d.walk)+'km '+fmtDurK(d.walkSec):''].filter(Boolean).join(' · '):'쉼')}); }
+  const items=[]; for(let i=29;i>=0;i--){ const k=addDays(k0,-i), d=m[k]||DAY0(), dt=parseKey(k);
+    const A=barMode==='km'?d.run:d.runSec/60, C=barMode==='km'?d.mix:d.mixSec/60, B=barMode==='km'?d.walk:d.walkSec/60;
+    items.push({a:A, c:C, b:B, hi:k===k0&&A>0, lab:(i===29||dt.getDate()===1)?(dt.getMonth()+1)+'/'+dt.getDate():(i%(narrow()?7:5)===0&&i>2?String(dt.getDate()):''),
+      tip:kLabelW(k)+' · '+(dayKm(d)>0?kindParts(d,(v,kd)=>fmtKm(v)+'km '+fmtDurK(d[kd+'Sec'])):'쉼')}); }
   h+=`<h3>최근 30일 날마다 <span class="toggle"><button data-bm="km" class="${barMode==='km'?'on':''}">거리</button> <button data-bm="min" class="${barMode==='min'?'on':''}">시간</button></span></h3>
-    <div class="chart">${stackSVG(items,{label:'최근 30일 날마다', min:barMode==='km'?1:10})}</div>${legend(all.some(x=>x.kind==='walk'))}`;
+    <div class="chart">${stackSVG(items,{label:'최근 30일 날마다', min:barMode==='km'?1:10})}</div>${legend(all.some(x=>x.kind==='walk'),all.some(x=>x.kind==='mix'))}`;
 
   /* 평균의 흐름 */
   const start=addDays(first,29);
@@ -757,9 +778,9 @@ function renderFlow(){
 
   /* 주마다 */
   const wk=weekRows(12).filter(x=>x.we>=weekOf(first)), warn=weekWarn();
-  h+=`<h3>주마다</h3><div class="chart">${stackSVG(wk.map((x,i)=>{ const d=parseKey(x.ws); return {a:x.run, b:x.walk, hi:false,
+  h+=`<h3>주마다</h3><div class="chart">${stackSVG(wk.map((x,i)=>{ const d=parseKey(x.ws); return {a:x.run, c:x.mix, b:x.walk, hi:false,
       lab:(i===0||d.getDate()<=7)?(d.getMonth()+1)+'/'+d.getDate():(wk.length<=8||i%2===0?String(d.getDate()):''), top:x.run>0?km1(x.run):'',
-      tip:kLabel(x.ws)+'–'+kLabel(x.we)+(x.part?' (진행 중)':'')+' · 달리기 '+fmtKm(x.run)+'km'+(x.walk?' · 걷기 '+fmtKm(x.walk)+'km':'')}; }),{label:'주마다 거리', gap:0.14, min:5})}</div>
+      tip:kLabel(x.ws)+'–'+kLabel(x.we)+(x.part?' (진행 중)':'')+' · 달리기 '+fmtKm(x.run)+'km'+(x.mix?' · 섞어서 '+fmtKm(x.mix)+'km':'')+(x.walk?' · 걷기 '+fmtKm(x.walk)+'km':'')}; }),{label:'주마다 거리', gap:0.14, min:5})}</div>
     <p class="note">월요일에 시작하는 주. 막대 위 숫자는 달리기 거리입니다.</p>`;
   if(warn&&warn.length){ const bad=warn.filter(x=>x.r>0.1);
     if(bad.length) h+=bad.map(x=>`<p class="alert">${x.part?'이번 주는 지금까지':'지난주'} 달리기 ${fmtKm(x.cur.run)}km로, 앞선 4주 평균 ${fmtKm(x.avg)}km보다 ${Math.round(x.r*100)}% 많습니다. 다치는 일은 대개 거리를 빨리 늘릴 때 생깁니다. 한 주에 10% 안팎으로 늘리는 것이 흔한 기준입니다.</p>`).join('');
@@ -769,10 +790,10 @@ function renderFlow(){
   const runs=all.filter(x=>x.kind!=='walk'&&x.sec>0&&x.day>addDays(k0,-120));
   if(runs.length){
     const lab=(a,i)=>{ const d=parseKey(a.day); return i===0||parseKey(runs[i-1].day).getMonth()!==d.getMonth()?(d.getMonth()+1)+'월':''; };
-    h+=`<h3>달리기 페이스</h3><div class="chart">${lineSVG(runs.map((a,i)=>({v:paceOf(a), lab:lab(a,i), tip:kLabel(a.day)+' · '+fmtKm(a.km)+'km · '+fmtPace(paceOf(a)), c:a.day===k0?C_SEAL:C_RUN})),{label:'달리기마다의 평균 페이스', invert:true, dots:true, fmt:v=>fmtPace(v), few:'달리기가 둘 이상 쌓이면 그립니다.'})}</div>
-      <p class="note">최근 120일의 달리기마다 평균 페이스. 위로 갈수록 빠릅니다.</p>`;
+    h+=`<h3>달리기 페이스</h3><div class="chart">${lineSVG(runs.map((a,i)=>({v:paceOf(a), lab:lab(a,i), tip:kLabel(a.day)+' · '+(isRun(a)?'':'섞어서 · ')+fmtKm(a.km)+'km · '+fmtPace(paceOf(a)), c:a.day===k0?C_SEAL:isRun(a)?C_RUN:C_MIX})),{label:'달리기마다의 평균 페이스', invert:true, dots:true, fmt:v=>fmtPace(v), few:'달리기가 둘 이상 쌓이면 그립니다.'})}</div>
+      <p class="note">최근 120일의 달리기마다 평균 페이스. 위로 갈수록 빠릅니다.${runs.some(a=>!isRun(a))?' 금빛 점은 섞어서(걷다가 뛰다가)입니다.':''}</p>`;
     const cr=runs.filter(a=>a.cad>0);
-    if(cr.length>=2) h+=`<h3>케이던스</h3><div class="chart">${lineSVG(cr.map((a,i)=>({v:a.cad, lab:i===0||parseKey(cr[i-1].day).getMonth()!==parseKey(a.day).getMonth()?(parseKey(a.day).getMonth()+1)+'월':'', tip:kLabel(a.day)+' · '+a.cad+' spm'})),{label:'케이던스', dots:true, h:narrow()?140:150, fmt:v=>Math.round(v)+' spm'})}</div>`;
+    if(cr.length>=2) h+=`<h3>케이던스</h3><div class="chart">${lineSVG(cr.map((a,i)=>({v:a.cad, lab:i===0||parseKey(cr[i-1].day).getMonth()!==parseKey(a.day).getMonth()?(parseKey(a.day).getMonth()+1)+'월':'', tip:kLabel(a.day)+' · '+(isRun(a)?'':'섞어서 · ')+a.cad+' spm', c:isRun(a)?C_RUN:C_MIX})),{label:'케이던스', dots:true, h:narrow()?140:150, fmt:v=>Math.round(v)+' spm'})}</div>`;
   }
 
   /* 같은 힘에 얼마나 빨랐나 */
@@ -797,11 +818,11 @@ function renderFlow(){
 
   /* 달마다 */
   const ms=[]; for(let mo=first.slice(0,7); mo<=k0.slice(0,7); mo=monthAdd(mo,1)){
-    let run=0,walk=0,sec=0,rs=0,days=0,n=0; for(let k=mo+'-01'; k.slice(0,7)===mo&&k<=k0; k=addDays(k,1)){ if(k<first) continue; n++; const d=m[k]; if(d){ run+=d.run; walk+=d.walk; sec+=d.runSec+d.walkSec; rs+=d.runSec; if(d.run+d.walk>0) days++; } }
-    ms.push({mo, run, walk, sec, rp:run>0?rs/run:null, days, n, part:mo===k0.slice(0,7)}); }
+    let run=0,mix=0,walk=0,sec=0,rs=0,days=0,n=0; for(let k=mo+'-01'; k.slice(0,7)===mo&&k<=k0; k=addDays(k,1)){ if(k<first) continue; n++; const d=m[k]; if(d){ run+=d.run; mix+=d.mix; walk+=d.walk; sec+=daySec(d); rs+=d.runSec; if(dayKm(d)>0) days++; } }
+    ms.push({mo, run, mix, walk, sec, rp:run>0?rs/run:null, days, n, part:mo===k0.slice(0,7)}); }
   ms.reverse();
-  const row=r=>`<tr${r.part?' class="part"':''}><td>${monthLabel(r.mo)}${r.part?' (진행 중)':''}</td><td>${fmtKm(r.run,1)}</td><td>${fmtKm(r.walk,1)}</td><td>${fmtDurK(r.sec)}</td><td>${r.days}일</td><td class="${!r.part&&(r.run+r.walk)/r.n>=g?'hi':''}">${fmtKm((r.run+r.walk)/Math.max(1,r.n))}</td><td>${r.rp?fmtPace(r.rp):'–'}</td></tr>`;
-  const th=`<table class="t"><thead><tr><th>달</th><th>달리기 km</th><th>걷기 km</th><th>시간</th><th>운동한 날</th><th>하루 평균</th><th>달리기 페이스</th></tr></thead><tbody>`;
+  const row=r=>`<tr${r.part?' class="part"':''}><td>${monthLabel(r.mo)}${r.part?' (진행 중)':''}</td><td>${fmtKm(r.run,1)}</td><td>${fmtKm(r.mix,1)}</td><td>${fmtKm(r.walk,1)}</td><td>${fmtDurK(r.sec)}</td><td>${r.days}일</td><td class="${!r.part&&(r.run+r.mix+r.walk)/r.n>=g?'hi':''}">${fmtKm((r.run+r.mix+r.walk)/Math.max(1,r.n))}</td><td>${r.rp?fmtPace(r.rp):'–'}</td></tr>`;
+  const th=`<table class="t"><thead><tr><th>달</th><th>달리기 km</th><th>섞어서 km</th><th>걷기 km</th><th>시간</th><th>운동한 날</th><th>하루 평균</th><th>달리기 페이스</th></tr></thead><tbody>`;
   h+=`<h3>달마다</h3><div class="tw">`+th+ms.slice(0,12).map(row).join('')+`</tbody></table></div>`;
   if(ms.length>12) h+=`<details class="old"><summary>이전 ${ms.length-12}달 보기</summary><div class="tw">`+th+ms.slice(12).map(row).join('')+`</tbody></table></div></details>`;
   h+=`<p class="note">하루 평균은 그달의 날 수로 나눕니다(첫 달은 첫 기록부터, 이번 달은 오늘까지).</p>`;
@@ -818,11 +839,11 @@ function renderList(){
   let h='', cur='';
   all.forEach(a=>{ const mo=a.day.slice(0,7);
     if(mo!==cur){ cur=mo; const xs=all.filter(x=>x.day.slice(0,7)===mo);
-      const r=xs.filter(x=>x.kind!=='walk').reduce((t,x)=>t+x.km,0), w=xs.filter(x=>x.kind==='walk').reduce((t,x)=>t+x.km,0);
-      h+=`<div class="mhead">${monthLabel(mo)} · 달리기 ${fmtKm(r,1)}km${w?' · 걷기 '+fmtKm(w,1)+'km':''}</div>`; }
+      const km=kd=>xs.filter(x=>kindOf(x)===kd).reduce((t,x)=>t+x.km,0), r=km('run'), x_=km('mix'), w=km('walk');
+      h+=`<div class="mhead">${monthLabel(mo)} · 달리기 ${fmtKm(r,1)}km${x_?' · 섞어서 '+fmtKm(x_,1)+'km':''}${w?' · 걷기 '+fmtKm(w,1)+'km':''}</div>`; }
     const p=paceOf(a), cn=nameOf(a.course);
     h+=`<button class="act" onclick="openOne('${a.id}')"><span class="d">${kLabel(a.day).replace('월 ','/').replace('일','')} ${WD[parseKey(a.day).getDay()]}</span>
-      <span class="k ${a.kind==='walk'?'walk':''}">${KIND[a.kind]}</span>
+      <span class="k ${kindCls(a)}">${KIND[kindOf(a)]}</span>
       <span class="m">${fmtKm(a.km)}km<small>${fmtDur(a.sec)}</small></span>
       <span class="p">${fmtPace(p)}${cn?' · '+esc(cn):''}${a.rpe?' · 힘 '+a.rpe:''}</span></button>`;
   });
@@ -847,7 +868,7 @@ function renderOne(){
   const a=ST.rows[oneId], host=$('vOne');
   if(!a||a.deleted){ host.innerHTML=`<p class="empty">이 기록은 지워졌습니다. <button class="linkish" onclick="go('list')">기록으로</button></p>`; return; }
   const p=paceOf(a), sp=speedOf(a), cell=(lab,val,unit,main)=>val==null||val===''||(typeof val==='number'&&!isFinite(val))?'':`<div${main?' class="main"':''}><b>${val}${unit?'<small>'+unit+'</small>':''}</b><span>${lab}</span></div>`;
-  let h=`<div class="one-head"><div class="d">${kLabelY(a.day)} <span style="font-size:17px;color:var(--ink-soft)">${WD[parseKey(a.day).getDay()]}요일</span><span class="k ${a.kind==='walk'?'walk':''}">${KIND[a.kind]}</span></div>
+  let h=`<div class="one-head"><div class="d">${kLabelY(a.day)} <span style="font-size:17px;color:var(--ink-soft)">${WD[parseKey(a.day).getDay()]}요일</span><span class="k ${kindCls(a)}">${KIND[kindOf(a)]}</span></div>
     <div class="s">${a.start?a.start+(a.end?'–'+a.end:'')+' · ':''}${a.course?esc(nameOf(a.course))+' · ':''}${a.shoe?esc(nameOf(a.shoe))+' · ':''}${a.temp!=null?a.temp+'°C ':''}${esc(a.weather||'')}</div></div>
     <div class="nums">${cell('거리',fmtKm(a.km),'km',1)}${cell('평균 페이스',fmtPace(p),'/km',1)}${cell('러닝 시간',fmtDur(a.sec),'',1)}
     ${cell('시속',km1(sp),'km')}${cell('최고 페이스',a.best?fmtPace(a.best):null,'')}${cell('케이던스',a.cad,'spm')}
@@ -861,7 +882,7 @@ function renderOne(){
       if(a.splits.some(s=>s.km<0.999)) h+=`<p class="note">1km에 못 미치는 마지막 구간은 옅게 그리고, 견줄 때는 뺐습니다.</p>`; }
   }
   /* 같은 코스 */
-  if(a.course&&a.kind!=='walk'&&p){ const xs=acts().filter(x=>x.course===a.course&&x.kind!=='walk'&&x.sec>0);
+  if(a.course&&isRun(a)&&p){ const xs=acts().filter(x=>x.course===a.course&&isRun(x)&&x.sec>0);
     if(xs.length>1){ const sorted=xs.slice().sort((x,y)=>paceOf(x)-paceOf(y)), rank=sorted.findIndex(x=>x.id===a.id)+1, best=sorted[0];
       const before=xs.filter(x=>(x.day+(x.start||''))<(a.day+(a.start||''))).slice(-5), bp=before.length?before.reduce((t,x)=>t+x.sec,0)/before.reduce((t,x)=>t+x.km,0):null;
       h+=`<h3>${esc(nameOf(a.course))}에서</h3><p class="para">이 코스를 ${xs.length}번 달렸고, 이번이 ${rank===1?'가장 빨랐습니다':rank+'번째로 빨랐습니다'}.${rank!==1?' 가장 빠른 날은 '+kLabelY(best.day)+'('+fmtPace(paceOf(best))+')입니다.':''}${bp?' 바로 앞선 '+before.length+'번의 평균 '+fmtPace(bp)+'보다 '+(Math.abs(p-bp)<1?'같았습니다':secDiff(Math.abs(p-bp))+' '+(p<bp?'빨랐습니다':'느렸습니다'))+'.':''}</p>`; } }
@@ -913,7 +934,7 @@ function advicePrompt(nw){
   const xs=acts().filter(a=>a.day>=from);
   const rows=xs.map(a=>[a.day, KIND[a.kind], fmtKm(a.km), fmtDur(a.sec), fmtPace(paceOf(a)), a.cad??'', a.up??'', a.hrA??'', a.rpe??'', nameOf(a.course), nameOf(a.shoe),
     (a.splits||[]).map(s=>(s.km<0.999?fmtKm(s.km)+'km:':'')+fmtPace(s.pace)).join(' '), (a.memo||'').replace(/\s+/g,' ').slice(0,80)].join(' | '));
-  const wk=weekRows(nw).map(w=>`${w.ws}~${w.we}${w.part?'(진행 중)':''}: 달리기 ${fmtKm(w.run)}km, 걷기 ${fmtKm(w.walk)}km`);
+  const wk=weekRows(nw).map(w=>`${w.ws}~${w.we}${w.part?'(진행 중)':''}: 달리기 ${fmtKm(w.run)}km, 섞어서 ${fmtKm(w.mix)}km, 걷기 ${fmtKm(w.walk)}km`);
   const wt=weights().filter(w=>w.date>=addDays(from,-7)), wl=[];
   for(let k=weekOf(from); k<=k0; k=addDays(k,7)){ const ys=wt.filter(w=>w.date>=k&&w.date<=addDays(k,6)); if(ys.length) wl.push(`${k} 주: ${(ys.reduce((t,w)=>t+w.kg,0)/ys.length).toFixed(1)}kg (${ys.length}번 잼)`); }
   const sh=shoes().filter(s=>!s.retired).map(s=>`${s.name}: ${Math.round(shoeKm(s))}km`);
@@ -929,6 +950,7 @@ function advicePrompt(nw){
 ## 기록 설명
 - 기간: ${from}~${k0} (최근 ${nw}주)
 - 각 줄은 한 번의 운동이다. 날짜는 자정 기준.
+- 종류는 셋이다: 걷기 · 섞어서(걷다가 뛰다가 한 것 — 걷기에서 달리기로 넘어가는 단계) · 달리기. 섞어서의 페이스·케이던스는 걷기와 달리기가 섞인 평균이다.
 - 칸: 날짜 | 종류 | 거리km | 러닝시간 | 평균페이스(분'초"/km) | 케이던스(걸음/분) | 고도상승m | 평균심박 | 힘든정도(1 아주 쉬움~10 최대) | 코스 | 신발 | 구간페이스(1km마다, 짧은 마지막 구간은 거리 표시) | 메모
 - 빈 칸은 재지 않은 것이지 0이 아니다.
 
