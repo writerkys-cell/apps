@@ -278,6 +278,19 @@ main{height:calc(100% - 3.6rem);overflow:hidden}
 #jmenu{position:fixed;z-index:70;min-width:13rem;max-width:26rem;max-height:60vh;overflow-y:auto;background:var(--sheet);border:1px solid var(--seon);box-shadow:0 6px 24px rgba(0,0,0,.12);padding:.35rem 0;font-family:var(--ui);font-size:.8rem}
 #jmenu button{display:block;width:100%;text-align:left;background:none;border:0;padding:.38rem 1rem;color:var(--meok);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:inherit}
 #jmenu button:hover{background:rgba(0,0,0,.05)}
+/* 원고의 자료 — 주소 여러 개를 열고, 더하고, 빼는 작은 창 */
+#refPop{position:fixed;z-index:70;width:22rem;max-width:92vw;max-height:70vh;overflow-y:auto;background:var(--sheet);border:1px solid var(--seon);box-shadow:0 6px 24px rgba(0,0,0,.12);padding:.6rem .8rem .7rem;font-family:var(--ui);font-size:.8rem;color:var(--meok)}
+#refPop .rp-h{margin:0 0 .4rem;color:var(--meok-3);font-size:.75rem}
+#refPop .rp-e{margin:.2rem 0 .5rem;color:var(--meok-3)}
+#refPop .rp-r{display:flex;gap:.4rem;align-items:baseline;border-bottom:1px solid var(--seon);padding:.3rem 0}
+#refPop button{font:inherit;background:none;border:0;padding:0;color:var(--meok);cursor:pointer;text-align:left}
+#refPop .rp-a{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#refPop .rp-a:hover{color:var(--inju)}
+#refPop .rp-x{flex:none;color:var(--meok-3);padding:0 .2rem}
+#refPop .rp-x:hover{color:var(--inju)}
+#refPop .rp-f{display:flex;justify-content:space-between;margin-top:.6rem}
+#refPop .rp-f button{color:var(--meok-2);border-bottom:1px solid var(--seon)}
+#refPop .rp-f button:hover{color:var(--inju);border-bottom-color:var(--inju)}
 #jmenu button.cur{color:var(--inju)}
 #jmenu button .lab{display:inline-block;min-width:2.4em;color:var(--meok-3)}
 #jmenu button .rv{color:var(--inju);margin-left:.5em}
@@ -867,6 +880,7 @@ h2:first-child{margin-top:0}
         <span class="when" id="tpWhen"></span>
         <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
         <button class="lnk" id="tpVersBtn" type="button" title="이 원고에 쌓인 판본 목록">판본</button>
+        <button class="lnk" id="tpRefs" type="button" hidden title="이 원고의 자료 — 데본씽크 항목이나 웹 주소. 누르면 목록이 뜨고, 거기서 열고 더하고 뺍니다">자료</button>
         <a class="lnk" id="tpCard" hidden target="storyM" data-win="storyM" href="#" title="storyM에서 이 원고에 이어진 집필 카드를 바로 엽니다">카드 ↗</a>
         <a class="lnk" id="tpManual" hidden target="storyM" data-win="storyM" href="#" title="storyM에서 이 원고에 이어진 카드를 원고를 쓴 뒤에 고쳤습니다. 카드를 열어 달라진 것을 보고, 본 뒤에는 카드에서 '확인했음'을 누르세요">매뉴얼이 바뀜 ↗</a>
         <a class="lnk" id="tpStory" hidden target="storyM" data-win="storyM" href="#" title="storyM에서 카드 찾기 — 막혔을 때">카드 찾기 ↗</a>
@@ -3470,14 +3484,86 @@ var STORYM_URL = "https://writerkys-cell.github.io/apps/storyM.html";
    정리의 원고(카드 링크가 정리의 것이거나, 카드 링크 없이 글상자에 든 원고)는 "카드 ↗"·"카드 찾기 ↗"·"아이디어 보내기"가 storyM이 아니라 정리로 간다 */
 var JEONGRI_URL = "https://writerkys-cell.github.io/apps/jeongri.html";
 function isJrLink(l){ return /jeongri\.html/i.test(String(l || "")); }
-function jrMs(m){ return !!m && (m.storyLink ? isJrLink(m.storyLink) : isBox(workOf(m))); }
-/* 정리의 카드에 적힌 글 — 정리의 저장소(jeongri.v1)를 읽기만 한다. 그 카드에서 원고를 처음 만들 때 첫 글로 넣는다(tpHashNew) */
-function jrCardText(id){
+function jrMs(m){ return !!m && (m.storyLink ? isJrLink(m.storyLink) : (!!m.jrCard || isBox(workOf(m)))); }
+/* 정리의 카드 — 정리의 저장소(jeongri.v1)를 읽기만 한다. 그 카드에서 원고를 처음 만들 때 본문을 첫 글로, 자료 칸의 주소를 원고의 자료로 가져온다(tpHashNew).
+   카드로 돌아가는 링크는 두지 않는다(2026년 11월 19일 저녁, 작가가 정함) — 정리의 카드는 원고가 생기면 보관으로 넘어가고, 원고에는 자료만 남는다.
+   어느 카드에서 왔는지는 원고의 jrCard에 적어 둔다. 정리가 그것을 보고 원고가 생긴 것을 알아 카드를 보관한다(링크가 아니라 표다) */
+function jrCardData(id){
+  var out = { text:"", refs:[] };
   try{
     var d = JSON.parse(localStorage.getItem("jeongri.v1"));
     var c = d && Array.isArray(d.cards) ? d.cards.filter(function(x){ return x && x.id === id; })[0] : null;
-    return c ? String(c.text || "").replace(/\r/g, "").trim() : "";
-  }catch(e){ return ""; }
+    if(c){
+      out.text = String(c.text || "").replace(/\r/g, "").trim();
+      (c.srcs || []).forEach(function(x){ var u = x ? String(x.u || "").trim() : ""; if(u) out.refs.push({ u:u, n:String(x.n || "").trim() }); });
+    }
+  }catch(e){}
+  return out;
+}
+/* ---------- 원고의 자료 (2026년 11월 19일) — 데본씽크 항목 주소나 웹 주소 여러 개(m.refs: [{u, n}]).
+   정리에서 넘어올 때 카드의 자료 칸에서 가져오고, 여기서도 더하고 뺄 수 있다. 400자 탭 윗줄의 "자료"와 원고 탭의 "자료"가 같은 목록 창을 연다.
+   카드 링크처럼 이 저장소에만 두고 수파베이스에는 올리지 않는다 ---------- */
+function refsOf(m){ return m && Array.isArray(m.refs) ? m.refs.filter(function(x){ return x && String(x.u || "").trim(); }) : []; }
+function refName(x, i){
+  var n = String(x.n || "").trim(), u = String(x.u || "").trim();
+  var q = u.match(/[?&]query=([^&]+)/), t = "";
+  if(q){ try{ t = decodeURIComponent(q[1]); }catch(e){ t = q[1]; } }
+  if(t) return (n ? n + " · " : "") + t;   /* 데본씽크 검색 링크 — 찾는 말(문서 제목)을 보인다 */
+  if(n) return n;
+  return /^https?:/i.test(u) ? u.replace(/^https?:\/\//i, "").slice(0, 44) : "자료 " + (i + 1);
+}
+function refLabel(m){ var n = refsOf(m).length; return n ? "자료 " + n : "자료 넣기"; }
+function openRef(u){
+  var a = document.createElement("a"); a.href = u;
+  if(/^https?:/i.test(u)){ a.target = "_blank"; a.rel = "noopener"; }   /* 데본씽크 주소는 앱으로 넘어가므로 그대로 연다 */
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function addRef(m){
+  var v = prompt("자료의 주소를 붙여 넣으세요.\n(데본씽크 항목 링크나 웹 주소)", "");
+  if(v === null) return false;
+  v = v.trim(); if(!v) return false;
+  var n = prompt("이 자료의 이름 (비워도 됩니다)", "");
+  if(!Array.isArray(m.refs)) m.refs = [];
+  m.refs.push({ u:v, n:String(n || "").trim() });
+  save(); return true;
+}
+function refsChanged(){ try{ if(tpOn()) tpRenderStrip(); }catch(e){} try{ renderList(); }catch(e){} }
+function refsOutside(e){ var b = document.getElementById("refPop"); if(b && !b.contains(e.target)) closeRefs(); }
+function closeRefs(){ var b = document.getElementById("refPop"); if(b) b.parentNode.removeChild(b); document.removeEventListener("mousedown", refsOutside, true); }
+function openRefs(m, at){
+  closeRefs();
+  if(!m) return;
+  var box = document.createElement("div"); box.id = "refPop";
+  function draw(){
+    box.innerHTML = "";
+    var rs = refsOf(m);
+    var h = document.createElement("p"); h.className = "rp-h"; h.textContent = "'" + m.title + "'의 자료"; box.appendChild(h);
+    if(!rs.length){ var e0 = document.createElement("p"); e0.className = "rp-e"; e0.textContent = "아직 자료가 없습니다."; box.appendChild(e0); }
+    rs.forEach(function(x, i){
+      var row = document.createElement("div"); row.className = "rp-r";
+      var a = document.createElement("button"); a.type = "button"; a.className = "rp-a"; a.textContent = refName(x, i) + " ↗"; a.title = x.u;
+      a.addEventListener("click", function(){ openRef(String(x.u).trim()); });
+      var d = document.createElement("button"); d.type = "button"; d.className = "rp-x"; d.textContent = "✕"; d.title = "이 자료 링크를 뺍니다";
+      d.addEventListener("click", function(){
+        if(!confirm("'" + refName(x, i) + "' 링크를 이 원고에서 뺄까요?")) return;
+        m.refs = m.refs.filter(function(y){ return y !== x; }); save(); draw(); refsChanged();
+      });
+      row.appendChild(a); row.appendChild(d); box.appendChild(row);
+    });
+    var f = document.createElement("div"); f.className = "rp-f";
+    var add = document.createElement("button"); add.type = "button"; add.textContent = "+ 자료 링크 넣기";
+    add.addEventListener("click", function(){ if(addRef(m)){ draw(); refsChanged(); } });
+    var cl = document.createElement("button"); cl.type = "button"; cl.textContent = "닫기"; cl.addEventListener("click", closeRefs);
+    f.appendChild(add); f.appendChild(cl); box.appendChild(f);
+  }
+  draw();
+  document.body.appendChild(box);
+  var r = at && at.getBoundingClientRect ? at.getBoundingClientRect() : null, bw = box.offsetWidth, bh = box.offsetHeight;
+  var left = r ? r.left : (window.innerWidth - bw) / 2, top = r ? r.bottom + 6 : window.innerHeight * 0.2;
+  if(left + bw > window.innerWidth - 8) left = window.innerWidth - bw - 8;
+  if(top + bh > window.innerHeight - 8) top = Math.max(8, window.innerHeight - bh - 8);
+  box.style.left = Math.max(8, left) + "px"; box.style.top = Math.max(8, top) + "px";
+  setTimeout(function(){ document.addEventListener("mousedown", refsOutside, true); }, 0);
 }
 /* 원고의 줄거리 주소. 링크가 있으면 그것(장면·카드까지), 없으면 작품 이름으로 storyM의 그 소설을 연다(storyM이 #소설제목= 을 읽음) */
 function storyLinkOf(m){
@@ -4720,6 +4806,7 @@ function renderList(){
       /* 합친 원고 — 완성은 장 머리(장 완성)나 작품(초고 완성)에서. 링크만 여기서 */
       act(m.scrivLink ? "링크 바꾸기" : "링크 넣기", function(){ putLink(m); });
       act(m.storyLink ? "카드 링크 바꾸기" : "카드 링크 넣기", function(){ putStoryLink(m); });
+      act(refLabel(m), function(){ openRefs(m); });
       act("원고 주소 복사", function(){ copyMsAddr(m); });
     }else if(!wDone){
       act("제목 바꾸기", function(){
@@ -4737,6 +4824,7 @@ function renderList(){
       }
       act(m.scrivLink ? "링크 바꾸기" : "링크 넣기", function(){ putLink(m); });
       act(m.storyLink ? "카드 링크 바꾸기" : "카드 링크 넣기", function(){ putStoryLink(m); });
+      act(refLabel(m), function(){ openRefs(m); });
       act("원고 주소 복사", function(){ copyMsAddr(m); });
       if(rw) act(rv ? "새 글로 바꾸기" : "개정으로 바꾸기", function(){ switchRev(m); });
       act("↑", function(){ shiftUnit(m, -1); });
@@ -6589,7 +6677,7 @@ function tpHashNew(q, loud){
   /* 정리에서 왔으면(정리카드) 카드 링크는 정리의 카드 주소. 글상자로 오면 작품 이름 대신 글상자에 넣는다(없으면 묻지 않고 만든다)
      정리의 주소: #글상자=1&새원고=<제목>&정리카드=<카드 id>  ·  #작품=<작품 이름>&작품id=<작품 id>&새원고=<제목>&정리카드=<카드 id> */
   var jrCard = q["정리카드"] || "", toBox = !!q["글상자"], fromApp = jrCard ? "정리" : "storyM";
-  var link = jrCard ? JEONGRI_URL + "#카드=" + encodeURIComponent(jrCard)
+  var link = jrCard ? ""   /* 정리의 카드로 돌아가는 링크는 두지 않는다 — 본문과 자료를 가져오면 카드는 보관으로 넘어간다 */
            : (q["소설"] && q["카드"] ? STORYM_URL + "#소설=" + encodeURIComponent(q["소설"]) + "&카드=" + encodeURIComponent(q["카드"]) : "");
   var ws = S.works.filter(function(w){ return !isBox(w) && String(w.title || "").trim() === wt; });
   var w = toBox ? boxWork(false) : ((q["작품id"] && workById(q["작품id"])) || ws.filter(workActive)[0] || ws[0]);
@@ -6610,11 +6698,12 @@ function tpHashNew(q, loud){
     /* 주소를 그 원고의 주소로 바꿔 둔다 — 새로 고쳐도 다시 묻지 않게 */
     try{ history.replaceState(null, "", location.href.replace(/#.*$/, "") + "#원고=" + encodeURIComponent(m.id)); }catch(e){}
     tpOpen(m.id);
-    if(made) toast("'" + m.title + "' 원고를 만들었습니다 · " + fromApp + "의 카드와 이어집니다", 4000);
+    if(made) toast("'" + m.title + "' 원고를 만들었습니다 · " + (jrCard ? "정리의 글" + (refsOf(m).length ? "과 자료 " + refsOf(m).length + "개" : "") + "를 가져왔습니다" : "storyM의 카드와 이어집니다"), 4000);
+    else if(jrCard && m.jrCard !== jrCard) toast("'" + m.title + "'이라는 원고가 이미 있어 그것을 열었습니다 · 정리의 글은 넣지 않았습니다", 5000);
   };
   /* 정리의 그 카드에 이미 이어진 원고가 있으면(카드 제목을 바꿨어도) 그것을 연다 */
   if(jrCard){
-    var lk = S.mss.filter(function(m){ return !m.folded && isJrLink(m.storyLink) && linkPart(m.storyLink, "카드") === jrCard; })[0];
+    var lk = S.mss.filter(function(m){ return !m.folded && (m.jrCard === jrCard || (isJrLink(m.storyLink) && linkPart(m.storyLink, "카드") === jrCard)); })[0];
     if(lk){ done(lk, false); return true; }
   }
   var ex = S.mss.filter(function(m){ return m.workId === w.id && !m.folded && String(m.title || "").replace(/\s+/g, " ").trim() === name; })[0];
@@ -6629,7 +6718,7 @@ function tpHashNew(q, loud){
     c = defaultChapter(w, c);
     if(!c){ toast("'" + w.title + "'에 열린 장이 없습니다 — 원고 탭에서 장을 먼저 만드세요", 5000); return true; }
   }
-  if(!madeW && !confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\n" + fromApp + "의 카드와 이어집니다. 만들까요?")){
+  if(!madeW && !confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\n" + (jrCard ? "정리의 글과 자료를 가져옵니다." : "storyM의 카드와 이어집니다.") + " 만들까요?")){
     try{ history.replaceState(null, "", location.href.replace(/#.*$/, "")); }catch(e){}
     return true;
   }
@@ -6638,8 +6727,14 @@ function tpHashNew(q, loud){
   m.title = name; m.dirty = true;
   /* 정리의 카드에서 만든 원고는 카드의 글을 첫 글로 넣는다(2026년 11월 19일, 작가가 정함) — 400자 탭 왼쪽에 그 글이 첫 판본으로 보이고,
      오른쪽에서 원고로 다시 써서 보내면 그 글로 바뀐다(카드의 글은 판본 목록에 남는다). 오늘 쓴 글이 아니므로 순증·나아감에 세지 않고,
-     넣은 글자 수를 seedChars에 적어 두어 처음 고칠 때 쓴 글 전체가 세어지게 한다(commit) */
-  if(jrCard){ var seed = jrCardText(jrCard); if(seed){ m.text = seed; m.editedAt = Date.now(); m.seedChars = len(seed); } }
+     넣은 글자 수를 seedChars에 적어 두어 처음 고칠 때 쓴 글 전체가 세어지게 한다(commit).
+     같은 날 저녁부터는 카드의 자료 칸에 있던 주소도 원고의 자료(refs)로 가져오고, 카드 링크는 넣지 않는다 */
+  if(jrCard){
+    var jd = jrCardData(jrCard), seed = jd.text;
+    m.jrCard = jrCard;   /* 어느 카드에서 왔는지 — 정리가 이것을 보고 카드를 보관한다 */
+    if(seed){ m.text = seed; m.editedAt = Date.now(); m.seedChars = len(seed); }
+    if(jd.refs.length) m.refs = jd.refs;   /* 카드의 자료 칸에 있던 주소들 — 원고를 쓰는 내내 "자료"로 연다 */
+  }
   if(link) m.storyLink = link;
   clockIn(); S.current = m.id; S.sel = null;
   save(); renderHead(); renderWrite(); renderList();
@@ -6743,6 +6838,7 @@ function tpLeftText(){ var u = tpUnit(); if(u.fix) return u.fixText || ""; var x
 function tpRenderStrip(){
   var m = tpMs(), u = tpUnit(m), v = u.versions, g = tpGoal(u);
   var jr = jrMs(m);
+  var rb = document.getElementById("tpRefs"); if(rb){ var rn = refsOf(m).length; rb.hidden = !(rn || jr); rb.textContent = rn ? "자료 " + rn : "자료 넣기"; }
   var sc = document.getElementById("tpCard"); if(sc){ sc.hidden = !m.storyLink; sc.href = m.storyLink || "#"; sc.setAttribute("data-win", jr ? "jeongri" : "storyM"); sc.title = jr ? "정리에서 이 원고에 이어진 카드를 바로 엽니다" : "storyM에서 이 원고에 이어진 집필 카드를 바로 엽니다"; }
   var mc = document.getElementById("tpManual"); if(mc){ mc.hidden = !manualChanged(m); mc.href = m.storyLink || "#"; }
   var sl = document.getElementById("tpStory"); if(sl){ sl.setAttribute("data-win", jr ? "jeongri" : "storyM"); sl.hidden = false; sl.href = storyLinkOf(m); sl.title = "storyM에서 카드 찾기 — 막혔을 때. 입력창에서 글자를 골라 놓고 누르면 그 말로 찾고, 고른 것이 없으면 찾을 말을 묻습니다"; }
@@ -7097,6 +7193,7 @@ document.getElementById("tpStory").addEventListener("click", function(e){
   this.href = q ? storyFindUrl(tpMs(), q) : storyLinkOf(tpMs());
 });
 document.getElementById("tpIdea").addEventListener("click", function(){ sendIdea(tpMs(), tpEl.input); });
+document.getElementById("tpRefs").addEventListener("click", function(){ openRefs(tpMs(), this); });
 document.getElementById("ideaBtn").addEventListener("click", function(){ sendIdea(cur(), document.getElementById("input")); });
 tpEl.prev.addEventListener("dblclick", function(){ var t = tpLeftText(); if(t) copyThen(t, function(){ toast("복사했습니다"); }); });
 tpEl.versBtn.addEventListener("click", function(){ tpVersOn = !tpVersOn; tpRenderBtns(); if(tpVersOn) tpRenderVers(); });
