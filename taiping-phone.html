@@ -199,6 +199,7 @@ var OLD_KEY = "botaegi-phone-v1";   /* 2026년 11월 14일 이름을 바꾸기 �
 var TABLE = "botaegi_ms";
 var NOTES = "botaegi_notes";   /* 의견 — 원고 줄과 따로 둔다. 본문 고치기와 서로 덮지 않는다 */
 var CHS = {};   /* 작품마다 장 목록 {id, no, name, done, part, ms:[원고 id]} */
+var BOXES = {};  /* 글상자(타이핑의 box 작품) — 종류는 초고 그대로이고 이름만 글상자로 보인다(2026년 11월 19일) */
 var PARTS = {};  /* 작품마다 부 {id, no, name} — 장의 part가 부 id */
 var REVS = {};   /* 개정 작품마다 개정 원고 id(합친 장 원고 포함). 나머지는 새 글 */
 /* 종류 — 초고와 개정 둘(2026년 11월 14일, 타이핑과 같이). 예전 장편·중편·단편·산문·청탁은 초고로 본다.
@@ -380,7 +381,7 @@ function loadWorks(){
       var id = useId && r.work_id ? r.work_id : "t:" + (r.work_title || "");
       if(r.work_kind === "개정") kinds[id] = "개정";
       if(!r.work_title || seen[id]) return;
-      seen[id] = 1; out.push({ id:id, title:r.work_title, kind:normKind(r.work_kind) });
+      seen[id] = 1; out.push({ id:id, title:r.work_title, kind:normKind(r.work_kind), box:!!BOXES[id] });
     });
     out.forEach(function(w){ if(kinds[w.id]) w.kind = "개정"; });
     S.works = out;
@@ -389,13 +390,14 @@ function loadWorks(){
   }
   /* 장 — 타이핑이 올린 작품 목록에서. 개정 작품만 장으로 묶는다(chWork) */
   var kvp = api("botaegi_kv?select=data&id=eq.works").then(function(r){ return r.ok ? r.json() : []; }).then(function(kv){
-    var m = {}, pm = {}, rm = {};
+    var m = {}, pm = {}, rm = {}, bx = {};
     ((kv[0] && kv[0].data) || []).forEach(function(w){
       if(Array.isArray(w.chapters)) m[w.id] = w.chapters;
       if(Array.isArray(w.parts)) pm[w.id] = w.parts;
       if(Array.isArray(w.rev_ms)) rm[w.id] = w.rev_ms;
+      if(w.box) bx[w.id] = 1;
     });
-    CHS = m; PARTS = pm; REVS = rm;
+    CHS = m; PARTS = pm; REVS = rm; BOXES = bx;
   }).catch(function(){});
   return kvp.then(function(){ return api(TABLE + "?select=work_id,work_title,work_kind"); }).then(function(r){
     if(r.status === 400) return api(TABLE + "?select=work_title,work_kind").then(function(r2){ return r2.ok ? r2.json() : []; }).then(function(rows){ build(rows, false); });
@@ -623,7 +625,7 @@ function renderList(){
   }
   if(S.works.length){
     var ws = document.createElement("select"); ws.className = "wsel";
-    [["", "모든 작품"]].concat(S.works.map(function(w){ return [w.id, w.title + (w.kind ? " · " + w.kind : "")]; })).forEach(function(o){
+    [["", "모든 작품"]].concat(S.works.map(function(w){ return [w.id, w.box ? w.title : w.title + (w.kind ? " · " + w.kind : "")]; })).forEach(function(o){
       var op = document.createElement("option"); op.value = o[0]; op.textContent = o[1]; ws.appendChild(op);
     });
     ws.value = S.work || "";

@@ -120,17 +120,20 @@ section>h2{font-size:13.5px;font-weight:400;color:var(--ink-soft);margin:0 0 10p
 const KEY='writerKYS.v1', TP_KEY='taiping-v1', SM_KEY='storyM.v1', IDEA_IN='storyM.ideas.in';
 const DEF={
   works:[],
-  apps:[{name:'스토리엠',url:'./storyM.html'},{name:'타이핑',url:'./taiping.html'},{name:'타자기',url:'https://writerkys-cell.github.io/apps/typewriter.html'},{name:'떠들기',url:'./tteodeulgi.html'}],
+  apps:[{name:'스토리엠',url:'./storyM.html'},{name:'정리',url:'./jeongri.html'},{name:'타이핑',url:'./taiping.html'},{name:'타자기',url:'https://writerkys-cell.github.io/apps/typewriter.html'},{name:'떠들기',url:'./tteodeulgi.html'}],
   books:[], refs:[],
   taipingUrl:'./taiping.html', seogaUrl:'./seoga.html'
 };
 function loadCfg(){
   let c=null; try{ c=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
   const d=JSON.parse(JSON.stringify(DEF));
-  if(!c||typeof c!=='object') return d;
+  if(!c||typeof c!=='object'){ d.jr1=1; return d; }
   ['works','apps','books','refs'].forEach(k=>{ if(Array.isArray(c[k])) d[k]=c[k].filter(x=>x&&typeof x==='object'); });
   if(c.taipingUrl) d.taipingUrl=String(c.taipingUrl);
   if(c.seogaUrl) d.seogaUrl=String(c.seogaUrl);
+  /* 정리(jeongri.html)가 생겼다(2026년 11월 19일) — 이미 도구 칸을 저장해 둔 설정에는 한 번만 더해 준다. 그 뒤에 빼면 다시 넣지 않는다 */
+  if(c.jr1) d.jr1=1;
+  else{ if(Array.isArray(c.apps)&&!d.apps.some(a=>/jeongri\.html/.test(a.url||''))){ const k=d.apps.findIndex(a=>/storyM\.html/.test(a.url||'')); d.apps.splice(k>=0?k+1:0,0,{name:'정리',url:'./jeongri.html'}); } d.jr1=1; try{ localStorage.setItem(KEY,JSON.stringify(d)); }catch(e){} }
   return d;
 }
 let cfg=loadCfg(), view='home', ideaDraft='', ideaStory='';
@@ -182,7 +185,7 @@ function winName(app){ let n=''; try{ n=localStorage.getItem('appwin.'+app)||'';
 function claimWin(){
   try{
     if(!window.name) window.name='writerKYS';
-    ['taiping','storyM'].forEach(a=>{ if(localStorage.getItem('appwin.'+a)===window.name) localStorage.removeItem('appwin.'+a); });
+    ['taiping','storyM','jeongri'].forEach(a=>{ if(localStorage.getItem('appwin.'+a)===window.name) localStorage.removeItem('appwin.'+a); });
     localStorage.setItem('appwin.writerKYS',window.name);
   }catch(e){}
 }
@@ -190,6 +193,7 @@ function targetFor(url,i){
   if(!/^(https?:|\.\/|\.\.\/|\/)/.test(url)) return '';                /* 데본씽크·씽즈·단축어 같은 주소 — 창을 만들지 않는다 */
   if(/taiping\.html/.test(url)) return winName('taiping');
   if(/storyM\.html/.test(url)) return winName('storyM');
+  if(/jeongri\.html/.test(url)) return winName('jeongri');
   if(/seoga\.html/.test(url)) return window.name==='wk_seoga'?'wk_seoga2':'wk_seoga';
   const n='wk_'+i; return n===window.name?n+'_2':n;
 }

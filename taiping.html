@@ -1134,7 +1134,7 @@ var REV_OPTS = [["개정", "개정 · 있던 글을 고침"], ["새 글", "새 �
 /* 스스로 써서 쌓는 글이 아닌 종류 — 원고 평균·예상·효율에서는 뺀다(하루 기록에는 넣는다) */
 var NOT_OWN = { "청탁":1, "개정":1 };
 /* 계산에 쓰는 종류 — 개정 작품의 새 글은 '새 글의 종류'(기본 산문)로 센다. 책 고치기는 원고가 아니다 */
-function effKind(m){ var w = workOf(m); if(!w) return ""; if(isRevMs(m)) return "개정"; return w.kind === "개정" ? "초고" : (w.kind || ""); }
+function effKind(m){ var w = workOf(m); if(!w) return ""; if(w.box) return "글상자"; if(isRevMs(m)) return "개정"; return w.kind === "개정" ? "초고" : (w.kind || ""); }   /* 글상자의 글은 초고에 섞지 않고 따로 센다 */
 /* 개정 작품의 원고 — '개정'(있던 글을 고침)과 '새 글'. 개정 원고와 합친 장 원고는 원고 계산(순증·나아감·도장·평균·예상)에서 빠지고 시간만 든다 */
 function isRevMs(m){ var w = m ? workOf(m) : null; return !!(w && w.kind === "개정" && (m.merged || m.rev === "개정")); }
 function revName(m){ return isRevMs(m) ? "개정" : "새 글"; }
@@ -1164,6 +1164,20 @@ function isNovel(w){ return !!w && (w.kind === "장편" || w.kind === "중편");
 /* 단편·산문 — 초고 완성 때 원고들을 하나로 합친다 */
 function mergesDraft(w){ return !!w && (w.kind === "단편" || w.kind === "산문"); }
 function isRevision(w){ return !!w && w.kind === "개정"; }
+/* ---------- 글상자 (2026년 11월 19일) — 초고·개정 옆의 세 번째 분류. 아직 어떤 글이 될지 알 수 없는 것들이 자라는 자리.
+   속으로는 종류가 초고인 작품 하나에 box 표시를 붙인 것이다. 종류 이름을 새로 만들지 않은 까닭: 예전 판(과 아이폰의 타이핑, writerKYS)은
+   모르는 종류를 초고로 바꿔 저장한다. 표시만 붙이면 그쪽은 그냥 초고 작품으로 읽고 표시는 건드리지 않는다.
+   쓰는 방식과 스크리브너로 넘기는 흐름은 초고와 같다. 다른 것: 하나뿐이고, 고치거나 완성하거나 지우지 않고, 인쇄는 지금 원고 하나만 찍는다.
+   정리(jeongri.html)의 카드에서 "타이핑에서 쓰기 시작"을 누르면 태그가 글상자인 카드의 원고가 여기에 생긴다 ---------- */
+var BOX_TITLE = "글상자";
+function isBox(w){ return !!(w && w.box); }
+function boxWork(make){
+  var w = S.works.filter(isBox)[0] || null;
+  if(!w && make){ w = newWork(BOX_TITLE, "초고", null); w.box = true; S.works.push(w); }
+  return w;
+}
+/* 작품을 고르는 목록에 보이는 이름 — "이름 · 종류". 글상자는 이름만 */
+function workLabel(w){ return isBox(w) ? (w.title || BOX_TITLE) : w.title + (w.kind ? " · " + w.kind : ""); }
 /* ---------- 개정 회차 — 프린트 한 번이 한 회차. 전체 쪽수·시작 쪽(이미 고쳐 둔 쪽수)·쪽수 기록·시작한 때·마친 때·시작할 때 분량.
    회차는 어떤 작품에든 붙는다(완성한 작품의 개정, 책을 타이핑으로 들여오는 '개정' 작품의 1차). 지금 회차는 마치지 않은 마지막 회차 ---------- */
 function revsOf(w){ return (w && w.revs) || []; }
@@ -1846,7 +1860,7 @@ function renderHead(){
     if(!workActive(w)) return;
     if(!unitsOf(w).length) return;
     var o = document.createElement("option");
-    o.value = w.id; o.textContent = w.title + (w.kind ? " · " + w.kind : "") + (workDone(w) && curRev(w) ? " · " + revLabel(curRev(w)) : "");
+    o.value = w.id; o.textContent = workLabel(w) + (workDone(w) && curRev(w) ? " · " + revLabel(curRev(w)) : "");
     if(cw && w.id === cw.id) o.selected = true;
     elMsSel.appendChild(o);
   });
@@ -2464,7 +2478,7 @@ function loadTteo(){
 }
 function tteoOf(w){ return (TTEO && w && TTEO.byWork[w.id]) || 0; }
 /* 떠들기 시간이 들어가는 장르 — 개정 작품은 새 글의 종류로 */
-function tteoKind(w){ return !w ? "" : w.kind === "개정" ? "초고" : (w.kind || ""); }
+function tteoKind(w){ return !w ? "" : w.box ? "글상자" : w.kind === "개정" ? "초고" : (w.kind || ""); }
 /* 떠들기까지 넣은 1매당 시간(분) — 떠들기 시간이 없으면 null */
 function withTteo(ms, extra, chars){ return extra > 0 && ms >= 0 && chars > 0 ? (ms + extra) / 60000 / (chars / 200) : null; }
 /* 같은 장르에서 완성한 원고들의 1매당 시간에, 그 원고들의 작품에 이어 둔 떠들기 시간을 더해서 */
@@ -2869,7 +2883,7 @@ var worksSent = "";
 function worksObj(){
   return S.works.filter(workActive).map(function(w){
     var rv = curRev(w);
-    return { id:w.id, title:w.title, kind:w.kind || "", target_mae:w.targetMae || null, due:w.due || "",
+    return { id:w.id, title:w.title, kind:w.kind || "", box:w.box ? 1 : null, target_mae:w.targetMae || null, due:w.due || "",
              act_mae:w.actMae || null, acts:[], open_act: hasChapters(w) ? 1 : null,
              /* 개정 회차 — 지금 회차의 번호·전체 쪽수·시작 쪽·지금 쪽. 회차가 없으면 모두 null */
              rev_no: rv ? rv.no : null, pages_total: rv ? (rv.total || null) : null, pages_from: rv ? (rv.from || 0) : null,
@@ -2951,6 +2965,7 @@ function pullStrangers(ids){
 function adoptRow(x, works){
   var cw = works.filter(function(w){ return w.id === x.work_id; })[0] || null;
   var w = x.work_id ? workById(x.work_id) : null;
+  if(!w && cw && cw.box) w = boxWork(true);   /* 다른 저장소의 글상자에 든 원고는 이 저장소의 글상자로 */
   if(!w && x.work_title){ var ws = S.works.filter(function(y){ return String(y.title || "").trim() === String(x.work_title).trim(); }); w = ws.filter(workActive)[0] || ws[0] || null; }
   if(!w){
     if(!x.work_title) return false;
@@ -3449,14 +3464,21 @@ function phoneCopy(m){
 /* 카드 링크(옛 이름 줄거리 링크, 칸 이름은 storyLink 그대로) — storyM 카드 주소(storyM.html#소설=…&카드=…). 원고 탭의 '카드'로 연다. 400자 탭의 '카드 찾기 ↗'는 아래 storyFindUrl.
    맥의 저장소에만 두고 수파베이스에는 올리지 않는다(아이폰에는 필요 없다) */
 var STORYM_URL = "https://writerkys-cell.github.io/apps/storyM.html";
+/* 정리(jeongri.html, 2026년 11월 19일) — 수첩에 적은 생각을 카드로 정리하는 앱. 그 카드에서 시작한 원고의 카드 링크는 정리의 카드 주소다.
+   정리의 원고(카드 링크가 정리의 것이거나, 카드 링크 없이 글상자에 든 원고)는 "카드 ↗"·"카드 찾기 ↗"·"아이디어 보내기"가 storyM이 아니라 정리로 간다 */
+var JEONGRI_URL = "https://writerkys-cell.github.io/apps/jeongri.html";
+function isJrLink(l){ return /jeongri\.html/i.test(String(l || "")); }
+function jrMs(m){ return !!m && (m.storyLink ? isJrLink(m.storyLink) : isBox(workOf(m))); }
 /* 원고의 줄거리 주소. 링크가 있으면 그것(장면·카드까지), 없으면 작품 이름으로 storyM의 그 소설을 연다(storyM이 #소설제목= 을 읽음) */
 function storyLinkOf(m){
   if(m && m.storyLink) return m.storyLink;
+  if(jrMs(m)) return JEONGRI_URL;
   var w = workOf(m), t = w && w.title ? String(w.title).trim() : "";
   return t ? STORYM_URL + "#소설제목=" + encodeURIComponent(t) : STORYM_URL;
 }
 /* 카드 찾기 — storyM의 그 소설(작품 이름이 같은 것)에서 q가 든 카드를 찾는 주소. storyM이 #소설제목=…&찾기=… 를 읽는다 */
 function storyFindUrl(m, q){
+  if(jrMs(m)) return JEONGRI_URL + "#찾기=" + encodeURIComponent(q || "");
   var w = workOf(m), t = w && w.title ? String(w.title).trim() : "";
   return STORYM_URL + "#" + (t ? "소설제목=" + encodeURIComponent(t) + "&" : "") + "찾기=" + encodeURIComponent(q || "");
 }
@@ -3494,24 +3516,34 @@ function manualChanged(m){
 function sendIdea(m, el){
   if(!m){ toast("원고를 먼저 고르세요"); return; }
   smCache.at = 0;
-  var ss = storyMStories();
-  if(!ss.length){ toast("이 브라우저에 storyM의 소설이 없습니다 — storyM을 한 번 열어 주세요", 4500); return; }
-  var s = storyForMs(m);
-  if(!s){
-    var pick = prompt("어느 소설의 아이디어로 보낼까요? 번호를 적으세요.\n(원고에 카드 링크가 있거나 작품 이름이 소설 제목과 같으면 묻지 않습니다)\n\n" + ss.map(function(x, i){ return (i + 1) + ". " + (x.title || "제목 없음"); }).join("\n"), "1");
-    if(pick === null) return;
-    s = ss[parseInt(pick, 10) - 1]; if(!s){ toast("그런 번호의 소설이 없습니다"); return; }
+  /* 가는 곳 — 정리의 원고면 정리, 카드 링크나 작품 이름이 storyM의 소설이면 storyM, 어느 쪽도 아니면 고른다(맨 위가 정리) */
+  var ss = storyMStories(), s = null, toJr = jrMs(m);
+  if(!toJr){
+    s = storyForMs(m);
+    if(!s){
+      if(!ss.length) toJr = true;
+      else{
+        var pick = prompt("어디로 보낼까요? 번호를 적으세요.\n(원고에 카드 링크가 있거나 작품 이름이 소설 제목과 같으면 묻지 않습니다)\n\n0. 정리 — 어느 작품에도 묶지 않고 적어 두기\n" + ss.map(function(x, i){ return (i + 1) + ". storyM · " + (x.title || "제목 없음"); }).join("\n"), "0");
+        if(pick === null) return;
+        if(String(pick).trim() === "0") toJr = true;
+        else{ s = ss[parseInt(pick, 10) - 1]; if(!s){ toast("그런 번호가 없습니다"); return; } }
+      }
+    }
   }
   var sel = "";
   try{ sel = el.value.slice(el.selectionStart, el.selectionEnd).trim().replace(/\s+/g, " ").slice(0, 200); }catch(e){}
-  var v = prompt("storyM '" + (s.title || "제목 없음") + "'의 아이디어로 보냅니다.\n떠오른 것, 앞뒤가 안 맞는 곳을 한 줄로 적으세요.", sel);
+  var where = toJr ? "정리" : "storyM '" + (s.title || "제목 없음") + "'";
+  var v = prompt(where + "의 아이디어로 보냅니다.\n떠오른 것, 앞뒤가 안 맞는 곳을 한 줄로 적으세요.", sel);
   if(v === null) return;
   v = v.trim(); if(!v) return;
-  var arr = [];
-  try{ arr = JSON.parse(localStorage.getItem("storyM.ideas.in")) || []; }catch(e){}
+  /* 받은편지함 — 정리는 jeongri.in, storyM은 storyM.ideas.in. 그 앱이 가져가 아이디어로 만든다 */
+  var key = toJr ? "jeongri.in" : "storyM.ideas.in", arr = [];
+  try{ arr = JSON.parse(localStorage.getItem(key)) || []; }catch(e){}
   if(!Array.isArray(arr)) arr = [];
-  arr.push({ id:"tp" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), story_id:s.id, text:v, ms_link:msAddr(m), ms_title:String(m.title || ""), created_at:Date.now() });
-  try{ localStorage.setItem("storyM.ideas.in", JSON.stringify(arr)); toast("storyM '" + (s.title || "제목 없음") + "'의 아이디어로 보냈습니다", 3000); }
+  var it = { id:"tp" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text:v, ms_link:msAddr(m), ms_title:String(m.title || ""), created_at:Date.now() };
+  if(!toJr) it.story_id = s.id;
+  arr.push(it);
+  try{ localStorage.setItem(key, JSON.stringify(arr)); toast(where + "의 아이디어로 보냈습니다", 3000); }
   catch(e){ toast("보내지 못했습니다"); }
 }
 /* 원고 주소 — storyM 집필 카드의 '타이핑 원고' 칸에 붙이는 주소(…taiping.html#원고=<id>).
@@ -3522,7 +3554,7 @@ function putStoryLink(m){
   var v = prompt("storyM 카드 주소를 붙여넣으세요.\n(storyM에서 카드를 열고 '주소 복사'를 누르면 됩니다. 비우면 링크를 지웁니다)", m.storyLink || "");
   if(v === null) return;
   v = v.trim();
-  if(v && !/storyM\.html#/i.test(v) && !confirm("storyM 카드 주소처럼 보이지 않습니다(storyM.html# 이 없음). 그래도 저장할까요?")) return;
+  if(v && !/(storyM|jeongri)\.html#/i.test(v) && !confirm("storyM 카드 주소처럼 보이지 않습니다(storyM.html# 이 없음). 그래도 저장할까요?")) return;
   m.storyLink = v; save(); renderList();
   if(typeof tpRenderStrip === "function" && tpOn()) tpRenderStrip();
   toast(v ? "카드 링크를 넣었습니다" : "카드 링크를 지웠습니다");
@@ -3986,7 +4018,8 @@ function finishMs(m){
 /* 새 원고 — 어느 작품의 다음 조각인지 고르거나, 새 작품을 만든다 */
 function newMsFlow(after){
   var open = S.works.filter(function(w){ return !workDone(w); });
-  var opts = open.map(function(w){ return [w.id, w.title + (w.kind ? " · " + w.kind : "")]; });
+  var opts = open.map(function(w){ return [w.id, workLabel(w)]; });
+  if(!boxWork()) opts.push(["__box", BOX_TITLE]);
   opts.push(["__new", "새 작품 만들기"]);
   var curW = workOf(cur());
   dialog("새 원고", [
@@ -4017,7 +4050,7 @@ function newMsFlow(after){
         toast("'" + w.title + "'을 원고 없이 만들었습니다 · 쪽수 적기, 또는 '새 장'으로 원고를 시작합니다");
         return;
       }
-    }else w = workById(v.work);
+    }else w = v.work === "__box" ? boxWork(true) : workById(v.work);
     if(w.kind === "청탁" && unitsOf(w).length){ toast("청탁은 원고 하나로 씁니다"); return false; }
     if(draftMerged(w)){ toast("초고를 완성해 원고를 합친 작품입니다. 합친 원고를 다듬어 주세요"); return false; }
     if(hasChapters(w) && !openChapters(w).length){ toast("쓰고 있는 장이 없습니다. 원고 탭에서 '새 장'을 만들어 주세요"); return false; }
@@ -4029,6 +4062,7 @@ function newMsFlow(after){
   });
 }
 function editWork(w){
+  if(isBox(w)){ toast("글상자는 이름과 종류를 고치지 않습니다"); return; }
   var shown0 = plannedUnits(w) || "";
   dialog("작품", [
     { id:"title", label:"이름", type:"text", value:w.title },
@@ -4079,7 +4113,8 @@ function editWork(w){
 }
 function moveUnit(m){
   var opts = S.works.filter(function(w){ return !workDone(w) && w.id !== m.workId; })
-    .map(function(w){ return [w.id, w.title + (w.kind ? " · " + w.kind : "")]; });
+    .map(function(w){ return [w.id, workLabel(w)]; });
+  if(!boxWork()) opts.push(["__box", BOX_TITLE]);
   opts.push(["__new", "새 작품 만들기"]);
   dialog("'" + m.title + "'을 다른 작품으로 옮기기", [
     { id:"work", label:"작품", type:"select", options:opts },
@@ -4095,7 +4130,7 @@ function moveUnit(m){
       if(hasChapters(w)){ c = newChapter(v.chName.trim()); c.order = 1; w.chapters.push(c); }
       S.works.push(w);
     }else{
-      w = workById(v.work);
+      w = v.work === "__box" ? boxWork(true) : workById(v.work);
       if(draftMerged(w)){ toast("그 작품은 초고를 완성해 원고를 합쳤습니다"); return false; }
       if(hasChapters(w)){ c = defaultChapter(w); if(!c){ toast("그 작품에 쓰고 있는 장이 없습니다. 원고 탭에서 '새 장'을 먼저 만들어 주세요"); return false; } }
     }
@@ -4107,7 +4142,7 @@ function moveUnit(m){
     if(isRevision(w)){ if(m.rev !== "개정") m.rev = "새 글"; } else delete m.rev;
     m.dirty = true; cloudPush(m);
     /* 마지막 원고가 빠져나간 작품은 저절로 지운다 */
-    if(fromW && !workDone(fromW) && !allOf(fromW).length){
+    if(fromW && !isBox(fromW) && !workDone(fromW) && !allOf(fromW).length){
       S.works = S.works.filter(function(x){ return x.id !== fromW.id; });
       toast("'" + fromW.title + "'에 원고가 없어 작품을 지웠습니다");
     }
@@ -4123,6 +4158,7 @@ function shiftUnit(m, dir){
 }
 /* 작품 완성 — 퇴고를 마치고 출판사에 보내는 날. 컴파일 글자 수를 받고, 본문은 파일로 내려받은 뒤 비운다 */
 function finishWork(w){
+  if(isBox(w)){ toast("글상자는 완성하는 작품이 아닙니다"); return; }
   var us = unitsOf(w), all = allOf(w);
   if(S.typ && all.some(function(m){ return m.id === S.typ.id; })){ toast("이 작품의 타이핑을 마친 뒤에 완성할 수 있습니다"); return; }
   if(S.sess && all.some(function(m){ return m.id === S.sess.id; })){ toast("이 작품의 몰입이 끝난 뒤에 완성할 수 있습니다"); return; }
@@ -4155,6 +4191,7 @@ function deleteUnit(m){
   save(); renderHead(); renderWrite(); renderList();
 }
 function deleteWork(w){
+  if(isBox(w)){ toast("글상자는 지우지 않습니다"); return; }
   var us = unitsOf(w);
   if(S.typ && us.some(function(m){ return m.id === S.typ.id; })){ toast("이 작품의 타이핑을 마친 뒤에 지울 수 있습니다"); return; }
   if(S.sess && us.some(function(m){ return m.id === S.sess.id; })){ toast("이 작품의 몰입이 끝난 뒤에 지울 수 있습니다"); return; }
@@ -4644,7 +4681,7 @@ function renderList(){
       }
       top.appendChild(wr);
       /* 줄거리 — storyM 장면으로. 막혔을 때 가는 길 */
-      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "storyM"; sl.dataset.win = "storyM"; sl.textContent = "카드"; sl.title = m.storyLink ? "storyM에서 이 원고에 건 카드 열기" : "storyM에서 이 작품의 카드 열기"; top.appendChild(sl);
+      var sl = document.createElement("a"); sl.className = "wr"; sl.href = storyLinkOf(m); sl.target = "storyM"; sl.dataset.win = jrMs(m) ? "jeongri" : "storyM"; sl.textContent = "카드"; sl.title = m.storyLink ? "storyM에서 이 원고에 건 카드 열기" : "storyM에서 이 작품의 카드 열기"; top.appendChild(sl);
     }
     var gap = document.createElement("span"); gap.className = "gap"; top.appendChild(gap);
     if(m.doneAt && !isRevMs(m)){ var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "한 편"; top.appendChild(bd); }
@@ -4770,14 +4807,15 @@ function renderList(){
     head.appendChild(foldMark(fw));
     foldable(head, fw, function(){ S.fold.w[w.id] = !fw; save(); renderList(); }, "작품");
     var t = document.createElement("span"); t.className = "wk-t"; t.textContent = w.title; head.appendChild(t);
-    if(w.kind){ var k = document.createElement("span"); k.className = "wk-k"; k.textContent = w.kind; head.appendChild(k); }
+    if(isBox(w)){ var kb = document.createElement("span"); kb.className = "wk-k"; kb.textContent = "어느 작품에도 속하지 않는 글"; head.appendChild(kb); }
+    else if(w.kind){ var k = document.createElement("span"); k.className = "wk-k"; k.textContent = w.kind; head.appendChild(k); }
     if(dn){ var f = document.createElement("span"); f.className = "badge fin"; f.textContent = "완성"; head.appendChild(f); }
     sec.appendChild(head);
 
     var chars = dn && w.finalChars != null ? w.finalChars : workChars(w);
     var fin = cntPieces(w).filter(finished).length;
     var planned = plannedUnits(w);
-    var mt = [(isRevision(w) ? "새 글 원고 " : "") + fin + " / " + planned + " 완성"];
+    var mt = [isBox(w) ? "원고 " + us.length + "개" : (isRevision(w) ? "새 글 원고 " : "") + fin + " / " + planned + " 완성"];
     if(isRevision(w)){ var rps = piecesOf(w).filter(isRevMs); if(rps.length) mt.push("개정 원고 " + rps.filter(finished).length + " / " + rps.length + " 완성"); }
     if(hasChapters(w) && chaptersOf(w).length) mt.push("장 " + chaptersOf(w).length + "개 · " + chaptersOf(w).filter(chDone).length + "개 완성");
     mt.push((isRevision(w) && !dn ? "새 글 " : "") + mae(chars) + (w.targetMae ? " / " + w.targetMae + "매 (" + Math.round(chars / (w.targetMae*200) * 100) + "%)" : "매")
@@ -4808,7 +4846,7 @@ function renderList(){
 
     var act = actBar(sec);
     if(!dn){
-      act("작품 고치기", function(){ editWork(w); });
+      if(!isBox(w)) act("작품 고치기", function(){ editWork(w); });
       if(hasChapters(w)){ act("새 장", function(){ newChapterFlow(w); }); act("새 부", function(){ newPartFlow(w); }); }
       else if(w.kind !== "청탁" && !draftMerged(w)) act("다음 원고", function(){
         var m = nextUnit(w); clockIn(); S.current = m.id; S.sel = null;
@@ -4820,8 +4858,10 @@ function renderList(){
         if(w.draftAt) act("초고 완성 취소", function(){ unfinishDraft(w); });
         else act("초고 완성", function(){ finishDraft(w); });
       }
-      act("작품 완성", function(){ finishWork(w); });
-      act("작품 지우기", function(){ deleteWork(w); });
+      if(!isBox(w)){   /* 글상자는 완성하거나 지우는 작품이 아니다 */
+        act("작품 완성", function(){ finishWork(w); });
+        act("작품 지우기", function(){ deleteWork(w); });
+      }
     }else{
       /* 완성한 작품의 개정 — 프린트해서 고치는 회차 */
       if(curRev(w)){ act("쪽수 적기", function(){ putPages(w); }); act(revLabel(curRev(w)) + " 마침", function(){ finishRev(w); }); }
@@ -5402,6 +5442,7 @@ function renderAnaRecs(){
 
   /* 작품별 */
   var list = S.works.filter(function(w){
+    if(isBox(w)) return false;   /* 글상자는 작품이 아니다 */
     if(S.anaFilter === "done") return workDone(w);
     return allOf(w).some(function(m){ return m.text.trim() || m.finishedAt || m.cleared || m.folded; });
   }).sort(function(x, y){ return (y.finishedAt || workStages(y).start) - (x.finishedAt || workStages(x).start); });
@@ -6121,7 +6162,7 @@ document.addEventListener("keydown", function(e){
 
 elSend.addEventListener("click", send);
 elUndo.addEventListener("click", function(){ swapBack(); elInput.focus(); });
-elPrint.addEventListener("click", function(){ printWork(workOf(cur())); });
+elPrint.addEventListener("click", function(){ var w = workOf(cur()); if(isBox(w)) printMs(cur()); else printWork(w); });   /* 글상자는 지금 원고 하나만 찍는다 */
 $("#prScope").addEventListener("change", function(){
   var w = workOf(cur()); if(!w) return;
   S.prScope[w.id] = this.value; save();
@@ -6535,10 +6576,18 @@ function tpHashId(){ return hashParams()["원고"] || null; }
 function tpHashNew(q, loud){
   var name = String(q["새원고"] || "").replace(/\s+/g, " ").trim(), wt = String(q["작품"] || "").trim();
   if(!name) return true;
-  var link = q["소설"] && q["카드"] ? STORYM_URL + "#소설=" + encodeURIComponent(q["소설"]) + "&카드=" + encodeURIComponent(q["카드"]) : "";
-  var ws = S.works.filter(function(w){ return String(w.title || "").trim() === wt; });
-  var w = ws.filter(workActive)[0] || ws[0];
+  /* 정리에서 왔으면(정리카드) 카드 링크는 정리의 카드 주소. 글상자로 오면 작품 이름 대신 글상자에 넣는다(없으면 묻지 않고 만든다)
+     정리의 주소: #글상자=1&새원고=<제목>&정리카드=<카드 id>  ·  #작품=<작품 이름>&작품id=<작품 id>&새원고=<제목>&정리카드=<카드 id> */
+  var jrCard = q["정리카드"] || "", toBox = !!q["글상자"], fromApp = jrCard ? "정리" : "storyM";
+  var link = jrCard ? JEONGRI_URL + "#카드=" + encodeURIComponent(jrCard)
+           : (q["소설"] && q["카드"] ? STORYM_URL + "#소설=" + encodeURIComponent(q["소설"]) + "&카드=" + encodeURIComponent(q["카드"]) : "");
+  var ws = S.works.filter(function(w){ return !isBox(w) && String(w.title || "").trim() === wt; });
+  var w = toBox ? boxWork(false) : ((q["작품id"] && workById(q["작품id"])) || ws.filter(workActive)[0] || ws[0]);
   var madeW = false;
+  if(!w && toBox){
+    if(!loud) return false;   /* 수파베이스에서 받은 뒤에 한 번 더 본다 */
+    w = boxWork(true); madeW = true;
+  }
   if(!w){
     if(!loud) return false;   /* 수파베이스에서 받은 뒤에 한 번 더 본다 */
     if(!wt || !confirm("타이핑에 '" + wt + "' 작품이 없습니다.\n\n'" + wt + "' 초고 작품을 새로 만들고 '" + name + "' 원고를 넣을까요?")){
@@ -6551,8 +6600,13 @@ function tpHashNew(q, loud){
     /* 주소를 그 원고의 주소로 바꿔 둔다 — 새로 고쳐도 다시 묻지 않게 */
     try{ history.replaceState(null, "", location.href.replace(/#.*$/, "") + "#원고=" + encodeURIComponent(m.id)); }catch(e){}
     tpOpen(m.id);
-    if(made) toast("'" + m.title + "' 원고를 만들었습니다 · storyM의 카드와 이름으로 이어집니다", 4000);
+    if(made) toast("'" + m.title + "' 원고를 만들었습니다 · " + fromApp + "의 카드와 이어집니다", 4000);
   };
+  /* 정리의 그 카드에 이미 이어진 원고가 있으면(카드 제목을 바꿨어도) 그것을 연다 */
+  if(jrCard){
+    var lk = S.mss.filter(function(m){ return !m.folded && isJrLink(m.storyLink) && linkPart(m.storyLink, "카드") === jrCard; })[0];
+    if(lk){ done(lk, false); return true; }
+  }
   var ex = S.mss.filter(function(m){ return m.workId === w.id && !m.folded && String(m.title || "").replace(/\s+/g, " ").trim() === name; })[0];
   if(ex){ done(ex, false); return true; }
   if(!loud) return false;   /* 수파베이스에서 받은 뒤에 한 번 더 보고, 그때도 없으면 만든다 */
@@ -6565,7 +6619,7 @@ function tpHashNew(q, loud){
     c = defaultChapter(w, c);
     if(!c){ toast("'" + w.title + "'에 열린 장이 없습니다 — 원고 탭에서 장을 먼저 만드세요", 5000); return true; }
   }
-  if(!madeW && !confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\nstoryM의 카드와 이름이 같아 저절로 이어집니다. 만들까요?")){
+  if(!madeW && !confirm("'" + w.title + "'" + (c ? "의 '" + c.name + "'" : "") + "에 '" + name + "' 원고를 새로 만듭니다.\n\n" + fromApp + "의 카드와 이어집니다. 만들까요?")){
     try{ history.replaceState(null, "", location.href.replace(/#.*$/, "")); }catch(e){}
     return true;
   }
@@ -6674,9 +6728,10 @@ function tpLeftText(){ var u = tpUnit(); if(u.fix) return u.fixText || ""; var x
 
 function tpRenderStrip(){
   var m = tpMs(), u = tpUnit(m), v = u.versions, g = tpGoal(u);
-  var sc = document.getElementById("tpCard"); if(sc){ sc.hidden = !m.storyLink; sc.href = m.storyLink || "#"; }
+  var jr = jrMs(m);
+  var sc = document.getElementById("tpCard"); if(sc){ sc.hidden = !m.storyLink; sc.href = m.storyLink || "#"; sc.setAttribute("data-win", jr ? "jeongri" : "storyM"); sc.title = jr ? "정리에서 이 원고에 이어진 카드를 바로 엽니다" : "storyM에서 이 원고에 이어진 집필 카드를 바로 엽니다"; }
   var mc = document.getElementById("tpManual"); if(mc){ mc.hidden = !manualChanged(m); mc.href = m.storyLink || "#"; }
-  var sl = document.getElementById("tpStory"); if(sl){ sl.hidden = false; sl.href = storyLinkOf(m); sl.title = "storyM에서 카드 찾기 — 막혔을 때. 입력창에서 글자를 골라 놓고 누르면 그 말로 찾고, 고른 것이 없으면 찾을 말을 묻습니다"; }
+  var sl = document.getElementById("tpStory"); if(sl){ sl.setAttribute("data-win", jr ? "jeongri" : "storyM"); sl.hidden = false; sl.href = storyLinkOf(m); sl.title = "storyM에서 카드 찾기 — 막혔을 때. 입력창에서 글자를 골라 놓고 누르면 그 말로 찾고, 고른 것이 없으면 찾을 말을 묻습니다"; }
   var old = tpEl.strip.querySelector(".mark, .fixn");
   while(old){ tpEl.strip.removeChild(old); old = tpEl.strip.querySelector(".mark, .fixn"); }
   tpEl.nums.innerHTML = ""; tpEl.when.textContent = "";
