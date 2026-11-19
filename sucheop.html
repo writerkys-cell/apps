@@ -74,7 +74,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2400);}
 function autogrow(ta){ta.style.height='auto';ta.style.height=(ta.scrollHeight+2)+'px';}
 
-/* S.queue: 아직 올리지 못한 것 [{op:'add',row} | {op:'patch',id,fields}]. S.recent: 최근 적은 것(읽어 온 것) */
+/* S.queue: 아직 올리지 못한 것 [{op:'add',row} | {op:'patch',id,fields}]. S.recent: 아직 정리하지 않은 것(읽어 온 것)
+   목록에는 맥의 정리에서 아직 처리하지 않은 메모(state 'new')만 보인다. 카드가 됐거나 storyM으로 보낸 것은 바로 사라진다(2026년 11월 19일, 작가가 정함). 표에는 그대로 남는다 */
 let S=(()=>{try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&typeof d==='object')return Object.assign({queue:[],recent:[],noTable:false},d);}catch(e){}return{queue:[],recent:[],noTable:false};})();
 const persist=()=>{try{localStorage.setItem(STORE_KEY,JSON.stringify(S));}catch(e){}};
 let sess=(()=>{try{return JSON.parse(localStorage.getItem(SESS_KEY))||null;}catch(e){return null;}})();
@@ -107,7 +108,7 @@ async function rest(path,opt={}){const tok=await token();if(!tok)throw new Error
 /* ---------- 최근 적은 것 · 올리기 ---------- */
 async function loadRecent(){
   if(!sess)return;
-  try{const rows=await rest(`/${TABLE}?select=id,text,state,origin,meta,created_at,updated_at&deleted=eq.false&order=created_at.desc&limit=20`);
+  try{const rows=await rest(`/${TABLE}?select=id,text,state,origin,meta,created_at,updated_at&deleted=eq.false&state=eq.new&order=created_at.desc&limit=50`);
     S.recent=rows||[];S.noTable=false;ui.net='ok';persist();paintList();paintHead();}
   catch(e){if(e.noTable){S.noTable=true;persist();paintList();}else ui.net=navigator.onLine===false?'off':'err';paintHead();}
 }
@@ -166,13 +167,13 @@ function paintList(){
   const box=document.getElementById('list');if(!box)return;
   const patch={};S.queue.forEach(q=>{if(q.op==='patch')patch[q.id]=Object.assign(patch[q.id]||{},q.fields);});
   const waits=S.queue.filter(q=>q.op==='add'&&!q.row.deleted).map(q=>Object.assign({},q.row,{_wait:true})).reverse();
-  const got=(S.recent||[]).filter(r=>!waits.some(w=>w.id===r.id)).map(r=>Object.assign({},r,patch[r.id]||{})).filter(r=>!r.deleted);
+  const got=(S.recent||[]).filter(r=>!waits.some(w=>w.id===r.id)).map(r=>Object.assign({},r,patch[r.id]||{})).filter(r=>!r.deleted&&r.state==='new');
   const rows=waits.concat(got);
   const one=r=>{const edit=ui.edit===r.id;const can=r.state==='new';const to=(r.meta||{}).to;
     return `<div class="item ${r._wait?'wait':''} ${can?'':'done'}">${edit?`<textarea id="ed-${r.id}">${esc(r.text)}</textarea>`:`<div class="t">${esc(r.text)}</div>`}
       <div class="m"><span>${whenTxt(r.created_at)}</span>${r._wait?'<span>아직 올리지 못함</span>':''}${can?'':`<span>${to==='storyM'?'storyM으로 보냄':to==='merged'?'다른 메모와 합침':'카드가 됨'}</span>`}${r.origin&&r.origin!=='phone'?`<span>${r.origin==='taiping'?'타이핑에서':'맥에서'}</span>`:''}<span class="sp"></span>
         ${edit?`<button class="small" data-act="edSave" data-id="${r.id}">고친 것 저장</button><button class="small" data-act="edCancel">그만</button>`:can?`<button class="small" data-act="ed" data-id="${r.id}">고치기</button><button class="small danger" data-act="del" data-id="${r.id}">지우기</button>`:''}</div></div>`;};
-  box.innerHTML=`<div class="sec">최근 적은 것</div>${rows.map(one).join('')||'<div class="muted smalltxt" style="padding:4px 2px">아직 적은 것이 없습니다.</div>'}`;
+  box.innerHTML=`<div class="sec">아직 정리하지 않은 것${rows.length?' '+rows.length:''}</div>${rows.map(one).join('')||'<div class="muted smalltxt" style="padding:4px 2px">정리하지 않은 메모가 없습니다.</div>'}`;
   const ed=ui.edit&&document.getElementById('ed-'+ui.edit);if(ed){autogrow(ed);ed.focus();}
 }
 /* 고치기·지우기 — 아직 올리지 못한 것은 이 기기에서 바로, 올린 것은 "새것"일 때만 */
