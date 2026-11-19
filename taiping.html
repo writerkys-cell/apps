@@ -2664,6 +2664,8 @@ function commit(m, text, label, how){
   /* 본문을 비운 원고에 다시 글이 들어오면 — 비우기 직전 분량에서 잰다(순증이 부풀지 않게) */
   var wasCleared = !!m.cleared;
   if(m.cleared){ before = m.cleared.chars; m.cleared = null; }
+  /* 정리의 카드에서 넣어 둔 첫 글(seedChars)을 처음 고칠 때 — 그 글은 쓴 것으로 세지 않았으므로 0자에서 잰다. 한 번만 */
+  if(m.seedChars != null){ if(before === m.seedChars) before = 0; delete m.seedChars; }
   /* 되돌리기 사본은 한 원고에만 — 앞서 바뀐 다른 원고의 사본은 버린다 */
   var prev = S.lastEditId !== m.id ? msById(S.lastEditId) : null;
   if(prev){ prev.undo = null; prev.redo = null; }
@@ -3469,6 +3471,14 @@ var STORYM_URL = "https://writerkys-cell.github.io/apps/storyM.html";
 var JEONGRI_URL = "https://writerkys-cell.github.io/apps/jeongri.html";
 function isJrLink(l){ return /jeongri\.html/i.test(String(l || "")); }
 function jrMs(m){ return !!m && (m.storyLink ? isJrLink(m.storyLink) : isBox(workOf(m))); }
+/* 정리의 카드에 적힌 글 — 정리의 저장소(jeongri.v1)를 읽기만 한다. 그 카드에서 원고를 처음 만들 때 첫 글로 넣는다(tpHashNew) */
+function jrCardText(id){
+  try{
+    var d = JSON.parse(localStorage.getItem("jeongri.v1"));
+    var c = d && Array.isArray(d.cards) ? d.cards.filter(function(x){ return x && x.id === id; })[0] : null;
+    return c ? String(c.text || "").replace(/\r/g, "").trim() : "";
+  }catch(e){ return ""; }
+}
 /* 원고의 줄거리 주소. 링크가 있으면 그것(장면·카드까지), 없으면 작품 이름으로 storyM의 그 소설을 연다(storyM이 #소설제목= 을 읽음) */
 function storyLinkOf(m){
   if(m && m.storyLink) return m.storyLink;
@@ -6626,6 +6636,10 @@ function tpHashNew(q, loud){
   var m = nextUnit(w, c);
   if(!m){ toast("원고를 만들지 못했습니다"); return true; }
   m.title = name; m.dirty = true;
+  /* 정리의 카드에서 만든 원고는 카드의 글을 첫 글로 넣는다(2026년 11월 19일, 작가가 정함) — 400자 탭 왼쪽에 그 글이 첫 판본으로 보이고,
+     오른쪽에서 원고로 다시 써서 보내면 그 글로 바뀐다(카드의 글은 판본 목록에 남는다). 오늘 쓴 글이 아니므로 순증·나아감에 세지 않고,
+     넣은 글자 수를 seedChars에 적어 두어 처음 고칠 때 쓴 글 전체가 세어지게 한다(commit) */
+  if(jrCard){ var seed = jrCardText(jrCard); if(seed){ m.text = seed; m.editedAt = Date.now(); m.seedChars = len(seed); } }
   if(link) m.storyLink = link;
   clockIn(); S.current = m.id; S.sel = null;
   save(); renderHead(); renderWrite(); renderList();
