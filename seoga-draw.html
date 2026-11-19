@@ -59,12 +59,14 @@ input:focus{outline:none;border-bottom-color:var(--seal)}
 /* 밑줄 뽑기 — 서가(seoga.html)의 아이폰 클라이언트(2026년 11월 19일).
    서가에 저장된 밑줄에서 하나를 무작위로 뽑아 크게 보여 준다. 글쓰기를 시작할 때의 자극이다. 기본은 밑줄, 고르면 코멘트.
    읽기만 한다. 서가의 표에 아무것도 쓰지 않고, 뽑은 것도 저장하지 않는다.
+   2026년 11월 20일부터 "수첩에 적기" — 뽑힌 글을 수첩(sucheop.html)의 입력창에 넣은 채로 연다(toNote). 글로 쓰고 싶은 밑줄에 생각을 덧붙여 정리로 보내는 길이다. 여기서는 주소만 만들고 아무 데도 쓰지 않는다.
      · 밑줄: seoga_reads에서 『밑줄들』(bookId 'underlines')의 kind:'mark' 줄과, 책에 적으며 밑줄로 고른 줄(quote:true, kind 'mark'|'scan') — 서가 한눈에 탭의 밑줄 뽑기(drawPool)와 같다.
      · 코멘트: 책에 적은 코멘트(kind 'mark'|'scan', quote가 아니고 『밑줄들』이 아닌 것).
      · gone인 줄과 글이 없는 줄은 뺀다. 책 제목·지은이는 seoga_books에서 붙인다(처분한 책도 남아 있다).
    서가에서 밑줄·코멘트의 모양(kind, quote, bookId, text, page, date, gone)을 바꾸면 이 파일의 build()도 고친다.
    연결 정보는 서가와 같은 localStorage 'seoga.sb'({url,key}). 받아온 것은 'seoga.draw.cache'에 두어 끊겨 있어도 뽑힌다. */
 const SBKEY='seoga.sb', CACHEKEY='seoga.draw.cache', MODEKEY='seoga.draw.mode', JAR='underlines';
+const NOTE_URL='./sucheop.html', CURKEY='seoga.draw.cur';   /* 수첩(같은 폴더), 수첩에 다녀오는 동안 뽑혀 있던 것을 기억하는 자리(이 창에서만) */
 const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
 const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
 let cfg=lsGet(SBKEY,{}), C=lsGet(CACHEKEY,{quote:[],comment:[],at:''});
@@ -106,6 +108,15 @@ function draw(){
   cur=rest[Math.floor(Math.random()*rest.length)]; render(); window.scrollTo(0,0);
 }
 function setMode(m){ if(mode===m) return; mode=m; cur=null; draw(); }
+/* 수첩에 적기 — 뽑힌 글과 출처(『제목』, 지은이, 쪽)를 수첩의 입력창에 넣은 채로 같은 창에서 연다. 수첩이 주소의 #적기= 를 읽는다.
+   돌아왔을 때 같은 글이 보이도록 뽑혀 있던 것을 이 창의 sessionStorage에 적어 둔다 */
+function noteText(x){ const src=[x.title?'『'+x.title+'』':'',x.author,x.page?x.page+'쪽':''].filter(Boolean).join(', '); return x.t+(src?'\n'+src:'')+'\n\n'; }
+function toNote(){ if(!cur) return;
+  try{ sessionStorage.setItem(CURKEY,JSON.stringify({mode,id:cur.id})); }catch(e){}
+  location.href=NOTE_URL+'#적기='+encodeURIComponent(noteText(cur))+'&돌아갈곳=seoga-draw.html'; }
+function restoreCur(){ let k=null; try{ k=JSON.parse(sessionStorage.getItem(CURKEY)); sessionStorage.removeItem(CURKEY); }catch(e){}
+  if(!k||!(k.mode==='quote'||k.mode==='comment')) return false;
+  const x=(C[k.mode]||[]).find(y=>y.id===k.id); if(!x) return false; mode=k.mode; cur=x; render(); return true; }
 function render(){
   document.getElementById('m-q').classList.toggle('on',mode==='quote'); document.getElementById('m-c').classList.toggle('on',mode==='comment');
   document.getElementById('seg').style.display=(setup||!cfg.url)?'none':'';
@@ -118,14 +129,14 @@ function render(){
   if(!cur){ el.innerHTML=`<p class="note">${C.at?(mode==='quote'?'아직 밑줄이 없습니다. 서가의 한눈에 탭 ‘밑줄 적기’나, 책에 글을 적을 때 ‘밑줄’을 골라 적으면 여기서 뽑힙니다.':'아직 코멘트가 없습니다.'):'받아오는 중입니다.'}</p>${foot}`; return; }
   const meta=[cur.title?'<b>'+esc(cur.title)+'</b>':'',esc(cur.author),cur.page?cur.page+'쪽':'',md(cur.date)].filter(Boolean).join(' · ');
   el.innerHTML=`<p class="q${cur.t.length>160?' long':''}">${esc(cur.t)}</p><div class="m">${meta}</div>
-    <div class="rowbtns"><button class="primary" onclick="draw()">다시 뽑기</button></div>${foot}`;
+    <div class="rowbtns"><button class="primary" onclick="draw()">다시 뽑기</button><button class="linkish" onclick="toNote()">수첩에 적기</button></div>${foot}`;
 }
 function saveCfg(){
   const u=document.getElementById('s-url').value.trim().replace(/\/+$/,''), k=document.getElementById('s-key').value.trim();
   if(!/^https?:\/\/\S+$/.test(u)||!k){ toast('주소와 키를 모두 넣어주세요'); return; }
   cfg={url:u,key:k}; lsSet(SBKEY,cfg); setup=false; render(); load();
 }
-draw();          /* 받아 둔 것에서 먼저 하나 뽑고 */
+if(!restoreCur()) draw();          /* 수첩에 다녀왔으면 그 글을, 아니면 받아 둔 것에서 먼저 하나 뽑고 */
 load();          /* 새로 받아온다(뽑힌 것은 그대로 둔다) */
 window.addEventListener('online',()=>load());
 </script>

@@ -617,7 +617,7 @@ create policy "own rows" on public.jeongri
 notify pgrst, 'reload schema';
 `;
 let sess=(()=>{try{return JSON.parse(localStorage.getItem(SESS_KEY))||null;}catch(e){return null;}})();
-const sy={table:lsGet('jeongri.table')||'?',busy:false,ideaT:null,cardT:null,lastPull:0,lastCheck:0,msg:'',err:false};
+const sy={table:lsGet('jeongri.table')||'?',busy:false,ideaT:null,cardT:null,lastPull:0,lastCheck:0,msg:'',err:false,works:null};
 function setSess(x){sess=x;try{if(x)localStorage.setItem(SESS_KEY,JSON.stringify(x));else localStorage.removeItem(SESS_KEY);}catch(e){}}
 function setTable(v){if(sy.table===v)return;sy.table=v;try{localStorage.setItem('jeongri.table',v);}catch(e){}const t=document.getElementById('tblStat');if(t)t.textContent=v==='ok'?'있음':v==='none'?'없음':'확인 전';if(!typing())renderDetail();}
 function jwtExp(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000;}catch(e){return 0;}}
@@ -689,7 +689,21 @@ async function pullCards(force){
     else setMsg(`맞췄습니다 ${fmtTime(Date.now())}`);
   }catch(e){failed(e);}
 }
-async function syncAll(force){if(!sess||sy.busy)return;if(!force&&Date.now()-sy.lastPull<10000)return;sy.busy=true;sy.lastPull=Date.now();try{await pullIdeas(force);await pullCards(force);}finally{sy.busy=false;}}
+/* 수첩에 보일 작품 이름 (2026년 11월 19일) — 타이핑의 초고 작품(글상자·개정·완성한 것은 빼고) 이름을 jeongri 표의 'works' 줄에 올려 둔다.
+   수첩(아이폰)이 그 줄을 읽어 맨 위에 보인다. 카드의 줄('main')과는 따로다. 저쪽과 같으면 올리지 않는다.
+   타이핑의 저장소를 읽지 못한 창에서는 올리지 않는다(빈 목록으로 덮지 않게) */
+const draftNames=()=>TP.works.filter(w=>!w.box&&w.kind!=='개정'&&!w.finishedAt&&norm(w.title)).map(w=>norm(w.title));
+async function pushWorks(force){
+  if(!sess||!TP.ok||blocked(force))return;
+  const names=draftNames(),js=JSON.stringify(names);
+  try{
+    if(sy.works==null||force){const rows=await rest(`/${T_CARD}?select=data&id=eq.works`);const r=rows&&rows[0];sy.works=JSON.stringify(r&&r.data&&Array.isArray(r.data.names)?r.data.names:null);}
+    if(sy.works===js)return;
+    await rest(`/${T_CARD}?on_conflict=user_id,id`,{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{id:'works',user_id:sess.user,data:{names},updated_at:Date.now()}])});
+    sy.works=js;
+  }catch(e){if(e.noTable){sy.lastCheck=Date.now();setTable('none');}}
+}
+async function syncAll(force){if(!sess||sy.busy)return;if(!force&&Date.now()-sy.lastPull<10000)return;sy.busy=true;sy.lastPull=Date.now();try{await pullIdeas(force);await pullCards(force);await pushWorks(force);}finally{sy.busy=false;}}
 function syncPanelHtml(){
   if(sess)return `<div class="small"><b style="font-weight:500">맞추기</b> · ${esc(sess.email||'')}</div><button data-act2="syncNow">지금 맞추기</button><button data-act2="syncOut">로그아웃</button><div class="syncstat ${sy.err?'err':''}">${esc(sy.msg)}</div>`;
   return `<div class="small"><b style="font-weight:500">맞추기</b></div><input type="email" id="syncEmail" placeholder="이메일" autocomplete="username"><input type="password" id="syncPw" placeholder="비밀번호" autocomplete="current-password"><button data-act2="syncIn">로그인</button><div class="syncstat ${sy.err?'err':''}">${esc(sy.msg)||'storyM과 같은 계정으로 로그인합니다. storyM·문득·수첩과 로그인을 함께 씁니다(한쪽에서 로그아웃하면 이 맥의 다른 쪽도 로그아웃됩니다).'}</div>`;}
@@ -720,7 +734,7 @@ let tpT=null;
 window.addEventListener('storage',e=>{
   if(e.key===IN_KEY&&e.newValue)drainInbox();
   /* 타이핑이 저장했다 — 조금 기다렸다가 다시 읽는다(글을 치는 중이면 목록만) */
-  if(e.key===TP_KEY){clearTimeout(tpT);tpT=setTimeout(()=>{tpRefresh();if(!typing())renderDetail();else renderSide();},1200);}
+  if(e.key===TP_KEY){clearTimeout(tpT);tpT=setTimeout(()=>{tpRefresh();if(!typing())renderDetail();else renderSide();pushWorks();},1200);}
 });
 window.addEventListener('focus',()=>{winMine();tpRefresh();drainInbox();if(!typing())renderDetail();syncAll(false);});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){tpRefresh();drainInbox();syncAll(false);}else{flushIdeas();pushCards();}});
