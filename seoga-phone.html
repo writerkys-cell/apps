@@ -84,8 +84,11 @@ a.linkish{display:inline-block}
      · 코멘트: seoga_reads의 kind:'mark'(스캔을 켜면 'scan') {id, kind, bookId, title, page, text, date, at, updated}
      · 밑줄: 코멘트와 같은 줄에 quote:true만 더 붙는다(책의 문장). 서가 한눈에 탭의 밑줄 뽑기에 나온다.
    서가의 규칙을 바꾸면 이 파일의 apply()도 함께 고친다.
+   2026년 11월 20일부터 "적고 수첩에서 열기"(saveToNote) — 여느 때처럼 서가에 적은 뒤, 그 글과 출처를 수첩(sucheop.html)의 입력창에 넣은 채로 연다. 인상적인 밑줄이나 코멘트를 글감으로도 남기는 길.
    연결 정보는 서가와 같은 localStorage 'seoga.sb'({url,key})를 쓴다. 적을 것은 먼저 'seoga.phone.out'에 담아 두고 보낸다(끊겨 있으면 이어질 때 보낸다). */
 const SBKEY='seoga.sb', OUTKEY='seoga.phone.out', CACHEKEY='seoga.phone.cache';
+const NOTE_URL='./sucheop.html', CURKEY='seoga.phone.cur';   /* 수첩(같은 폴더), 수첩에 다녀오는 동안 펴 놓았던 책을 기억하는 자리(이 창에서만) */
+let lastFlush=null;   /* 방금 시작한 올리기 — 수첩으로 넘어가기 전에 잠깐 기다린다 */
 const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
 const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
 let cfg=lsGet(SBKEY,{}), out=lsGet(OUTKEY,[]), C=lsGet(CACHEKEY,{reading:[],wait:[],at:''});
@@ -218,7 +221,7 @@ function saveAdd(){
   out.push({type:'add',book:b}); lsSet(OUTKEY,out);
   C.wait.push({id:b.id,title:b.title,author:b.author,page:0,total:b.total,lent:b.borrowed,last:''}); (C.titles=C.titles||[]).push({t:title,s:'읽을 책'}); lsSet(CACHEKEY,C);
   draft=null; toast('담았습니다 · 읽기 대기 맨 아래'); openBook(b.id);
-  setState('busy'); flush().then(()=>load(),()=>setState('err'));
+  setState('busy'); lastFlush=flush(); lastFlush.then(()=>load(),()=>setState('err'));
 }
 function findB(id){ return C.reading.find(b=>b.id===id)||C.wait.find(b=>b.id===id); }
 function scanWanted(b){ return scanOn===null? !!(b&&b.lent) : scanOn; }
@@ -229,10 +232,29 @@ function bookHTML(){
     <div class="field"><div class="seg"><button class="${quoteOn?'':'on'}" onclick="setQuote(false)">코멘트</button><button class="${quoteOn?'on q':''}" onclick="setQuote(true)">밑줄</button></div>
       <textarea id="tx" rows="4" placeholder="${quoteOn?'책의 문장':'이 쪽에 대한 코멘트 · 비워도 됩니다'}" aria-label="${quoteOn?'밑줄':'코멘트'}"></textarea></div>
     <button class="toggle${scanWanted(b)?' on':''}" onclick="toggleScan()"><span class="box"></span>이 쪽을 스캔한다${b.lent?' · 빌린 책':''}</button>
-    <div class="rowbtns"><button class="primary" onclick="save()">적기</button><button class="linkish" onclick="back()">뒤로</button></div>
-    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다.</p>`;
+    <div class="rowbtns"><button class="primary" onclick="save()">적기</button>${scanWanted(b)?'':'<button class="linkish" onclick="saveToNote()">적고 수첩에서 열기</button>'}<button class="linkish" onclick="back()">뒤로</button></div>
+    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다. ‘적고 수첩에서 열기’는 서가에 적은 뒤 그 글을 수첩의 입력창으로 가져갑니다(스캔을 켜면 보이지 않습니다).</p>`;
 }
 function openBook(id){ cur=id; view='book'; scanOn=null; quoteOn=false; render(); window.scrollTo(0,0); }
+/* 적고 수첩에서 열기 — 적기(save)와 똑같이 서가에 적고, 적은 글과 출처(『제목』, 지은이, 쪽)를 수첩의 입력창에 넣은 채로 같은 창에서 연다. 수첩이 주소의 #적기= 를 읽는다.
+   글이 없거나 스캔이 켜져 있으면 그냥 적기다(스캔은 단축어로 넘어가므로 한 번에 하나만).
+   서가에 올리는 것을 잠깐(길어야 3초) 기다렸다가 넘어간다. 그 안에 못 올려도 적을 것은 seoga.phone.out에 남아 돌아오면 올라간다(apply는 다시 해도 같은 줄을 덮는다).
+   돌아왔을 때 이 책이 펴져 있도록 책 id를 이 창의 sessionStorage에 적어 둔다 */
+async function saveToNote(){
+  const b=findB(cur); if(!b) return;
+  const text=document.getElementById('tx').value.trim();
+  if(!text||scanWanted(b)){ save(); return; }
+  const v=parseInt(document.getElementById('pg').value,10), to=v>0?v:0;
+  const src=[b.title?'『'+b.title+'』':'',b.author,to?to+'쪽':''].filter(Boolean).join(', ');
+  const url=NOTE_URL+'#적기='+enc(text+(src?'\n'+src:'')+'\n\n')+'&돌아갈곳=seoga-phone.html';
+  const n=out.length; save(); if(out.length<=n) return;   /* 적히지 않았으면 넘어가지 않는다 */
+  try{ sessionStorage.setItem(CURKEY,b.id); }catch(e){}
+  toast('적었습니다 · 수첩을 엽니다');
+  await Promise.race([Promise.resolve(lastFlush).catch(()=>{}),new Promise(r=>setTimeout(r,3000))]);
+  location.href=url;
+}
+function restoreCur(){ let id=''; try{ id=sessionStorage.getItem(CURKEY)||''; sessionStorage.removeItem(CURKEY); }catch(e){}
+  if(id&&findB(id)){ cur=id; view='book'; scanOn=null; quoteOn=false; } }
 function back(){ view='list'; cur=null; render(); window.scrollTo(0,0); }
 function keepInputs(fn){ const p=document.getElementById('pg').value, t=document.getElementById('tx').value; fn(); render(); document.getElementById('pg').value=p; document.getElementById('tx').value=t; }
 function toggleScan(){ keepInputs(()=>{ scanOn=!scanWanted(findB(cur)); }); }
@@ -254,12 +276,13 @@ function save(){
   toast([setPage?to+'쪽':'',text?(quote?'밑줄을 적었습니다':'코멘트를 적었습니다'):''].filter(Boolean).join(' · '));
   /* 적은 뒤에도 그 책의 화면에 머문다(이어서 다음 쪽·다음 코멘트를 적는다). 쪽 칸은 새 현재 쪽, 코멘트 칸은 비운다. 목록은 '뒤로'로 간다. */
   render(); window.scrollTo(0,0);
-  setState('busy'); flush().then(()=>load(),()=>setState('err'));
+  setState('busy'); lastFlush=flush(); lastFlush.then(()=>load(),()=>setState('err'));
   if(scan){ /* 서가와 같은 입력: 띄어쓰기·문장부호를 뺀 제목|쪽 */
     const tag=(b.title||'').replace(/[^\p{L}\p{N}_-]/gu,'');
     location.href='shortcuts://x-callback-url/run-shortcut?name='+enc(scanName())+'&input=text&text='+enc(tag+'|'+(to||''))+'&x-success='+enc(location.href.split('#')[0]);
   }
 }
+restoreCur();     /* 수첩에 다녀왔으면 그 책을 펴 둔다 */
 render(); setState(out.length?'on':'');
 load();
 window.addEventListener('online',()=>load());
