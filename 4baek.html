@@ -66,10 +66,27 @@ main{flex:1;min-height:0}
 .tstrip .red,.tstrip .mark{color:var(--inju);white-space:nowrap}
 .tstrip .when{white-space:nowrap;font-variant-numeric:tabular-nums}
 .tstrip .lnk{background:none;border:0;padding:0;flex:none;white-space:nowrap;font-family:var(--ui);font-size:.75rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
-.tstrip .lnk:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.tstrip .lnk:hover,.tstrip .lnk.on{color:var(--inju);border-bottom-color:var(--inju)}
 .tstrip [hidden]{display:none}
 #tpNote{margin:0 auto;width:100%;padding:.7rem var(--ppad) 0;font-size:.8rem;line-height:1.7;color:var(--inju)}
 #tpNote[hidden]{display:none}
+/* 왼쪽 윗줄 아래의 작은 칸들 — 스크리브너 링크 넣기, 자료 목록 */
+.tbox{margin:0 auto;width:100%;padding:.6rem var(--ppad) 0;font-size:.78rem;color:var(--meok-2);display:flex;gap:.7rem;align-items:baseline;flex-wrap:wrap}
+.tbox[hidden]{display:none}
+.tbox input{flex:1;min-width:8rem;border:0;border-bottom:1px solid var(--seon);background:transparent;padding:.2rem 0;font-size:.78rem}
+.tbox input:focus{outline:none;border-bottom-color:var(--inju)}
+.tbox .lnk{background:none;border:0;padding:0;flex:none;white-space:nowrap;font-size:.75rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+.tbox .lnk:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.tbox.refs{display:block}
+.tbox.refs[hidden]{display:none}
+.tbox.refs .rr{display:flex;gap:.6rem;align-items:baseline;padding:.15rem 0}
+.tbox.refs .rr a{flex:1;min-width:0;color:var(--meok);text-decoration:none;border-bottom:1px solid var(--seon);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbox.refs .rr a:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.tbox.refs .rr .nolink{flex:1;min-width:0;color:var(--meok-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbox.refs .rr .x{background:none;border:0;padding:0;color:var(--meok-3);flex:none}
+.tbox.refs .rr .x:hover{color:var(--inju)}
+.tbox.refs form{display:flex;gap:.6rem;align-items:baseline;margin-top:.35rem}
+.tbox.refs form input.n{flex:none;width:7rem;min-width:0}
 .tprev{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:1.4rem var(--ppad) 0;margin:0 auto;width:100%;font-size:var(--pfz);line-height:var(--plh);font-family:var(--body)}
 .tprev:not(.empty)::after{content:"";display:block;height:80vh}
 .tprev .para{margin:0;text-indent:var(--pind);text-align:justify;text-justify:inter-character;word-break:break-all;hanging-punctuation:allow-end}
@@ -240,9 +257,12 @@ table.st tr.noline td{border-bottom:0;padding-bottom:.1rem}
         <button class="lnk" id="tpWaitX" type="button" hidden title="기다리기를 그만두고 지금 왼쪽 글로 계속 씁니다">취소</button>
         <span class="when" id="tpWhen"></span>
         <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
+        <button class="lnk" id="tpRefs" type="button" hidden title="이 원고의 자료 — 데본씽크 항목이나 웹 주소. 누르면 목록이 열리고, 거기서 열고 더하고 뺍니다">자료</button>
         <button class="lnk" id="tpScriv" type="button" hidden title="스크리브너에서 이 원고를 열고, 복사해 온 글을 왼쪽에 받을 채비를 합니다">스크리브너 ↗</button>
       </div>
       <p id="tpNote" hidden></p>
+      <form id="tpLink" class="tbox" hidden><input type="text" id="tpLinkIn" spellcheck="false" placeholder="스크리브너 링크 (x-scrivener-item://…)"><button type="submit" class="lnk">링크 넣기</button></form>
+      <div id="tpRefBox" class="tbox refs" hidden></div>
       <div class="tprev empty" id="tpPrev"></div>
     </div>
     <div class="tpane r">
@@ -452,6 +472,7 @@ function renderHead(){
 var tpEl = {
   view:$("#tp"), grip:$("#tpGrip"), tally:$("#tpTally"), wait:$("#tpWait"), waitX:$("#tpWaitX"), when:$("#tpWhen"),
   toRight:$("#tpToRight"), scriv:$("#tpScriv"), note:$("#tpNote"), prev:$("#tpPrev"),
+  refs:$("#tpRefs"), refBox:$("#tpRefBox"), link:$("#tpLink"), linkIn:$("#tpLinkIn"),
   wrap:$("#tpWrap"), mirror:$("#tpMirror"), input:$("#tpInput"), line:$("#tpLine"), fix:$("#tpFix"), cur:$("#tpCur"), stop:$("#tpStop"), send:$("#tpSend")
 };
 var tpWheelUntil = 0;
@@ -467,7 +488,7 @@ function tpWaiting(m){ m = m || cur(); if(!m) return false; return !!S.armed || 
 /* 원고 탭에서 원고를 골랐다 — 쓰던 글을 남겨 두고, 그 원고로 400자 탭을 새로 열고, 스크리브너를 연다 */
 function tpOpen(id){
   var m = msById(id); if(!m) return;
-  tpStash();
+  tpStash(); refOpen = false;
   S.cur = id; S.armed = true;
   save(); renderHead();
   showView("tp");
@@ -542,8 +563,14 @@ function tpRenderStrip(){
   if(!m){
     tpEl.tally.textContent = "원고를 고르지 않았습니다";
     tpEl.wait.hidden = tpEl.waitX.hidden = tpEl.scriv.hidden = tpEl.note.hidden = true;
+    tpEl.refs.hidden = tpEl.link.hidden = tpEl.refBox.hidden = true;
     return;
   }
+  var rn = refsOf(m).length;
+  tpEl.refs.hidden = false; tpEl.refs.textContent = rn ? "자료 " + rn : "자료 넣기"; tpEl.refs.classList.toggle("on", refOpen);
+  tpEl.refBox.hidden = !refOpen; if(refOpen) renderRefs();
+  /* 링크 없는 원고에서 '그만'을 눌렀다 — 스크리브너에 문서가 생겼을 테니 그 링크를 받는다 */
+  tpEl.link.hidden = !(m.linkWait && !m.link);
   var g = tpGoal(m), n = len(m.base), wait = tpWaiting(m);
   tpEl.scriv.hidden = !m.link;
   tpEl.wait.hidden = !wait;
@@ -559,7 +586,9 @@ function tpRenderStrip(){
   /* '그만'을 누른 뒤 — 돌아왔을 때 무엇을 해야 하는지 남겨 둔다. 다시 쓰기 시작하거나 새로 붙여넣으면 사라진다 */
   if(m.stopAt && !tpEl.input.value.trim()){
     tpEl.note.hidden = false;
-    tpEl.note.textContent = "그만 · " + whenText(m.stopAt) + " · " + fmt(m.stopN || 0) + "자를 복사했습니다. 스크리브너에서 ⌘A ⌘V로 덮어쓰세요. 덮기 전에 스냅숏(⌘5)을 찍어 두면 기울임·주석이 있던 예전 글로 돌아갈 수 있습니다.";
+    tpEl.note.textContent = "그만 · " + whenText(m.stopAt) + " · " + fmt(m.stopN || 0) + "자를 복사했습니다. "
+      + (m.link ? "스크리브너에서 ⌘A ⌘V로 덮어쓰세요. 덮기 전에 스냅숏(⌘5)을 찍어 두면 기울임·주석이 있던 예전 글로 돌아갈 수 있습니다."
+                : "스크리브너 링크가 없는 원고입니다. 스크리브너에서 새 문서를 만들거나 넣을 문서를 열어 붙여 넣고, 그 문서의 링크('편집 → 특수 복사 → 문서를 외부 링크로 복사')를 아래 칸에 넣어 주세요.");
   }else tpEl.note.hidden = true;
 }
 function tpRenderPrev(){
@@ -761,13 +790,55 @@ function tpStop(){
   tpEl.input.value = ""; m.draft = "";
   m.stopAt = Date.now(); m.stopN = len(t);
   m.editedAt = Date.now(); delete m.dirty;
+  if(!m.link) m.linkWait = true;
   S.armed = false;
   save(); tpRender();
   copyThen(t, function(){
     var opened = openLink(m.link);
-    toast(fmt(len(t)) + "자를 복사했습니다 · " + (opened ? "스크리브너에서 ⌘A ⌘V로 덮어쓰세요" : "링크가 없어 스크리브너는 열지 않았습니다"), 6000);
+    toast(fmt(len(t)) + "자를 복사했습니다 · " + (opened ? "스크리브너에서 ⌘A ⌘V로 덮어쓰세요" : "스크리브너에서 문서를 열어 붙여 넣고, 왼쪽 위 칸에 그 문서의 링크를 넣어 주세요"), 6000);
   });
 }
+
+/* ---- 원고의 자료 (2026년 11월 20일) — 데본씽크 항목 주소나 웹 주소 여러 개(m.refs: [{u, n}]). 타이핑의 '자료'와 같은 것.
+   정리의 카드에서 올 때 카드의 자료 칸에서 가져오고, 여기서도 더하고 뺀다. 이 브라우저의 저장소에만 있다 ---- */
+var refOpen = false;
+function refsOf(m){ return m && Array.isArray(m.refs) ? m.refs : []; }
+function refOk(u){ return /^(https?:\/\/|x-devonthink(-item)?:)/i.test(u || ""); }   /* 열 수 있는 주소 — 웹과 데본씽크만 */
+function renderRefs(){
+  var m = cur(), b = tpEl.refBox; b.innerHTML = ""; if(!m) return;
+  refsOf(m).forEach(function(x, i){
+    var r = el("div", "rr"), web = /^https?:/i.test(x.u), name = (x.n ? x.n + " — " : "") + x.u, a;
+    if(refOk(x.u)){ a = el("a", "", name); a.href = x.u; a.title = web ? "새 창에서 열기" : "데본씽크에서 열기"; if(web){ a.target = "_blank"; a.rel = "noopener"; } }
+    else a = el("span", "nolink", name);
+    var del = el("button", "x", "✕"); del.type = "button"; del.title = "이 자료를 뺍니다";
+    del.onclick = function(){ m.refs.splice(i, 1); save(); tpRenderStrip(); };
+    r.appendChild(a); r.appendChild(del); b.appendChild(r);
+  });
+  var f = el("form"), u = document.createElement("input"), n = document.createElement("input"), ok = el("button", "lnk", "더하기");
+  u.type = "text"; u.spellcheck = false; u.placeholder = "데본씽크 항목 주소(x-devonthink-item://…)나 웹 주소";
+  n.type = "text"; n.className = "n"; n.placeholder = "쪽수, 무엇";
+  ok.type = "submit";
+  f.appendChild(u); f.appendChild(n); f.appendChild(ok);
+  f.onsubmit = function(e){
+    e.preventDefault();
+    var v = u.value.trim(); if(!v){ u.focus(); return; }
+    if(!refOk(v)){ toast("웹 주소(https://…)나 데본씽크 주소(x-devonthink-item://…)만 넣을 수 있습니다", 3200); return; }
+    if(!Array.isArray(m.refs)) m.refs = [];
+    m.refs.push({ u:v, n:n.value.replace(/\s+/g, " ").trim() });
+    save(); tpRenderStrip();
+  };
+  b.appendChild(f);
+}
+tpEl.refs.addEventListener("click", function(){ refOpen = !refOpen; tpRenderStrip(); });
+tpEl.link.addEventListener("submit", function(e){
+  e.preventDefault();
+  var m = cur(), v = tpEl.linkIn.value.trim(); if(!m) return;
+  if(!v){ tpEl.linkIn.focus(); return; }
+  if(!isScriv(v)){ toast("스크리브너 링크가 아닙니다 — x-scrivener-item:// 로 시작해야 합니다", 3200); return; }
+  m.link = v; delete m.linkWait; tpEl.linkIn.value = "";
+  save(); tpRender();
+  toast("링크를 넣었습니다 — 이제 '스크리브너 ↗'와 '그만'이 이 문서를 엽니다", 3600);
+});
 
 /* ---- 붙여넣기 — 받을 채비가 된 때의 ⌘V는 어디서 눌러도 왼쪽으로 간다.
    채비가 아닐 때는 입력창 밖(왼쪽 칸을 누른 뒤)에서 누른 ⌘V만 왼쪽으로 간다 ---- */
@@ -775,6 +846,7 @@ document.addEventListener("paste", function(e){
   if(!tpOn()) return;
   var m = cur(); if(!m) return;
   var inInput = e.target === tpEl.input;
+  if(!inInput && e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || "")) return;   /* 링크 넣기·자료 칸에 붙이는 것 */
   if(inInput && !tpWaiting(m)) return;   /* 보통의 붙여넣기 */
   var raw = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
   var t = normal(raw);
@@ -992,6 +1064,7 @@ function renderList(){
     }else{
       var h = el("div", "wh");
       h.appendChild(el("span", "nm", wk.title));
+      if(wk.box) h.querySelector(".nm").title = "정리에서 태그를 글상자로 둔 카드가 여기로 옵니다 — 아직 어떤 글이 될지 모르는 것들";
       h.appendChild(actBtn("이름·목표·마감", function(){ listForm = { kind:"work", id:wk.id }; renderList(); }, "작품 이름, 목표 매수, 마감 날짜 고치기"));
       h.appendChild(actBtn("지우기", function(){
         if(!confirm("'" + wk.title + "'" + (all.length ? "과 그 아래 원고 " + all.length + "개(아카이브 포함)를" : "을") + " 목록에서 지웁니다.\n스크리브너의 원고는 그대로입니다. 여기 남아 있던 글과 기록은 사라집니다.")) return;
@@ -1475,20 +1548,79 @@ document.addEventListener("visibilitychange", function(){ if(document.hidden){ t
    writerKYS는 이 앱의 저장소(4baek-v1)를 읽기만 한다 */
 var booted = false;
 function winMine(){ try{ if(!window.name) window.name = "4baek"; localStorage.setItem("appwin.4baek", window.name); }catch(e){} }
-function hashOpen(){
-  var h = (location.hash || "").replace(/^#/, ""), id = null;
-  if(!h) return false;
+function hashParams(){
+  var o = {}, h = (location.hash || "").replace(/^#/, "");
   h.split("&").forEach(function(p){
     var i = p.indexOf("="); if(i <= 0) return;
-    try{ if(decodeURIComponent(p.slice(0, i)).trim() === "원고") id = decodeURIComponent(p.slice(i + 1)).trim(); }catch(e){}
+    var k = p.slice(0, i), v = p.slice(i + 1);
+    try{ k = decodeURIComponent(k); }catch(e){} try{ v = decodeURIComponent(v); }catch(e){}
+    o[k.trim()] = v.trim();
   });
+  return o;
+}
+function hashOpen(){
+  if(!(location.hash || "").replace(/^#/, "")) return false;
+  var q = hashParams();
   try{ history.replaceState(null, "", location.href.replace(/#.*$/, "")); }catch(e){}
-  if(!id) return false;
+  if(q["정리카드"]) return hashNew(q);
+  var id = q["원고"]; if(!id) return false;
   var m = msById(id);
   if(!m || m.done){ toast(m ? "완성해 아카이브에 넣은 원고입니다" : "주소의 원고를 찾지 못했습니다", 3000); return false; }
   if(booted && tpOn()) tpStash();
-  S.cur = id; S.armed = false;
+  S.cur = id; S.armed = false; refOpen = false;
   save(); renderHead(); showView("tp");
+  return true;
+}
+/* 정리(jeongri.html)의 카드에서 "4baek에서 쓰기 시작" (2026년 11월 20일, 작가가 정함 — 수첩의 아이디어는 정리를 거쳐 4baek으로 온다)
+   주소: #정리카드=<카드 id>&새원고=<제목>&글상자=1   ·   #정리카드=<카드 id>&새원고=<제목>&작품=<작품 이름>&작품id=<작품 id>
+   카드의 제목이 소제목, 카드의 글이 왼쪽 글, 카드의 자료 칸이 원고의 자료가 된다. 스크리브너 링크는 없는 채로 시작한다('그만' 뒤에 넣는다).
+   가져온 글은 오늘 쓴 글이 아니므로 통계에 세지 않는다(스크리브너에서 붙여넣은 글과 같다).
+   원고에 카드 번호(jrCard)를 적어 두면 정리가 그것을 보고 카드를 보관으로 넘긴다. 정리의 저장소(jeongri.v1)는 읽기만 한다 */
+function jrCardData(id){
+  var out = { title:"", text:"", refs:[], found:false };
+  try{
+    var d = JSON.parse(localStorage.getItem("jeongri.v1"));
+    var c = d && Array.isArray(d.cards) ? d.cards.filter(function(x){ return x && x.id === id; })[0] : null;
+    if(c){
+      out.found = true; out.title = String(c.title || "").replace(/\s+/g, " ").trim();
+      out.text = normal(String(c.text || ""));
+      (c.srcs || []).forEach(function(x){ var u = x ? String(x.u || "").trim() : ""; if(u) out.refs.push({ u:u, n:String(x.n || "").trim() }); });
+    }
+  }catch(e){}
+  return out;
+}
+function boxWork(make){
+  var w = S.works.filter(function(x){ return x.box; })[0];
+  if(!w && make){ w = { id:uid(), title:"글상자", goal:0, due:"", box:true }; S.works.push(w); }
+  return w || null;
+}
+function hashNew(q){
+  var cid = q["정리카드"], ex = S.mss.filter(function(m){ return m.jrCard === cid; })[0];
+  if(ex){   /* 이미 받은 카드 — 그 원고를 연다 */
+    if(ex.done){ toast("'" + ex.title + "'은 완성해 아카이브에 넣은 원고입니다", 3200); return false; }
+    if(booted && tpOn()) tpStash();
+    S.cur = ex.id; S.armed = false; refOpen = false; save(); renderHead(); showView("tp");
+    return true;
+  }
+  var jd = jrCardData(cid), name = String(q["새원고"] || jd.title || "").replace(/\s+/g, " ").trim();
+  if(!jd.found){ toast("정리에서 그 카드를 찾지 못했습니다 — 정리와 같은 브라우저에서 열어야 합니다", 4500); return false; }
+  if(!name){ toast("카드에 제목이 없습니다 — 정리에서 제목을 적어 주세요", 3500); return false; }
+  var w = null, wt = String(q["작품"] || "").replace(/\s+/g, " ").trim();
+  if(q["글상자"] || !wt) w = boxWork(true);
+  else{
+    w = (q["작품id"] && workById(q["작품id"])) || S.works.filter(function(x){ return !x.box && String(x.title || "").replace(/\s+/g, " ").trim() === wt; })[0] || null;
+    if(!w){
+      if(!confirm("4baek에 '" + wt + "' 작품이 없습니다.\n\n'" + wt + "' 작품을 새로 만들고 '" + name + "' 원고를 넣을까요?")) return false;
+      w = { id:uid(), title:wt, goal:0, due:"" }; S.works.push(w);
+    }
+  }
+  if(booted && tpOn()) tpStash();
+  var m = { id:uid(), workId:w.id, title:name, link:"", base:jd.text, baseAt:Date.now(), draft:"", jrCard:cid, editedAt:Date.now() };
+  if(jd.refs.length) m.refs = jd.refs;
+  S.mss.push(m);
+  S.cur = m.id; S.armed = false; refOpen = false;
+  save(); renderHead(); showView("tp");
+  toast("'" + name + "' 원고를 " + w.title + "에 만들었습니다 · 정리의 글 " + fmt(len(jd.text)) + "자" + (jd.refs.length ? "와 자료 " + jd.refs.length + "개" : "") + "를 가져왔습니다", 4500);
   return true;
 }
 window.addEventListener("hashchange", hashOpen);
