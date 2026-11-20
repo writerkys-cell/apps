@@ -135,6 +135,20 @@ main{flex:1;min-height:0}
 .form input:focus{outline:none;border-bottom-color:var(--inju)}
 .form input.lk{flex:2;font-size:.8rem}
 .add{margin-top:.5rem}
+.form input.gl{flex:none;width:6rem;min-width:0;text-align:right}
+.form .unit{font-size:.8rem;color:var(--meok-3)}
+.prog{font-size:.78rem;color:var(--meok-3);padding:.45rem 0 .3rem;font-variant-numeric:tabular-nums}
+.prog b{font-weight:400;color:var(--meok-2)}
+.prog b.pc{color:var(--inju)}
+.prog .dim{color:#c5bfb3}
+.bar{display:flex;height:3px;background:rgba(214,205,186,.55);margin-bottom:.4rem;overflow:hidden}
+.bar i{display:block;height:100%}
+.bar i.d{background:var(--inju)}
+.bar i.l{background:var(--inju);opacity:.35}
+.arch{margin-top:.9rem}
+.arch .ah{background:none;border:0;padding:0;font-size:.78rem;color:var(--meok-3);font-variant-numeric:tabular-nums}
+.arch .ah:hover{color:var(--inju)}
+.ms.done span.open{flex:1;min-width:0;font-size:.9rem;font-family:var(--body);color:var(--meok-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blank{color:var(--meok-3);padding:2rem 0;text-align:center}
 h2{font-size:.85rem;font-weight:400;color:var(--meok-2);margin:2.2rem 0 .6rem;border-bottom:1px solid var(--seon);padding-bottom:.3rem}
 h2:first-child{margin-top:0}
@@ -737,30 +751,71 @@ function tpOnStack(){ if(tpOn()){ tpPad(); tpRenderPrev(); tpRenderBtns(); tpRen
 var listForm = null;   /* 열려 있는 적는 칸 — {kind:"work"|"ms", id(고칠 때), workId(원고를 더할 때)} */
 function el(tag, cls, text){ var e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; }
 function actBtn(text, fn, title){ var b = el("button", "act", text); b.type = "button"; if(title) b.title = title; b.onclick = fn; return b; }
+/* 매수 — 200자 한 매, 소수 한 자리. 원고 탭의 분량은 모두 매수로 보인다(2026년 11월 20일, 작가가 정함) */
+function mae1(n){ return Math.round(n / 20) / 10; }
 function msStatus(m){
-  var s = m.base ? fmt(len(m.base)) + "자" : '<span class="no">' + (m.link ? "아직 가져오지 않음" : "링크 없음") + "</span>";
-  if(m.draft && m.draft.trim()) s += " · 쓰던 글 " + fmt(len(m.draft)) + "자";
+  var s = m.base ? mae(len(m.base)) + "매" : '<span class="no">' + (m.link ? "아직 가져오지 않음" : "링크 없음") + "</span>";
+  if(m.draft && m.draft.trim()) s += " · 쓰던 글 " + mae(len(m.draft)) + "매";
   if(m.stopAt) s += " · 그만 " + whenText(m.stopAt);
   return s;
 }
+function dayText(at){ var d = new Date(at); return (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + "." : "") + (d.getMonth()+1) + "." + d.getDate(); }
+/* 작품의 진척 — 완성한 원고의 매수(m.doneN)와 작업 중인 원고의 왼쪽 글(m.base)을 더한다.
+   오른쪽에 치던 글은 왼쪽 글을 다시 쓰는 것이라 세지 않는다. 아직 가져오지 않은 원고는 0매 */
+function workSums(wk){
+  var o = { done:0, doneCnt:0, live:0, liveCnt:0 };
+  S.mss.forEach(function(m){
+    if(m.workId !== wk.id) return;
+    if(m.done){ o.done += m.doneN || 0; o.doneCnt++; }
+    else{ o.live += len(m.base); o.liveCnt++; }
+  });
+  o.doneMae = mae1(o.done); o.liveMae = mae1(o.live); o.total = Math.round((o.doneMae + o.liveMae) * 10) / 10;
+  o.pct = wk.goal > 0 ? Math.round(o.total / wk.goal * 100) : null;
+  return o;
+}
+/* 완성 — 매수와 날짜만 적어 작품의 아카이브로 내린다. 글은 스크리브너에 있으므로 여기 남아 있던 글은 지운다(작가가 정함) */
+function msDone(m){
+  var n = len(m.base), dr = m.draft && m.draft.trim() ? len(m.draft) : 0;
+  var msg = "'" + m.title + "'을 완성으로 표시하고 아카이브에 넣습니다.\n"
+          + (n ? mae(n) + "매로 적고, 여기 남아 있던 글은 지웁니다. 원고는 스크리브너에 있어야 합니다." : "가져온 글이 없어 0매로 적힙니다.");
+  if(dr) msg += "\n\n오른쪽에 쓰던 글 " + mae(dr) + "매가 있습니다. 보내지도 '그만'하지도 않은 글이라 스크리브너에 없습니다. 이 글도 사라집니다.";
+  else if(n && !m.stopAt) msg += "\n\n'그만'을 누른 뒤로 글이 바뀌었거나, '그만'을 누른 적이 없는 원고입니다. 왼쪽 글이 스크리브너에 들어가 있는지 확인하세요.";
+  if(!confirm(msg + "\n\n완성할까요?")) return;
+  m.done = Date.now(); m.doneN = n;
+  m.base = ""; m.baseAt = 0; m.draft = ""; m.fix = false; m.fixText = ""; m.fixN = 0;
+  delete m.cut; delete m.stopAt; delete m.stopN;
+  if(S.cur === m.id){ S.cur = null; S.armed = false; }
+  save(); renderList(); renderHead();
+  toast("'" + m.title + "' 완성 · " + mae(n) + "매", 3000);
+}
+function msRevive(m){
+  if(!confirm("'" + m.title + "'을 아카이브에서 꺼내 다시 작업합니다.\n글은 남아 있지 않으니 스크리브너에서 다시 복사해 옵니다. 적어 둔 " + mae(m.doneN || 0) + "매는 지워지고, 가져온 글의 매수로 다시 셉니다.")) return;
+  delete m.done; delete m.doneN;
+  save(); renderList();
+}
+var archOpen = {};   /* 펼쳐 둔 아카이브 — 작품 id마다. 저장하지 않는다 */
 function formRow(f, vals, onOk){
-  var d = el("form", "form"), a = document.createElement("input"), b = null;
+  var d = el("form", "form"), a = document.createElement("input"), b = null, g = null;
   a.type = "text"; a.placeholder = f.kind === "work" ? "작품 이름" : "소제목"; a.value = vals.title || "";
   d.appendChild(a);
   if(f.kind === "ms"){
     b = document.createElement("input"); b.type = "text"; b.className = "lk"; b.spellcheck = false;
     b.placeholder = "스크리브너 링크 (x-scrivener-item://…)"; b.value = vals.link || "";
     d.appendChild(b);
+  }else{
+    g = document.createElement("input"); g.type = "number"; g.className = "gl"; g.min = "0"; g.step = "1";
+    g.placeholder = "목표 매수"; g.title = "이 작품의 목표 매수(200자 원고지). 비우면 진척을 퍼센트로 보이지 않습니다"; g.value = vals.goal || "";
+    d.appendChild(g); d.appendChild(el("span", "unit", "매"));
   }
   var ok = actBtn(f.id ? "고치기" : "넣기", null); ok.type = "submit"; ok.onclick = null;
   d.appendChild(ok);
   d.appendChild(actBtn("취소", function(){ listForm = null; renderList(); }));
   d.addEventListener("submit", function(e){
     e.preventDefault();
-    var t = a.value.replace(/\s+/g, " ").trim(), l = b ? b.value.trim() : "";
+    var t = a.value.replace(/\s+/g, " ").trim(), l = b ? b.value.trim() : "", gv = g ? parseFloat(g.value) : 0;
     if(!t){ a.focus(); return; }
     if(l && !isScriv(l) && !confirm("스크리브너 링크처럼 보이지 않습니다(x-scrivener-item:// 로 시작하지 않음).\n이런 링크는 눌러도 열리지 않습니다. 그래도 저장할까요?")) return;
-    onOk(t, l);
+    onOk(t, l, gv > 0 ? gv : 0);
   });
   setTimeout(function(){ a.focus(); }, 0);
   return d;
@@ -771,21 +826,37 @@ function renderList(){
     w.appendChild(el("p", "blank", "작품이 없습니다. 작품을 만든 뒤 그 아래에 소제목과 스크리브너 링크를 넣으세요."));
   }
   S.works.forEach(function(wk){
-    var box = el("div", "work"), mss = S.mss.filter(function(m){ return m.workId === wk.id; });
+    var box = el("div", "work"), all = S.mss.filter(function(m){ return m.workId === wk.id; });
+    var mss = all.filter(function(m){ return !m.done; }), arch = all.filter(function(m){ return m.done; });
     if(listForm && listForm.kind === "work" && listForm.id === wk.id){
-      box.appendChild(formRow(listForm, { title:wk.title }, function(t){ wk.title = t; listForm = null; save(); renderList(); renderHead(); }));
+      box.appendChild(formRow(listForm, { title:wk.title, goal:wk.goal }, function(t, l, g){ wk.title = t; wk.goal = g; listForm = null; save(); renderList(); renderHead(); }));
     }else{
       var h = el("div", "wh");
       h.appendChild(el("span", "nm", wk.title));
-      h.appendChild(actBtn("이름", function(){ listForm = { kind:"work", id:wk.id }; renderList(); }));
+      h.appendChild(actBtn("이름·목표", function(){ listForm = { kind:"work", id:wk.id }; renderList(); }, "작품 이름과 목표 매수 고치기"));
       h.appendChild(actBtn("지우기", function(){
-        if(!confirm("'" + wk.title + "'" + (mss.length ? "과 그 아래 원고 " + mss.length + "개를" : "을") + " 목록에서 지웁니다.\n스크리브너의 원고는 그대로입니다. 여기 남아 있던 글은 사라집니다.")) return;
+        if(!confirm("'" + wk.title + "'" + (all.length ? "과 그 아래 원고 " + all.length + "개(아카이브 포함)를" : "을") + " 목록에서 지웁니다.\n스크리브너의 원고는 그대로입니다. 여기 남아 있던 글과 기록은 사라집니다.")) return;
         if(cur() && cur().workId === wk.id){ S.cur = null; S.armed = false; }
         S.mss = S.mss.filter(function(m){ return m.workId !== wk.id; });
         S.works = S.works.filter(function(x){ return x.id !== wk.id; });
         save(); renderList(); renderHead();
       }));
       box.appendChild(h);
+    }
+    /* 진척 — 완성 + 작업 중 = 합 / 목표 */
+    var sm = workSums(wk);
+    if(all.length || wk.goal){
+      var pr = el("div", "prog");
+      pr.innerHTML = "완성 <b>" + sm.doneMae.toFixed(1) + "</b>매 + 작업 중 <b>" + sm.liveMae.toFixed(1) + "</b>매 = <b>" + sm.total.toFixed(1) + "</b>매"
+                   + (wk.goal > 0 ? " / 목표 " + fmt(wk.goal) + "매 · <b class=\"pc\">" + sm.pct + "%</b>" : ' · <span class="dim">목표 매수 없음</span>');
+      box.appendChild(pr);
+      if(wk.goal > 0){
+        var bar = el("div", "bar"), i1 = el("i", "d"), i2 = el("i", "l");
+        var pd = Math.min(100, sm.doneMae / wk.goal * 100), pl = Math.min(100 - pd, sm.liveMae / wk.goal * 100);
+        i1.style.width = pd + "%"; i2.style.width = pl + "%";
+        bar.title = "짙은 쪽이 완성, 옅은 쪽이 작업 중";
+        bar.appendChild(i1); bar.appendChild(i2); box.appendChild(bar);
+      }
     }
     mss.forEach(function(m){
       if(listForm && listForm.kind === "ms" && listForm.id === m.id){
@@ -798,6 +869,7 @@ function renderList(){
       o.onclick = function(){ tpOpen(m.id); };
       r.appendChild(o);
       var s = el("span", "st"); s.innerHTML = msStatus(m); r.appendChild(s);
+      r.appendChild(actBtn("완성", function(){ msDone(m); }, "이 원고를 마쳤습니다 — 매수만 적어 아카이브로 내립니다"));
       r.appendChild(actBtn("고치기", function(){ listForm = { kind:"ms", id:m.id }; renderList(); }, "소제목과 링크 고치기"));
       r.appendChild(actBtn("지우기", function(){
         if(!confirm("'" + m.title + "'을 목록에서 지웁니다.\n스크리브너의 원고는 그대로입니다. 여기 남아 있던 글" + (m.draft && m.draft.trim() ? "과 쓰던 글" : "") + "은 사라집니다.")) return;
@@ -816,17 +888,39 @@ function renderList(){
       var ad = el("div", "add"); ad.appendChild(actBtn("+ 원고", function(){ listForm = { kind:"ms", workId:wk.id }; renderList(); }, "소제목과 스크리브너 링크 넣기"));
       box.appendChild(ad);
     }
+    /* 아카이브 — 완성한 원고. 접어 두고, 누르면 소제목·매수·완성한 날이 펼쳐진다 */
+    if(arch.length){
+      var ar = el("div", "arch" + (archOpen[wk.id] ? " open" : ""));
+      var ah = el("button", "ah", (archOpen[wk.id] ? "▾ " : "▸ ") + "완성 " + arch.length + "편 · " + sm.doneMae.toFixed(1) + "매"); ah.type = "button";
+      ah.onclick = function(){ archOpen[wk.id] = !archOpen[wk.id]; renderList(); };
+      ar.appendChild(ah);
+      if(archOpen[wk.id]){
+        arch.slice().sort(function(x, y){ return x.done - y.done; }).forEach(function(m){
+          var r = el("div", "ms done");
+          r.appendChild(el("span", "open", m.title));
+          r.appendChild(el("span", "st", mae(m.doneN || 0) + "매 · " + dayText(m.done)));
+          r.appendChild(actBtn("되살리기", function(){ msRevive(m); }, "아카이브에서 꺼내 다시 작업합니다"));
+          r.appendChild(actBtn("지우기", function(){
+            if(!confirm("'" + m.title + "'의 완성 기록(" + mae(m.doneN || 0) + "매)을 지웁니다. 작품의 진척에서도 빠집니다.")) return;
+            S.mss = S.mss.filter(function(x){ return x.id !== m.id; });
+            save(); renderList();
+          }));
+          ar.appendChild(r);
+        });
+      }
+      box.appendChild(ar);
+    }
     w.appendChild(box);
   });
   if(listForm && listForm.kind === "work" && !listForm.id){
-    w.appendChild(formRow(listForm, {}, function(t){
-      var nw = { id:uid(), title:t }; S.works.push(nw);
+    w.appendChild(formRow(listForm, {}, function(t, l, g){
+      var nw = { id:uid(), title:t, goal:g }; S.works.push(nw);
       listForm = { kind:"ms", workId:nw.id }; save(); renderList();
     }));
   }else{
     w.appendChild(actBtn("+ 작품", function(){ listForm = { kind:"work" }; renderList(); }));
   }
-  w.appendChild(el("p", "note", "스크리브너 링크는 스크리브너에서 문서를 고르고 '편집 → 특수 복사 → 문서를 외부 링크로 복사'로 얻습니다. 소제목을 누르면 스크리브너가 그 문서를 열고, 400자 탭은 복사해 온 글(⌘V)을 기다립니다."));
+  w.appendChild(el("p", "note", "스크리브너 링크는 스크리브너에서 문서를 고르고 '편집 → 특수 복사 → 문서를 외부 링크로 복사'로 얻습니다. 소제목을 누르면 스크리브너가 그 문서를 열고, 400자 탭은 복사해 온 글(⌘V)을 기다립니다. 분량은 200자 원고지 매수입니다. '완성'을 누르면 매수만 적어 아카이브로 내리고 글은 지웁니다."));
 }
 
 /* ===================== 설정 ===================== */
