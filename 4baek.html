@@ -323,6 +323,10 @@ table.st tr.noline td{border-bottom:0;padding-bottom:.1rem}
       <p class="note" id="fontNote"></p>
       <p class="note">왼쪽 글과 쓰는 칸이 모두 이 글꼴을 씁니다. 고운바탕과 나눔명조는 인터넷에서 받아 오는 글꼴이라 처음 한 번은 연결이 필요합니다. 사파리는 맥에 따로 설치한 글꼴을 웹 페이지에 보여 주지 않으므로, 다른 글꼴은 '직접 입력'에서 글꼴 파일(.otf, .ttf)을 넣어 씁니다. 넣은 파일은 이 브라우저 안에만 저장되고 백업 파일에는 들어가지 않습니다. 맥에 설치된 글꼴 파일은 파일 고르는 창에서 ⌘⇧G를 누르고 /Library/Fonts 를 적으면 찾을 수 있습니다.</p>
 
+      <h2>시작에 올리기</h2>
+      <p class="note">날마다 늘어난 글자 수와 하루 목표, 작품의 매수만 수파베이스에 올려 시작(sijak)의 글쓰기·원고 칸이 어느 기기에서든 읽게 합니다. 원고의 글은 올리지 않고, 올린 것을 다시 받아 오지도 않습니다. 연결은 이 브라우저의 타이핑(없으면 시작)에 적어 둔 것을 빌려 씁니다. 4baek을 두 브라우저에서 쓰면 나중에 올린 쪽의 기록만 남습니다.</p>
+      <p class="note" id="shareNote"></p>
+
       <h2>백업</h2>
       <p class="note warnnote" id="bakNote" hidden></p>
       <div class="bak">
@@ -339,7 +343,7 @@ table.st tr.noline td{border-bottom:0;padding-bottom:.1rem}
 
 <script>
 "use strict";
-var KEY = "4baek-v1";   /* 타이핑(taiping-v1)·보태기(botaegi-v1)와 겹치지 않는 열쇠. 수파베이스는 쓰지 않는다 */
+var KEY = "4baek-v1";   /* 타이핑(taiping-v1)·보태기(botaegi-v1)와 겹치지 않는 열쇠. 원고와 기록의 본자리는 이 저장소이고, 수파베이스에는 날짜별 분량 요약만 올린다(아래 '시작에 올리기') */
 function $(s){ return document.querySelector(s); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
@@ -378,7 +382,7 @@ function load(){
   return d;
 }
 var S = load();
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장하지 못했습니다 — 저장 공간을 확인하세요", 4000); } }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장하지 못했습니다 — 저장 공간을 확인하세요", 4000); } queueShare(); }
 
 function len(t){ return (t || "").replace(/\n/g, "").length; }
 function trimBlank(a){
@@ -1477,6 +1481,7 @@ function renderSet(){
     x.type = "button"; x.textContent = "×"; x.title = "빼기"; x.onclick = function(){ S.restDates = S.restDates.filter(function(y){ return y !== k; }); save(); todayGoal(); renderSet(); };
     sp.appendChild(x); rs.appendChild(sp);
   });
+  shareNote(shareState || (shareConf() ? "저장할 때마다 3초 뒤에 올립니다." : "이 브라우저에 타이핑이나 시작의 수파베이스 연결이 없어 올리지 않습니다."));
   var bn = $("#bakNote"), stale = backupStale();
   bn.hidden = !stale;
   if(stale) bn.textContent = S.lastExport ? "마지막으로 내보낸 지 " + stale + "일이 지났습니다. 글과 기록은 이 브라우저에만 있으니 지금 한 번 내보내 두세요." : "아직 한 번도 내보내지 않았습니다(쓰기 시작한 지 " + stale + "일). 글과 기록은 이 브라우저에만 있으니 지금 한 번 내보내 두세요.";
@@ -1626,11 +1631,53 @@ function hashNew(q){
 window.addEventListener("hashchange", hashOpen);
 window.addEventListener("focus", winMine);
 
+/* ---------- 시작에 올리기 (2026년 11월 20일) ----------
+   시작(sijak)이 읽는 날짜별 분량 요약 — 타이핑이 days 줄을 올리는 것과 같은 표(botaegi_kv)의 sabaek 줄.
+   { v, first:기록이 있는 첫날, adv:{날짜:늘어난 글자}(0이 아닌 날만, 하루는 자정에 바뀐다), goalBy:{날짜:그날의 하루 목표(매)},
+     dailyMae, dailyMode, works:[{id, title, goal, due, total(매), live(작업 중인 원고 수), done(완성한 원고 수)}] }
+   올리기만 하고 받지 않는다 — 본자리는 이 브라우저의 저장소다. 원고의 글과 기록 한 줄 한 줄은 올리지 않는다.
+   연결(주소·열쇠)은 같은 주소의 타이핑(taiping-v1의 sbUrl·sbKey), 없으면 시작(sijak.cfg의 bt)에 적힌 것을 빌린다. 둘 다 없으면 올리지 않는다.
+   이 모양을 바꾸면 시작의 loadWrite도 맞출 것 */
+var shareSent = "", shareT = null, shareState = "";
+function shareConf(){
+  var u = "", k = "";
+  try{ var tp = JSON.parse(localStorage.getItem("taiping-v1")); if(tp && tp.sbUrl && tp.sbKey){ u = tp.sbUrl; k = tp.sbKey; } }catch(e){}
+  if(!u){ try{ var sj = JSON.parse(localStorage.getItem("sijak.cfg")); if(sj && sj.bt && sj.bt.url && sj.bt.key){ u = sj.bt.url; k = sj.bt.key; } }catch(e){} }
+  return u && k ? { url:String(u).replace(/\/+$/, ""), key:k } : null;
+}
+function shareObj(){
+  var adv = {}, first = null;
+  S.log.forEach(function(e){ var k = dayKey(e.t); if(!first || k < first) first = k; adv[k] = (adv[k] || 0) + e.d; });
+  Object.keys(adv).forEach(function(k){ if(!adv[k]) delete adv[k]; });
+  return { v:1, first:first, adv:adv, goalBy:S.goalBy, dailyMae:S.dailyMae || 0, dailyMode:S.dailyMode === "due" ? "due" : "fixed",
+           works:S.works.map(function(wk){ var sm = workSums(wk); return { id:wk.id, title:wk.title, goal:wk.goal || 0, due:wk.due || "", total:sm.total, live:sm.liveCnt, done:sm.doneCnt }; }) };
+}
+function shareNote(t){ shareState = t; var e = document.getElementById("shareNote"); if(e) e.textContent = t; }
+function shareNow(){
+  if(!S.log.length && !S.works.length) return;   /* 빈 저장소는 올리지 않는다 — 다른 브라우저가 올린 것을 지우지 않게 */
+  var c = shareConf();
+  if(!c){ shareNote("이 브라우저에 타이핑이나 시작의 수파베이스 연결이 없어 올리지 않습니다."); return; }
+  var body = JSON.stringify(shareObj());
+  if(body === shareSent) return;
+  fetch(c.url + "/rest/v1/botaegi_kv", { method:"POST", keepalive:true,
+    headers:{ "apikey":c.key, "Authorization":"Bearer " + c.key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+    body:JSON.stringify({ id:"sabaek", data:JSON.parse(body), updated_at:new Date().toISOString() }) })
+    .then(function(r){
+      if(r.ok){ shareSent = body; shareNote("마지막으로 올린 때 · " + whenText(Date.now())); }
+      else shareNote("올리지 못했습니다(" + r.status + ") · 다음에 저장할 때 다시 올립니다");
+    })
+    .catch(function(){ shareNote("올리지 못했습니다 · 인터넷에 이어지면 다시 올립니다"); });
+}
+function queueShare(){ clearTimeout(shareT); shareT = setTimeout(shareNow, 3000); }
+window.addEventListener("online", queueShare);
+window.addEventListener("pagehide", function(){ clearTimeout(shareT); shareNow(); });   /* 보내고 3초 안에 창을 닫아도 올라가게(keepalive) */
+
 /* ---------- 시작 ---------- */
 if(S.cur && !msById(S.cur)){ S.cur = null; S.armed = false; }
 winMine(); applyLook(); renderHead(); todayGoal();
 if(!hashOpen()) showView(S.mss.length ? "tp" : "list");
 booted = true;
+queueShare();
 </script>
 </body>
 </html>

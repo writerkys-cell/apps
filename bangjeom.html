@@ -524,8 +524,8 @@ body.embed .sheet.editing #shTa{min-height:12rem;flex:none}
   </section>
 
   <section>
-    <h2>글쓰기 시간 · 독서 쪽수</h2>
-    <p>오늘 글쓰기 시간은 시작이 잰 세션(서가와 같은 프로젝트의 <b>sijak_sessions</b> 표)에 떠들기를 더해 읽고, 독서는 서가 표(<b>seoga_reads</b>)에서 오늘 읽은 쪽수만 읽습니다(독서 시간과 목표는 2026년 11월 19일부터 보지 않습니다). 읽기만 합니다. 타이핑·보태기 안의 몰입 시간은 세지 않습니다(시작과 같은 기준). 보태기 프로젝트는 하루 글쓰기 목표와 떠들기 시간을 읽는 데만 씁니다. 비우면 목표는 180분입니다. 서가 칸을 비우면 위 동기화의 주소와 키로 읽습니다. 하루는 시작·서가와 같이 새벽 4시에 바뀝니다.</p>
+    <h2>글쓰기 분량 · 독서 쪽수</h2>
+    <p>오늘 쓴 초고 매수와 고친 쪽수는 보태기 프로젝트에서 읽습니다(4baek과 타이핑이 올린 날짜별 분량과 개정 쪽 기록. 시작의 글쓰기 칸과 같은 기준). 독서는 서가 표(<b>seoga_reads</b>)에서 오늘 읽은 쪽수만 읽습니다. 읽기만 합니다. 글쓰기 시간과 목표는 2026년 11월 20일부터 보지 않습니다. 보태기 칸을 비우면 이 브라우저의 타이핑이나 시작에 적힌 연결을 빌려 읽고, 서가 칸을 비우면 위 동기화의 주소와 키로 읽습니다. 하루는 시작·서가와 같이 자정에 바뀝니다.</p>
     <label for="sBtUrl">보태기 프로젝트 URL</label>
     <input type="text" id="sBtUrl" placeholder="https://xxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false">
     <label for="sBtKey">보태기 anon 키</label>
@@ -881,7 +881,7 @@ const repCycle = t => { const r = t.rep; return r.type === 'week' ? ((r.days || 
 const repLabel = t => `${(BLOCKS[t.rep.block] || BLOCKS.pm).name} · ${repCycle(t)}`;
 const repTag = t => isRep(t) ? '<span class="kind rep">반복</span>' : '';
 const isWorkKind = k => k === 'write' || k === 'read';
-// 읽기 항목은 링크를 따로 적지 않으면 서가로 간다. 쓰기 항목에는 붙이지 않는다(2026년 11월 12일): 글쓰기 시간은 시작이 재고,
+// 읽기 항목은 링크를 따로 적지 않으면 서가로 간다. 쓰기 항목에는 붙이지 않는다(2026년 11월 12일): 글쓰기는 시작의 글쓰기 칸에서 열고(11월 20일부터 시간은 재지 않는다),
 // 맥에서 보태기를 열면 타이핑의 기록을 덮어쓰니 방점이 보태기로 보내면 안 된다. 전에 붙여 둔 보태기 링크는 열 때 뗀다(fillKindUrls)
 const KIND_URL = {read:'https://writerkys-cell.github.io/apps/seoga#read'};
 const OLD_WRITE_URLS = ['https://writerkys-cell.github.io/apps/botaegi.html', 'https://writerkys-cell.github.io/apps/botaegi-phone.html'];
@@ -967,48 +967,47 @@ const todayLabel = () => { const d = parseKey(dayKey()); return `${d.getMonth()+
 const hm = ms => { const d = new Date(ms); return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); };
 const linkTag = url => url ? `<a class="lnk" href="${esc(showUrl(url))}"${/^https?:/i.test(url) ? ' target="_blank" rel="noopener"' : ''} aria-label="열기">↗</a>` : '';
 
-/* ══════════ 오늘의 글쓰기 시간·독서 쪽수 읽기 (시작의 세션·떠들기·서가) ══════════ */
+/* ══════════ 오늘의 글쓰기 분량·독서 쪽수 읽기 (4baek·타이핑·서가) ══════════ */
 async function restGet(p, path){
   const r = await fetch(p.url.replace(/\/+$/,'') + '/rest/v1/' + path, {headers:{apikey:p.key, Authorization:'Bearer ' + p.key}});
   const t = await r.text();
   if(!r.ok){ let m = t; try{ const j = JSON.parse(t); m = j.message || j.hint || t; }catch(e){} throw new Error(m || ('HTTP ' + r.status)); }
   return t ? JSON.parse(t) : null;
 }
-const btProj = () => cfg.btUrl && cfg.btKey ? {url:cfg.btUrl, key:cfg.btKey} : null;
+// 보태기 프로젝트: 설정에 적은 것, 비었으면 같은 주소의 타이핑(taiping-v1)이나 시작(sijak.cfg)이 이 브라우저에 적어 둔 연결을 빌린다(2026년 11월 20일)
+const btProj = () => {
+  if(cfg.btUrl && cfg.btKey) return {url:cfg.btUrl, key:cfg.btKey};
+  try{ const tp = JSON.parse(localStorage.getItem('taiping-v1')); if(tp && tp.sbUrl && tp.sbKey) return {url:tp.sbUrl, key:tp.sbKey}; }catch(e){}
+  try{ const sj = JSON.parse(localStorage.getItem('sijak.cfg')); if(sj && sj.bt && sj.bt.url && sj.bt.key) return {url:sj.bt.url, key:sj.bt.key}; }catch(e){}
+  return null;
+};
 const sgProj = () => cfg.sgUrl && cfg.sgKey ? {url:cfg.sgUrl, key:cfg.sgKey} : (cfg.url && cfg.key ? {url:cfg.url, key:cfg.key} : null);
-// G.write: {min, run, goal, on} 또는 null. min은 끝난 세션의 합, run은 진행 중인 것, goal은 하루 목표. 모두 분
+// G.write: {chars, pages, rev} 또는 null. chars는 오늘 쓴 초고의 글자, pages는 오늘 고친 쪽, rev는 개정 회차가 열린 작품이 있는가(2026년 11월 20일부터. 시간·목표·진행 중은 없다)
 // G.read: {pages} 또는 null. 오늘 읽은 쪽수뿐이다(2026년 11월 19일부터. 서가가 독서 시간을 재지 않는다). 목표도 진행 중도 없다
 const G = {write:null, read:null, err:{write:'', read:''}, at:0};
-// 글쓰기 시간(2026년 11월 12일부터): 시작이 잰다. 시작_인계.md의 ‘글쓰기 세션’과 같은 기준이니 그쪽이 바뀌면 여기도 고칠 것.
-//   미래 프로젝트(서가와 같은 곳)의 sijak_sessions: kind 'write', 지우지 않은 줄. end가 있으면 끝난 세션(min이 있으면 그 값, 없으면 end - start),
-//   end가 없으면 재는 중. 하루는 시작 시각 기준. 여기에 떠들기(botaegi_sessions의 source 'tteodeulgi')를 더한다.
-//   타이핑·보태기의 몰입·타이핑·교열은 세지 않는다(둘 다 세면 두 번 센다). 목표는 보태기 프로젝트의 conf, 못 읽으면 180분.
+// 글쓰기 분량(2026년 11월 20일부터): 시작이 글쓰기 시간을 재지 않는다. 시작의 글쓰기 칸과 같은 기준이니(시작_인계.md ‘글쓰기 분량 전환’) 그쪽이 바뀌면 여기도 고칠 것.
+//   보태기 프로젝트의 botaegi_kv 세 줄만 읽는다. 초고 = 타이핑의 days.adv[오늘](완성 전 원고에서 늘어난 글자) + 4baek의 sabaek.adv[오늘](보낼 때 늘어난 글자).
+//   개정 = 타이핑 works 줄의 작품마다 rev_log에서 오늘 마지막 쪽 − 어제까지의 쪽(없으면 pages_from), 0 아래로는 안 내려간다.
+//   sijak_sessions·떠들기(botaegi_sessions)·conf(goalH·goalM)는 더 읽지 않는다. 11월 12일~19일에는 시작이 잰 세션의 분을 읽었다(bangjeom_2026-11-20_분량전환-이전.html)
 async function loadWriteGoal(){
-  const ps = sgProj(), pb = btProj();
-  if(!ps){ G.write = null; G.err.write = '시작 세션 연결 없음'; return; }
-  const {key, s, e} = dayRange();
-  const enc = encodeURIComponent;
+  const pb = btProj();
+  if(!pb){ G.write = null; G.err.write = '보태기 연결 없음'; return; }
+  const {key} = dayRange();
   try{
-    const since = new Date(s.getTime() - 24*3600000).toISOString();     // 자정을 넘겨 이어지는 세션도 보려고 하루 앞에서부터
-    const [rows, tteo, kv] = await Promise.all([
-      restGet(ps, 'sijak_sessions?select=data&data->>kind=eq.write&data->>start=gte.' + enc(since)),
-      pb ? restGet(pb, 'botaegi_sessions?select=type,start_at,end_at,source&source=eq.tteodeulgi&start_at=gte.' + enc(s.toISOString()) + '&start_at=lt.' + enc(e.toISOString())).catch(() => null) : null,
-      pb ? restGet(pb, 'botaegi_kv?select=id,data&id=eq.conf').catch(() => null) : null
-    ]);
-    const t = Date.now();
-    let min = 0, run = 0, on = false, first = Infinity;
-    (rows || []).forEach(r => {
-      const d = r.data || {}; if(d.deleted || !d.start) return;
-      const a = Date.parse(d.start); if(!(a > 0)) return;
-      if(!d.end){ on = true; if(a < first){ first = a; run = Math.max(0, (t - a)/60000); } return; }   // 재는 중: 가장 먼저 시작한 것 하나
-      if(dayKey(a) !== key) return;
-      min += (d.min != null && +d.min >= 0) ? +d.min : Math.max(0, (Date.parse(d.end) - a)/60000);
+    const kv = await restGet(pb, 'botaegi_kv?select=id,data&id=in.(days,works,sabaek)');
+    const get = id => ((kv || []).find(x => x.id === id) || {}).data || null;
+    const days = get('days'), works = get('works'), sb = get('sabaek');
+    const chars = (+(days && days.adv && days.adv[key]) || 0) + (+(sb && sb.adv && sb.adv[key]) || 0);
+    let pages = 0, rev = false;
+    (Array.isArray(works) ? works : []).forEach(w => {
+      if(!w || !Array.isArray(w.rev_log)) return;
+      rev = true;
+      let before = +w.pages_from || 0, upto = null;
+      w.rev_log.filter(x => x && x.t != null && x.p != null).sort((a, b) => a.t - b.t).forEach(x => { const kk = dayKey(x.t); if(kk < key) before = +x.p; else if(kk === key) upto = +x.p; });
+      if(upto != null) pages += Math.max(0, upto - before);
     });
-    (tteo || []).forEach(r => { if(/^(focus|ty|gyo)/.test(r.type || '')){ const a = Date.parse(r.start_at), b = Date.parse(r.end_at); if(b > a) min += (b - a)/60000; } });
-    const c = ((kv || []).find(x => x.id === 'conf') || {}).data || {};
-    const goal = (c.goalH != null || c.goalM != null) ? ((+c.goalH || 0)*60 + (+c.goalM || 0)) : 180;
-    G.write = {min, run, goal, on}; G.err.write = '';
-  }catch(er){ G.write = null; G.err.write = '시작의 글쓰기 표를 읽지 못함'; }
+    G.write = {chars, pages, rev}; G.err.write = '';
+  }catch(er){ G.write = null; G.err.write = '글쓰기 분량을 읽지 못함'; }
 }
 // 서가의 seoga_reads에서 오늘 날짜인 줄만 받는다. 옛 줄(kind 'read')은 toPage - fromPage(0보다 작으면 0),
 //   새 줄(kind 'page')은 page - from(고쳐 적어 줄어든 것은 음수 그대로). gone인 줄은 뺀다. seoga_meta(active·settings.target)는 더는 읽지 않는다
@@ -1030,11 +1029,8 @@ async function loadReadGoal(){
     G.read = {pages:readPages(rows)}; G.err.read = '';
   }catch(er){ G.read = null; G.err.read = '서가를 읽지 못함'; }
 }
-// 진도: 오늘 한 분(진행 중 포함) ÷ 목표. 연결이 없거나 읽지 못했으면 0 (늘 부족). 독서에는 목표가 없어 늘 0이다(쓰는 곳 없음)
-const progress = k => { const g = G[k]; return g && g.goal > 0 ? (g.min + g.run)/g.goal : 0; };
-const running = k => !!(G[k] && (G[k].on || G[k].run > 0));
 const GOAL_NAME = {write:'글쓰기', read:'독서'};
-const goalStat = k => G[k] ? (k === 'read' ? `${GOAL_NAME[k]} ${G[k].pages}쪽` : `${GOAL_NAME[k]} ${Math.round(G[k].min + G[k].run)}/${Math.round(G[k].goal)}분`) : `${GOAL_NAME[k]} · ${G.err[k] || '아직 안 읽음'}`;
+const goalStat = k => G[k] ? (k === 'read' ? `${GOAL_NAME[k]} ${G[k].pages}쪽` : `${GOAL_NAME[k]} 초고 ${(G[k].chars/200).toFixed(1)}매${G[k].rev || G[k].pages ? ' · 개정 ' + G[k].pages + '쪽' : ''}`) : `${GOAL_NAME[k]} · ${G.err[k] || '아직 안 읽음'}`;
 let goalP = null;
 // 5분 안에 읽은 것은 다시 읽지 않는다. force면 새로 읽는다. 읽는 중에 또 부르면 그 읽기를 같이 기다린다
 async function refreshGoals(force){
@@ -1089,14 +1085,7 @@ function choose(){
   // 2. 마감이 오늘이거나 지난 일. 종류도 시간대도 가리지 않는다
   const dueNow = open.filter(t => t.due && dueDays(t) <= 0).sort(byDue);
   if(dueNow.length){ const t = dueNow[0], n = dueDays(t); return made(t, 'due', n === 0 ? '마감 오늘' : `마감 ${md(t)} · ${-n}일 지남`); }
-  // 3. 시작에서 글쓰기 세션이 돌고 있으면 쓰기를 지킨다. 직전 추천이 쓰기였으면 그대로. 정오를 넘긴 글쓰기가 이것으로 이어진다.
-  //    독서는 서가가 시간을 재지 않으니(2026년 11월 19일) ‘읽는 중’이 없다. 읽기는 저녁 시간대(6번)와 오늘·마감으로만 뜬다
-  for(const k of ['write']){
-    if(!running(k)) continue;
-    const pool = ofKind(k); if(!pool.length) continue;
-    const keep = prev && pool.find(t => t.id === prev.id);
-    return made(keep || pool[0], 'keep', '시작에서 쓰는 중');
-  }
+  // 3. (없앰, 2026년 11월 20일) 전에는 시작에서 글쓰기 세션이 돌고 있으면 쓰기를 지켰다. 시작이 시간을 재지 않아 ‘쓰는 중’이 없다. 쓰기는 오전 시간대(6번)와 오늘·마감으로만 뜬다
   // 4. 이 시간대의 반복되는 일 중 오늘 차례이고 아직 안 한 것. 목록 순
   const reps = S.tasks.filter(t => isRep(t) && t.rep.block === blk && repDue(t) && !S.skip[t.id]);
   if(reps.length) return made(reps[0], 'rep', `${B.name}의 반복 · ${repCycle(reps[0])}`);
@@ -1386,8 +1375,7 @@ function renderGoals(){
     if(!g) return `<span class="err">${esc(GOAL_NAME[k])} · ${esc(G.err[k] || '아직 안 읽음')}</span>`;
     const name = EMBED && k === 'write' ? GOAL_NAME[k] : `<a href="${esc(GOAL_URL[k])}" target="_blank" rel="noopener">${GOAL_NAME[k]}</a>`;   // 시작 안에서는 시작으로 가는 링크가 필요 없다
     if(k === 'read') return `<span>${name} <b>${g.pages}쪽</b></span>`;   // 독서는 오늘 읽은 쪽수만. 목표가 없다
-    const done = Math.round(g.min + g.run);
-    return `<span>${name} <b class="${done >= g.goal ? 'met' : ''}">${done}/${Math.round(g.goal)}분</b>${g.run > 0 ? ' · 진행 중' : ''}</span>`;
+    return `<span>${name} 초고 <b>${(g.chars/200).toFixed(1)}매</b>${g.rev || g.pages ? ` · 개정 <b>${g.pages}쪽</b>` : ''}</span>`;   // 글쓰기도 오늘의 분량만(2026년 11월 20일). 시간·목표·진행 중이 없다
   });
   if(S.pick && pickTask()) parts.push(`<span>${hm(S.pick.at)}에 고름 · 다음 ${hm(S.pick.at + SLOT)}</span>`);
   parts.push(`<span>오늘 ${todayLabel()}</span>`);
