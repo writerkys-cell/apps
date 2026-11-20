@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* writerKYS — 글쓰기 대시보드(2026년 11월 18일). 시작에서 열어, 원고 쓰기·구상·자료 읽기를 여기서 시작한다.
-   타이핑(taiping-v1)과 storyM(storyM.v1)의 저장소는 읽기만 한다. 쓰는 곳은 자기 설정(writerKYS.v1)과 storyM의 아이디어 받은편지함(storyM.ideas.in)뿐. */
+   타이핑(taiping-v1)과 4baek(4baek-v1), storyM(storyM.v1)의 저장소는 읽기만 한다. 쓰는 곳은 자기 설정(writerKYS.v1)과 storyM의 아이디어 받은편지함(storyM.ideas.in)뿐. */
 :root{
   --paper:#f2ede1; --paper-2:#e8e0cf; --ink:#23201c; --ink-soft:#736a59; --line:#d6ccb6;
   --seal:#9b3b32; --deep:#3f5566; --moss:#5f6f49; --void:#8c8577; --radius:2px;
@@ -115,25 +115,29 @@ section>h2{font-size:13.5px;font-weight:400;color:var(--ink-soft);margin:0 0 10p
 'use strict';
 /* ---------- 저장소 ----------
    writerKYS.v1 — 이 앱의 설정만. 진행 상황은 저장하지 않고 열 때마다 타이핑에서 읽는다.
-   works:[{name, unit:'mae'|'page', target}]  이름은 타이핑의 작품 이름과 같아야 한다. unit은 매수(글자 수 ÷ 200) 또는 쪽수(타이핑의 개정 회차 기록)
+   works:[{name, src:'tp'|'sb', unit:'mae'|'page', target}]  src는 읽을 곳 — 'tp'는 타이핑(개정), 'sb'는 4baek(초고, 2026년 11월 20일). 이름은 그 앱의 작품 이름과 같아야 한다. unit은 매수(글자 수 ÷ 200) 또는 쪽수(타이핑의 개정 회차 기록)
    apps·books·refs:[{name, url}]  책의 url을 비우면 서가의 그 책(seoga.html#책=이름 — 서가에서 그 책이 펼쳐지고 쪽수를 적을 수 있다) */
-const KEY='writerKYS.v1', TP_KEY='taiping-v1', SM_KEY='storyM.v1', IDEA_IN='storyM.ideas.in';
+const KEY='writerKYS.v1', TP_KEY='taiping-v1', SB_KEY='4baek-v1', SM_KEY='storyM.v1', IDEA_IN='storyM.ideas.in';
 const DEF={
   works:[],
-  apps:[{name:'스토리엠',url:'./storyM.html'},{name:'정리',url:'./jeongri.html'},{name:'타이핑',url:'./taiping.html'},{name:'타자기',url:'https://writerkys-cell.github.io/apps/typewriter.html'},{name:'떠들기',url:'./tteodeulgi.html'}],
+  apps:[{name:'스토리엠',url:'./storyM.html'},{name:'정리',url:'./jeongri.html'},{name:'타이핑',url:'./taiping.html'},{name:'4baek',url:'./4baek.html'},{name:'타자기',url:'https://writerkys-cell.github.io/apps/typewriter.html'},{name:'떠들기',url:'./tteodeulgi.html'}],
   books:[], refs:[],
-  taipingUrl:'./taiping.html', seogaUrl:'./seoga.html'
+  taipingUrl:'./taiping.html', sabaekUrl:'./4baek.html', seogaUrl:'./seoga.html'
 };
 function loadCfg(){
   let c=null; try{ c=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
   const d=JSON.parse(JSON.stringify(DEF));
-  if(!c||typeof c!=='object'){ d.jr1=1; return d; }
+  if(!c||typeof c!=='object'){ d.jr1=1; d.sb1=1; return d; }
   ['works','apps','books','refs'].forEach(k=>{ if(Array.isArray(c[k])) d[k]=c[k].filter(x=>x&&typeof x==='object'); });
   if(c.taipingUrl) d.taipingUrl=String(c.taipingUrl);
   if(c.seogaUrl) d.seogaUrl=String(c.seogaUrl);
+  if(c.sabaekUrl) d.sabaekUrl=String(c.sabaekUrl);
   /* 정리(jeongri.html)가 생겼다(2026년 11월 19일) — 이미 도구 칸을 저장해 둔 설정에는 한 번만 더해 준다. 그 뒤에 빼면 다시 넣지 않는다 */
   if(c.jr1) d.jr1=1;
   else{ if(Array.isArray(c.apps)&&!d.apps.some(a=>/jeongri\.html/.test(a.url||''))){ const k=d.apps.findIndex(a=>/storyM\.html/.test(a.url||'')); d.apps.splice(k>=0?k+1:0,0,{name:'정리',url:'./jeongri.html'}); } d.jr1=1; try{ localStorage.setItem(KEY,JSON.stringify(d)); }catch(e){} }
+  /* 4baek(4baek.html)이 생겼다(2026년 11월 20일) — 정리 때와 같이, 저장해 둔 도구 칸에 한 번만 더해 준다(타이핑 다음) */
+  if(c.sb1) d.sb1=1;
+  else{ if(Array.isArray(c.apps)&&!d.apps.some(a=>/4baek\.html/.test(a.url||''))){ const k=d.apps.findIndex(a=>/taiping\.html/.test(a.url||'')); d.apps.splice(k>=0?k+1:d.apps.length,0,{name:'4baek',url:'./4baek.html'}); } d.sb1=1; try{ localStorage.setItem(KEY,JSON.stringify(d)); }catch(e){} }
   return d;
 }
 let cfg=loadCfg(), view='home', ideaDraft='', ideaStory='';
@@ -177,6 +181,64 @@ function manualChanged(stories,m){
   const s=stories.filter(x=>x.id===sid)[0], c=((s&&s.guide&&s.guide.cards)||[]).filter(x=>x.id===cid)[0];
   return !!(c&&c.tpChanged&&!c.dropped);
 }
+/* ---------- 4baek 읽기(읽기만 한다. 계산은 4baek과 같게) — 초고 작품 (2026년 11월 20일) ----------
+   4baek-v1: works[{id,title,goal(매),due}], mss[{workId,title,base,draft,done,doneN,dirty,editedAt}], log[{t,w,d}], dailyMae */
+function readSb(){ try{ const s=JSON.parse(localStorage.getItem(SB_KEY)); return s&&typeof s==='object'&&Array.isArray(s.works)?s:null; }catch(e){ return null; } }
+function sbFind(B,name){ const k=norm(name); if(!k||!B) return null; return B.works.filter(w=>norm(w.title)===k)[0]||null; }
+function mae1(n){ return Math.round(n/20)/10; }
+function sbSums(B,w){
+  const o={done:0,doneCnt:0,live:0,liveCnt:0,dirty:0,last:null};
+  (B.mss||[]).forEach(m=>{
+    if(m.workId!==w.id) return;
+    if(m.done){ o.done+=m.doneN||0; o.doneCnt++; return; }
+    o.live+=len(m.base); o.liveCnt++; if(m.dirty) o.dirty++;
+    if(!o.last||(m.editedAt||m.baseAt||0)>(o.last.editedAt||o.last.baseAt||0)) o.last=m;
+  });
+  o.total=Math.round((mae1(o.done)+mae1(o.live))*10)/10;
+  return o;
+}
+function sbDayChars(B,k,wid){ let n=0; ((B&&B.log)||[]).forEach(e=>{ if(ymd(new Date(e.t))===k&&(!wid||e.w===wid)) n+=e.d; }); return n; }
+/* 최근 14일(기록이 그보다 짧으면 기록된 날 수)의 하루 평균 매수 — 4baek 통계 탭의 예상 완성일과 같은 셈 */
+function sbAvg(B,wid){
+  const log=(B&&B.log)||[]; if(!log.length) return {avg:0,span:0};
+  const t0=new Date(); t0.setHours(0,0,0,0); const f=new Date(log[0].t); f.setHours(0,0,0,0);
+  const span=Math.min(14,Math.round((t0-f)/86400000)+1), cut=t0.getTime()-13*86400000;
+  let n=0; log.forEach(e=>{ if(e.w===wid&&e.t>=cut) n+=e.d; });
+  return {avg:span?n/200/span:0,span};
+}
+/* 4baek의 오늘 하루 목표(매) — 4baek이 날마다 적어 두는 goalBy[오늘]. 오늘 4baek을 아직 열지 않았으면, 마감에 맞추는 날은 가장 최근에 적힌 목표를, 아니면 직접 적은 dailyMae를 쓴다 */
+function sbGoal(B,tk){
+  const gb=(B&&B.goalBy)||{}; if(typeof gb[tk]==='number') return gb[tk];
+  if(B.dailyMode==='due'){ const ks=Object.keys(gb).sort(); if(ks.length) return +gb[ks[ks.length-1]]||0; }
+  return +B.dailyMae||0;
+}
+/* 원고 줄을 어디서 읽을까 — 설정에서 고른 곳. 고르지 않았으면 타이핑에 없고 4baek에만 있는 이름일 때 4baek */
+function srcOf(cw,S,B){ if(cw.src==='sb'||cw.src==='tp') return cw.src; return !findWork(S,cw.name)&&sbFind(B,cw.name)?'sb':'tp'; }
+function sbWorkHTML(B,cw){
+  const w=sbFind(B,cw.name);
+  if(!w) return '<div class="work miss"><div class="head"><span class="name">'+esc(cw.name||'이름 없음')+'</span></div><p class="note">'+(B?'4baek에 이 이름의 작품이 없습니다 — 설정에서 이름을 4baek의 작품 이름과 똑같이 적으세요.':'이 브라우저에 4baek의 저장소가 없습니다.')+'</p></div>';
+  const sm=sbSums(B,w), lu=sm.last, base=cfg.sabaekUrl||DEF.sabaekUrl, href=lu?base+'#'+encodeURIComponent('원고')+'='+encodeURIComponent(lu.id):base;
+  const now=sm.total, target=+cw.target||+w.goal||0, pct=target?Math.max(0,Math.min(100,Math.round(now/target*100))):null, sub=[];
+  sub.push('<span>원고 '+sm.liveCnt+'개'+(sm.doneCnt?' · 완성 '+sm.doneCnt+'편':'')+'</span>');
+  const left=target?Math.round((target-now)*10)/10:0;
+  if(target) sub.push('<span>'+(left>0?'남은 '+num(left,1)+'매':'목표를 채웠습니다')+'</span>');
+  if(w.due){
+    const d=Math.round((new Date(w.due+'T00:00:00')-new Date(ymd(new Date())+'T00:00:00'))/86400000);
+    sub.push('<span class="'+(d<0?'late':'')+'">마감 '+esc(w.due.replace(/-/g,'.'))+' · '+(d>0?'D-'+d:d===0?'오늘':'D+'+(-d))+'</span>');
+    if(left>0&&d>=0) sub.push('<span>하루 '+num(left/(d+1),1)+'매</span>');
+  }
+  if(left>0){ const a=sbAvg(B,w.id); if(a.avg>0){ const dd=Math.ceil(left/a.avg), ed=new Date(); ed.setDate(ed.getDate()+dd); sub.push('<span>이 속도(하루 '+num(a.avg,1)+'매)면 '+(ed.getMonth()+1)+'월 '+ed.getDate()+'일쯤</span>'); } }
+  const flags=[]; if(sm.dirty) flags.push('<span>스크리브너에 아직 없음 '+sm.dirty+'</span>');
+  if(sm.doneCnt&&!sm.liveCnt) flags.push('<span>초고의 원고가 모두 완성됐습니다 — 개정으로 넘어가면 설정에서 이 줄을 \'개정 · 타이핑\'으로</span>');
+  let ll=''; if(lu){ const ls=String((lu.draft&&lu.draft.trim())?lu.draft:(lu.base||'')).split('\n').map(x=>x.trim()).filter(Boolean); ll=ls[ls.length-1]||''; if(ll.length>70) ll='…'+ll.slice(-70); }
+  return '<div class="work"><div class="head">'+aTag(href,'name',esc(w.title),0)+'<span class="kind">초고</span>'
+    +'<span class="num"><b>'+num(now,1)+'</b>'+(target?' / '+num(target,1):'')+'매'+(pct!=null?' · '+pct+'%':'')+'</span></div>'
+    +(pct!=null?'<div class="bar'+(pct>=100?' done':'')+'"><i style="width:'+pct+'%"></i></div>':'')
+    +'<div class="sub">'+sub.join('')+'</div>'
+    +(lu?'<div class="last"><span class="t">이어 쓸 곳 · '+esc(lu.title||'제목 없음')+'</span>'+(ll?'<br>'+esc(ll):'')+'</div>':(sm.doneCnt?'':'<p class="note">아직 원고가 없습니다 — 4baek의 원고 탭에서 소제목과 스크리브너 링크를 넣으세요.</p>'))
+    +(flags.length?'<div class="flags">'+flags.join('')+'</div>':'')+'</div>';
+}
+
 /* 다른 앱의 창 이름 — 타이핑과 storyM은 자기 창 이름을 appwin.<앱>에 적어 둔다. 그 창을 다시 써야 타이핑 창이 둘이 되어 서로 덮는 일이 없다 */
 function winName(app){ let n=''; try{ n=localStorage.getItem('appwin.'+app)||''; }catch(e){} if(!n||n===window.name) n=app; return n===window.name?app+'2':n; }
 /* 대시보드는 늘 떠 있어야 한다(2026년 11월 18일) — 시작이 이 창을 닫는 때로 글쓰기 끝을 잡는다. 그래서 여기서 여는 것은 모두 다른 창으로 간다.
@@ -185,13 +247,14 @@ function winName(app){ let n=''; try{ n=localStorage.getItem('appwin.'+app)||'';
 function claimWin(){
   try{
     if(!window.name) window.name='writerKYS';
-    ['taiping','storyM','jeongri'].forEach(a=>{ if(localStorage.getItem('appwin.'+a)===window.name) localStorage.removeItem('appwin.'+a); });
+    ['taiping','storyM','jeongri','4baek'].forEach(a=>{ if(localStorage.getItem('appwin.'+a)===window.name) localStorage.removeItem('appwin.'+a); });
     localStorage.setItem('appwin.writerKYS',window.name);
   }catch(e){}
 }
 function targetFor(url,i){
   if(!/^(https?:|\.\/|\.\.\/|\/)/.test(url)) return '';                /* 데본씽크·씽즈·단축어 같은 주소 — 창을 만들지 않는다 */
   if(/taiping\.html/.test(url)) return winName('taiping');
+  if(/4baek\.html/.test(url)) return winName('4baek');
   if(/storyM\.html/.test(url)) return winName('storyM');
   if(/jeongri\.html/.test(url)) return winName('jeongri');
   if(/seoga\.html/.test(url)) return window.name==='wk_seoga'?'wk_seoga2':'wk_seoga';
@@ -200,7 +263,8 @@ function targetFor(url,i){
 function aTag(url,cls,inner,i){ const t=targetFor(url,i); return '<a class="'+cls+'" href="'+esc(url)+'"'+(t?' target="'+esc(t)+'" rel="opener"':'')+'>'+inner+'</a>'; }
 
 /* ---------- 원고 ---------- */
-function workHTML(S,stories,cw){
+function workHTML(S,stories,cw,B){
+  if(srcOf(cw,S,B)==='sb') return sbWorkHTML(B,cw);
   const w=findWork(S,cw.name);
   if(!w) return '<div class="work miss"><div class="head"><span class="name">'+esc(cw.name||'이름 없음')+'</span></div><p class="note">타이핑에 이 이름의 작품이 없습니다 — 설정에서 이름을 타이핑의 작품 이름과 똑같이 적으세요.</p></div>';
   const us=unitsOf(S,w), lu=lastUnit(S,w), kind=w.kind==='개정'?'개정':'초고';
@@ -235,21 +299,27 @@ function workHTML(S,stories,cw){
     +(lu?'<div class="last"><span class="t">이어 쓸 곳 · '+esc(lu.title||'제목 없음')+'</span>'+(ll?'<br>'+esc(ll):'')+'</div>':'<p class="note">아직 원고가 없습니다.</p>')
     +(flags.length?'<div class="flags">'+flags.join('')+'</div>':'')+'</div>';
 }
-function todayHTML(S){
-  if(!S) return '';
-  const k=tpDayKey(S,Date.now()), adv=(S.adv&&S.adv[k])||0, goal=S.daily||0, out=[];
-  out.push('<span>오늘 <b'+(goal&&adv>=goal?' class="hit"':'')+'>'+num(adv/200,1)+'</b>매'+(goal?' / '+num(goal/200,1)+'매':'')+'</span>');
+/* 오늘 — 초고와 개정을 따로 보인다(2026년 11월 20일, 작가가 정함). 매수 목표는 초고(4baek)만으로 따지고, 개정은 쪽으로 따로 센다.
+   4baek 저장소가 없는 브라우저에서는 예전처럼 타이핑의 매수와 하루 목표를 보인다 */
+function todayHTML(S,B){
+  if(!S&&!B) return '';
+  const out=[];
+  if(B){ const tk=ymd(new Date()), c=sbDayChars(B,tk), g=sbGoal(B,tk); out.push('<span>오늘 초고 <b'+(g&&c>=g*200?' class="hit"':'')+'>'+num(c/200,1)+'</b>매'+(g?' / '+num(g,1)+'매':'')+'</span>'); }
+  if(!S) return '<div class="today">'+out.join('')+'</div>';
+  const k=tpDayKey(S,Date.now()), adv=(S.adv&&S.adv[k])||0, goal=S.daily||0;
+  if(!B) out.push('<span>오늘 <b'+(goal&&adv>=goal?' class="hit"':'')+'>'+num(adv/200,1)+'</b>매'+(goal?' / '+num(goal/200,1)+'매':'')+'</span>');
+  else if(adv>0) out.push('<span>타이핑 <b>'+num(adv/200,1)+'</b>매</span>');
   let pg=0; (S.works||[]).forEach(w=>revsOf(w).forEach(r=>{ let before=r.from||0, upto=null; revLog(r).forEach(x=>{ const kk=tpDayKey(S,x.t); if(kk<k) before=x.p; else if(kk===k) upto=x.p; }); if(upto!=null) pg+=Math.max(0,upto-before); }));
   if(pg||S.dailyPg) out.push('<span>고친 쪽 <b'+(S.dailyPg&&pg>=S.dailyPg?' class="hit"':'')+'>'+pg+'</b>쪽'+(S.dailyPg?' / '+S.dailyPg+'쪽':'')+'</span>');
   const ms=(S.days&&S.days[k])||0; if(ms>=60000) out.push('<span>몰입 <b>'+Math.round(ms/60000)+'</b>분</span>');
   return '<div class="today">'+out.join('')+'</div>';
 }
 function topHTML(){
-  const S=readTp(), stories=readSm();
-  let h=todayHTML(S)+'<section><h2>원고</h2>';
-  if(!S) h+='<p class="note">이 브라우저에 타이핑의 저장소가 없습니다. 시작 웹 앱 안에서 열어야 실제 작업이 보입니다.</p>';
-  else if(!cfg.works.length) h+='<p class="note">설정에서 지금 작업 중인 작품의 이름을 적으세요. 타이핑의 작품 이름과 같아야 합니다.</p>';
-  else h+=cfg.works.map(cw=>workHTML(S,stories,cw)).join('');
+  const S=readTp(), B=readSb(), stories=readSm();
+  let h=todayHTML(S,B)+'<section><h2>원고</h2>';
+  if(!S&&!B) h+='<p class="note">이 브라우저에 타이핑과 4baek의 저장소가 없습니다. 시작 웹 앱 안에서 열어야 실제 작업이 보입니다.</p>';
+  else if(!cfg.works.length) h+='<p class="note">설정에서 지금 작업 중인 작품의 이름을 적으세요. 초고는 4baek, 개정은 타이핑의 작품 이름과 같아야 합니다.</p>';
+  else h+=cfg.works.map(cw=>workHTML(S,stories,cw,B)).join('');
   return h+'</section>';
 }
 
@@ -289,18 +359,27 @@ function restHTML(){
 
 /* ---------- 설정 ---------- */
 const SECS=[
-  ['works','원고','지금 작업 중인 초고·개정. 이름은 타이핑의 작품 이름과 똑같이. 목표를 비우면 타이핑에 적어 둔 목표 매수(쪽수는 개정 회차의 전체 쪽수)를 씁니다.'],
+  ['works','원고','지금 작업 중인 초고·개정. 초고는 4baek, 개정은 타이핑에서 읽습니다. 이름은 그 앱의 작품 이름과 똑같이. 목표를 비우면 그 앱에 적어 둔 목표 매수(쪽수는 개정 회차의 전체 쪽수)를 씁니다.'],
   ['apps','도구','가운데에 보일 글쓰기 앱. 이름과 주소.'],
   ['books','책','글쓰기와 관련해 읽는 책. 주소를 비우면 서가의 그 책이 \'자료로 읽기\'로 열립니다(이름은 서가의 책 제목과 같게).'],
   ['refs','자료','데본씽크(x-devonthink-item://…), 씽즈(things:///…), 단축어(shortcuts://run-shortcut?name=…) 같은 주소.']
 ];
-function rowHTML(sec,x,i,S){
+function rowHTML(sec,x,i,S,B){
   const mv='<button data-act="up" data-sec="'+sec+'" data-i="'+i+'" aria-label="위로">↑</button><button data-act="del" data-sec="'+sec+'" data-i="'+i+'">빼기</button>';
+  if(sec==='works'&&srcOf(x,S,B)==='sb'){
+    const w=sbFind(B,x.name);
+    const st=!norm(x.name)?'':!B?'<div class="st bad">4baek 저장소가 없습니다</div>':!w?'<div class="st bad">4baek에 이 이름의 작품이 없습니다</div>'
+      :'<div class="st">4baek의 초고 작품'+(w.goal?' · 목표 '+w.goal+'매':'')+(w.due?' · 마감 '+esc(w.due):'')+'</div>';
+    return '<div class="srow"><input class="nm" list="tpWorks" placeholder="작품 이름" value="'+esc(x.name||'')+'" data-sec="works" data-i="'+i+'" data-k="name">'
+      +'<select data-sec="works" data-i="'+i+'" data-k="src" aria-label="읽을 곳"><option value="sb" selected>초고 · 4baek</option><option value="tp">개정 · 타이핑</option></select>'
+      +'<input class="tg" type="number" min="0" inputmode="numeric" placeholder="목표" value="'+esc(x.target||'')+'" data-sec="works" data-i="'+i+'" data-k="target">'+mv+st+'</div>';
+  }
   if(sec==='works'){
     const w=S?findWork(S,x.name):null;
     const st=!norm(x.name)?'':!S?'<div class="st bad">타이핑 저장소가 없습니다</div>':!w?'<div class="st bad">타이핑에 이 이름의 작품이 없습니다</div>'
       :'<div class="st">타이핑의 '+(w.kind==='개정'?'개정':'초고')+' 작품'+(w.targetMae?' · 목표 '+w.targetMae+'매':'')+(w.due?' · 마감 '+esc(w.due):'')+(x.unit==='page'&&!revsOf(w).length?' · 개정 회차가 없어 쪽수를 읽을 수 없습니다':'')+'</div>';
     return '<div class="srow"><input class="nm" list="tpWorks" placeholder="작품 이름" value="'+esc(x.name||'')+'" data-sec="works" data-i="'+i+'" data-k="name">'
+      +'<select data-sec="works" data-i="'+i+'" data-k="src" aria-label="읽을 곳"><option value="sb">초고 · 4baek</option><option value="tp" selected>개정 · 타이핑</option></select>'
       +'<select data-sec="works" data-i="'+i+'" data-k="unit" aria-label="세는 법"><option value="mae"'+(x.unit!=='page'?' selected':'')+'>매수</option><option value="page"'+(x.unit==='page'?' selected':'')+'>쪽수</option></select>'
       +'<input class="tg" type="number" min="0" inputmode="numeric" placeholder="목표" value="'+esc(x.target||'')+'" data-sec="works" data-i="'+i+'" data-k="target">'+mv+st+'</div>';
   }
@@ -308,17 +387,18 @@ function rowHTML(sec,x,i,S){
     +'<input class="url" placeholder="'+(sec==='books'?'주소(비우면 서가)':'주소')+'" value="'+esc(x.url||'')+'" data-sec="'+sec+'" data-i="'+i+'" data-k="url" autocapitalize="off" autocorrect="off" spellcheck="false">'+mv+'</div>';
 }
 function setHTML(){
-  const S=readTp();
-  let h='<div class="set"><datalist id="tpWorks">'+((S&&S.works)||[]).filter(workActive).map(w=>'<option value="'+esc(w.title)+'">').join('')+'</datalist>';
+  const S=readTp(), B=readSb();
+  let h='<div class="set"><datalist id="tpWorks">'+((S&&S.works)||[]).filter(workActive).map(w=>'<option value="'+esc(w.title)+'">').join('')+((B&&B.works)||[]).map(w=>'<option value="'+esc(w.title)+'">').join('')+'</datalist>';
   const refs=seogaRefs();
   h+='<datalist id="sgRefs">'+refs.map(r=>'<option value="'+esc(r.title)+'">').join('')+'</datalist>';
   SECS.forEach(([sec,name,note])=>{
-    h+='<h3>'+name+'</h3><p class="note">'+esc(note)+'</p>'+cfg[sec].map((x,i)=>rowHTML(sec,x,i,S)).join('')
+    h+='<h3>'+name+'</h3><p class="note">'+esc(note)+'</p>'+cfg[sec].map((x,i)=>rowHTML(sec,x,i,S,B)).join('')
       +'<div class="add"><button class="btn" data-act="add" data-sec="'+sec+'">'+name+' 더하기</button></div>';
     if(sec==='books') h+='<p class="note" style="margin-top:14px">책 이름 칸에 제목을 적으면 서가에 담긴 책 '+refs.length+'권에서 찾아 줍니다.</p>';
   });
-  h+='<h3>주소</h3><p class="note">원고 이름을 누르면 여는 타이핑, 책을 여는 서가의 주소. 깃허브 apps/에 함께 올려 두면 그대로 두면 됩니다.</p>'
+  h+='<h3>주소</h3><p class="note">원고 이름을 누르면 여는 타이핑과 4baek, 책을 여는 서가의 주소. 깃허브 apps/에 함께 올려 두면 그대로 두면 됩니다.</p>'
     +'<div class="srow"><input class="nm" value="타이핑" disabled><input class="url" data-top="taipingUrl" value="'+esc(cfg.taipingUrl)+'" autocapitalize="off" spellcheck="false"></div>'
+    +'<div class="srow"><input class="nm" value="4baek" disabled><input class="url" data-top="sabaekUrl" value="'+esc(cfg.sabaekUrl)+'" autocapitalize="off" spellcheck="false"></div>'
     +'<div class="srow"><input class="nm" value="서가" disabled><input class="url" data-top="seogaUrl" value="'+esc(cfg.seogaUrl)+'" autocapitalize="off" spellcheck="false"></div>'
     +'<div class="add" style="margin-top:28px"><button class="btn go" id="setDone">돌아가기</button></div></div>';
   return h;
@@ -349,14 +429,14 @@ document.addEventListener('change',e=>{
   if(t.id==='ideaStory'){ ideaStory=t.value; return; }
   if(t.dataset.top){ cfg[t.dataset.top]=norm(t.value)||DEF[t.dataset.top]; saveCfg(); return; }
   const sec=t.dataset.sec, k=t.dataset.k, i=+t.dataset.i; if(!sec||!k||!cfg[sec]||!cfg[sec][i]) return;
-  cfg[sec][i][k]=k==='url'?t.value.trim():k==='target'?(t.value>0?+t.value:''):k==='unit'?t.value:norm(t.value);
+  cfg[sec][i][k]=k==='url'?t.value.trim():k==='target'?(t.value>0?+t.value:''):(k==='unit'||k==='src')?t.value:norm(t.value);
   saveCfg(); if(sec==='works') render();
 });
 document.addEventListener('input',e=>{ if(e.target.id==='ideaText') ideaDraft=e.target.value; });
 document.addEventListener('keydown',e=>{ if(e.target.id==='ideaText'&&e.key==='Enter'&&!e.isComposing){ e.preventDefault(); sendIdea(); } });
 window.addEventListener('focus',()=>{ claimWin(); refreshTop(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') refreshTop(); });
-window.addEventListener('storage',e=>{ if(e.key===TP_KEY||e.key===SM_KEY) refreshTop(); else if(e.key==='seoga.v1'&&view==='set'&&!(document.activeElement&&/INPUT|SELECT/.test(document.activeElement.tagName))) render(); else if(e.key===KEY){ cfg=loadCfg(); render(); } });
+window.addEventListener('storage',e=>{ if(e.key===TP_KEY||e.key===SB_KEY||e.key===SM_KEY) refreshTop(); else if(e.key==='seoga.v1'&&view==='set'&&!(document.activeElement&&/INPUT|SELECT/.test(document.activeElement.tagName))) render(); else if(e.key===KEY){ cfg=loadCfg(); render(); } });
 claimWin();
 render();
 </script>
