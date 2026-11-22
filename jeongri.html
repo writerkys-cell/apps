@@ -254,7 +254,7 @@ const ideaTitle=i=>norm((i.meta||{}).title)||defTitle(i.text);
 const ideaTag=i=>{const t=(i.meta||{}).tag;return t&&t.id?t:null;};
 /* 타이핑이 적어 둔 것을 가져온다 */
 function drainInbox(){let arr=[];try{arr=JSON.parse(localStorage.getItem(IN_KEY))||[];}catch(e){}if(!Array.isArray(arr)||!arr.length)return 0;
-  let n=0;arr.forEach(x=>{if(!x||!String(x.text||'').trim())return;if(x.id&&ideaById(x.id))return;newIdea(x.text,{id:x.id||uid(),origin:'taiping',created_at:x.created_at||Date.now(),meta:{ms:x.ms_link||'',msTitle:x.ms_title||''}});n++;});
+  let n=0;arr.forEach(x=>{if(!x||!String(x.text||'').trim())return;if(x.id&&ideaById(x.id))return;newIdea(x.text,{id:x.id||uid(),origin:x.origin==='bangjeom'?'bangjeom':'taiping',created_at:x.created_at||Date.now(),meta:{ms:x.ms_link||'',msTitle:x.ms_title||''}});n++;});
   try{localStorage.removeItem(IN_KEY);}catch(e){}
   if(n){persist(true);ideaFlushSoon();if(!typing())render();}return n;}
 const typing=()=>{const a=document.activeElement;return !!(a&&(a.tagName==='TEXTAREA'||a.tagName==='INPUT'||a.tagName==='SELECT')&&a.closest('#detail'))||!!document.querySelector('.modal-bg');};
@@ -296,7 +296,7 @@ const storyList=()=>{try{const d=JSON.parse(localStorage.getItem(SM_KEY));return
 
 /* ---------- 화면 ---------- */
 function statHtml(){
-  if(!sess)return '<div class="note"><span>로그인하지 않아 이 맥에만 저장됩니다. 수첩에 적은 것을 받으려면 설정에서 로그인하세요(storyM과 같은 계정).</span></div>';
+  if(!sess)return '<div class="note"><span>로그인하지 않아 이 맥에만 저장됩니다. 다른 기기와 맞추려면 설정에서 로그인하세요(storyM과 같은 계정).</span></div>';
   if(sy.table==='none')return '<div class="note"><span>수첩과 정리의 표가 아직 수파베이스에 없습니다. 그때까지는 이 맥에만 저장됩니다.</span><button class="sm" data-act="sqlCopy">표 SQL 복사</button></div>';
   return '';}
 function render(){
@@ -324,7 +324,7 @@ function render(){
 }
 function renderSide(){
   const s=document.getElementById('side');if(!s)return;const ni=liveIdeas().length,nc=liveCards().length,nd=dropCards().length;const all=ui.pane==='card'&&ui.tag===null;
-  s.innerHTML=`<div class="srow ${ui.pane==='idea'?'sel':''}" data-act="pane" data-p="idea" title="수첩에 적은 것, 여기서 적은 것, 타이핑에서 보낸 것. 제목과 태그를 정하고 '카드로'를 눌러야 카드가 됩니다"><span>아이디어</span><span class="c ${ni?'w':''}">${ni||''}</span></div>
+  s.innerHTML=`<div class="srow ${ui.pane==='idea'?'sel':''}" data-act="pane" data-p="idea" title="방점에서 글감으로 보낸 것, 여기서 적은 것, 타이핑에서 보낸 것. 제목과 태그를 정하고 '카드로'를 눌러야 카드가 됩니다"><span>아이디어</span><span class="c ${ni?'w':''}">${ni||''}</span></div>
     <div class="srow ${all?'sel':''}" data-act="pane" data-p="card" title="정리한 카드 전체"><span>카드</span><span class="c">${nc||''}</span></div>
     <div class="tags">${tagList().map(t=>`<div class="tg ${ui.pane==='card'&&ui.tag===t.key?'sel':''}" data-act="tag" data-k="${esc(t.key)}" title="${t.key?'이 작품의 카드':'아직 어떤 글이 될지 모르는 카드'}"><span>${esc(t.name)}</span><span class="c">${t.n||''}</span></div>`).join('')}</div>
     <div class="srow ${ui.pane==='drop'?'sel':''}" data-act="pane" data-p="drop" title="4baek으로(예전에는 타이핑으로) 넘긴 카드와 직접 보관한 카드"><span>보관</span><span class="c">${nd||''}</span></div>`;
@@ -337,7 +337,7 @@ function renderDetail(){
   if(ui.open&&ui.focusCard){const t=d.querySelector(`.panel textarea[data-id="${ui.open}"]`);if(t){t.closest('.cwrap')?.scrollIntoView({block:'nearest'});}ui.focusCard=false;}
 }
 /* 아이디어 탭 */
-function ideaHtml(i){const m=i.meta||{};const from=i.origin==='phone'?'수첩에서':i.origin==='taiping'?'타이핑에서 쓰다가':'';
+function ideaHtml(i){const m=i.meta||{};const from=i.origin==='phone'?'수첩에서':i.origin==='taiping'?'타이핑에서 쓰다가':i.origin==='bangjeom'?'방점의 글감':'';
   return `<div class="idea"><div class="ih"><input type="checkbox" data-isel="${i.id}" ${ui.sel[i.id]?'checked':''} title="여러 개를 골라 합칩니다"><textarea data-if="text" data-id="${i.id}" rows="1">${esc(i.text)}</textarea></div>
     <div class="ir"><span class="lb">제목</span><input class="tt" data-if="title" data-id="${i.id}" value="${esc(m.title||'')}" placeholder="${esc(defTitle(i.text))||'제목'}" title="4baek 원고의 소제목이 됩니다. 비워 두면 첫 문장의 앞부분을 씁니다">
       <span class="lb">태그</span><select data-if="tag" data-id="${i.id}" title="글상자는 아직 어떤 글이 될지 모르는 것. 작품을 고르면 그 작품의 글이 됩니다">${tagOptions(ideaTag(i))}</select>
@@ -349,7 +349,7 @@ function ideaHtml(i){const m=i.meta||{};const from=i.origin==='phone'?'수첩에
 function ideaPaneHtml(){const is=liveIdeas();const nsel=is.filter(i=>ui.sel[i.id]).length;
   return `<div class="ghead"><div class="ttl">아이디어 <span class="muted small" style="font-weight:400">${is.length?`처리할 것 ${is.length}개`:''}</span></div>
       <div class="gsw">${nsel>=2?`<button class="primary" data-act="merge" title="고른 것을 하나로 합칩니다. 가장 먼저 적은 것에 나머지 글이 빈 줄을 두고 이어집니다">고른 ${nsel}개 합치기</button>`:nsel===1?'<span class="muted small">합치려면 둘 이상 고르세요</span>':''}</div></div>
-    <p class="muted small" style="margin:0 0 12px">수첩에 적은 생각이 여기로 들어옵니다. 하나씩 제목을 달고 태그를 정한 뒤 "카드로"를 누르면 카드가 됩니다. 태그의 처음 값은 글상자이고, 4baek의 작품 하나로 바꿀 수 있습니다. 여기에 남아 있는 것이 아직 처리하지 않은 것입니다.</p>
+    <p class="muted small" style="margin:0 0 12px">방점에서 글감으로 보낸 생각이 여기로 들어옵니다(수첩에 적은 것은 방점으로 가서 태그를 답니다). 하나씩 제목을 달고 태그를 정한 뒤 "카드로"를 누르면 카드가 됩니다. 태그의 처음 값은 글상자이고, 4baek의 작품 하나로 바꿀 수 있습니다. 여기에 남아 있는 것이 아직 처리하지 않은 것입니다.</p>
     ${statHtml()}
     <div class="newbar"><textarea id="newIdea" rows="1" placeholder="맥에서 바로 적기 — ⏎ 저장, ⇧⏎ 줄바꿈">${esc(ui.draft)}</textarea><button data-act="saveNew">저장</button></div>
     ${is.map(ideaHtml).join('')||'<div class="empty">처리할 아이디어가 없습니다.</div>'}`;}
@@ -672,14 +672,19 @@ async function flushIdeas(unloading){
     rows.forEach(i=>{if(i.updated_at===stamp.get(i.id))delete i._d;});persist();setTable('ok');}
   catch(e){failed(e);}
 }
+/* 수첩 줄은 이제 방점이 가져간다(2026년 11월 22일, 글쓰기패턴 업데이트 5단계). 정리는 방점에서 글감으로 보낸 것만 받는다(받은편지함 jeongri.in).
+   넘기는 때(sucheop.bjFrom — 이 판의 정리나 방점이 이 브라우저에서 처음 열린 때) 뒤에 수첩이 적은 줄은 이 맥에 없으면 들이지 않는다.
+   그 전에 적어 이미 들어와 있는 수첩 줄, 정리에서 적은 것, 타이핑·방점에서 보낸 것은 전과 같이 이 표로 맞춘다. 방점의 pullSucheop이 같은 때를 본다 */
+const SC_FROM_KEY='sucheop.bjFrom';
+function scFrom(){let v=0;try{v=+localStorage.getItem(SC_FROM_KEY)||0;if(!v){v=Date.now();localStorage.setItem(SC_FROM_KEY,String(v));}}catch(e){}return v||Date.now();}
 async function pullIdeas(force){
-  if(!sess||blocked(force))return;let changed=false;
+  if(!sess||blocked(force))return;let changed=false;const bjFrom=scFrom();
   /* 수파베이스는 한 번에 1,000줄까지만 준다. 나중에 고친 것부터 받고, 다 받았을 때만 "저쪽에 없는 줄"을 올릴 것으로 친다 */
   /* 처리가 끝난 지 한 달이 넘은 줄은 이 맥의 저장소에 두지 않는다(표에는 남는다) */
   const old=Date.now()-30*86400000;const stale=r=>(r.state!=='new'||r.deleted)&&(r.updated_at||0)<old;
   try{const rows=await rest(`/${T_IDEA}?select=*&order=updated_at.desc&limit=1000`);setTable('ok');const seen=new Set();
     for(const r of rows){seen.add(r.id);delete r.user_id;const loc=ideaById(r.id);
-      if(!loc){if(stale(r))continue;db.ideas.push(r);changed=true;}
+      if(!loc){if(stale(r))continue;if(r.origin==='phone'&&(r.created_at||0)>=bjFrom)continue;/* 방점이 가져갈(가져간) 수첩 줄 */db.ideas.push(r);changed=true;}
       else if(r.updated_at>(loc.updated_at||0)){for(const k of Object.keys(loc))delete loc[k];Object.assign(loc,r);changed=true;}
       else if(r.updated_at<(loc.updated_at||0))loc._d=1;}
     if(rows.length<1000)db.ideas.forEach(i=>{if(!seen.has(i.id))i._d=1;});
