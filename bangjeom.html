@@ -305,7 +305,7 @@ ol.list li.editor.cont label,.ask.cont label{display:block;font-size:.82rem;colo
 .ask.cont label:first-child,ol.list li.editor.cont label:first-child{margin-top:0}
 .pendh{font-size:.85rem;font-weight:400;color:var(--ink-soft);letter-spacing:.08em;margin:2.2rem 0 .4rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
 .pendh span{color:var(--ink-faint);margin-left:.3rem}
-ol.list.pend li .mv{visibility:visible}
+ol.list.pend li .mv,ol.list.pend li .del{visibility:visible}
 ol.list.pend li .body{color:var(--ink-soft)}
 .nexts{margin-top:1.6rem;text-align:left;border-top:1px dotted var(--rule);padding-top:.8rem}
 .nexts .nl{font-size:.78rem;color:var(--ink-faint);letter-spacing:.12em;margin-bottom:.3rem}
@@ -1677,6 +1677,7 @@ function renderList(){
         <span class="gutter"></span>
         <span class="body">${kindTag(p.kind)}<span class="ttl">${esc(p.text)}</span>${linkTag(p.url)}</span>
         <button class="mv" data-restore="${esc(p.id)}">되돌리기</button>
+        <button class="del" data-pdel="${esc(p.id)}" aria-label="지우기">지움</button>
       </li>`).join('')}</ol>`
     : '';
 }
@@ -2102,6 +2103,12 @@ document.addEventListener('click', e => {
   if(hd){ const t = byId(hd.dataset.hold), was = t && t.hold; if(toggleHold(hd.dataset.hold)) toast(was ? '미결을 풀었습니다' : '미결로 표시했습니다 · 매듭을 지으면 미결함으로 갑니다'); return; }
   const rs = e.target.closest('[data-restore]');
   if(rs){ if(restorePend(rs.dataset.restore)) toast('목록 끝으로 되돌렸습니다'); return; }
+  const pd = e.target.closest('[data-pdel]');
+  if(pd){   // 미결함에서 지우기(2026년 11월 22일, 작가가 정함). 되돌릴 수 없으니 묻는다
+    const k = (S.pend || []).findIndex(x => x.id === pd.dataset.pdel);
+    if(k >= 0 && confirm(`「${S.pend[k].text}」\n\n미결함에서 지웁니까?`)){ S.pend.splice(k, 1); commit(); }
+    return;
+  }
   const dn = e.target.closest('[data-done]');
   if(dn){ const t = byId(dn.dataset.done); if(t && !t.done){ finish(t.id, null, true); toast(t.rep ? '오늘 한 일에 남겼습니다 · 다음 차례에 다시 뜹니다' : '끝낸 일로 옮겼습니다'); } return; }
   const rv = e.target.closest('[data-revive]');
