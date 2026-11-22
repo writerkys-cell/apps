@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4efe3">
+<title>fomo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f4efe3; --paper-2:#ece4d3; --ink:#26221f; --ink-soft:#6d6459; --ink-faint:#9a9084;
+  --rule:#d6cbb5; --seal:#9b2c25; --seal-soft:#bf6d64; --seal-wash:#f0dcd8; --w:34rem;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:'Gowun Batang',serif;font-size:17px;line-height:1.75;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
+input{font:inherit;color:inherit}
+.wrap{max-width:var(--w);margin:0 auto;padding:1.4rem 16px 4rem}
+header{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--rule);padding-bottom:.7rem;margin-bottom:1.6rem}
+h1{font-size:1.35rem;margin:0;letter-spacing:.12em;font-weight:700}
+h1 span{color:var(--seal)}
+header small{color:var(--ink-faint);font-size:.8rem;letter-spacing:.04em}
+.warn{display:none;margin:0 0 1.2rem;padding:.7rem .9rem;border:1px solid var(--seal-soft);background:var(--seal-wash);color:var(--seal);border-radius:2px;font-size:.92rem;width:100%;text-align:left}
+.warn.on{display:block}
+.stage{text-align:center;padding:.6rem 0 0}
+.phase{font-size:.85rem;color:var(--ink-soft);letter-spacing:.16em}
+.clock{font-size:4.6rem;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:.02em;margin:.2rem 0 .1rem}
+.until{font-size:.88rem;color:var(--ink-faint);min-height:1.6em}
+.stage.ring .clock{color:var(--seal)}
+.acts{display:grid;grid-template-columns:1fr;gap:.6rem;margin-top:1.3rem}
+.acts button{padding:.85rem 0;border:1px solid var(--ink);border-radius:2px;font-size:1rem}
+.acts .go{background:var(--ink);color:var(--paper)}
+.acts .off{background:var(--seal);border-color:var(--seal);color:var(--paper)}
+.acts .dim{border-color:var(--rule);color:var(--ink-soft)}
+.today{margin-top:1.1rem;font-size:.9rem;color:var(--ink-soft);text-align:center}
+.today b{color:var(--ink)}
+section{margin-top:2.4rem;border-top:1px solid var(--rule);padding-top:1rem}
+h2{font-size:.85rem;font-weight:400;color:var(--ink-soft);letter-spacing:.14em;margin:0 0 .7rem}
+.set{display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center;font-size:.95rem}
+.set label{display:flex;align-items:center;gap:.4rem}
+.set input{width:4.2rem;padding:.3rem .4rem;border:1px solid var(--rule);border-radius:2px;background:#fbf8f1;text-align:right}
+.links{display:flex;flex-wrap:wrap;gap:.5rem 1.3rem;margin-top:.9rem}
+.links button{color:var(--seal);font-size:.9rem;border-bottom:1px dotted var(--seal-soft);padding-bottom:1px}
+.links button.dim{color:var(--ink-faint);border-bottom-color:var(--rule)}
+.stat{font-size:.85rem;color:var(--ink-faint);margin-top:.8rem;line-height:1.7}
+.stat b{color:var(--ink-soft);font-weight:400}
+ol.log{list-style:none;margin:0;padding:0;font-size:.82rem;color:var(--ink-soft);line-height:1.7;max-height:16rem;overflow:auto}
+ol.log li{border-bottom:1px dotted var(--rule);padding:.15rem 0}
+ol.log .t{color:var(--ink-faint);margin-right:.6rem;font-variant-numeric:tabular-nums}
+ol.log .bg{color:var(--seal);margin-left:.5rem}
+.help p{font-size:.9rem;color:var(--ink-soft);margin:.2rem 0 .7rem}
+/* 목록과 계획 (7단계) */
+.task{min-height:2.2rem;margin-bottom:.5rem;font-size:1.25rem;line-height:1.5}
+.task .none{font-size:.92rem;color:var(--ink-faint)}
+.task a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--seal)}
+.task .n{display:block;font-size:.85rem;color:var(--ink-soft);letter-spacing:.06em;margin-top:.15rem}
+.kind{display:inline-block;font-size:.72rem;color:var(--seal);border:1px solid var(--seal-soft);border-radius:2px;padding:.05rem .3rem;margin-right:.4rem;vertical-align:.12em;line-height:1.4;letter-spacing:.04em}
+.kind.rep{color:var(--ink-soft);border-color:var(--rule)}
+.sum{font-size:.95rem;margin-bottom:.6rem}
+.sum b{font-weight:700}
+.sum .over{color:var(--seal)}
+.sum small{color:var(--ink-faint);font-size:.82rem;margin-left:.5rem}
+ol.tasks{list-style:none;margin:0;padding:0}
+ol.tasks li{display:flex;align-items:flex-start;gap:.3rem;border-bottom:1px dotted var(--rule);padding:.35rem 0;cursor:pointer}
+ol.tasks li.sel{background:var(--paper-2)}
+ol.tasks li.planned + li:not(.planned){border-top:1px solid var(--rule)}
+ol.tasks .selb{width:1.6rem;flex:none;height:1.75rem;display:flex;align-items:center;justify-content:center}
+ol.tasks .selb::before{content:'';width:9px;height:9px;border-radius:50%;border:1px solid var(--ink-faint)}
+ol.tasks li.sel .selb::before{background:var(--seal);border-color:var(--seal);box-shadow:0 0 0 3px var(--seal-wash)}
+ol.tasks .tt{flex:1;min-width:0;line-height:1.6}
+ol.tasks .tt .go{cursor:pointer}
+ol.tasks .tt .go:hover{color:var(--seal)}
+ol.tasks .tt small{color:var(--ink-faint);font-size:.78rem;margin-left:.5em}
+ol.tasks .cnt{flex:none;min-width:3.2rem;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-soft);font-size:.92rem;line-height:1.75rem}
+ol.tasks .cnt b{color:var(--ink)}
+ol.tasks .ar{flex:none;width:1.7rem;height:1.75rem;color:var(--ink-soft);font-size:.8rem;border:1px solid var(--rule);border-radius:2px;background:#fbf8f1}
+ol.tasks .ar:hover{border-color:var(--seal-soft);color:var(--seal)}
+/* 생각 보내기 (8단계) */
+.think{display:flex;gap:.5rem;margin-top:1.4rem;border-bottom:1px solid var(--rule)}
+.think input{flex:1;min-width:0;background:none;border:none;padding:.5rem 0;font-size:.95rem}
+.think input::placeholder{color:var(--ink-faint)}
+.think button{color:var(--seal);font-size:.9rem;flex:none}
+.sent{font-size:.82rem;color:var(--ink-faint);min-height:1.5em;text-align:left;margin-top:.2rem}
+ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding:.6rem 0}
+.set.conn{margin-top:.8rem}
+.set.conn input{width:13rem;text-align:left}
+.set.conn label{flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>fo<span>mo</span></h1><small>방점의 일을 포모도로로</small></header>
+
+  <button class="warn" id="warn"></button>
+
+  <div class="stage" id="stage">
+    <div class="task" id="task"></div>
+    <div class="phase" id="phase"></div>
+    <div class="clock" id="clock"></div>
+    <div class="until" id="until"></div>
+    <div class="acts" id="acts"></div>
+    <div class="today" id="today"></div>
+    <div class="think"><input id="think" placeholder="떠오른 생각 한 줄 — 방점 목록 끝으로 보냅니다" enterkeyhint="send" autocomplete="off"><button id="thinkGo">보내기</button></div>
+    <div class="sent" id="sent"></div>
+  </div>
+
+  <section>
+    <h2>오늘 할 일 — 방점에서 가져온 것</h2>
+    <div class="sum" id="sum"></div>
+    <ol class="tasks" id="tasks"></ol>
+    <div class="links"><button id="reload">방점에서 새로 불러오기</button></div>
+    <div class="stat" id="bjStat"></div>
+  </section>
+
+  <section>
+    <h2>설정</h2>
+    <div class="set">
+      <label>포모도로 <input id="cFocus" type="number" min="0.1" step="0.1" inputmode="decimal"> 분</label>
+      <label>짧은 휴식 <input id="cRest" type="number" min="0.1" step="0.1" inputmode="decimal"> 분</label>
+      <label>긴 휴식 <input id="cLong" type="number" min="0.1" step="0.1" inputmode="decimal"> 분</label>
+      <label><input id="cEvery" type="number" min="1" step="1" inputmode="numeric"> 포모도로마다 긴 휴식</label>
+      <label>하루 기본 <input id="cDaily" type="number" min="0" step="1" inputmode="numeric"> 포모도로</label>
+    </div>
+    <div class="set conn">
+      <label>방점 주소 <input id="bUrl" placeholder="비우면 이 브라우저의 방점 설정을 씁니다" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label>키 <input id="bKey" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label>목록 이름 <input id="bList" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    </div>
+    <div class="links">
+      <button id="quick" class="dim">시험: 포모도로 20초 · 휴식 15초로 한 바퀴</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>소리와 알림</h2>
+    <div class="links">
+      <button id="tryRest">휴식 알람 들어 보기</button>
+      <button id="tryStart">시작 알람 들어 보기</button>
+      <button id="askNoti">맥 알림 허락 받기</button>
+    </div>
+    <div class="stat" id="stat"></div>
+  </section>
+
+  <section>
+    <h2>기록 — 무슨 일이 언제 있었나</h2>
+    <ol class="log" id="log"></ol>
+    <div class="links"><button class="dim" id="clearLog">기록 비우기</button></div>
+  </section>
+
+  <section class="help">
+    <h2>쓰는 법</h2>
+    <p>‘방점에서 새로 불러오기’를 누르면 방점의 할 일을 받아 옵니다(쓰기·개정·읽기·할일만. ‘새’ 표시가 붙은 일, 글감·메모, 미결은 오지 않습니다). 일마다 ▲▼로 오늘 몇 포모도로를 할지 정하면 그 일이 목록 위로 올라오고, 위에 오늘의 합이 보입니다. 줄을 눌러 일을 고르면 맨 위에 뜨고 시작 단추가 나옵니다. 제목을 누르면 방점처럼 4baek·타이핑·서가나 그 일의 링크가 열립니다. 새로 불러오면 계획과 고른 일은 비워지고 기록은 남습니다. 날이 바뀌면 계획은 저절로 비워집니다.</p>
+    <p>포모도로를 마칠 때마다 방점의 그 일 페이지에 한 줄이 남고(예: 포모도로 1 · 25분), 도중에 멈추면 ‘무효 · 방해’ 한 줄이 남습니다. ‘이 일 끝’을 누르면 방점에서도 끝난 일이 됩니다. 떠오른 생각을 적어 보내면 방점 목록 끝에 ‘새’ 표시로 들어갑니다. 이것들은 방점(또는 방점을 끼운 시작)이 열릴 때 받아 갑니다. 오늘 한 포모도로 수는 방점 맨 위 줄에 ‘포모도로 3 / 9 · 무효 1’처럼 보입니다.</p>
+    <p>‘시작’을 누르면 포모도로가 돌고, 끝나면 <b>휴식 알람</b>(따르릉)이 울리며 휴식이 저절로 시작됩니다(정한 횟수마다 긴 휴식). 휴식이 끝나면 <b>시작 알람</b>(딩·동·댕)이 ‘알람 끄기’를 누를 때까지 울립니다. 다음 포모도로는 손으로 시작합니다. 도중에 ‘멈춤’을 누르면 그 포모도로는 무효입니다.</p>
+    <p>두 알람은 ‘시작’을 누르는 순간 끝나는 시각에 맞춰 미리 예약해 둡니다. 그래서 fomo가 다른 탭이나 다른 앱 뒤에 있어도 제때 울립니다. 맥 알림도 함께 뜹니다(허락했을 때).</p>
+    <p><b>울리지 않는 경우</b>: 맥이 잠자기에 들어갔을 때, 소리를 껐을 때, 이 탭을 닫았을 때. 탭을 새로 고치면 타이머는 이어지지만 소리는 한 번 눌러 깨워야 합니다(위에 붉은 줄이 뜹니다).</p>
+  </section>
+</div>
+
+<script>
+/* fomo — 방점의 일을 포모도로로 하는 앱. 이 파일은 **알람만 있는 시험판**이다(글쓰기패턴 업데이트 6단계, 2026년 11월 22일).
+   목록·방점 연결은 7·8단계에서 얹는다. 가장 중요한 것은 알람이 반드시 울리는 것(계획 8-5·8-8).
+
+   알람이 울리는 법
+   · 타이머는 남은 초를 세지 않는다. 끝나는 시각(run.focusEnd, run.restEnd)을 적어 두고 지금과 견준다.
+   · 소리는 ‘시작’을 누르는 순간 두 알람을 WebAudio의 시계로 **미리 예약**한다. 뒤에 있는 탭은 자바스크립트 타이머가 늦어지지만 예약된 소리는 제때 난다.
+     휴식은 저절로 시작되므로 휴식 끝 알람(시작 알람)도 이때 같이 예약한다 — 누른 뒤에만 소리를 낼 수 있어서다.
+   · 포모도로와 휴식이 도는 동안 들리지 않을 만큼 작은 소리를 계속 낸다(keep). 브라우저가 소리 나는 탭은 덜 재우고, 오디오가 잠들지 않게 하려는 것.
+   · 상태를 넘기는 일(휴식 시작, 맥 알림, 기록)은 자바스크립트가 한다. 워커가 0.5초마다 깨워 준다(워커의 타이머는 뒤에 있어도 덜 늦는다).
+   · 맥이 잠들었다 깨어나면 오디오 시계와 벽시계가 어긋난다. 1.5초 넘게 어긋나면 다시 예약한다(resync).
+   저장: localStorage 'fomo.v1' { cfg:{focus,rest}(분), run:{phase,startAt,focusEnd,restEnd}|null, ring:{kind:'rest'|'start',at}|null, days:{날짜:{done,void}}, log:[{t,m,bg}] } */
+const KEY = 'fomo.v1';
+const $ = s => document.querySelector(s);
+// 7단계에 더한 것: cfg.long·every·daily·bj{url,key,list}, tasks(방점에서 가져온 일 [{id,text,url,kind,ref,rep}]), loadedAt,
+//   plan {day, n:{일 id: 오늘 할 포모도로 수}, sel: 고른 일 id}, recs(기록 [{d:날짜, id:일 id, text, min:분, void:무효 여부, at}]) — 방점에 합칠 때 그대로 받을 수 있는 모양
+const CFG0 = {focus:25, rest:5, long:15, every:4, daily:8, bj:{url:'', key:'', list:''}};
+const blank = () => ({cfg:JSON.parse(JSON.stringify(CFG0)), run:null, ring:null, tasks:[], loadedAt:0, plan:null, recs:[], out:[], log:[]});   // out: 방점에 아직 못 보낸 요청 [{kind, target, text, at}]
+let S = blank();
+try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && typeof p === 'object') S = Object.assign(blank(), p); }catch(e){}
+S.cfg = Object.assign(JSON.parse(JSON.stringify(CFG0)), S.cfg || {});
+['focus','rest','long'].forEach(k => { if(!(S.cfg[k] > 0)) S.cfg[k] = CFG0[k]; });
+if(!(S.cfg.every >= 1)) S.cfg.every = 4;
+if(!(S.cfg.daily >= 0)) S.cfg.daily = 8;
+if(!S.cfg.bj || typeof S.cfg.bj !== 'object') S.cfg.bj = {url:'', key:'', list:''};
+if(!Array.isArray(S.log)) S.log = [];
+if(!Array.isArray(S.tasks)) S.tasks = [];
+if(!Array.isArray(S.recs)) S.recs = [];
+if(!Array.isArray(S.out)) S.out = [];
+if(S.days){                                   // 알람 시험판의 날짜별 수를 기록으로 옮긴다
+  Object.keys(S.days).forEach(d => { const x = S.days[d] || {}; for(let i = 0; i < (x.done || 0); i++) S.recs.push({d, id:null, text:'', min:0, void:false, at:0}); for(let i = 0; i < (x.void || 0); i++) S.recs.push({d, id:null, text:'', min:0, void:true, at:0}); });
+  delete S.days;
+}
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} };
+
+const z = n => String(n).padStart(2, '0');
+const hms = ms => { const d = new Date(ms); return `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };
+const hm = ms => { const d = new Date(ms); return `${z(d.getHours())}:${z(d.getMinutes())}`; };
+const dayKey = (ms = Date.now()) => { const d = new Date(ms); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };   // 하루는 자정에 바뀐다(방점과 같게)
+// 오늘의 기록에서 센다. id를 주면 그 일의 것만
+const cnt = (id) => { const k = dayKey(); let done = 0, vd = 0; S.recs.forEach(r => { if(r.d !== k || (id !== undefined && r.id !== id)) return; if(r.void) vd++; else done++; }); return {done, void:vd}; };
+const recAdd = (run, min, vd) => { S.recs.push({d:dayKey(), id:run.id || null, text:run.text || '', min:Math.round(min * 10) / 10, void:!!vd, at:Date.now()}); if(S.recs.length > 5000) S.recs = S.recs.slice(-5000); };
+// 오늘의 계획. 날이 바뀌면 저절로 비운다(기록은 남는다)
+function plan(){
+  const k = dayKey();
+  if(!S.plan || S.plan.day !== k || !S.plan.n){ S.plan = {day:k, n:{}, sel:null}; save(); }
+  return S.plan;
+}
+const taskOf = id => S.tasks.find(t => t.id === id) || null;
+const minTxt = m => Number.isInteger(m) ? `${m}분` : (m * 60 < 60 ? `${Math.round(m * 60)}초` : `${Math.round(m * 600) / 10}분`);
+function logIt(m){
+  S.log.unshift({t:Date.now(), m, bg:document.hidden});
+  S.log = S.log.slice(0, 80);
+  save(); renderLog();
+}
+
+/* ══════════ 소리 ══════════ */
+let ctx = null, master = null, keep = null;
+let nodes = {rest:[], start:[], try:[]};          // 예약해 둔 소리. 무리마다 따로 끈다
+let sched = null;                                  // {c0: 예약할 때의 오디오 시계, w0: 그때의 벽시계, focusEnd, restEnd}
+const REST_RING = 45, START_RING = 15 * 60;        // 휴식 알람은 45초(휴식은 어차피 저절로 간다), 시작 알람은 끌 때까지 — 15분어치를 예약해 둔다
+function ensureAudio(){
+  try{
+    if(!ctx){
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0.7; master.connect(ctx.destination);
+      ctx.onstatechange = () => render();
+    }
+    if(ctx.state !== 'running') ctx.resume().then(() => { render(); resync(true); }).catch(() => {});
+  }catch(e){ ctx = null; }
+  return ctx;
+}
+const audioOk = () => !!ctx && ctx.state === 'running';
+function killNodes(group){
+  (nodes[group] || []).forEach(n => { try{ n.stop(); }catch(e){} try{ n.disconnect(); }catch(e){} });
+  nodes[group] = [];
+}
+// 들리지 않을 만큼 작은 소리. 도는 동안만 낸다
+function keepOn(){
+  if(!ctx || keep) return;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.frequency.value = 40; g.gain.value = 0.0006;
+  o.connect(g); g.connect(master); o.start();
+  keep = {o, g};
+}
+function keepOff(){ if(!keep) return; try{ keep.o.stop(); keep.o.disconnect(); keep.g.disconnect(); }catch(e){} keep = null; }
+// 휴식 알람: 키친타이머의 따르릉. 높은 음을 빠르게 떨게 해 1.3초 울리고 0.7초 쉰다
+function ringRest(group, t0, secs){
+  const car = ctx.createOscillator(), car2 = ctx.createOscillator(), vca = ctx.createGain(), lfo = ctx.createOscillator(), lfoG = ctx.createGain(), env = ctx.createGain();
+  car.type = 'triangle'; car.frequency.value = 2093; car2.type = 'sine'; car2.frequency.value = 2794;
+  lfo.type = 'square'; lfo.frequency.value = 24; lfoG.gain.value = 0.5; vca.gain.value = 0.5;
+  lfo.connect(lfoG); lfoG.connect(vca.gain);
+  car.connect(vca); car2.connect(vca); vca.connect(env); env.connect(master);
+  env.gain.setValueAtTime(0, Math.max(0, t0 - 0.05));
+  for(let t = t0; t < t0 + secs; t += 2){
+    env.gain.setValueAtTime(0, t); env.gain.linearRampToValueAtTime(0.55, t + 0.02);
+    env.gain.setValueAtTime(0.55, t + 1.3); env.gain.linearRampToValueAtTime(0, t + 1.36);
+  }
+  [car, car2, lfo].forEach(o => { o.start(Math.max(0, t0 - 0.05)); o.stop(t0 + secs + 0.2); nodes[group].push(o); });
+}
+// 시작 알람: 딩·동·댕 올라가는 세 음. 2.4초마다 되풀이한다. 휴식 알람과 듣고 구별된다
+function ringStart(group, t0, secs){
+  const o = ctx.createOscillator(), o2 = ctx.createOscillator(), env = ctx.createGain(), g2 = ctx.createGain();
+  o.type = 'sine'; o2.type = 'sine'; g2.gain.value = 0.25;
+  o.connect(env); o2.connect(g2); g2.connect(env); env.connect(master);
+  env.gain.setValueAtTime(0, Math.max(0, t0 - 0.05));
+  const notes = [659.25, 880, 1108.73];
+  for(let t = t0; t < t0 + secs; t += 2.4){
+    notes.forEach((f, i) => {
+      const s = t + i * 0.34;
+      o.frequency.setValueAtTime(f, s); o2.frequency.setValueAtTime(f * 2, s);
+      env.gain.setValueAtTime(0.0001, s); env.gain.linearRampToValueAtTime(0.8, s + 0.015);
+      env.gain.exponentialRampToValueAtTime(0.0001, s + (i === 2 ? 0.9 : 0.32));
+    });
+  }
+  [o, o2].forEach(x => { x.start(Math.max(0, t0 - 0.05)); x.stop(t0 + secs + 0.2); nodes[group].push(x); });
+}
+// 도는 포모도로·휴식의 끝에 맞춰 두 알람을 예약한다. 이미 지난 것은 건너뛴다(울리는 중인 것은 ringNow가 맡는다)
+function schedule(){
+  killNodes('rest'); killNodes('start'); sched = null;
+  if(!S.run || !audioOk()) return false;
+  const now = Date.now(), c = ctx.currentTime;
+  const at = ms => c + (ms - now) / 1000;
+  if(S.run.focusEnd > now) ringRest('rest', at(S.run.focusEnd), REST_RING);
+  if(S.run.restEnd > now) ringStart('start', at(S.run.restEnd), START_RING);
+  sched = {c0:c, w0:now, focusEnd:S.run.focusEnd, restEnd:S.run.restEnd};
+  keepOn();
+  return true;
+}
+// 지금 바로 울린다: 예약이 없었거나(새로 고친 뒤) 어긋났을 때
+function ringNow(kind){
+  if(!audioOk()) return false;
+  killNodes(kind);
+  if(kind === 'rest') ringRest('rest', ctx.currentTime + 0.05, Math.max(4, REST_RING - (Date.now() - S.ring.at) / 1000));
+  else ringStart('start', ctx.currentTime + 0.05, START_RING);
+  return true;
+}
+// 오디오 시계와 벽시계가 어긋났거나(잠자기), 예약이 없으면 다시 맞춘다
+function resync(force){
+  if(!audioOk()) return;
+  if(S.run){
+    const drift = sched ? Math.abs((ctx.currentTime - sched.c0) * 1000 - (Date.now() - sched.w0)) : Infinity;
+    if(force || !sched || drift > 1500 || sched.focusEnd !== S.run.focusEnd || sched.restEnd !== S.run.restEnd){
+      const was = sched && drift > 1500 && isFinite(drift);
+      schedule();
+      if(was) logIt(`소리 예약을 다시 맞춤 (시계가 ${Math.round(drift / 1000)}초 어긋남)`);
+    }
+  }
+  if(S.ring && !ringing[S.ring.kind]){ if(ringNow(S.ring.kind)) ringing[S.ring.kind] = true; }
+}
+let ringing = {rest:false, start:false};          // 이 창에서 그 알람의 소리가 나고 있나(예약된 것이든 바로 낸 것이든)
+
+/* ══════════ 맥 알림 · 화면 꺼짐 막기 ══════════ */
+const notiState = () => ('Notification' in window) ? Notification.permission : 'none';
+function askNoti(){
+  if(!('Notification' in window)){ render(); return; }
+  try{ const p = Notification.requestPermission(() => render()); if(p && p.then) p.then(() => render()); }catch(e){}
+}
+function notify(title, body){
+  if(notiState() !== 'granted') return false;
+  try{
+    const n = new Notification(title, {body, tag:'fomo', requireInteraction:true});
+    n.onclick = () => { try{ window.focus(); }catch(e){} n.close(); };
+    return true;
+  }catch(e){ return false; }
+}
+let wake = null;
+async function wakeOn(){
+  if(!('wakeLock' in navigator) || wake || document.hidden) return;
+  try{ wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; renderStat(); }); renderStat(); }catch(e){ wake = null; }
+}
+function wakeOff(){ if(wake){ try{ wake.release(); }catch(e){} wake = null; } }
+
+/* ══════════ 흐름 ══════════ */
+// o: 시험 한 바퀴일 때 {focus, rest}(분). 없으면 설정대로 — 오늘 한 포모도로가 정한 횟수의 배수가 되는 차례면 긴 휴식
+function start(o){
+  ensureAudio();
+  if(notiState() === 'default') askNoti();
+  if(S.ring) dismiss(true);
+  const long = !o && (cnt().done + 1) % Math.max(1, Math.round(S.cfg.every)) === 0;
+  const fm = o ? o.focus : S.cfg.focus, rm = o ? o.rest : (long ? S.cfg.long : S.cfg.rest);
+  const t = o ? null : taskOf(plan().sel);
+  const now = Date.now(), f = fm * 60000, r = rm * 60000;
+  S.run = {phase:'focus', startAt:now, focusEnd:now + f, restEnd:now + f + r, id:t ? t.id : null, text:t ? t.text : '', long, test:!!o};
+  ringing = {rest:false, start:false};
+  save();
+  const ok = schedule();
+  wakeOn();
+  logIt(`포모도로 시작${t ? ' · ' + t.text : ''} · ${minTxt(fm)} · ${hms(S.run.focusEnd)}에 끝남${ok ? ' · 두 알람 예약함' : ' · 소리를 예약하지 못함'}`);
+  render();
+}
+// 포모도로 도중에 멈추면 무효. 휴식 도중이면 휴식만 그만둔다
+function stop(){
+  if(!S.run) return;
+  const was = S.run;
+  killNodes('rest'); killNodes('start'); sched = null; keepOff(); wakeOff();
+  S.run = null; S.ring = null; ringing = {rest:false, start:false};
+  if(was.phase === 'focus'){
+    if(!was.test){
+      recAdd(was, (Date.now() - was.startAt) / 60000, true);
+      if(was.id) bjSend('line', was.id, stamp(Date.now()) + `포모도로 무효 · 방해 · ${Math.max(0, Math.floor((Date.now() - was.startAt) / 60000))}분에 멈춤`);
+      shareSoon();
+    }
+    logIt(`포모도로 무효 · 방해 · ${Math.max(0, Math.floor((Date.now() - was.startAt) / 60000))}분에 멈춤`);
+  }else logIt('휴식을 그만둠');
+  save(); renderList(); render();
+}
+// 알람 끄기. 휴식 알람을 끄면 휴식은 계속 간다
+function dismiss(quiet){
+  if(!S.ring) return;
+  const k = S.ring.kind;
+  killNodes(k); ringing[k] = false;
+  S.ring = null;
+  if(k === 'start' && !S.run){ keepOff(); wakeOff(); }
+  save();
+  if(!quiet) logIt(k === 'rest' ? '휴식 알람을 끔' : '시작 알람을 끔');
+  render();
+}
+// 끝나는 시각이 지났는지 본다. 자고 일어나 둘 다 지났으면 차례로 넘긴다
+const restMin = r => (r.restEnd - r.focusEnd) / 60000;
+function tick(){
+  const now = Date.now();
+  // 다른 탭이 먼저 넘겼으면 그것을 따른다(두 탭이 같은 포모도로를 두 번 세지 않게)
+  try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.run) !== JSON.stringify(S.run)){ S.run = p.run || null; S.ring = p.ring || null; S.recs = p.recs || S.recs; S.log = p.log || S.log; } }catch(e){}
+  if(S.run && S.run.phase === 'focus' && now >= S.run.focusEnd){
+    S.run.phase = 'rest';
+    if(!S.run.test){
+      recAdd(S.run, (S.run.focusEnd - S.run.startAt) / 60000, false);
+      if(S.run.id) bjSend('line', S.run.id, stamp(S.run.focusEnd) + `포모도로 ${cnt(S.run.id).done} · ${minTxt((S.run.focusEnd - S.run.startAt) / 60000)}`);   // 방점의 그 일 페이지에 한 줄
+      shareSoon();
+    }
+    S.ring = {kind:'rest', at:S.run.focusEnd};
+    ringing.rest = !!(sched && sched.focusEnd === S.run.focusEnd && audioOk());      // 예약해 둔 소리가 지금 나고 있다
+    save();
+    const late = Math.round((now - S.run.focusEnd) / 1000);
+    const nt = notify('포모도로 끝 · 휴식', `${minTxt(restMin(S.run))} 쉽니다. ${hm(S.run.restEnd)}에 끝납니다.`);
+    logIt(`포모도로 끝 → ${S.run.long ? '긴 ' : ''}휴식 ${minTxt(restMin(S.run))} 시작${late > 1 ? ` (${late}초 늦게 알아챔)` : ''} · 휴식 알람 ${ringing.rest ? '예약대로 울림' : '예약 없음'}${nt ? ' · 맥 알림 띄움' : ''}`);
+  }
+  if(S.run && S.run.phase === 'rest' && now >= S.run.restEnd){
+    const end = S.run.restEnd, had = !!(sched && sched.restEnd === end && audioOk());
+    killNodes('rest'); ringing.rest = false;
+    S.run = null;
+    S.ring = {kind:'start', at:end};
+    ringing.start = had;
+    save();
+    const late = Math.round((now - end) / 1000);
+    const nt = notify('휴식 끝 · 다음 포모도로', '알람을 끄고 다음 포모도로를 시작하세요.');
+    logIt(`휴식 끝${late > 1 ? ` (${late}초 늦게 알아챔)` : ''} · 시작 알람 ${had ? '예약대로 울림' : '예약 없음'}${nt ? ' · 맥 알림 띄움' : ''}`);
+  }
+  if(S.ring && S.ring.kind === 'rest' && now - S.ring.at > REST_RING * 1000){       // 휴식 알람은 45초 뒤 저절로 그친다
+    killNodes('rest'); ringing.rest = false; S.ring = null; save();
+  }
+  resync(false);
+  renderList();                                  // 한 수가 바뀌었을 수 있다(같으면 다시 그리지 않는다)
+  render();
+}
+
+/* ══════════ 그리기 ══════════ */
+function render(){
+  const now = Date.now(), r = S.run, ring = S.ring;
+  const P = plan(), selT = taskOf(P.sel), canStart = !!selT || !S.tasks.length;      // 일을 골라야 시작 단추가 나온다. 가져온 일이 하나도 없으면 일 없이 돈다
+  const startBtn = canStart ? `<button class="go" id="bStart">${minTxt(S.cfg.focus)} 시작</button>` : '';
+  let phase = '준비', left = S.cfg.focus * 60000, until = canStart ? '' : '목록에서 일을 하나 고르세요', acts = '';
+  if(r && r.phase === 'focus'){ phase = '포모도로'; left = r.focusEnd - now; until = `${hm(r.focusEnd)}에 끝나고 ${r.long ? '긴 ' : ''}휴식 ${minTxt(restMin(r))}`; acts = '<button class="dim" id="bStop">멈춤 · 이 포모도로는 무효가 됩니다</button>'; }
+  else if(r && r.phase === 'rest'){ phase = '휴식'; left = r.restEnd - now; until = `${hm(r.restEnd)}에 시작 알람이 울립니다`; acts = (ring ? '<button class="off" id="bOff">알람 끄기</button>' : '') + '<button class="dim" id="bStop">휴식 그만</button>'; }
+  else if(ring && ring.kind === 'start'){ phase = '휴식 끝'; left = 0; until = '알람을 끄고 다음 포모도로를 시작하세요'; acts = `<button class="off" id="bOff">알람 끄기</button>${startBtn}`; }
+  else { phase = '준비'; acts = startBtn; }
+  if(selT && !(r && r.phase === 'focus')) acts += '<button class="dim" id="bDone">이 일 끝 · 방점에서도 끝냅니다</button>';
+  // 대시보드의 일: 도는 중이면 그 포모도로의 일, 아니면 고른 일. 한 포모도로 수 / 정한 수
+  const dt = r && r.id ? (taskOf(r.id) || {id:r.id, text:r.text}) : (r ? null : selT);
+  const th = dt ? `${kindTag(dt)}<a href="#" data-go="${esc(dt.id)}">${esc(dt.text)}</a><span class="n">${cnt(dt.id).done} / ${P.n[dt.id] || 0} 포모도로</span>` : (r ? '' : `<span class="none">${S.tasks.length ? '고른 일이 없습니다' : ''}</span>`);
+  if($('#task').dataset.k !== th){ $('#task').innerHTML = th; $('#task').dataset.k = th; }
+  left = Math.max(0, left);
+  const sec = Math.ceil(left / 1000), mm = Math.floor(sec / 60), ss = sec % 60;
+  const clock = `${z(mm)}:${z(ss)}`;
+  $('#phase').textContent = phase;
+  $('#clock').textContent = clock;
+  $('#until').textContent = until;
+  $('#stage').classList.toggle('ring', !!ring);
+  if($('#acts').dataset.k !== acts){ $('#acts').innerHTML = acts; $('#acts').dataset.k = acts; }
+  const d = cnt();
+  $('#today').innerHTML = `오늘 포모도로 <b>${d.done}</b>${d.void ? ` · 무효 <b>${d.void}</b>` : ''}`;
+  document.title = (r ? `${clock} ${r.phase === 'focus' ? '포모도로' : '휴식'}` : ring ? '⏰ 휴식 끝' : 'fomo');
+  // 소리가 잠들어 있으면 알린다: 도는 중이거나 울려야 하는데 오디오가 깨어 있지 않을 때
+  const need = (r || ring) && !audioOk();
+  const w = $('#warn');
+  w.classList.toggle('on', !!need);
+  if(need) w.textContent = '소리가 잠들어 있습니다. 여기를 한 번 누르면 깨어나 알람이 다시 예약됩니다.';
+  renderStat();
+}
+function renderStat(){
+  const a = !ctx ? '아직 깨우지 않음(시작을 누르면 깨어납니다)' : ctx.state === 'running' ? '깨어 있음' : `잠듦(${ctx.state})`;
+  const n = {granted:'허락됨', denied:'막혀 있음 — 브라우저 설정에서 이 주소의 알림을 허용해야 합니다', default:'아직 묻지 않음', none:'이 브라우저는 알림이 없음'}[notiState()];
+  const wl = !('wakeLock' in navigator) ? '이 브라우저는 안 됨' : wake ? '켜짐' : '꺼짐(도는 동안 이 탭이 보일 때만 켜집니다)';
+  $('#stat').innerHTML = `소리 <b>${a}</b> · 맥 알림 <b>${n}</b> · 화면 꺼짐 막기 <b>${wl}</b>${sched && S.run ? ` · 알람 예약 <b>${hms(sched.focusEnd)} / ${hms(sched.restEnd)}</b>` : ''}`;
+}
+const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const KINDS = {write:'쓰기', revise:'개정', read:'읽기'};
+const kindTag = t => (KINDS[t.kind] ? `<span class="kind">${KINDS[t.kind]}</span>` : '') + (t.rep ? '<span class="kind rep">반복</span>' : '');
+// 목록: 포모도로 수를 정한 일이 위로(그 안에서는 방점의 순서). 줄을 누르면 고르고, 제목을 누르면 링크로, ▲▼로 수를 정한다
+let listKey = '';
+function renderList(){
+  const P = plan();
+  const total = S.tasks.reduce((a, t) => a + (P.n[t.id] || 0), 0), mins = total * S.cfg.focus, c = cnt();
+  const hmTxt = m => { const h = Math.floor(m / 60), r = Math.round(m - h * 60); return (h ? h + '시간 ' : '') + (r || !h ? r + '분' : '').trim(); };
+  const sm = S.tasks.length
+    ? `오늘 <b>${total}</b> 포모도로 · ${hmTxt(mins)} · <span class="${total > S.cfg.daily ? 'over' : ''}">${total} / 기본 ${S.cfg.daily}</span><small>한 것 ${c.done}${c.void ? ` · 무효 ${c.void}` : ''}</small>`
+    : '';
+  if($('#sum').dataset.k !== sm){ $('#sum').innerHTML = sm; $('#sum').dataset.k = sm; }
+  const rows = S.tasks.filter(t => P.n[t.id] > 0).concat(S.tasks.filter(t => !(P.n[t.id] > 0)));
+  const h = rows.length ? rows.map(t => {
+    const n = P.n[t.id] || 0, did = cnt(t.id).done, go = !!(KINDS[t.kind] || t.url);
+    return `<li class="${P.sel === t.id ? 'sel' : ''} ${n > 0 ? 'planned' : ''}" data-row="${esc(t.id)}">
+      <span class="selb"></span>
+      <span class="tt">${kindTag(t)}<span class="${go ? 'go' : ''}"${go ? ` data-go="${esc(t.id)}"` : ''}>${esc(t.text)}</span>${t.ref && t.ref.name ? `<small>${esc(t.ref.name)}</small>` : ''}</span>
+      <span class="cnt">${did || n ? `${did} / <b>${n}</b>` : ''}</span>
+      <button class="ar" data-up="${esc(t.id)}" aria-label="하나 더">▲</button><button class="ar" data-dn="${esc(t.id)}" aria-label="하나 덜">▼</button>
+    </li>`;
+  }).join('') : `<li class="empty">${bjCfg() ? '가져온 일이 없습니다. ‘방점에서 새로 불러오기’를 누르세요.' : '방점 연결이 없습니다. 아래 설정에 방점의 주소·키·목록 이름을 넣거나, 방점을 쓰는 브라우저에서 여세요.'}</li>`;
+  if(h !== listKey){ $('#tasks').innerHTML = h; listKey = h; }
+  $('#bjStat').textContent = bjMsg || (S.loadedAt ? `${new Date(S.loadedAt).getMonth() + 1}/${new Date(S.loadedAt).getDate()} ${hm(S.loadedAt)}에 불러옴 · ${S.tasks.length}개` : '');
+}
+function setN(id, d){
+  const P = plan(), n = Math.max(0, Math.min(40, (P.n[id] || 0) + d));
+  if(n) P.n[id] = n; else delete P.n[id];
+  save(); shareSoon(); renderList(); render();
+}
+function pick(id){
+  const P = plan();
+  P.sel = P.sel === id ? null : id;
+  save(); renderList(); render();
+}
+
+/* ══════════ 방점에서 가져오기 ══════════
+   final이 받는 길(bjMerge)을 본으로: bangjeom 표의 한 줄(id = 목록 이름)의 data.tasks를 **읽기만** 한다. 이 단계에서는 방점에 아무것도 쓰지 않는다.
+   가져오는 것: 끝나지 않은 일 가운데 쓰기·개정·읽기·할일. 새 표시가 붙은 일, 글감·메모, 미결 표시한 일은 빼고, 반복되는 일은 오늘 차례인 것만.
+   연결: 설정에 적은 주소·키·목록 이름. 주소·키를 비워 두면 같은 브라우저의 방점 설정(bangjeom.cfg)을 빌린다 */
+let bjMsg = '';
+function bjCfg(){
+  const b = S.cfg.bj || {};
+  let c = {}; try{ c = JSON.parse(localStorage.getItem('bangjeom.cfg') || '{}') || {}; }catch(e){}
+  const url = b.url || c.url || '', key = b.key || c.key || '', list = b.list || c.list || '';
+  return url && key && list ? {url:String(url).replace(/\/+$/, ''), key, list} : null;
+}
+// 방점의 repDue와 같게(final의 bjRepDue)
+function repDue(t, k){
+  const r = t && t.rep; if(!r || t.done || t.repLast === k) return false;
+  const day = x => { const p = String(x).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); };
+  if(r.type === 'week') return (r.days || []).includes(day(k).getDay());
+  if(r.type === 'days') return !t.repLast || Math.round((day(k) - day(t.repLast)) / 86400000) >= (+r.n || 1);
+  return true;
+}
+// reset: 손으로 '새로 불러오기'를 눌렀을 때 — 계획과 고른 일을 비운다(기록은 남는다)
+async function loadTasks(reset){
+  const b = bjCfg();
+  if(!b){ bjMsg = '방점 연결이 없습니다'; renderList(); return false; }
+  bjMsg = '불러오는 중…'; renderList();
+  try{
+    const r = await fetch(b.url + '/rest/v1/bangjeom?select=data&id=eq.' + encodeURIComponent(b.list), {headers:{apikey:b.key, Authorization:'Bearer ' + b.key}});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json(), data = rows && rows[0] && rows[0].data;
+    if(!data || !Array.isArray(data.tasks)) throw new Error(`방점에 '${b.list}' 목록이 없습니다`);
+    const k = dayKey();
+    S.tasks = data.tasks.filter(t => t && t.id && !t.done && !t.fresh && !t.hold && t.kind !== 'idea' && t.kind !== 'memo' && (!t.rep || repDue(t, k)))
+      .map(t => ({id:String(t.id), text:String(t.text || ''), url:t.url || '', kind:t.kind || '', ...(t.ref ? {ref:{id:t.ref.id, name:t.ref.name || ''}} : {}), ...(t.rep ? {rep:true} : {})}));
+    S.loadedAt = Date.now();
+    if(reset){ S.plan = {day:k, n:{}, sel:null}; }
+    else { const P = plan(); if(P.sel && !taskOf(P.sel)) P.sel = null; }
+    bjMsg = ''; save(); shareSoon(); renderList(); render();
+    return true;
+  }catch(e){ bjMsg = '불러오지 못했습니다: ' + (e && e.message || e); renderList(); return false; }
+}
+
+/* ══════════ 방점에 알리기 (8단계) ══════════
+   final·주머니와 같은 요청 표 bangjeom_act에 **넣기만** 한다. 방점(또는 방점을 끼운 시작)이 열릴 때 받아 처리한다. 방점의 목록 줄(bangjeom 표)에는 쓰지 않는다.
+   · line: 포모도로를 마칠 때 그 일의 페이지에 한 줄, 멈추면 '무효 · 방해' 한 줄. 방점의 기록 줄 모양(— 11/22 14:05 · …)으로 보내 '지난번'에 보이게 한다
+   · done: '이 일 끝' — 방점에서도 끝낸 일이 된다
+   · add: 생각 보내기 — 방점 목록 맨 끝에 새 표시를 달고 들어간다(target이 새 일의 id, text가 {"t","u"})
+   못 보낸 것은 S.out에 남겨 두었다가 다시 보낸다(보낼 때, 돌아올 때, 1분마다) */
+const stamp = ms => { const d = new Date(ms); return `— ${d.getMonth() + 1}/${d.getDate()} ${z(d.getHours())}:${z(d.getMinutes())} · `; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function bjSend(kind, target, text){
+  S.out.push({kind, target:String(target), text:text || '', at:Date.now()});
+  save(); bjFlush();
+}
+let flushing = false;
+async function bjFlush(){
+  if(flushing || !S.out.length) return;
+  const b = bjCfg(); if(!b){ renderSent(); return; }
+  flushing = true;
+  try{
+    while(S.out.length){
+      const x = S.out[0];
+      const r = await fetch(b.url + '/rest/v1/bangjeom_act', {method:'POST',
+        headers:{apikey:b.key, Authorization:'Bearer ' + b.key, 'Content-Type':'application/json', Prefer:'return=minimal'},
+        body:JSON.stringify({list:b.list, kind:x.kind, target:x.target, text:x.text || null, device:'fomo'})});
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      S.out.shift(); save();
+    }
+  }catch(e){ /* 다음에 다시 */ }
+  finally{ flushing = false; renderSent(); }
+}
+let sentMsg = '';
+function renderSent(){
+  const n = S.out.length;
+  $('#sent').textContent = n ? (bjCfg() ? `방점에 아직 못 보낸 것 ${n}개 · 다시 보냅니다` : `방점 연결이 없어 ${n}개가 기다립니다`) : sentMsg;
+}
+// 이 일 끝: 방점에 done을 보내고 fomo의 목록에서 뺀다. 기록은 남는다
+function finishTask(){
+  const P = plan(), t = taskOf(P.sel); if(!t) return;
+  if(S.run && S.run.phase === 'focus') return;
+  bjSend('done', t.id);
+  S.tasks = S.tasks.filter(x => x.id !== t.id);
+  delete P.n[t.id]; P.sel = null;
+  save(); logIt(`‘${t.text}’ 끝 · 방점에 알림`);
+  shareSoon(); renderList(); render();
+}
+function sendThought(){
+  const inp = $('#think'), v = inp.value.replace(/\s+/g, ' ').trim(); if(!v) return;
+  inp.value = '';
+  bjSend('add', 'fm' + uid(), JSON.stringify({t:v, u:''}));
+  sentMsg = `‘${v.length > 24 ? v.slice(0, 24) + '…' : v}’ 보냄 · 방점 목록 끝에 ‘새’ 표시로 들어갑니다`;
+  renderSent();
+}
+
+/* ══════════ 오늘의 수를 올리기 (8단계) ══════════
+   방점 맨 위 한 줄이 '포모도로 n / m · 무효 k'를 보인다. 맥에서는 방점이 이 저장소(fomo.v1)를 읽기만 하면 되지만, 아이폰의 시작에서도 보이게
+   4baek의 '시작에 올리기'처럼 botaegi_kv의 fomo 줄에 오늘의 수만 올린다: { v, day, done, void, plan, at }. 올리기만 하고 받지 않는다.
+   연결은 같은 주소의 타이핑(taiping-v1의 sbUrl·sbKey), 없으면 시작(sijak.cfg의 bt)의 것을 빌린다. 둘 다 없으면 올리지 않는다. 주소를 파일에 박지 않았다 */
+function shareConf(){
+  let u = '', k = '';
+  const tp = lsJson('taiping-v1'); if(tp && tp.sbUrl && tp.sbKey){ u = tp.sbUrl; k = tp.sbKey; }
+  if(!u){ const sj = lsJson('sijak.cfg'); if(sj && sj.bt && sj.bt.url && sj.bt.key){ u = sj.bt.url; k = sj.bt.key; } }
+  return u && k ? {url:String(u).replace(/\/+$/, ''), key:k} : null;
+}
+const todayObj = () => { const P = plan(), c = cnt(); return {v:1, day:dayKey(), done:c.done, void:c.void, plan:Object.values(P.n).reduce((a, n) => a + (+n || 0), 0)}; };
+let shareSent = '', shareT = null;
+function shareSoon(){ clearTimeout(shareT); shareT = setTimeout(shareNow, 2000); }
+function shareNow(){
+  const c = shareConf(); if(!c) return;
+  const o = todayObj(), body = JSON.stringify(o);
+  if(body === shareSent || (!o.done && !o.void && !o.plan && !shareSent)) return;      // 아무것도 없는 날은 올리지 않는다
+  fetch(c.url + '/rest/v1/botaegi_kv', {method:'POST', keepalive:true,
+    headers:{apikey:c.key, Authorization:'Bearer ' + c.key, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal'},
+    body:JSON.stringify({id:'fomo', data:{...o, at:Date.now()}, updated_at:new Date().toISOString()})})
+    .then(r => { if(r.ok) shareSent = body; }).catch(() => {});
+}
+
+/* ══════════ 제목을 누르면 — 방점과 같은 링크 (방점의 goTask와 같게. 저장소는 읽기만 한다) ══════════ */
+const lsJson = k => { try{ return JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){ return null; } };
+const winName = app => { let n = ''; try{ n = localStorage.getItem('appwin.' + app) || ''; }catch(e){} if(!n || n === window.name) n = app; return n === window.name ? app + '2' : n; };
+const appUrl = f => new URL(f, location.href).href, enc = encodeURIComponent;
+const AUTO_URLS = ['https://writerkys-cell.github.io/apps/seoga#read'];      // 방점이 읽기에 붙이는 자동 링크
+function goTask(id){
+  const t = taskOf(id) || (S.run && S.run.id === id ? {id, kind:''} : null); if(!t) return;
+  const k = t.kind || '', ref = t.ref && t.ref.id;
+  if(k === 'write'){ window.open(appUrl('4baek.html') + '#' + (ref ? enc('작품') + '=' + enc(ref) : enc('목록') + '=1'), winName('4baek')); return; }
+  if(k === 'revise'){
+    let u = appUrl('taiping.html');
+    if(ref){
+      const T = lsJson('taiping-v1'); let b = null;
+      ((T && T.mss) || []).forEach(m => { if(!m || m.workId !== ref || m.folded) return; const at = m.editedAt || m.createdAt || 0; if(!b || at > (b.editedAt || b.createdAt || 0)) b = m; });
+      if(b) u += '#' + enc('원고') + '=' + enc(b.id);
+    }
+    window.open(u, winName('taiping')); return;
+  }
+  if(k === 'read'){ window.open(appUrl('seoga.html') + '#' + (ref ? enc('읽기') + '=' + enc(ref) : 'read'), '_blank'); return; }
+  if(t.url && !AUTO_URLS.includes(t.url)){
+    if(/^https?:/i.test(t.url)) window.open(t.url, '_blank', 'noopener');
+    else { const a = document.createElement('a'); a.href = t.url; document.body.appendChild(a); a.click(); a.remove(); }
+  }
+}
+
+function renderLog(){
+  $('#log').innerHTML = S.log.length
+    ? S.log.map(x => `<li><span class="t">${hms(x.t)}</span>${String(x.m).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}${x.bg ? '<span class="bg">뒤에 있었음</span>' : ''}</li>`).join('')
+    : '<li>아직 없습니다.</li>';
+}
+
+/* ══════════ 누르기 ══════════ */
+document.addEventListener('click', e => {
+  if(e.target.closest('#bStart')){ start(); return; }
+  if(e.target.closest('#bStop')){ stop(); return; }
+  if(e.target.closest('#bOff')){ ensureAudio(); dismiss(false); return; }
+  if(e.target.closest('#warn')){ ensureAudio(); return; }
+  if(e.target.closest('#bDone')){ finishTask(); return; }
+  if(e.target.closest('#thinkGo')){ sendThought(); return; }
+  const g = e.target.closest('[data-go]'); if(g){ e.preventDefault(); goTask(g.dataset.go); return; }
+  const up = e.target.closest('[data-up]'); if(up){ setN(up.dataset.up, 1); return; }
+  const dn = e.target.closest('[data-dn]'); if(dn){ setN(dn.dataset.dn, -1); return; }
+  const row = e.target.closest('[data-row]'); if(row){ pick(row.dataset.row); return; }
+});
+const CF = {cFocus:'focus', cRest:'rest', cLong:'long', cEvery:'every', cDaily:'daily'}, BF = {bUrl:'url', bKey:'key', bList:'list'};
+Object.keys(CF).forEach(id => { $('#' + id).value = S.cfg[CF[id]]; });
+Object.keys(BF).forEach(id => { $('#' + id).value = S.cfg.bj[BF[id]] || ''; });
+const readCfg = () => {
+  const v = id => +$('#' + id).value;
+  if(v('cFocus') > 0) S.cfg.focus = Math.min(180, Math.max(0.1, v('cFocus')));
+  if(v('cRest') > 0) S.cfg.rest = Math.min(120, Math.max(0.1, v('cRest')));
+  if(v('cLong') > 0) S.cfg.long = Math.min(180, Math.max(0.1, v('cLong')));
+  if(v('cEvery') >= 1) S.cfg.every = Math.min(20, Math.round(v('cEvery')));
+  if(v('cDaily') >= 0 && $('#cDaily').value !== '') S.cfg.daily = Math.min(60, Math.round(v('cDaily')));
+  Object.keys(BF).forEach(id => { S.cfg.bj[BF[id]] = $('#' + id).value.trim(); });
+  save(); renderList(); render();                     // 도는 중인 것은 그대로, 다음 포모도로부터
+};
+Object.keys(CF).concat(Object.keys(BF)).forEach(id => $('#' + id).addEventListener('change', readCfg));
+$('#quick').onclick = () => {                         // 시험 한 바퀴만 짧게. 설정도 기록도 건드리지 않는다
+  if(S.run) stop();
+  start({focus:20 / 60, rest:15 / 60});
+};
+$('#reload').onclick = () => loadTasks(true);
+$('#think').addEventListener('keydown', e => { if(e.key !== 'Enter') return; e.preventDefault(); setTimeout(sendThought, 0); });   // 한글 조합이 끝난 뒤 읽는다
+function tryRing(kind){
+  if(!ensureAudio()) return;
+  const go = () => { killNodes('try'); (kind === 'rest' ? ringRest : ringStart)('try', ctx.currentTime + 0.05, kind === 'rest' ? 3.5 : 4.6); };
+  if(audioOk()) go(); else ctx.resume().then(go).catch(() => {});
+}
+$('#tryRest').onclick = () => tryRing('rest');
+$('#tryStart').onclick = () => tryRing('start');
+$('#askNoti').onclick = () => { askNoti(); if(notiState() === 'granted') notify('fomo', '맥 알림이 이렇게 뜹니다.'); };
+$('#clearLog').onclick = () => { S.log = []; save(); renderLog(); };
+
+/* ══════════ 깨우기 ══════════ */
+// 워커의 타이머는 탭이 뒤에 있어도 덜 늦는다. 워커를 못 만들면 그냥 setInterval
+try{
+  const w = new Worker(URL.createObjectURL(new Blob(['setInterval(function(){postMessage(0)},500)'], {type:'text/javascript'})));
+  w.onmessage = tick;
+}catch(e){}
+setInterval(tick, 1000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden){ if(S.run) wakeOn(); tick(); } });
+window.addEventListener('focus', () => { tick(); bjFlush(); });
+setInterval(() => { if(S.out.length) bjFlush(); }, 60000);
+// 다른 탭에서 같은 fomo를 열어 상태가 바뀌면 따라간다(소리는 누른 창에서만 난다)
+window.addEventListener('storage', e => { if(e.key !== KEY || !e.newValue) return; try{ const p = JSON.parse(e.newValue); S = Object.assign(blank(), p); if(!S.run){ killNodes('rest'); if(!S.ring) killNodes('start'); sched = null; } renderList(); render(); renderLog(); }catch(er){} });
+
+// 날이 바뀌면 계획이 비워진다(plan). 열어 둔 채 자정을 넘겨도 목록이 따라가게 1분마다 본다
+let lastDay = dayKey();
+setInterval(() => { if(dayKey() !== lastDay){ lastDay = dayKey(); plan(); renderList(); render(); } }, 60000);
+
+renderLog();
+renderList();
+renderSent();
+tick();
+bjFlush();
+shareSoon();
+if(!S.tasks.length && bjCfg()) loadTasks(false);      // 처음 열었을 때 한 번
+</script>
+</body>
+</html>
