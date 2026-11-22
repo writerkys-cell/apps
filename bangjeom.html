@@ -1048,7 +1048,7 @@ const btProj = () => {
 const sgProj = () => cfg.sgUrl && cfg.sgKey ? {url:cfg.sgUrl, key:cfg.sgKey} : (cfg.url && cfg.key ? {url:cfg.url, key:cfg.key} : null);
 // G.write: {chars, pages, rev} 또는 null. chars는 오늘 쓴 초고의 글자, pages는 오늘 고친 쪽, rev는 개정 회차가 열린 작품이 있는가(2026년 11월 20일부터. 시간·목표·진행 중은 없다)
 // G.read: {pages} 또는 null. 오늘 읽은 쪽수뿐이다(2026년 11월 19일부터. 서가가 독서 시간을 재지 않는다). 목표도 진행 중도 없다
-const G = {write:null, read:null, err:{write:'', read:''}, at:0};
+const G = {write:null, read:null, fomo:null, err:{write:'', read:''}, at:0};   // fomo: 다른 기기의 fomo가 올린 오늘의 수(botaegi_kv의 fomo 줄)
 // 글쓰기 분량(2026년 11월 20일부터): 시작이 글쓰기 시간을 재지 않는다. 시작의 글쓰기 칸과 같은 기준이니(시작_인계.md ‘글쓰기 분량 전환’) 그쪽이 바뀌면 여기도 고칠 것.
 //   보태기 프로젝트의 botaegi_kv 세 줄만 읽는다. 초고 = 타이핑의 days.adv[오늘](완성 전 원고에서 늘어난 글자) + 4baek의 sabaek.adv[오늘](보낼 때 늘어난 글자).
 //   개정 = 타이핑 works 줄의 작품마다 rev_log에서 오늘 마지막 쪽 − 어제까지의 쪽(없으면 pages_from), 0 아래로는 안 내려간다.
@@ -1058,9 +1058,10 @@ async function loadWriteGoal(){
   if(!pb){ G.write = null; G.err.write = '보태기 연결 없음'; return; }
   const {key} = dayRange();
   try{
-    const kv = await restGet(pb, 'botaegi_kv?select=id,data&id=in.(days,works,sabaek)');
+    const kv = await restGet(pb, 'botaegi_kv?select=id,data&id=in.(days,works,sabaek,fomo)');
     const get = id => ((kv || []).find(x => x.id === id) || {}).data || null;
     const days = get('days'), works = get('works'), sb = get('sabaek');
+    G.fomo = get('fomo');
     const chars = (+(days && days.adv && days.adv[key]) || 0) + (+(sb && sb.adv && sb.adv[key]) || 0);
     let pages = 0, rev = false;
     (Array.isArray(works) ? works : []).forEach(w => {
@@ -1582,6 +1583,20 @@ function render(){
 }
 
 // 맨 위 한 줄: 오늘의 글쓰기·독서와 고른 시각
+// fomo의 오늘: 같은 브라우저에 fomo의 저장소(fomo.v1)가 있으면 그것을 **읽기만** 한다(쓰지 않는다). 없으면(아이폰) fomo가 botaegi_kv에 올린 줄(G.fomo).
+// 돌려주는 값 {done, void, plan} 또는 오늘 한 것도 정한 것도 없으면 null
+function fomoToday(){
+  const F = lsJson('fomo.v1'), k = dayKey();
+  let o = null;
+  if(F && typeof F === 'object'){
+    let done = 0, vd = 0;
+    (F.recs || []).forEach(r => { if(!r || r.d !== k) return; if(r.void) vd++; else done++; });
+    const n = F.plan && F.plan.day === k && F.plan.n ? F.plan.n : {};
+    o = {done, void:vd, plan:Object.values(n).reduce((a, x) => a + (+x || 0), 0)};
+  }else if(G.fomo && G.fomo.day === k) o = {done:+G.fomo.done || 0, void:+G.fomo.void || 0, plan:+G.fomo.plan || 0};
+  return o && (o.done || o.void || o.plan) ? o : null;
+}
+window.addEventListener('storage', e => { if(e.key === 'fomo.v1') renderGoals(); });   // fomo가 다른 창에서 돌면 바로 따라간다
 function renderGoals(){
   const parts = ['write','read'].map(k => {
     const g = G[k];
@@ -1590,7 +1605,11 @@ function renderGoals(){
     if(k === 'read') return `<span>${name} <b>${g.pages}쪽</b></span>`;   // 독서는 오늘 읽은 쪽수만. 목표가 없다
     return `<span>${name} 초고 <b>${(g.chars/200).toFixed(1)}매</b>${g.rev || g.pages ? ` · 개정 <b>${g.pages}쪽</b>` : ''}</span>`;   // 글쓰기도 오늘의 분량만(2026년 11월 20일). 시간·목표·진행 중이 없다
   });
-  if(S.pick && pickTask()) parts.push(`<span>${hm(S.pick.at)}에 고름 · 다음 ${hm(S.pick.at + SLOT)}</span>`);
+  // fomo의 오늘(2026년 11월 22일, 작가가 정함): '○○:○○에 고름 · 다음 ○○:○○' 자리에 '포모도로 한 수 / 하기로 한 수 · 무효'를 보인다. 시작에 끼운 방점에서도 그대로 보인다.
+  // 30분마다 다시 고르는 것(SLOT)은 그대로 돈다. 보이는 글자만 바꿨다. fomo를 쓰지 않은 날(셋 다 0)에는 전처럼 고른 때를 보인다
+  const fm = fomoToday();
+  if(fm) parts.push(`<span>포모도로 <b>${fm.done}</b> / ${fm.plan}${fm.void ? ` · 무효 ${fm.void}` : ''}</span>`);
+  else if(S.pick && pickTask()) parts.push(`<span>${hm(S.pick.at)}에 고름 · 다음 ${hm(S.pick.at + SLOT)}</span>`);
   parts.push(`<span>오늘 ${todayLabel()}</span>`);
   { const B = BLOCKS[blockOf()]; parts.push(`<span title="${B.end}까지">${B.name} · ${B.what}</span>`); }
   $('#goals').innerHTML = parts.join('');
