@@ -1568,6 +1568,19 @@ function hashOpen(){
   var q = hashParams();
   try{ history.replaceState(null, "", location.href.replace(/#.*$/, "")); }catch(e){}
   if(q["정리카드"]) return hashNew(q);
+  /* 작은 주소 둘 (2026년 11월 22일, 방점의 쓰기 일이 연다)
+     #목록=1 — 원고 목록 화면.   #작품=<작품 id> — 그 작품의 완성하지 않은 원고 가운데 가장 최근에 쓴 것(editedAt, 없으면 baseAt — Writer KYS의 '이어 쓸 곳'과 같은 고르는 법).
+     쓰던 원고가 없거나 작품을 못 찾으면 원고 목록을 연다. '작품'은 정리카드와 함께 올 때는 작품 이름이다(위에서 먼저 갈린다) */
+  if(q["목록"]){ showView("list"); return true; }
+  if(q["작품"] && !q["원고"]){
+    var hw = workById(q["작품"]), hl = null;
+    if(hw) S.mss.forEach(function(x){ if(x.workId === hw.id && !x.done && (!hl || (x.editedAt || x.baseAt || 0) > (hl.editedAt || hl.baseAt || 0))) hl = x; });
+    if(!hl){ showView("list"); toast(hw ? "'" + hw.title + "'에 쓰던 원고가 없습니다" : "주소의 작품을 찾지 못했습니다", 3000); return true; }
+    if(booted && tpOn()) tpStash();
+    S.cur = hl.id; S.armed = false; refOpen = false;
+    save(); renderHead(); showView("tp");
+    return true;
+  }
   var id = q["원고"]; if(!id) return false;
   var m = msById(id);
   if(!m || m.done){ toast(m ? "완성해 아카이브에 넣은 원고입니다" : "주소의 원고를 찾지 못했습니다", 3000); return false; }

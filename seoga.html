@@ -1987,8 +1987,23 @@ function hashBook(){
   sideId=b.discarded?null:b.id; markAdd=null;   /* 자료로 읽기 칸을 연다 — 내놓은 책은 기록만 보여 준다 */
   render(true);
 }
+/* 읽기 주소(2026년 11월 22일) — seoga.html#읽기=<책 id>로 오면 읽기 탭에서 그 책을 펼친다(방점의 읽기 일이 연다).
+   읽는 중이거나 읽기 대기인 책만 펼친다. 아니면 읽기 탭만 열고 알린다. 펼친 뒤에는 주소에서 지운다. */
+function hashRead(){
+  let k=''; try{ const m=/^#읽기=(.+)$/.exec(decodeURIComponent(location.hash)); if(m) k=m[1].trim(); }catch(e){}
+  if(!k) return;
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  if(SOLO) leaveSolo();
+  const b=book(k), ws=waitBooks(), ok=b&&(isReading(b)||ws.some(x=>x.id===b.id));
+  readScan=null; readQuote=false; go('read');
+  if(!ok){ toast(b?'‘'+b.title+'’은 읽는 중인 책이 아닙니다':'서가에서 그 책을 찾지 못했습니다'); return; }
+  const i=ws.findIndex(x=>x.id===b.id); if(i>=waitShown) waitShown=i+1;   /* 읽기 대기의 뒤쪽 책이면 거기까지 보이게 */
+  readOpen=b.id; render(true);
+}
 hashBook();
+hashRead();
 window.addEventListener('hashchange',hashBook);
+window.addEventListener('hashchange',hashRead);
 if(sbCfg.url&&sbCfg.key) sbConnect(false);
 window.addEventListener('online',()=>{ if(sbCfg.url) syncAll(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState!=='visible') return;
