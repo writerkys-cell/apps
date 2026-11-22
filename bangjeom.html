@@ -87,16 +87,19 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .dueline{font-size:.8rem;color:var(--ink-soft);letter-spacing:.04em;margin:.3rem 0 0;text-align:center}
 .dueline.today{color:var(--seal-soft)}
 .dueline.over{color:var(--seal)}
-.acts{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-top:1.3rem}
-.acts button{padding:.8rem 0;border:1px solid var(--ink);border-radius:2px;font-size:.98rem}
-.acts .page{border-color:var(--seal);color:var(--seal)}
-.acts .done{background:var(--ink);border-color:var(--ink);color:var(--paper)}
-.acts .drop{border-color:var(--rule);color:var(--ink-soft)}
+/* 카드의 단추는 상자가 아니라 글자 링크 한 줄(2026년 11월 23일, 작가가 정함). 목록 줄의 단추와 같은 빛깔. 누르는 자리는 여백으로 넓힌다 */
+.acts{display:flex;justify-content:center;flex-wrap:wrap;gap:0 .5rem;margin-top:1.1rem}
+.acts button{padding:.55rem .75rem;min-width:3.2rem;font-size:.98rem;color:var(--ink)}
+.acts .done{font-weight:700}
+.acts .page{color:var(--seal)}
+.acts .drop{color:var(--ink-faint)}
+.acts button:hover{text-decoration:underline;text-underline-offset:.25em;text-decoration-thickness:1px}
 .now a.txt{color:var(--ink);text-decoration:none;-webkit-tap-highlight-color:transparent}
 .now a.txt::after{content:'↗';font-size:.7em;color:var(--seal);margin-left:.35em;vertical-align:.25em}
 .now a.txt:active{color:var(--seal)}
 .skip{display:block;margin:1.1rem auto 0;color:var(--ink-faint);font-size:.85rem;border-bottom:1px dotted var(--rule);padding-bottom:1px}
 .skiprow{display:flex;justify-content:center;gap:1.6rem;margin-top:1.1rem}
+.acts + .skiprow{margin-top:.5rem}
 .skiprow .skip{margin:0}
 .restnote{
   border:1px solid var(--rule);background:var(--paper-2);color:var(--ink-soft);
@@ -305,6 +308,8 @@ ol.list li.editor.cont label,.ask.cont label{display:block;font-size:.82rem;colo
 .ask.cont label:first-child,ol.list li.editor.cont label:first-child{margin-top:0}
 .pendh{font-size:.85rem;font-weight:400;color:var(--ink-soft);letter-spacing:.08em;margin:2.2rem 0 .4rem;padding-bottom:.4rem;border-bottom:1px solid var(--rule)}
 .pendh span{color:var(--ink-faint);margin-left:.3rem}
+#freshBox{text-align:left}
+#freshBox:not(:empty){margin-bottom:1.6rem}
 ol.list.pend li .mv,ol.list.pend li .del{visibility:visible}
 ol.list.pend li .body{color:var(--ink-soft)}
 .nexts{margin-top:1.6rem;text-align:left;border-top:1px dotted var(--rule);padding-top:.8rem}
@@ -477,6 +482,7 @@ body.embed .sheet.editing #shTa{min-height:12rem;flex:none}
 <div class="view sel" id="v-today">
   <p class="goals" id="goals"></p>
   <div class="stage" id="stage"></div>
+  <div id="freshBox"></div>
   <div class="addrow" id="todayAdd">
     <input id="todayIn" placeholder="떠오른 일을 목록 끝에 적어둡니다" enterkeyhint="done">
     <div class="kinds" data-kinds>
@@ -663,6 +669,12 @@ do $$ begin
   end if;
 end $$;</pre>
     <div class="btns"><button id="btnSql">복사하기</button></div>
+  </section>
+
+  <section>
+    <h2>글감 처리하기</h2>
+    <p>목록에 <b>글감 처리하기</b>라는 줄을 하나 둡니다. 끝나지 않는 일이라 「계속」만 있고, 누르면 목록 끝으로 갑니다. 제목을 누르면 정리가 열립니다. 정리를 여는 브라우저(맥)에서는 옆에 처리할 아이디어와 카드의 수가 보이고, 아이디어가 있을 때만 오후에 권합니다.</p>
+    <div class="btns"><button id="btnGam"></button></div>
   </section>
 
   <section>
@@ -883,7 +895,29 @@ const KINDS = {write:'쓰기', revise:'개정', read:'읽기', idea:'글감', me
 // 새 표시와 태그(2026년 11월 22일). fresh: 밖(final·수첩)에서 들어왔거나 미결함에서 되돌려 아직 태그를 달지 않은 일. ref: 태그에 건 것 {id, name} — 쓰기는 4baek 작품, 개정은 타이핑 작품, 읽기는 서가의 책
 const REF_KINDS = {write:'4baek 작품', revise:'타이핑 작품', read:'서가의 책'};
 const slotKind = k => k === 'revise' ? 'write' : (k || '');                           // 추천의 시간대: 개정은 쓰기처럼 오전에
-const noRec = t => !!t.fresh || t.kind === 'idea' || t.kind === 'memo';               // 추천이 보지 않는 일: 새 표시가 붙은 일, 글감·메모(목록을 훑을 때 보낸다)
+// 「글감 처리하기」(2026년 11월 23일, 작가가 정함): 목록에 하나만 있는, 끝나지 않는 일(gam:true). 정리(jeongri.html)에 쌓인 아이디어와 카드의 수를 옆에 보인다.
+// 정리의 저장소(jeongri.v1)와 받은편지함(jeongri.in)을 **읽기만** 한다. 정리를 여는 브라우저(맥)에서만 수가 있고, 없으면(아이폰) null — 제목만 보인다.
+// ideas: 정리의 아이디어 탭에 보이는 것(state 'new', 지우지 않은 것) + 방점이 보냈는데 정리가 아직 받지 않은 것(jeongri.in). cards: 보관하지 않은 카드. ready: 그중 제목이 있고 본문이 400자를 넘어 4baek으로 넘길 수 있는 것
+const isGam = t => !!(t && t.gam && !t.done);
+let gamMemo = null;
+function gamCount(){
+  if(gamMemo && Date.now() - gamMemo.at < 3000) return gamMemo.v;
+  const J = lsJson('jeongri.v1'), inb = lsJson('jeongri.in');
+  let v = null;
+  if((J && typeof J === 'object') || Array.isArray(inb)){
+    const ideas = ((J && Array.isArray(J.ideas)) ? J.ideas : []).filter(i => i && !i.deleted && i.state === 'new');
+    const have = new Set(ideas.map(i => i.id));
+    const wait = (Array.isArray(inb) ? inb : []).filter(x => x && !have.has(x.id)).length;
+    const cards = ((J && Array.isArray(J.cards)) ? J.cards : []).filter(c => c && !c.dropped);
+    v = {ideas:ideas.length + wait, cards:cards.length,
+         ready:cards.filter(c => String(c.title || '').trim() && String(c.text || '').replace(/\n/g, '').length >= 400).length};
+  }
+  gamMemo = {at:Date.now(), v};
+  return v;
+}
+const gamIdle = t => { const c = gamCount(); return !(c && c.ideas > 0); };   // 처리할 아이디어가 없다(수를 모르는 기기에서도)
+const gamInfo = t => { if(!isGam(t)) return ''; const c = gamCount(); return c ? `<span class="repinfo">아이디어 ${c.ideas} · 카드 ${c.cards}${c.ready ? `(넘길 것 ${c.ready})` : ''}</span>` : ''; };
+const noRec = t => !!t.fresh || t.kind === 'idea' || t.kind === 'memo' || (!!t.gam && gamIdle(t));               // 추천이 보지 않는 일: 새 표시가 붙은 일, 글감·메모(목록을 훑을 때 보낸다)
 const freshTag = t => t && t.fresh ? '<span class="kind fresh">새</span>' : '';
 const lsJson = k => { try{ return JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){ return null; } };
 // 태그를 달 때 고를 것들. 같은 주소의 저장소를 **읽기만** 한다(4baek-v1 · taiping-v1 · seoga.v1). 절대 쓰지 않는다
@@ -1227,7 +1261,7 @@ function clearDots(){
 }
 // 미결: 형광펜 표시. 추천도 점도 보지 않는다. 매듭을 지으면 미결함으로 간다. 다시 누르면 푼다. 반복되는 일에는 없다
 function toggleHold(id){
-  const t = byId(id); if(!t || t.done || t.rep) return false;
+  const t = byId(id); if(!t || t.done || t.rep || t.gam) return false;
   if(t.hold) delete t.hold; else { t.hold = true; delete t.dot; }
   commit();
   if((S.pick && S.pick.id === id) || !pickTask()) repick(true);
@@ -1294,9 +1328,10 @@ const enc = encodeURIComponent;
 const taskBody = t => [t.text, (t.note || '').trim(), t.url && !KIND_URLS.includes(t.url) ? t.url : ''].filter(Boolean).join('\n\n');
 const copyText = v => { try{ navigator.clipboard.writeText(v).catch(() => {}); }catch(e){} };   // 덤이다. 넘기는 길이 실패해도 붙여 넣을 수 있게
 const isTagKind = k => !!KINDS[k];
-const goable = t => !!t && !t.done && (isTagKind(t.kind) || !!t.url);
+const goable = t => !!t && !t.done && (isTagKind(t.kind) || !!t.url || !!t.gam);
 function goTask(id){
   const t = byId(id); if(!goable(t)) return;
+  if(t.gam){ window.open(appUrl('jeongri.html'), winName('jeongri')); return; }   // 글감 처리하기: 정리를 연다
   const k = t.kind || '', ref = t.ref && t.ref.id;
   if(k === 'write'){ window.open(appUrl('4baek.html') + '#' + (ref ? enc('작품') + '=' + enc(ref) : enc('목록') + '=1'), winName('4baek')); return; }
   if(k === 'revise'){
@@ -1314,7 +1349,7 @@ function goTask(id){
     let arr = []; try{ arr = JSON.parse(localStorage.getItem('jeongri.in')) || []; }catch(e){}
     if(!Array.isArray(arr)) arr = [];
     arr.push({id:'bj' + t.id, text, origin:'bangjeom', created_at:Date.now()});
-    try{ localStorage.setItem('jeongri.in', JSON.stringify(arr)); }
+    try{ localStorage.setItem('jeongri.in', JSON.stringify(arr)); gamMemo = null; }
     catch(e){ toast('정리로 보내지 못했습니다 · 내용은 복사해 두었습니다'); return; }
     window.open(appUrl('jeongri.html'), winName('jeongri'));
     finish(id, null, true);
@@ -1337,9 +1372,19 @@ function goTask(id){
 }
 
 /* ══════════ 할 일 다루기 ══════════ */
+// 「글감 처리하기」 줄을 만들고 없앤다(설정). 켜져 있는지는 목록에 그 줄이 있는지로 안다 — 따로 적어 두는 값이 없어 기기끼리 어긋나지 않는다
+function setGam(on){
+  const i = S.tasks.findIndex(isGam);
+  if(on && i < 0) S.tasks.push({id:uid(), text:'글감 처리하기', url:'', note:'', kind:'', gam:true, done:false, doneAt:null, createdAt:now()});
+  else if(!on && i >= 0){ const id = S.tasks[i].id; S.tasks.splice(i, 1); delete S.skip[id]; }
+  else return;
+  commit();
+  if(!pickTask()) repick(true);
+}
 // quiet: 목록·페이지에서 끝낼 때. 그 일이 지금 할 일이 아니면 다시 고르지 않는다
 function finish(taskId, reentryText, quiet){
   const t = byId(taskId); if(!t) return;
+  if(t.gam){ carryOn(taskId, '', ''); return; }     // 글감 처리하기는 끝나지 않는다. final·fomo·페이지에서 「끝」이 와도 계속으로 받는다
   const onStage = !!(S.pick && S.pick.id === taskId && pickTask());
   const still = quiet && !onStage;
   if(t.rep){                               // 반복되는 일: 오늘 한 일에 기록 사본만 남기고, 항목은 다음 차례까지 숨는다. 쪽글로는 안 보낸다
@@ -1405,6 +1450,7 @@ function reviveRow(d){
 
 function drop(taskId){
   const i = idxOf(taskId); if(i < 0) return;
+  if(S.tasks[i].gam && !S.tasks[i].done){ toast('「글감 처리하기」는 설정에서 없앱니다'); return; }
   const wasPick = S.pick && S.pick.id === taskId;
   S.tasks.splice(i,1);
   delete S.skip[taskId];
@@ -1587,6 +1633,7 @@ const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight
 
 function render(){
   if(dropOldKeys() | fillKindUrls()) LS.set('bangjeom.state', JSON.stringify(S));
+  { const g = $('#btnGam'); if(g) g.textContent = S.tasks.some(isGam) ? '「글감 처리하기」 줄 없애기' : '「글감 처리하기」 줄 만들기'; }
   renderGoals();
   renderStage();
   renderList();
@@ -1610,7 +1657,8 @@ function fomoToday(){
   }else if(G.fomo && G.fomo.day === k) o = {done:+G.fomo.done || 0, void:+G.fomo.void || 0, plan:+G.fomo.plan || 0};
   return o && (o.done || o.void || o.plan) ? o : null;
 }
-window.addEventListener('storage', e => { if(e.key === 'fomo.v1') renderGoals(); });   // fomo가 다른 창에서 돌면 바로 따라간다
+window.addEventListener('storage', e => { if(e.key === 'fomo.v1') renderGoals(); });
+window.addEventListener('storage', e => { if(e.key === 'jeongri.v1' || e.key === 'jeongri.in'){ gamMemo = null; if(S.tasks.some(isGam)) render(); } });   // 정리 창에서 아이디어·카드가 바뀌면 「글감 처리하기」의 수가 바로 따라간다   // fomo가 다른 창에서 돌면 바로 따라간다
 function renderGoals(){
   const parts = ['write','read'].map(k => {
     const g = G[k];
@@ -1691,7 +1739,7 @@ function renderStage(){
     return;
   }
 
-  const title = isTagKind(a.kind)
+  const title = isTagKind(a.kind) || a.gam
     ? `<a class="txt" href="#" data-go="${a.id}">${esc(a.text)}</a>`          // 태그가 있으면 태그의 길로(goTask)
     : a.url
     ? `<a class="txt" href="${esc(showUrl(a.url))}"${/^https?:/i.test(a.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(a.text)}</a>`
@@ -1706,13 +1754,14 @@ function renderStage(){
       <div>${title}</div>
       <div class="why ${!dotMode && S.pick.kind === 'today' ? 'urg' : ''}">${dotMode ? `점 찍은 일${ds.length > 1 ? ` · ${ds.length}개 가운데 마지막에 찍은 것` : ''}` : esc(S.pick.why || '')}</div>
       ${!dotMode && S.pick.kind === 'due' ? '' : dueLine(a)}
+      ${a.gam && gamInfo(a) ? `<div class="dueline">${gamInfo(a).replace(/<\/?span[^>]*>/g, '')}</div>` : ''}
       ${lastLine(a)}
       ${memo}
     </div>` + (cont && cont.at === 'stage' ? contHtml(a, true) : ask && ask.id === a.id ? askHtml(ask.how) : `
     <div class="acts">
       <button id="actPart">계속</button>
-      <button class="done" id="actDone">끝</button>
-      ${a.rep ? '' : '<button class="drop" id="actHold">미결</button>'}
+      ${a.gam ? '' : '<button class="done" id="actDone">끝</button>'}
+      ${a.rep || a.gam ? '' : '<button class="drop" id="actHold">미결</button>'}
       <button class="page" id="actPage">페이지 열기</button>
     </div>
     <div class="skiprow">${dotMode
@@ -1728,7 +1777,7 @@ function renderStage(){
     return;
   }
   $('#actPage').onclick = () => openSheet(a.id);
-  $('#actDone').onclick = () => { ask = {id:a.id, how:'done'}; renderStage(); };
+  const ad = $('#actDone'); if(ad) ad.onclick = () => { ask = {id:a.id, how:'done'}; renderStage(); };
   $('#actPart').onclick = () => { ask = null; cont = {id:a.id, at:'stage'}; renderStage(); };
   const ah = $('#actHold'); if(ah) ah.onclick = () => { closeSheet(); if(toggleHold(a.id)) toast('미결로 표시했습니다 · 매듭을 지으면 미결함으로 갑니다'); };
   const ud = $('#unDots'); if(ud) ud.onclick = () => { const n = clearDots(); if(n) toast(`점 ${n}개를 풀었습니다`); };
@@ -1791,19 +1840,20 @@ function renderList(){
     const dot = t.done ? '<span class="ord">✓</span>' : (t.hold ? '' : `<button class="dotb${t.dot ? ' on' : ''}" data-dot="${t.id}" aria-label="${t.dot ? '점 풀기' : '점 찍기'}" title="${t.dot ? '점 풀기' : '점 찍기 · 오늘 탭의 추천 자리에 뜹니다'}"></button>`);
     const mv = t.done ? (t.echo ? '' : `<button class="mv" data-revive="${t.id}">되살리기</button>`) : '';
     // 단추 넷: 수정·계속·끝·미결. 페이지·지움은 작은 글씨로 뒤에. 「오늘로」「끝으로」는 없앴다(오늘 표는 수정 칸에서 켜고 끈다)
-    const ed = t.done ? '' : `<button class="ed" data-edit="${t.id}">수정</button>`;
+    const gm = isGam(t);                          // 글감 처리하기: 계속과 페이지만. 수정·끝·미결·지움이 없다
+    const ed = t.done || gm ? '' : `<button class="ed" data-edit="${t.id}">수정</button>`;
     const ct = t.done ? '' : `<button class="ct" data-cont="${t.id}">계속</button>`;
-    const dn = t.done ? '' : `<button class="dn" data-done="${t.id}">끝</button>`;
-    const up = t.done || t.rep ? '' : `<button class="hd" data-hold="${t.id}">${t.hold ? '미결 풀기' : '미결'}</button>`;
+    const dn = t.done || gm ? '' : `<button class="dn" data-done="${t.id}">끝</button>`;
+    const up = t.done || t.rep || gm ? '' : `<button class="hd" data-hold="${t.id}">${t.hold ? '미결 풀기' : '미결'}</button>`;
     const pg = t.done ? '' : `<button class="pg" data-page="${t.id}">페이지</button>`;
     const ri = isRep(t) ? `<span class="repinfo">${esc(repLabel(t))}${repDoneToday(t) ? ' · 오늘 함' : ''}${repResting(t) ? ' · ' + nextLabel(repNext(t)) : ''}</span>` : '';
-    return `<li class="${t.done?'done':''} ${t.id===act && !t.hold?'act':''} ${t.hold && !t.done?'hold':''} ${repResting(t)?'repdone':''}">
+    return `<li class="${t.done?'done':''} ${t.id===act && !t.hold?'act':''} ${t.hold && !t.done?'hold':''} ${repResting(t) || (gm && gamIdle(t))?'repdone':''}">
       <span class="gutter">${dot}</span>
-      <span class="body">${t.done ? '' : freshTag(t)}${urgTag(t)}${kindTag(t.kind)}${repTag(t)}<span class="ttl${goable(t) ? ' go' : ''}"${goable(t) ? ` data-go="${t.id}" title="${GO_TIP[t.kind || ''] || ''}"` : ''}>${esc(t.text)}</span>${linkTag(t.url)}${t.ref && !t.done ? `<span class="repinfo">${esc(t.ref.name)}</span>` : ''}${t.done ? '' : dueTag(t)}${ri}${t.fresh && !t.done
+      <span class="body">${t.done ? '' : freshTag(t)}${urgTag(t)}${kindTag(t.kind)}${repTag(t)}<span class="ttl${goable(t) ? ' go' : ''}"${goable(t) ? ` data-go="${t.id}" title="${GO_TIP[t.kind || ''] || ''}"` : ''}>${esc(t.text)}</span>${linkTag(t.url)}${t.ref && !t.done ? `<span class="repinfo">${esc(t.ref.name)}</span>` : ''}${t.done ? '' : dueTag(t)}${ri}${gamInfo(t)}${t.fresh && !t.done
         ? `<span class="tags">${TAG_BTNS.map(([k, lab]) => `<button data-tag="${k}" data-tid="${t.id}" class="${tagPick && tagPick.id === t.id && tagPick.kind === k ? 'sel' : ''}">${lab}</button>`).join('')}</span>` : ''}${t.note
         ? `<span class="note nt clamp ${noteOpen.has(t.id)?'open':''}" data-note="${t.id}"${t.done ? '' : ' title="누르면 페이지가 열립니다"'}>${fmtNote(t.note)}</span>` : ''}</span>
       ${ed}${ct}${dn}${up}${pg}${mv}
-      <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
+      ${gm ? '' : `<button class="del" data-del="${t.id}" aria-label="지우기">지움</button>`}
     </li>` + (editOpen === t.id ? editorHtml(t) : '') + (contId === t.id ? contHtml(t, false) : '') + (tagPick && tagPick.id === t.id ? pickerHtml() : '');
   }).join('') || (resting.length ? '' : `<li><span class="gutter"></span><span class="body" style="color:var(--ink-faint)">비어 있습니다</span></li>`)) + restRow + doneRow;
   wireEditor();
@@ -1818,6 +1868,26 @@ function renderList(){
         <button class="del" data-pdel="${esc(p.id)}" aria-label="지우기">지움</button>
       </li>`).join('')}</ol>`
     : '';
+  renderFresh();
+}
+
+// 오늘 탭의 「새로 들어온 일」(2026년 11월 23일, 작가가 정함): 새 표시가 붙은 일을 카드 아래에 다섯 줄까지 보이고, 목록과 같은 태그 단추·지움으로 그 자리에서 처리한다.
+// 새 일이 없으면 묶음이 통째로 보이지 않는다. 목록 탭의 줄은 그대로 있고 어느 쪽에서 처리해도 같다. renderList의 끝에서 부른다
+const FRESH_MAX = 5;
+function renderFresh(){
+  const box = $('#freshBox'); if(!box) return;
+  const fr = S.tasks.filter(t => !t.done && t.fresh);
+  if(!fr.length){ if(box.innerHTML){ box.innerHTML = ''; tellHeight(); } return; }
+  const more = fr.length - Math.min(fr.length, FRESH_MAX);
+  box.innerHTML = `<h3 class="pendh">새로 들어온 일 <span>${fr.length}</span></h3><ol class="list fresh">${fr.slice(0, FRESH_MAX).map(t => `<li>
+      <span class="gutter"></span>
+      <span class="body"><span class="ttl">${esc(t.text)}</span>${linkTag(t.url)}<span class="tags">${TAG_BTNS.map(([k, lab]) => `<button data-tag="${k}" data-tid="${t.id}" class="${tagPick && tagPick.id === t.id && tagPick.kind === k ? 'sel' : ''}">${lab}</button>`).join('')}</span>${t.note
+        ? `<span class="note nt clamp" data-note="${t.id}" title="누르면 페이지가 열립니다">${fmtNote(t.note)}</span>` : ''}</span>
+      <button class="pg" data-page="${t.id}">페이지</button>
+      <button class="del" data-del="${t.id}" aria-label="지우기">지움</button>
+    </li>` + (tagPick && tagPick.id === t.id ? pickerHtml() : '')).join('')}${more
+      ? `<li class="restrow"><span class="gutter"></span>${EMBED ? `<span class="body">외 ${more}개 · 방점의 목록에 있습니다</span>` : `<button class="body" data-golist>외 ${more}개 · 목록에서 보기</button>`}</li>` : ''}</ol>`;
+  tellHeight();
 }
 
 // 새 표시가 붙은 일에 보이는 태그 단추 여섯. 쓰기·개정·읽기는 고를 것(작품·책)을 묻는 칸이 줄 아래에 펼쳐진다. tagPick = {id, kind}
@@ -2298,6 +2368,7 @@ document.addEventListener('click', e => {
   const pg = e.target.closest('[data-page]');
   if(pg){ openSheet(pg.dataset.page); return; }
   if(e.target.closest('[data-resting]')){ showResting = !showResting; renderList(); return; }
+  if(e.target.closest('[data-golist]')){ document.querySelector('nav button[data-v="list"]').click(); return; }
   if(e.target.closest('[data-goknot]')){ document.querySelector('nav button[data-v="knot"]').click(); return; }
   const nt = e.target.closest('[data-note]');
   if(nt){
@@ -2424,6 +2495,11 @@ $('#btnGoalTest').onclick = async () => {
 $('#btnSql').onclick = async () => {
   try{ await navigator.clipboard.writeText($('#sql').textContent); toast('복사했습니다'); }
   catch(e){ toast('직접 선택해 복사하세요'); }
+};
+$('#btnGam').onclick = () => {
+  const on = S.tasks.some(isGam);
+  if(on && !confirm('목록에서 「글감 처리하기」 줄을 없앱니까?\n\n그 줄의 페이지에 적은 것도 함께 없어집니다.')) return;
+  setGam(!on); toast(on ? '「글감 처리하기」 줄을 없앴습니다' : '목록 끝에 「글감 처리하기」를 만들었습니다');
 };
 $('#btnExport').onclick = () => {
   const b = new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
