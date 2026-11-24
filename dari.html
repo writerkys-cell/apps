@@ -196,7 +196,7 @@ nav button .n{color:var(--inju);margin-left:.25rem;font-variant-numeric:tabular-
       <div class="tfoot">
         <button class="tb" id="tpLine" type="button">한 줄씩</button>
         <button class="tb" id="tpFix" type="button" title="지금 쓰는 대목을 몇 번이고 다시 치는 모드. 왼쪽 글은 바뀌지 않습니다.">고쳐쓰기</button>
-        <button class="go" id="tpStop" type="button" disabled title="400자를 넘긴 글을 정리의 카드로 넘깁니다. 오른쪽 글이 400자를 넘었으면 오른쪽 글을, 아니면 왼쪽 글을 넘깁니다. 넘긴 글감은 인박스에서 빠집니다.">정리로</button>
+        <button class="go" id="tpStop" type="button" disabled title="오른쪽 글을 왼쪽으로 보낼 때처럼 정돈해서 정리의 카드로 넘깁니다. 목표를 채우지 않아도 되지만 400자는 넘어야 합니다. 오른쪽이 비어 있으면(막 보낸 뒤) 왼쪽 글을 넘깁니다. 넘긴 글감은 인박스에서 빠집니다.">정리로</button>
         <button class="go" id="tpSend" type="button" disabled>보내기</button>
       </div>
     </div>
@@ -245,7 +245,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
      seed  — 처음 들어온 글감(바뀌지 않는다)
      base  — 왼쪽 글. 처음에는 글감이고, 보내기를 하면 마지막으로 보낸 글이 된다
      draft — 오른쪽에 쓰던 글. 다른 글감으로 옮겨 가도 조용히 남는다
-     sentAt·card — 정리로 넘긴 때와 정리의 카드 id. 넘긴 글감은 인박스에 보이지 않는다 */
+     sentAt·card·sent — 정리로 넘긴 때, 정리의 카드 id, 넘긴 글. 넘긴 글감은 인박스에 보이지 않는다 */
 function fresh(){
   return { items:[], cur:null, step:400, dim:true, lineMode:true, smart:true, split:50,
            pfz:16, plh:1.9, ifz:16, ilh:1.9,
@@ -569,13 +569,13 @@ function tpRenderMode(){
 }
 
 
-/* ---- 정리로 넘길 글 — 오른쪽 글이 400자를 넘었으면 그것, 아니면 (고쳐쓰기 중이면 옮겨 둔 글,) 왼쪽 글. 어느 것도 400자가 안 되면 넘길 수 없다 ---- */
+/* ---- 정리로 넘길 글 (2026년 11월 24일 저녁, 작가가 정함) — 늘 오른쪽 글을, 왼쪽으로 보낼 때처럼 정돈해서(tpOutgoing) 넘긴다. 목표는 보지 않는다.
+   오른쪽이 비어 있을 때만(막 보낸 뒤) 왼쪽 글을 넘긴다 — 이미 정돈되어 보내진 글이다. 넘길 글이 400자가 안 되면 넘길 수 없다(정리가 400자를 넘어야 메모함으로 보낸다) ---- */
 function jrPick(m){
   var r = tpOn() && cur() === m ? tpOutgoing() : "";
-  if(len(r) >= GOAL) return { t:r, from:"r" };
-  if(m.fix && len(m.fixText) >= GOAL) return { t:m.fixText, from:"f" };
-  if(len(m.base) >= GOAL) return { t:m.base, from:"l" };
-  return null;
+  if(r) return len(r) >= GOAL ? { t:r, from:"r" } : null;
+  var l = (m.fix && m.fixText) ? m.fixText : (m.base || "");
+  return len(l) >= GOAL ? { t:l, from:"l" } : null;
 }
 /* ---- 분량 세기와 보내기 조건 ---- */
 function tpRenderCount(){
@@ -658,29 +658,29 @@ function tpSend(){
   m.editedAt = Date.now();
   tpEl.input.value = ""; m.draft = "";
   save(); tpRender();
-  toast("글 " + fmt(n) + "자 · 다음 목표 " + fmt(tpGoal(m)) + "자 · 이제 '정리로' 넘길 수 있습니다", 3200);
+  toast("글 " + fmt(n) + "자 · 다음 목표 " + fmt(tpGoal(m)) + "자 · 여기서 '정리로'를 누르면 이 글이 넘어갑니다", 3200);
   tpEl.input.focus();
 }
 
-/* ---- 정리로 — 400자를 넘긴 글을 정리의 카드로 넘긴다. 정리의 받은편지함(jeongri.cards.in)에 적고 정리를 그 카드로 연다.
-   정리가 읽어 카드를 만든다(제목은 첫 문장의 앞부분, 본문은 이 글). 넘긴 글감은 인박스에서 빠지고 저장소에는 한 달 남는다 ---- */
+/* ---- 정리로 — 오른쪽 글(비어 있으면 왼쪽 글)을 정리의 카드로 넘긴다. 정리의 받은편지함(jeongri.cards.in)에 적고 정리를 그 카드로 연다.
+   정리가 읽어 카드를 만든다(제목은 첫 문장의 앞부분, 본문은 이 글). 넘기지 않은 왼쪽 글(left)과 처음 글감(seed)은 카드에 딸려 가 카드 아래에 접혀 보인다.
+   왼쪽 글이 넘기는 글보다 길 때만 한 번 묻는다. 넘긴 글감은 인박스에서 빠지고 저장소에는 한 달 남는다 ---- */
 function tpToJeongri(){
   var m = cur(); if(!m) return;
   var p = jrPick(m);
-  if(!p){ toast(fmt(GOAL) + "자를 넘겨야 정리로 넘길 수 있습니다"); return; }
-  var r = tpOutgoing(), st = tpStacked(), R = st ? "아래" : "오른쪽", L = st ? "위" : "왼쪽";
-  if(p.from === "r" && len(m.base) > len(p.t) && len(m.base) >= GOAL
-     && !confirm(R + " 글(" + fmt(len(p.t)) + "자)이 " + L + " 글(" + fmt(len(m.base)) + "자)보다 짧습니다.\n" + R + " 글을 정리로 넘깁니다. 넘길까요?")){ tpEl.input.focus(); return; }
-  if(p.from !== "r" && r
-     && !confirm(R + "에 쓰던 글(" + fmt(len(r)) + "자)은 " + fmt(GOAL) + "자가 안 되어 넘기지 않습니다.\n" + L + " 글(" + fmt(len(p.t)) + "자)만 정리로 넘깁니다. 넘길까요?")){ tpEl.input.focus(); return; }
+  if(!p){ toast((tpOutgoing() ? "쓰는 글이 " : "글이 ") + fmt(GOAL) + "자를 넘어야 정리로 넘길 수 있습니다"); return; }
+  var st = tpStacked(), R = st ? "아래" : "오른쪽", L = st ? "위" : "왼쪽";
+  var left = (m.base && m.base !== p.t && m.base !== m.seed) ? m.base : "";
+  if(p.from === "r" && left && len(left) > len(p.t)
+     && !confirm(L + " 글(" + fmt(len(left)) + "자)이 " + R + " 글(" + fmt(len(p.t)) + "자)보다 깁니다.\n" + R + " 글만 정리의 카드가 되고, " + L + " 글은 카드 아래에 딸려 갑니다. 넘길까요?")){ tpEl.input.focus(); return; }
   var cid = "dr" + m.id, arr = [];
   try{ arr = JSON.parse(localStorage.getItem(OUT_KEY)) || []; }catch(e){}
   if(!Array.isArray(arr)) arr = [];
   arr = arr.filter(function(x){ return x && x.id !== cid; });
-  arr.push({ id:cid, title:defTitle(p.t), text:p.t, seed:m.seed || "", origin:"dari", from:m.id, created_at:m.at || Date.now(), sent_at:Date.now() });
+  arr.push({ id:cid, title:defTitle(p.t), text:p.t, seed:(m.seed && m.seed !== p.t) ? m.seed : "", left:left, origin:"dari", from:m.id, created_at:m.at || Date.now(), sent_at:Date.now() });
   try{ localStorage.setItem(OUT_KEY, JSON.stringify(arr)); }
   catch(e){ toast("정리로 보내지 못했습니다 — 저장 공간을 확인하세요", 4000); return; }
-  m.base = p.t; m.baseAt = Date.now(); m.draft = ""; delete m.cut;
+  m.sent = p.t; m.draft = ""; delete m.cut;
   m.fix = false; m.fixText = ""; m.fixN = 0;
   m.sentAt = Date.now(); m.card = cid;
   tpEl.input.value = ""; S.cur = null;
@@ -743,7 +743,7 @@ function renderList(){
     var o = el("button", "open", firstLine(m.base || m.seed) || "(빈 글감)"); o.type = "button"; o.title = "400자 화면에서 엽니다";
     o.onclick = function(){ tpOpen(m.id); };
     var n = len(m.base), d = len(m.draft), st = el("span", "st");
-    st.innerHTML = fmt(n) + "자" + (d ? " · 쓰는 중 " + fmt(d) + "자" : "") + (n >= GOAL || d >= GOAL ? ' · <span class="no">정리로 넘길 수 있음</span>' : "");
+    st.innerHTML = fmt(n) + "자" + (d ? " · 쓰는 중 " + fmt(d) + "자" : "") + ((d ? d : n) >= GOAL ? ' · <span class="no">정리로 넘길 수 있음</span>' : "");
     var del = el("button", "act", "지우기"); del.type = "button"; del.title = "이 글감을 인박스에서 지웁니다";
     del.onclick = function(){
       if(!confirm("이 글감을 지울까요? 쓰던 글도 함께 사라집니다.\n\n" + firstLine(m.base || m.seed).slice(0, 60))) return;
