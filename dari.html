@@ -158,6 +158,12 @@ h2:first-child{margin-top:0}
 .row select{border:0;border-bottom:1px solid var(--seon);background:transparent;font-family:inherit;font-size:.9rem;color:inherit;padding:.2rem 0}
 .fontcheck{font-family:var(--body);font-size:1.05rem;color:var(--meok);margin:.9rem 0 0}
 .note{font-size:.8rem;color:var(--meok-3);line-height:1.8;margin:.4rem 0 0}
+#syncBox .row{flex-wrap:wrap}
+#syncBox input{flex:1;min-width:8rem;border:0;border-bottom:1px solid var(--seon);background:transparent;font-family:inherit;font-size:.9rem;color:inherit;padding:.2rem 0}
+#syncBox button{flex:none;background:none;border:0;padding:0;margin-left:.4rem;font-size:.85rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+#syncBox button:hover{color:var(--inju);border-bottom-color:var(--inju)}
+#syncBox .who{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.syncstat.err{color:var(--inju)}
 #toast{position:fixed;left:50%;bottom:2rem;transform:translateX(-50%);background:var(--meok);color:var(--jongi);padding:.5rem 1.1rem;border-radius:2px;font-size:.85rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:90;max-width:90vw;text-align:center}
 #toast.on{opacity:1}
 .ms .st.when{color:#b9b1a4}
@@ -225,6 +231,10 @@ nav button .n{color:var(--inju);margin-left:.25rem;font-variant-numeric:tabular-
       <p class="fontcheck">가을 햇살 아래, 나는 사백 자를 더 썼다.</p>
       <p class="note" id="fontNote"></p>
       <p class="note">왼쪽 글과 쓰는 칸이 모두 이 글꼴을 씁니다. 고운바탕과 나눔명조는 인터넷에서 받아 오는 글꼴이라 처음 한 번은 연결이 필요합니다. 다른 글꼴은 '직접 입력'에서 글꼴 파일(.otf, .ttf)을 넣어 씁니다. 넣은 파일은 이 브라우저 안에만 저장됩니다.</p>
+
+      <h2>맞추기</h2>
+      <div id="syncBox"></div>
+      <p class="note">인박스의 글감과 쓰던 글을 수파베이스에 올려 두고, 다른 기기의 다리에서 이어 씁니다. 수첩·방점·정리와 같은 로그인을 씁니다. 글감 하나씩 따로 맞추고, 나중에 고친 쪽이 남습니다. 두 기기에서 따로 쓴 글이 있으면 버리지 않고 쓰는 칸 뒤에 이어 붙입니다. 글자 크기·줄 간격·글꼴은 기기마다 따로입니다.</p>
     </div></div>
   </section>
 </main>
@@ -247,7 +257,7 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
      draft — 오른쪽에 쓰던 글. 다른 글감으로 옮겨 가도 조용히 남는다
      sentAt·card·sent — 정리로 넘긴 때, 정리의 카드 id, 넘긴 글. 넘긴 글감은 인박스에 보이지 않는다 */
 function fresh(){
-  return { items:[], cur:null, step:400, dim:true, lineMode:true, smart:true, split:50,
+  return { items:[], gone:{}, cur:null, step:400, dim:true, lineMode:true, smart:true, split:50,
            pfz:16, plh:1.9, ifz:16, ilh:1.9,
            bodyFont:"gowun",   /* 본문 글꼴 — FONTS의 열쇠, 또는 "custom"(넣은 글꼴 파일) */
            fontFile:"",        /* 넣은 글꼴 파일 이름 — 파일 자체는 IndexedDB "dari-fonts" */
@@ -270,11 +280,24 @@ function load(){
   }
   if(!Array.isArray(d.items)) d.items = [];
   d.items = d.items.filter(function(m){ return m && m.id && !(m.sentAt && Date.now() - m.sentAt > KEEP_SENT); });
+  d.items.forEach(function(m){ if(!m.u){ m.u = m.editedAt || m.baseAt || m.at || Date.now(); m._d = 1; } });   /* 맞추기 전의 글감 — 올릴 것으로 친다 */
+  if(!d.gone || typeof d.gone !== "object" || Array.isArray(d.gone)) d.gone = {};
   d.step = 400;
   return d;
 }
 var S = load();
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장하지 못했습니다 — 저장 공간을 확인하세요", 4000); } }
+/* 맞추기의 표시 — 글감마다 u(고친 때), _d(올릴 것), r(저쪽과 마지막으로 맞은 때). 저장할 때마다 글감을 직전 모습(SNAP)과 견주어 바뀐 것에만 u와 _d를 적는다 */
+var SNAP = {};
+function snapOf(m){ var o = {}; for(var k in m) if(k !== "u" && k !== "_d" && k !== "r") o[k] = m[k]; return JSON.stringify(o); }
+function snapAll(){ SNAP = {}; S.items.forEach(function(m){ SNAP[m.id] = snapOf(m); }); }
+function touch(){
+  var ch = false;
+  S.items.forEach(function(m){ var s = snapOf(m); if(SNAP[m.id] !== s){ SNAP[m.id] = s; m.u = Date.now(); m._d = 1; ch = true; } });
+  return ch;
+}
+snapAll();
+function store(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장하지 못했습니다 — 저장 공간을 확인하세요", 4000); } }
+function save(){ var ch = touch(); store(); if(ch) flushSoon(); }
 
 function len(t){ return (t || "").replace(/\n/g, "").length; }
 function trimBlank(a){
@@ -348,7 +371,7 @@ function drainIn(){
   var n = 0;
   arr.forEach(function(x){
     if(!x) return; var t = normal(x.text || ""); if(!t) return;
-    if(x.id && itemById(x.id)) return;
+    if(x.id && (itemById(x.id) || S.gone[x.id])) return;
     var at = x.created_at || Date.now();
     S.items.push({ id:x.id || uid(), seed:t, base:t, baseAt:at, draft:"", at:at, origin:x.origin || "" }); n++;
   });
@@ -748,7 +771,8 @@ function renderList(){
     del.onclick = function(){
       if(!confirm("이 글감을 지울까요? 쓰던 글도 함께 사라집니다.\n\n" + firstLine(m.base || m.seed).slice(0, 60))) return;
       S.items = S.items.filter(function(x){ return x !== m; }); if(S.cur === m.id) S.cur = null;
-      save(); renderList(); renderHead();
+      S.gone[m.id] = { at:Date.now(), d:1 }; delete SNAP[m.id];   /* 지운 표시 — 다른 기기에서도 지워지게 올린다 */
+      save(); flushSoon(); renderList(); renderHead();
     };
     r.appendChild(o); r.appendChild(st); r.appendChild(el("span", "st when", dayText(m.at || m.baseAt || Date.now()))); r.appendChild(del);
     w.appendChild(r);
@@ -895,6 +919,7 @@ function applyLook(){
 }
 
 function renderSet(){
+  paintSync();
   $("#sPfz").value = S.pfz; $("#sPlh").value = S.plh;
   $("#sIfz").value = S.ifz; $("#sIlh").value = S.ilh;
   $("#bodyFont").value = S.bodyFont === "custom" ? "custom" : bodyFontKey(); drawFontNote();
@@ -911,6 +936,173 @@ numSet("#sPlh", "plh", 1.2, 3, 1.9, false);
 numSet("#sIfz", "ifz", 12, 28, 16, true);
 numSet("#sIlh", "ilh", 1.2, 3, 1.9, false);
 
+/* ===================== 맞추기 (2026년 11월 24일 밤) — 수파베이스로 다른 기기의 다리와 글감을 맞춘다 =====================
+   정리·수첩과 같은 프로젝트, 같은 로그인(storyM.session). 표를 새로 만들지 않고 정리의 표(jeongri: id, data, updated_at)에
+   글감 하나를 한 줄로 둔다 — id는 'dari-'+글감 id. 정리와 수첩은 그 표에서 'main'·'works' 줄만 읽으므로 서로 닿지 않는다.
+   줄마다 updated_at(글감의 u)이 나중인 쪽이 남는다. 지운 글감은 data {deleted:true}인 줄로 남긴다(S.gone).
+   두 기기에서 따로 고친 글감(이쪽에 올리지 못한 글이 있는데 저쪽도 바뀌었다)은 나중 것을 남기되, 밀리는 쪽의 쓰던 글(draft)을 버리지 않고 뒤에 이어 붙인다.
+   S.cur와 글자 크기·글꼴은 맞추지 않는다(기기마다 따로) */
+function lsGet(k){ try{ return localStorage.getItem(k) || ""; }catch(e){ return ""; } }
+var SB_URL = lsGet("storyM.sbUrl") || "https://bmuslkayijcgosmgvnah.supabase.co";
+var SB_KEY = lsGet("storyM.sbKey") || "sb_publishable_sEHvPL_9_RHCZK4Fpw3zoA_VM7j9pyt";
+var SESS_KEY = "storyM.session", T_ROW = "jeongri", PRE = "dari-", KEEPALIVE_MAX = 60000;
+function readSess(){ try{ return JSON.parse(localStorage.getItem(SESS_KEY)) || null; }catch(e){ return null; } }
+var sess = readSess();
+var sy = { busy:false, t:null, last:0, msg:"", err:false, typed:0 };
+function setSess(x){ sess = x; try{ if(x) localStorage.setItem(SESS_KEY, JSON.stringify(x)); else localStorage.removeItem(SESS_KEY); }catch(e){} }
+function jwtExp(t){ try{ return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000; }catch(e){ return 0; } }
+async function sbFetch(path, opt){
+  opt = opt || {};
+  var h = { apikey:SB_KEY, "Content-Type":"application/json" }; for(var k in (opt.headers || {})) h[k] = opt.headers[k];
+  var r = await fetch(SB_URL + path, { method:opt.method || "GET", body:opt.body, keepalive:!!opt.keepalive, headers:h });
+  var text = await r.text(), j = null; try{ j = text ? JSON.parse(text) : null; }catch(e){}
+  if(!r.ok){
+    var msg = (j && (j.msg || j.message || j.error_description || j.error)) || text || String(r.status);
+    if(/relation .* does not exist|PGRST205|Could not find the table/i.test(msg + " " + ((j && j.code) || ""))) msg = "수파베이스에 정리의 표가 없습니다. 정리 앱의 설정에서 \"표 SQL 복사\"로 표를 먼저 만드세요.";
+    else if(/Invalid login credentials/i.test(msg)) msg = "이메일 또는 비밀번호가 맞지 않습니다.";
+    else if(/Email not confirmed/i.test(msg)) msg = "이메일 확인이 아직입니다.";
+    var e = new Error(msg); e.status = r.status; throw e;
+  }
+  return j;
+}
+async function sbSignIn(email, password){
+  var j = await sbFetch("/auth/v1/token?grant_type=password", { method:"POST", body:JSON.stringify({ email:email, password:password }) });
+  setSess({ access_token:j.access_token, refresh_token:j.refresh_token, user:j.user.id, email:email });
+}
+var tokP = null;
+async function sbToken(){
+  if(!sess) return null;
+  var s = readSess(); if(s && s.access_token && s.user === sess.user && jwtExp(s.access_token) > jwtExp(sess.access_token)) sess = s;   /* 다른 앱이 새로 받은 것 */
+  if(jwtExp(sess.access_token) - Date.now() < 60000){
+    if(!tokP) tokP = (async function(){
+      var j;
+      try{ j = await sbFetch("/auth/v1/token?grant_type=refresh_token", { method:"POST", body:JSON.stringify({ refresh_token:sess.refresh_token }) }); }
+      catch(e){ if(e.status === 400 || e.status === 401){ setSess(null); setMsg("로그인이 풀렸습니다. 다시 로그인하세요.", true); paintSync(); } throw e; }
+      setSess({ access_token:j.access_token, refresh_token:j.refresh_token, user:sess.user, email:sess.email });
+    })().finally(function(){ tokP = null; });
+    await tokP;
+  }
+  return sess ? sess.access_token : null;
+}
+async function rest(path, opt){
+  opt = opt || {};
+  var tok = await sbToken(); if(!tok) throw new Error("로그인이 필요합니다.");
+  var h = { Authorization:"Bearer " + tok }; for(var k in (opt.headers || {})) h[k] = opt.headers[k];
+  return sbFetch("/rest/v1" + path, { method:opt.method, body:opt.body, keepalive:opt.keepalive, headers:h });
+}
+function setMsg(m, err){ sy.msg = m; sy.err = !!err; var s = document.querySelector(".syncstat"); if(s){ s.textContent = m || syncHint(); s.classList.toggle("err", !!err); } }
+function hm(ts){ var d = new Date(ts); return two(d.getHours()) + ":" + two(d.getMinutes()); }
+function flushSoon(){ if(!sess) return; clearTimeout(sy.t); sy.t = setTimeout(function(){ flush(); }, 2500); }
+function rowData(m){ var o = {}; for(var k in m) if(k !== "u" && k !== "_d" && k !== "r") o[k] = m[k]; return o; }
+/* 올리기 — 바뀐 글감과 지운 표시만 */
+async function flush(unloading){
+  if(!sess) return;
+  var rows = [], stamp = {}, gs = [];
+  S.items.forEach(function(m){ if(m._d){ rows.push({ id:PRE + m.id, user_id:sess.user, data:rowData(m), updated_at:m.u || Date.now() }); stamp[m.id] = m.u; } });
+  Object.keys(S.gone).forEach(function(id){ var g = S.gone[id]; if(g && g.d){ rows.push({ id:PRE + id, user_id:sess.user, data:{ deleted:true }, updated_at:g.at }); gs.push(id); } });
+  if(!rows.length) return;
+  try{
+    var body = JSON.stringify(rows), keepalive = !!unloading && new Blob([body]).size <= KEEPALIVE_MAX;
+    await rest("/" + T_ROW + "?on_conflict=user_id,id", { method:"POST", keepalive:keepalive, headers:{ Prefer:"resolution=merge-duplicates,return=minimal" }, body:body });
+    S.items.forEach(function(m){ if(stamp[m.id] !== undefined && m.u === stamp[m.id]){ delete m._d; m.r = m.u; } });
+    gs.forEach(function(id){ if(S.gone[id]) delete S.gone[id].d; });
+    store(); setMsg("맞췄습니다 " + hm(Date.now()));
+  }catch(e){ setMsg("올리지 못했습니다: " + e.message, true); }
+}
+/* 따로 쓴 두 글을 잇는다 — 한쪽이 다른 쪽을 품고 있으면 긴 쪽만 */
+function joinDraft(a, b){
+  a = a || ""; b = b || "";
+  var x = a.trim(), y = b.trim();
+  if(!y || x.indexOf(y) > -1) return a;
+  if(!x || y.indexOf(x) > -1) return b;
+  return a.replace(/\s+$/, "") + "\n\n\n" + b.replace(/^\s+/, "");
+}
+/* 받기 — 저쪽 줄을 글감마다 견준다 */
+async function pull(){
+  var rows = await rest("/" + T_ROW + "?select=id,data,updated_at&id=like." + PRE + "*&order=updated_at.desc&limit=1000");
+  var seen = {}, changed = false, curHit = false, joined = 0, came = 0;
+  (rows || []).forEach(function(r){
+    var id = String(r.id).slice(PRE.length), d = r.data || {}, at = r.updated_at || 0, loc = itemById(id), g = S.gone[id];
+    seen[id] = 1;
+    if(d.deleted){
+      if(loc && at < (loc.u || 0)){ loc._d = 1; return; }                       /* 지운 뒤에 이쪽에서 고쳤다 — 이쪽 것을 다시 올린다 */
+      if(loc){ S.items = S.items.filter(function(x){ return x !== loc; }); delete SNAP[id]; if(S.cur === id){ S.cur = null; curHit = true; } changed = true; }
+      if(!g || g.at < at) S.gone[id] = { at:at };
+      return;
+    }
+    if(!d.id) return;
+    if(!loc){
+      if(g && g.at >= at){ g.d = 1; return; }                                    /* 이쪽에서 나중에 지웠다 */
+      if(g) delete S.gone[id];
+      if(d.sentAt && Date.now() - d.sentAt > KEEP_SENT) return;
+      d.u = at; d.r = at; S.items.push(d); changed = true; if(!d.sentAt) came++;
+      return;
+    }
+    var lu = loc.u || 0;
+    if(at === lu){ loc.r = at; return; }
+    if(at > lu){
+      var keep = (loc._d && !loc.sentAt && !d.sentAt && loc.draft && loc.draft.trim()) ? loc.draft : "";
+      Object.keys(loc).forEach(function(k){ delete loc[k]; });
+      for(var k in d) loc[k] = d[k];
+      loc.u = at; loc.r = at;
+      if(keep){ var nd = joinDraft(loc.draft, keep); if(nd !== (loc.draft || "")){ loc.draft = nd; loc.u = Date.now(); loc._d = 1; joined++; } }
+      if(S.cur === id) curHit = true;
+      changed = true;
+    }else{
+      if(at > (loc.r || 0) && !loc.sentAt && !d.sentAt && d.draft && d.draft.trim()){
+        var nd2 = joinDraft(loc.draft, d.draft);
+        if(nd2 !== (loc.draft || "")){ loc.draft = nd2; loc.u = Date.now(); joined++; changed = true; if(S.cur === id) curHit = true; }
+      }
+      loc.r = at; loc._d = 1;
+    }
+  });
+  if((rows || []).length < 1000){
+    S.items.forEach(function(m){ if(!seen[m.id]) m._d = 1; });
+    Object.keys(S.gone).forEach(function(id){ if(!seen[id]) S.gone[id].d = 1; });
+  }
+  Object.keys(S.gone).forEach(function(id){ var g = S.gone[id]; if(!g || (!g.d && Date.now() - g.at > KEEP_SENT)) delete S.gone[id]; });
+  if(S.cur && !cur()){ S.cur = null; curHit = true; }
+  snapAll(); store();
+  if(changed){
+    if(tpOn()){ if(curHit){ if(cur()) tpShow(); else showView("list"); } else if(!cur()) tpRenderPrev(); }
+    else if(viewNow() === "list") renderList();
+    renderHead();
+    if(joined) toast("다른 기기에서 따로 쓴 글을 쓰는 칸 뒤에 이어 붙였습니다", 4200);
+    else if(came) toast("다른 기기의 글감 " + came + "개를 받았습니다", 2600);
+  }
+}
+async function syncAll(force){
+  if(!sess || sy.busy) return;
+  if(!force && Date.now() - sy.last < 10000) return;
+  sy.busy = true; sy.last = Date.now();
+  try{ if(tpOn()){ tpStash(); save(); } sy.err = false; await pull(); await flush(); if(!sy.err) setMsg("맞췄습니다 " + hm(Date.now())); }
+  catch(e){ setMsg("맞추지 못했습니다: " + e.message, true); }
+  finally{ sy.busy = false; }
+}
+function syncHint(){ return sess ? "" : "수첩·방점·정리와 같은 계정으로 로그인합니다. 이 기기에서 그 앱들에 이미 로그인했으면 따로 하지 않아도 됩니다."; }
+function paintSync(){
+  var b = $("#syncBox"); if(!b) return;
+  b.innerHTML = sess
+    ? '<div class="row"><span class="who">' + esc(sess.email || "로그인됨") + '</span><button type="button" id="syncNow">지금 맞추기</button></div><p class="note syncstat' + (sy.err ? " err" : "") + '">' + esc(sy.msg) + "</p>"
+    : '<div class="row"><input type="email" id="syncEmail" placeholder="이메일" autocomplete="username"><input type="password" id="syncPw" placeholder="비밀번호" autocomplete="current-password"><button type="button" id="syncIn">로그인</button></div><p class="note syncstat' + (sy.err ? " err" : "") + '">' + esc(sy.msg || syncHint()) + "</p>";
+}
+$("#syncBox").addEventListener("click", async function(e){
+  var b = e.target.closest ? e.target.closest("button") : null; if(!b) return;
+  try{
+    if(b.id === "syncNow"){ setMsg("맞추는 중…"); await syncAll(true); return; }
+    if(b.id !== "syncIn") return;
+    var email = ($("#syncEmail") || {}).value || "", pw = ($("#syncPw") || {}).value || "";
+    if(!email || !pw){ setMsg("이메일과 비밀번호를 넣으세요.", true); return; }
+    b.disabled = true; setMsg("로그인 중…");
+    await sbSignIn(email, pw);
+    sy.msg = "맞추는 중…"; sy.err = false; paintSync();
+    await syncAll(true);
+  }catch(err){ setMsg(err.message || String(err), true); b.disabled = false; }
+});
+tpEl.input.addEventListener("input", function(){ sy.typed = Date.now(); });
+/* 한창 치는 중이 아니면 이따금 받아 온다(두 기기를 함께 열어 둔 때) */
+setInterval(function(){ if(!document.hidden && Date.now() - sy.typed > 30000) syncAll(false); }, 120000);
+
 /* ---------- 다른 창과 맞추기 — 받은편지함에 새 글감이 오면 들이고, 다른 dari 창이 저장했으면(앞에 있지 않은 이 창은) 따라 읽는다 ---------- */
 function redraw(){ applyLook(); if(tpOn()) tpShow(); else if(viewNow() === "list") renderList(); else renderSet(); renderHead(); }
 function takeIn(){
@@ -921,12 +1113,13 @@ function takeIn(){
 }
 window.addEventListener("storage", function(e){
   if(e.key === IN_KEY && e.newValue){ takeIn(); return; }
+  if(e.key === SESS_KEY){ var had = !!sess; sess = readSess(); if(viewNow() === "set") paintSync(); if(sess && !had) syncAll(true); return; }
   if(e.key !== KEY || document.hasFocus()) return;
-  S = load(); redraw();
+  S = load(); snapAll(); redraw();
 });
-window.addEventListener("focus", function(){ winMine(); takeIn(); });
-window.addEventListener("pagehide", function(){ tpStash(); save(); });
-document.addEventListener("visibilitychange", function(){ if(document.hidden){ tpStash(); save(); } else takeIn(); });
+window.addEventListener("focus", function(){ winMine(); if(!sess) sess = readSess(); takeIn(); syncAll(false); });
+window.addEventListener("pagehide", function(){ tpStash(); save(); flush(true); });
+document.addEventListener("visibilitychange", function(){ if(document.hidden){ tpStash(); save(); flush(); } else { takeIn(); syncAll(false); } });
 
 /* ---------- 시작 — 새 글감이 들어왔거나 고른 글감이 없으면 인박스부터 ---------- */
 if(S.cur && !cur()) S.cur = null;
@@ -935,6 +1128,7 @@ var came = drainIn();
 renderHead();
 showView(came || !cur() ? "list" : "tp");
 if(came) toast("글감 " + came + "개가 인박스에 들어왔습니다", 2600);
+if(sess) syncAll(true);
 if(S.copyFont){ S.copyFont = false; save(); try{ fontFrom(["4baek-fonts"], true).catch(function(){}); }catch(e){} }
 </script>
 </body>
