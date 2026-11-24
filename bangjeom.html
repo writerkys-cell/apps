@@ -673,7 +673,7 @@ end $$;</pre>
 
   <section>
     <h2>글감 처리하기</h2>
-    <p>목록에 <b>글감 처리하기</b>라는 줄을 하나 둡니다. 끝나지 않는 일이라 「계속」만 있고, 누르면 목록 끝으로 갑니다. 제목을 누르면 정리가 열립니다. 정리를 여는 브라우저(맥)에서는 옆에 처리할 아이디어와 카드의 수가 보이고, 아이디어가 있을 때만 오후에 권합니다.</p>
+    <p>목록에 <b>글감 처리하기</b>라는 줄을 하나 둡니다. 끝나지 않는 일이라 「계속」만 있고, 누르면 목록 끝으로 갑니다. 제목을 누르면 다리(dari)에 기다리는 글감이 있으면 다리가, 없으면 정리가 열립니다. 정리를 여는 브라우저(맥)에서는 옆에 다리에서 기다리는 글감, 정리의 아이디어와 카드의 수가 보이고, 글감이나 아이디어가 있을 때만 오후에 권합니다.</p>
     <div class="btns"><button id="btnGam"></button></div>
   </section>
 
@@ -897,26 +897,30 @@ const REF_KINDS = {write:'4baek 작품', revise:'타이핑 작품', read:'서가
 const slotKind = k => k === 'revise' ? 'write' : (k || '');                           // 추천의 시간대: 개정은 쓰기처럼 오전에
 // 「글감 처리하기」(2026년 11월 23일, 작가가 정함): 목록에 하나만 있는, 끝나지 않는 일(gam:true). 정리(jeongri.html)에 쌓인 아이디어와 카드의 수를 옆에 보인다.
 // 정리의 저장소(jeongri.v1)와 받은편지함(jeongri.in)을 **읽기만** 한다. 정리를 여는 브라우저(맥)에서만 수가 있고, 없으면(아이폰) null — 제목만 보인다.
+// dari(2026년 11월 24일): 다리(dari.html)의 인박스에서 기다리는 글감 — 다리의 저장소(dari-v1)에서 아직 정리로 넘기지 않은 것 + 방점이 보냈는데 다리가 아직 받지 않은 것(dari.in). 읽기만 한다.
 // ideas: 정리의 아이디어 탭에 보이는 것(state 'new', 지우지 않은 것) + 방점이 보냈는데 정리가 아직 받지 않은 것(jeongri.in). cards: 보관하지 않은 카드. ready: 그중 제목이 있고 본문이 400자를 넘어 4baek으로 넘길 수 있는 것
 const isGam = t => !!(t && t.gam && !t.done);
 let gamMemo = null;
 function gamCount(){
   if(gamMemo && Date.now() - gamMemo.at < 3000) return gamMemo.v;
-  const J = lsJson('jeongri.v1'), inb = lsJson('jeongri.in');
+  const J = lsJson('jeongri.v1'), inb = lsJson('jeongri.in'), D = lsJson('dari-v1'), din = lsJson('dari.in');
   let v = null;
-  if((J && typeof J === 'object') || Array.isArray(inb)){
+  if((J && typeof J === 'object') || Array.isArray(inb) || (D && typeof D === 'object') || Array.isArray(din)){
+    const ditems = ((D && Array.isArray(D.items)) ? D.items : []).filter(Boolean);
+    const dhave = new Set(ditems.map(m => m.id));
+    const dari = ditems.filter(m => !m.sentAt).length + (Array.isArray(din) ? din : []).filter(x => x && !dhave.has(x.id)).length;
     const ideas = ((J && Array.isArray(J.ideas)) ? J.ideas : []).filter(i => i && !i.deleted && i.state === 'new');
     const have = new Set(ideas.map(i => i.id));
     const wait = (Array.isArray(inb) ? inb : []).filter(x => x && !have.has(x.id)).length;
     const cards = ((J && Array.isArray(J.cards)) ? J.cards : []).filter(c => c && !c.dropped);
-    v = {ideas:ideas.length + wait, cards:cards.length,
+    v = {dari, ideas:ideas.length + wait, cards:cards.length,
          ready:cards.filter(c => String(c.title || '').trim() && String(c.text || '').replace(/\n/g, '').length >= 400).length};
   }
   gamMemo = {at:Date.now(), v};
   return v;
 }
-const gamIdle = t => { const c = gamCount(); return !(c && c.ideas > 0); };   // 처리할 아이디어가 없다(수를 모르는 기기에서도)
-const gamInfo = t => { if(!isGam(t)) return ''; const c = gamCount(); return c ? `<span class="repinfo">아이디어 ${c.ideas} · 카드 ${c.cards}${c.ready ? `(넘길 것 ${c.ready})` : ''}</span>` : ''; };
+const gamIdle = t => { const c = gamCount(); return !(c && (c.ideas > 0 || c.dari > 0)); };   // 처리할 아이디어가 없다(수를 모르는 기기에서도)
+const gamInfo = t => { if(!isGam(t)) return ''; const c = gamCount(); return c ? `<span class="repinfo">다리 ${c.dari} · 아이디어 ${c.ideas} · 카드 ${c.cards}${c.ready ? `(넘길 것 ${c.ready})` : ''}</span>` : ''; };
 const noRec = t => !!t.fresh || t.kind === 'idea' || t.kind === 'memo' || (!!t.gam && gamIdle(t));               // 추천이 보지 않는 일: 새 표시가 붙은 일, 글감·메모(목록을 훑을 때 보낸다)
 const freshTag = t => t && t.fresh ? '<span class="kind fresh">새</span>' : '';
 const lsJson = k => { try{ return JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){ return null; } };
@@ -1324,7 +1328,8 @@ function setTag(id, kind, ref){
 }
 /* ══════════ 제목을 누르면 (2026년 11월 22일) ══════════
    쓰기 → 4baek(건 작품의 지금 쓰는 원고, 없으면 원고 목록) · 개정 → 타이핑(건 작품에서 마지막으로 손본 원고의 400자 탭, 없으면 원고 탭)
-   읽기 → 서가의 읽기 탭(건 책이 펼쳐진 채) · 글감 → 복사하고 정리의 받은편지함(jeongri.in)에 넣고 정리를 연 뒤 줄 긋기
+   읽기 → 서가의 읽기 탭(건 책이 펼쳐진 채) · 글감 → 복사하고 다리의 받은편지함(dari.in)에 넣고 다리(dari.html)를 연 뒤 줄 긋기
+   (2026년 11월 24일, 작가가 정함: 글감은 정리로 바로 가지 않고 다리에서 400자로 자란 뒤 정리의 카드가 된다)
    메모 → 복사하고 데본씽크 Inbox로 보낸 뒤 줄 긋기 · 할일 → 링크가 있으면 그 링크 */
 const winName = app => { let n = ''; try{ n = localStorage.getItem('appwin.' + app) || ''; }catch(e){} if(!n || n === window.name) n = app; return n === window.name ? app + '2' : n; };   // Writer KYS의 winName과 같게: 그 앱이 이미 떠 있는 창을 다시 쓴다
 const appUrl = f => new URL(f, location.href).href;      // 방점과 같은 폴더의 앱
@@ -1335,7 +1340,7 @@ const isTagKind = k => !!KINDS[k];
 const goable = t => !!t && !t.done && (isTagKind(t.kind) || !!t.url || !!t.gam);
 function goTask(id){
   const t = byId(id); if(!goable(t)) return;
-  if(t.gam){ window.open(appUrl('jeongri.html'), winName('jeongri')); return; }   // 글감 처리하기: 정리를 연다
+  if(t.gam){ const c = gamCount(); if(c && c.dari > 0) window.open(appUrl('dari.html'), winName('dari')); else window.open(appUrl('jeongri.html'), winName('jeongri')); return; }   // 글감 처리하기: 다리에 기다리는 글감이 있으면 다리를, 없으면 정리를 연다
   const k = t.kind || '', ref = t.ref && t.ref.id;
   if(k === 'write'){ window.open(appUrl('4baek.html') + '#' + (ref ? enc('작품') + '=' + enc(ref) : enc('목록') + '=1'), winName('4baek')); return; }
   if(k === 'revise'){
@@ -1350,14 +1355,14 @@ function goTask(id){
   if(k === 'read'){ window.open(appUrl('seoga.html') + '#' + (ref ? enc('읽기') + '=' + enc(ref) : 'read'), '_blank'); return; }
   if(k === 'idea'){
     const text = taskBody(t); copyText(text);
-    let arr = []; try{ arr = JSON.parse(localStorage.getItem('jeongri.in')) || []; }catch(e){}
+    let arr = []; try{ arr = JSON.parse(localStorage.getItem('dari.in')) || []; }catch(e){}
     if(!Array.isArray(arr)) arr = [];
     arr.push({id:'bj' + t.id, text, origin:'bangjeom', created_at:Date.now()});
-    try{ localStorage.setItem('jeongri.in', JSON.stringify(arr)); gamMemo = null; }
-    catch(e){ toast('정리로 보내지 못했습니다 · 내용은 복사해 두었습니다'); return; }
-    window.open(appUrl('jeongri.html'), winName('jeongri'));
+    try{ localStorage.setItem('dari.in', JSON.stringify(arr)); gamMemo = null; }
+    catch(e){ toast('다리로 보내지 못했습니다 · 내용은 복사해 두었습니다'); return; }
+    window.open(appUrl('dari.html'), winName('dari'));
     finish(id, null, true);
-    toast('정리로 보내고 줄을 그었습니다 · 내용은 복사해 두었습니다'); return;
+    toast('다리로 보내고 줄을 그었습니다 · 내용은 복사해 두었습니다'); return;
   }
   if(k === 'memo'){
     const text = taskBody(t); copyText(text);
@@ -1676,7 +1681,7 @@ function fomoToday(){
   return o && (o.done || o.void || o.plan) ? o : null;
 }
 window.addEventListener('storage', e => { if(e.key === 'fomo.v1') renderGoals(); });
-window.addEventListener('storage', e => { if(e.key === 'jeongri.v1' || e.key === 'jeongri.in'){ gamMemo = null; if(S.tasks.some(isGam)) render(); } });   // 정리 창에서 아이디어·카드가 바뀌면 「글감 처리하기」의 수가 바로 따라간다   // fomo가 다른 창에서 돌면 바로 따라간다
+window.addEventListener('storage', e => { if(e.key === 'jeongri.v1' || e.key === 'jeongri.in' || e.key === 'dari-v1' || e.key === 'dari.in'){ gamMemo = null; if(S.tasks.some(isGam)) render(); } });   // 정리 창에서 아이디어·카드가 바뀌면 「글감 처리하기」의 수가 바로 따라간다   // fomo가 다른 창에서 돌면 바로 따라간다
 function renderGoals(){
   const parts = ['write','read'].map(k => {
     const g = G[k];
@@ -1917,7 +1922,7 @@ function renderFresh(){
 
 // 새 표시가 붙은 일에 보이는 태그 단추 여섯. 쓰기·개정·읽기는 고를 것(작품·책)을 묻는 칸이 줄 아래에 펼쳐진다. tagPick = {id, kind}
 const TAG_BTNS = [['write','쓰기'], ['revise','개정'], ['read','읽기'], ['idea','글감'], ['memo','메모'], ['todo','할일']];
-const GO_TIP = {write:'누르면 4baek이 열립니다', revise:'누르면 타이핑이 열립니다', read:'누르면 서가의 읽기 탭이 열립니다', idea:'누르면 정리로 보내고 줄을 긋습니다', memo:'누르면 데본씽크로 보내고 줄을 긋습니다', '':'누르면 링크가 열립니다'};
+const GO_TIP = {write:'누르면 4baek이 열립니다', revise:'누르면 타이핑이 열립니다', read:'누르면 서가의 읽기 탭이 열립니다', idea:'누르면 다리(dari)로 보내고 줄을 긋습니다', memo:'누르면 데본씽크로 보내고 줄을 긋습니다', '':'누르면 링크가 열립니다'};
 let tagPick = null;
 function pickerHtml(){
   const list = refList(tagPick.kind), lab = REF_KINDS[tagPick.kind];

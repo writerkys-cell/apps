@@ -151,10 +151,15 @@ details.menu>summary{white-space:nowrap}
    2026년 11월 24일(작가가 정함): 400자를 채운 카드는 4baek이 아니라 writerKYS의 메모함으로 넘긴다 — 본문은 메모함 카드의 코멘트,
    "메모함의 내용" 칸(AI가 링크를 읽고 정리해 준 글)은 내용이 된다. 데본씽크에 저장하던 것은 뺐다. 태그는 그대로 4baek의 작품이다(수첩은 건드리지 않았다).
    예전에 4baek·타이핑으로 넘긴 카드의 원고 링크와 저절로 보관(linkPass)은 그대로 둔다.
+   같은 날 다리(dari.html)가 생겼다: 방점의 글감은 다리의 인박스로 가서 400자로 자란 뒤 '정리로'를 누르면 받은편지함 jeongri.cards.in을 거쳐
+   아이디어 탭을 건너뛰고 카드로 바로 들어온다(drainCards). 아이디어 탭의 "다리로"는 아이디어를 다리의 받은편지함(dari.in)에 적는다.
+   정리는 다리의 저장소(dari-v1)를 읽지도 쓰지도 않는다.
    4baek의 저장소(4baek-v1)와 타이핑의 저장소(taiping-v1)는 읽기만 한다. storyM·문득은 건드리지 않는다(storyM으로 넘길 때 그 받은편지함에 적을 뿐) */
 const STORE_KEY='jeongri.v1';
 const CONF_KEY='jeongri.conf';
 const IN_KEY='jeongri.in';          /* 타이핑의 "아이디어 보내기"가 적어 두는 받은편지함 */
+const CARD_IN='jeongri.cards.in';   /* 다리(dari.html)의 '정리로'가 적어 두는 받은편지함 — 카드로 바로 만든다. [{id,title,text,seed,origin:'dari',from,created_at}] */
+const DARI_IN='dari.in';            /* 다리의 받은편지함 — 아이디어의 "다리로"가 여기에 적는다 */
 const TP_KEY='taiping-v1';          /* 타이핑의 저장소 — 읽기만 한다(예전에 넘긴 카드의 원고를 찾을 때만) */
 const BAEK_KEY='4baek-v1';          /* 4baek의 저장소 — 읽기만 한다 */
 const SM_KEY='storyM.v1', SM_IN='storyM.ideas.in';
@@ -308,6 +313,23 @@ function drainInbox(){let arr=[];try{arr=JSON.parse(localStorage.getItem(IN_KEY)
   let n=0;arr.forEach(x=>{if(!x||!String(x.text||'').trim())return;if(x.id&&ideaById(x.id))return;newIdea(x.text,{id:x.id||uid(),origin:x.origin==='bangjeom'?'bangjeom':'taiping',created_at:x.created_at||Date.now(),meta:{ms:x.ms_link||'',msTitle:x.ms_title||''}});n++;});
   try{localStorage.removeItem(IN_KEY);}catch(e){}
   if(n){persist(true);ideaFlushSoon();if(!typing())render();}return n;}
+/* 다리가 넘긴 글을 카드로 만든다 — 이미 400자를 넘긴 글이라 아이디어 탭을 거치지 않는다. 제목은 다리가 잡아 준 것(첫 문장의 앞부분), 태그는 글상자.
+   같은 id의 카드가 이미 있으면 다시 만들지 않는다. 새 카드가 생기면 카드 탭에서 그 카드를 연다(글을 치는 중이 아니면) */
+function drainCards(){let arr=[];try{arr=JSON.parse(localStorage.getItem(CARD_IN))||[];}catch(e){}if(!Array.isArray(arr)||!arr.length)return 0;
+  let n=0,last=null;arr.forEach(x=>{if(!x||!String(x.text||'').trim())return;if(x.id&&cardById(x.id))return;
+    const c=newCard({id:x.id||uid(),title:norm(x.title)||defTitle(x.text),text:String(x.text).trim(),tag:null,from:x.from||'',seed:x.seed||'',origin:'dari'});db.cards.push(c);last=c;n++;});
+  try{localStorage.removeItem(CARD_IN);}catch(e){}
+  if(n){saveCards(true);if(!typing()){ui.pane='card';ui.tag=null;ui.open=last.id;ui.focusCard=true;MB.err=null;renderDetail();mbLoadTags();}else renderSide();
+    toast(n===1?`다리에서 "${norm(last.title)||'제목 없음'}" 카드가 들어왔습니다.`:`다리에서 카드 ${n}장이 들어왔습니다.`);}
+  return n;}
+/* 아이디어를 다리로 — 400자로 키울 것은 다리의 인박스로 보낸다. 다리의 받은편지함에 적고 다리를 연다. 아이디어 탭에서는 사라진다 */
+function toDari(i){if(!String(i.text||'').trim()){toast('적은 것이 없습니다.');return;}
+  let arr=[];try{arr=JSON.parse(localStorage.getItem(DARI_IN))||[];}catch(e){}if(!Array.isArray(arr))arr=[];
+  arr.push({id:i.id,text:i.text.trim(),origin:'jeongri',created_at:i.created_at||Date.now()});
+  try{localStorage.setItem(DARI_IN,JSON.stringify(arr));}catch(e){toast('보내지 못했습니다.');return;}
+  i.state='done';i.meta=Object.assign({},i.meta,{to:'dari'});delete ui.sel[i.id];touchIdea(i,true);renderDetail();
+  toast('다리의 인박스로 보냈습니다. 400자를 넘겨 "정리로"를 누르면 카드로 돌아옵니다.');
+  try{window.open(new URL('dari.html',location.href).href,winOf('dari'));}catch(e){}}
 const typing=()=>{const a=document.activeElement;return !!(a&&(a.tagName==='TEXTAREA'||a.tagName==='INPUT'||a.tagName==='SELECT')&&a.closest('#detail'))||!!document.querySelector('.modal-bg');};
 
 /* ---------- 카드 ---------- */
@@ -376,7 +398,7 @@ function render(){
 }
 function renderSide(){
   const s=document.getElementById('side');if(!s)return;const ni=liveIdeas().length,nc=liveCards().length,nd=dropCards().length;const all=ui.pane==='card'&&ui.tag===null;
-  s.innerHTML=`<div class="srow ${ui.pane==='idea'?'sel':''}" data-act="pane" data-p="idea" title="방점에서 글감으로 보낸 것, 여기서 적은 것, 타이핑에서 보낸 것. 제목과 태그를 정하고 '카드로'를 눌러야 카드가 됩니다"><span>아이디어</span><span class="c ${ni?'w':''}">${ni||''}</span></div>
+  s.innerHTML=`<div class="srow ${ui.pane==='idea'?'sel':''}" data-act="pane" data-p="idea" title="여기서 적은 것, 타이핑에서 보낸 것, 예전에 들어온 것. '다리로' 보내 400자로 키우거나, 제목과 태그를 정하고 '카드로'를 누릅니다. 방점의 글감은 다리를 거쳐 카드로 바로 들어옵니다"><span>아이디어</span><span class="c ${ni?'w':''}">${ni||''}</span></div>
     <div class="srow ${all?'sel':''}" data-act="pane" data-p="card" title="정리한 카드 전체"><span>카드</span><span class="c">${nc||''}</span></div>
     <div class="tags">${tagList().map(t=>`<div class="tg ${ui.pane==='card'&&ui.tag===t.key?'sel':''}" data-act="tag" data-k="${esc(t.key)}" title="${t.key?'이 작품의 카드':'아직 어떤 글이 될지 모르는 카드'}"><span>${esc(t.name)}</span><span class="c">${t.n||''}</span></div>`).join('')}</div>
     <div class="srow ${ui.pane==='drop'?'sel':''}" data-act="pane" data-p="drop" title="메모함으로(예전에는 4baek·타이핑으로) 넘긴 카드와 직접 보관한 카드"><span>보관</span><span class="c">${nd||''}</span></div>`;
@@ -393,7 +415,8 @@ function ideaHtml(i){const m=i.meta||{};const from=i.origin==='phone'?'수첩에
   return `<div class="idea"><div class="ih"><input type="checkbox" data-isel="${i.id}" ${ui.sel[i.id]?'checked':''} title="여러 개를 골라 합칩니다"><textarea data-if="text" data-id="${i.id}" rows="1">${esc(i.text)}</textarea></div>
     <div class="ir"><span class="lb">제목</span><input class="tt" data-if="title" data-id="${i.id}" value="${esc(m.title||'')}" placeholder="${esc(defTitle(i.text))||'제목'}" title="카드의 제목이 됩니다. 비워 두면 첫 문장의 앞부분을 씁니다">
       <span class="lb">태그</span><select data-if="tag" data-id="${i.id}" title="글상자는 아직 어떤 글이 될지 모르는 것. 작품을 고르면 그 작품의 글이 됩니다">${tagOptions(ideaTag(i))}</select>
-      <button class="primary" data-act="toCard" data-id="${i.id}" title="이 아이디어를 카드로 옮깁니다. 아이디어 탭에서는 사라집니다">카드로</button></div>
+      <button class="primary" data-act="toDari" data-id="${i.id}" title="다리(dari)의 인박스로 보내 400자로 키웁니다. 다리에서 '정리로'를 누르면 카드로 돌아옵니다. 아이디어 탭에서는 사라집니다">다리로</button>
+      <button data-act="toCard" data-id="${i.id}" title="다리를 거치지 않고 바로 카드로 옮깁니다. 아이디어 탭에서는 사라집니다">카드로</button></div>
     <div class="im"><span>${whenTxt(i.created_at)}</span>${from?`<span>${from}</span>`:''}${m.ms?`<a href="${esc(m.ms)}" target="taiping" data-win="taiping" title="이 아이디어를 적은 타이핑 원고">적은 원고 ↗${m.msTitle?' '+esc(m.msTitle):''}</a>`:''}<span class="sp"></span>
       <button class="sm" data-act="split" data-id="${i.id}" title="생각이 둘이면 둘로 나눕니다. 나눌 자리에 커서를 놓고 누르세요. 커서가 없으면 첫 빈 줄에서 나눕니다">나누기</button>
       <button class="sm" data-act="toStory" data-id="${i.id}" title="storyM에서 다루는 소설의 아이디어라면 그 소설의 storyM 아이디어로 보냅니다">storyM으로</button>
@@ -401,7 +424,7 @@ function ideaHtml(i){const m=i.meta||{};const from=i.origin==='phone'?'수첩에
 function ideaPaneHtml(){const is=liveIdeas();const nsel=is.filter(i=>ui.sel[i.id]).length;
   return `<div class="ghead"><div class="ttl">아이디어 <span class="muted small" style="font-weight:400">${is.length?`처리할 것 ${is.length}개`:''}</span></div>
       <div class="gsw">${nsel>=2?`<button class="primary" data-act="merge" title="고른 것을 하나로 합칩니다. 가장 먼저 적은 것에 나머지 글이 빈 줄을 두고 이어집니다">고른 ${nsel}개 합치기</button>`:nsel===1?'<span class="muted small">합치려면 둘 이상 고르세요</span>':''}</div></div>
-    <p class="muted small" style="margin:0 0 12px">방점에서 글감으로 보낸 생각이 여기로 들어옵니다(수첩에 적은 것은 방점으로 가서 태그를 답니다). 하나씩 제목을 달고 태그를 정한 뒤 "카드로"를 누르면 카드가 됩니다. 태그의 처음 값은 글상자이고, 4baek의 작품 하나로 바꿀 수 있습니다. 여기에 남아 있는 것이 아직 처리하지 않은 것입니다.</p>
+    <p class="muted small" style="margin:0 0 12px">방점의 글감은 이제 다리(dari)로 가서 400자로 자란 뒤 카드로 바로 들어옵니다. 여기에는 맥에서 바로 적은 것, 타이핑에서 보낸 것, 예전에 들어온 것이 놓입니다. "다리로"를 누르면 다리의 인박스로 가서 400자로 키우게 되고, 제목과 태그를 정한 뒤 "카드로"를 누르면 다리를 거치지 않고 바로 카드가 됩니다. 태그의 처음 값은 글상자이고, 4baek의 작품 하나로 바꿀 수 있습니다. 여기에 남아 있는 것이 아직 처리하지 않은 것입니다.</p>
     ${statHtml()}
     <div class="newbar"><textarea id="newIdea" rows="1" placeholder="맥에서 바로 적기 — ⏎ 저장, ⇧⏎ 줄바꿈">${esc(ui.draft)}</textarea><button data-act="saveNew">저장</button></div>
     ${is.map(ideaHtml).join('')||'<div class="empty">처리할 아이디어가 없습니다.</div>'}`;}
@@ -453,8 +476,8 @@ function cardPaneHtml(){
   const ob=(k,l,t)=>`<button class="${o===k?'on':''}" data-act="order" data-o="${k}" title="${t}">${l}</button>`;
   return `<div class="ghead"><div class="ttl">${esc(name)} <span class="muted small" style="font-weight:400">${xs.length?`카드 ${xs.length}장${ready?` · 400자를 채운 것 ${ready}장`:''}`:''}</span></div>
       <div class="gsw">${ob('edit','마지막으로 고친 날','가장 최근에 고친 카드부터')}${ob('chars','글자 수','본문이 긴 카드부터')}${ob('made','만든 날','카드를 만든 순서(새것부터)')}<button data-act="addCard" title="아이디어를 거치지 않고 카드를 바로 만듭니다">+ 카드</button></div></div>
-    <p class="muted small" style="margin:0 0 12px">카드를 열어 본문을 고쳐 쓰고 자료를 붙입니다. 본문이 400자를 넘으면 "메모함으로 보내기"가 열립니다. 본문은 메모함 카드의 코멘트로, "메모함의 내용" 칸과 자료는 내용으로 들어가고, 보낸 카드는 보관으로 넘어갑니다. □는 400자가 안 된 카드, ■는 400자를 채운 카드입니다.</p>
-    ${xs.map(x=>cardRowHtml(x,all)).join('')||'<div class="empty">카드가 없습니다. 아이디어 탭에서 "카드로"를 누르면 여기에 옵니다.</div>'}`;}
+    <p class="muted small" style="margin:0 0 12px">다리(dari)에서 400자를 넘긴 글이 카드로 들어옵니다. 카드를 열어 관련서 찾기·조사 부탁으로 자료를 모으고, "링크 읽고 정리"의 답을 "메모함의 내용"에 붙입니다. 본문이 400자를 넘으면 "메모함으로 보내기"가 열립니다. 본문은 메모함 카드의 코멘트로, "메모함의 내용" 칸과 자료는 내용으로 들어가고, 보낸 카드는 보관으로 넘어갑니다. □는 400자가 안 된 카드, ■는 400자를 채운 카드입니다.</p>
+    ${xs.map(x=>cardRowHtml(x,all)).join('')||'<div class="empty">카드가 없습니다. 다리(dari)에서 400자를 넘겨 "정리로"를 누르면 여기에 옵니다.</div>'}`;}
 /* 보관 — 메모함으로(예전에는 4baek·타이핑으로) 넘긴 카드와 직접 보관한 카드. 지우지 않는다. 넘긴 카드에는 그 원고로 가는 링크가 남는다 */
 function dropPaneHtml(){const cs=dropCards().slice().sort((a,b)=>(b.dropAt||0)-(a.dropAt||0));
   const one=c=>{const m=msFor(c);const sent=!!c.sentAt;const n=bodyLen(c);const ss=(c.srcs||[]).filter(x=>(x.u||'').trim());
@@ -516,6 +539,7 @@ app.addEventListener('click',e=>{
     case 'tag':ui.pane='card';ui.tag=b.dataset.k;ui.open=null;renderDetail();break;
     case 'saveNew':saveNew();break;
     case 'toCard':{const i=ideaById(id);if(i)toCard(i);break;}
+    case 'toDari':{const i=ideaById(id);if(i)toDari(i);break;}
     case 'split':{const i=ideaById(id);if(i)splitIdea(i);break;}
     case 'merge':mergeIdeas();break;
     case 'toStory':{const i=ideaById(id);if(i)toStory(i);break;}
@@ -824,7 +848,7 @@ app.addEventListener('click',async e=>{const b=e.target.closest('[data-act2]');i
 });
 
 /* ---------- 밖에서 오기 — #카드=<id> (타이핑의 "카드 ↗"), #찾기=<말> (타이핑의 "카드 찾기 ↗") ---------- */
-function applyHash(){let h='';try{h=decodeURIComponent((location.hash||'').slice(1));}catch(e){h=(location.hash||'').slice(1);}if(!h)return false;
+function applyHash(){drainCards();let h='';try{h=decodeURIComponent((location.hash||'').slice(1));}catch(e){h=(location.hash||'').slice(1);}if(!h)return false;
   const o={};h.split('&').forEach(p=>{const k=p.indexOf('=');if(k>0)o[p.slice(0,k)]=p.slice(k+1);});
   if(o['카드']){const c=cardById(o['카드']);if(!c){toast('주소의 카드를 찾지 못했습니다.');return false;}ui.open=c.id;ui.focusCard=true;if(c.dropped){ui.pane='drop';}else{ui.pane='card';ui.tag=null;}renderDetail();return true;}
   if(o['찾기']!=null){ui.find=o['찾기'];ui.pane='find';ui.open=null;const f=document.getElementById('find');if(f)f.value=ui.find;renderDetail();return true;}
@@ -839,15 +863,17 @@ document.addEventListener('click',e=>{const a=e.target&&e.target.closest?e.targe
 let tpT=null;
 window.addEventListener('storage',e=>{
   if(e.key===IN_KEY&&e.newValue)drainInbox();
+  if(e.key===CARD_IN&&e.newValue)drainCards();
   /* 4baek(이나 타이핑)이 저장했다 — 조금 기다렸다가 다시 읽는다(글을 치는 중이면 목록만) */
   if(e.key===BAEK_KEY||e.key===TP_KEY){clearTimeout(tpT);tpT=setTimeout(()=>{tpRefresh();if(!typing())renderDetail();else renderSide();pushWorks();},1200);}
 });
-window.addEventListener('focus',()=>{winMine();tpRefresh();drainInbox();if(!typing())renderDetail();syncAll(false);});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){tpRefresh();drainInbox();syncAll(false);}else{flushIdeas();pushCards();}});
+window.addEventListener('focus',()=>{winMine();tpRefresh();drainInbox();drainCards();if(!typing())renderDetail();syncAll(false);});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){tpRefresh();drainInbox();drainCards();syncAll(false);}else{flushIdeas();pushCards();}});
 window.addEventListener('beforeunload',()=>{persist(true);flushIdeas(true);pushCards(true);});
 readTp();linkPass();
 render();
 drainInbox();
+drainCards();
 applyHash();
 if(sess){setMsg('맞추는 중…');syncAll(true);}
 </script>

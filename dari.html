@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>dari</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%23efe9dc%22%2F%3E%3Cpath%20d%3D%22M10%2042%20Q32%2012%2054%2042%22%20fill%3D%22none%22%20stroke%3D%22%23a8322d%22%20stroke-width%3D%225%22%2F%3E%3Crect%20x%3D%2210%22%20y%3D%2242%22%20width%3D%2244%22%20height%3D%225%22%20fill%3D%22%23b8ae9c%22%2F%3E%3C%2Fsvg%3E">
+<meta name="theme-color" content="#efe9dc">
+<meta name="apple-mobile-web-app-title" content="dari">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang&family=Gowun+Dodum&family=Nanum+Myeongjo&display=swap" rel="stylesheet">
+<style>
+/* dari — 수첩과 정리를 잇는 다리 (2026년 11월 24일, 작가가 정함). 4baek에서 인박스·400자·설정만 남긴 앱.
+   방점에서 글감의 제목을 누르면 그 글감이 이 앱의 인박스로 온다(받은편지함 dari.in). 인박스에서 고르면 400자 화면 —
+   왼쪽에 글감, 오른쪽에 쓰는 칸. 목표(400자의 배수)까지 써서 보내기를 되풀이하고, 400자를 넘기면 '정리로'를 눌러
+   정리(jeongri.html)의 카드로 바로 넘긴다(정리의 받은편지함 jeongri.cards.in). 스크리브너·원고·통계는 없다.
+   꾸밈과 400자 화면의 코드는 4baek.html(2026년 11월 22일 판)에서 그대로 가져왔다 */
+:root{
+  --hanji:#efe9dc;
+  --meok:#23201c;
+  --meok-2:#6b6259;
+  --meok-3:#9a9084;
+  --seon:#d6cdba;
+  --inju:#a8322d;
+  --sheet:#f7f3ea;
+  --jongi:#fcfcfa;
+  --ui:'Gowun Dodum',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',sans-serif;
+  --body:"Gowun Batang","AppleMyungjo",serif;
+  --pfz:16px; --plh:1.9; --ppad:48px; --pind:1em;
+  --ifz:16px; --ilh:1.9;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--hanji);color:var(--meok);font-family:var(--ui);font-size:16px;line-height:1.9;-webkit-font-smoothing:antialiased;overflow:hidden;display:flex;flex-direction:column}
+button{font-family:inherit;color:inherit;cursor:pointer}
+input{font-family:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--inju);outline-offset:2px}
+::selection{background:rgba(168,50,45,.18)}
+
+header{display:flex;align-items:baseline;gap:1.2rem;padding:1.1rem 1.6rem .9rem;border-bottom:1px solid var(--seon);flex:none}
+#head{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1rem}
+#head .w{color:var(--meok-3);font-size:.85rem;margin-right:.6rem}
+nav{margin-left:auto;display:flex;gap:1.1rem;font-size:.85rem;flex:none}
+nav button{background:none;border:0;padding:.1rem 0;color:var(--meok-2);border-bottom:1px solid transparent}
+nav button.on{color:var(--meok);border-bottom-color:var(--inju)}
+main{flex:1;min-height:0}
+.view{display:none;height:100%}
+.view.on{display:block}
+.scroll{height:100%;overflow-y:auto}
+.wrap{max-width:44rem;margin:0 auto;padding:2rem 1.6rem 6rem}
+
+/* ---------- 400자 ---------- */
+#tp{display:none;grid-template-columns:var(--tsplit,50%) 1fr;position:relative}
+#tp.on{display:grid}
+#tp.dragging{cursor:col-resize;user-select:none;-webkit-user-select:none}
+#tp.dragging #tpInput{pointer-events:none}
+#tpGrip{position:absolute;top:0;bottom:0;left:var(--tsplit,50%);width:11px;margin-left:-5px;z-index:20;cursor:col-resize;background:transparent}
+#tpGrip::after{content:"";position:absolute;left:50%;top:50%;width:1px;height:2.2rem;margin:-1.1rem 0 0 -.5px;background:var(--seon);opacity:0;transition:opacity .15s}
+#tpGrip:hover::after,#tp.dragging #tpGrip::after{opacity:1;background:var(--inju)}
+.tpane{height:100%;min-height:0;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.tpane.l{border-right:1px solid var(--seon);background:var(--jongi)}
+.tpane.r{background:var(--sheet)}
+.tstrip{display:flex;align-items:baseline;gap:.8rem;width:100%;margin:0 auto;padding:1.1rem var(--ppad) 0;font-size:.75rem;color:var(--meok-3)}
+.tstrip .tally{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.tstrip .tally b{font-weight:400;color:var(--meok)}
+.tstrip .red,.tstrip .mark{color:var(--inju);white-space:nowrap}
+.tstrip .when{white-space:nowrap;font-variant-numeric:tabular-nums}
+.tstrip .lnk{background:none;border:0;padding:0;flex:none;white-space:nowrap;font-family:var(--ui);font-size:.75rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+.tstrip .lnk:hover,.tstrip .lnk.on{color:var(--inju);border-bottom-color:var(--inju)}
+.tstrip [hidden]{display:none}
+#tpNote{margin:0 auto;width:100%;padding:.7rem var(--ppad) 0;font-size:.8rem;line-height:1.7;color:var(--inju)}
+#tpNote[hidden]{display:none}
+/* 왼쪽 윗줄 아래의 작은 칸들 — 스크리브너 링크 넣기, 자료 목록 */
+.tbox{margin:0 auto;width:100%;padding:.6rem var(--ppad) 0;font-size:.78rem;color:var(--meok-2);display:flex;gap:.7rem;align-items:baseline;flex-wrap:wrap}
+.tbox[hidden]{display:none}
+.tbox input{flex:1;min-width:8rem;border:0;border-bottom:1px solid var(--seon);background:transparent;padding:.2rem 0;font-size:.78rem}
+.tbox input:focus{outline:none;border-bottom-color:var(--inju)}
+.tbox .lnk{background:none;border:0;padding:0;flex:none;white-space:nowrap;font-size:.75rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+.tbox .lnk:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.tbox.refs{display:block}
+.tbox.refs[hidden]{display:none}
+.tbox.refs .rr{display:flex;gap:.6rem;align-items:baseline;padding:.15rem 0}
+.tbox.refs .rr a{flex:1;min-width:0;color:var(--meok);text-decoration:none;border-bottom:1px solid var(--seon);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbox.refs .rr a:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.tbox.refs .rr .nolink{flex:1;min-width:0;color:var(--meok-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbox.refs .rr .x{background:none;border:0;padding:0;color:var(--meok-3);flex:none}
+.tbox.refs .rr .x:hover{color:var(--inju)}
+.tbox.refs form{display:flex;gap:.6rem;align-items:baseline;margin-top:.35rem}
+.tbox.refs form input.n{flex:none;width:7rem;min-width:0}
+.tprev{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:1.4rem var(--ppad) 0;margin:0 auto;width:100%;font-size:var(--pfz);line-height:var(--plh);font-family:var(--body)}
+.tprev:not(.empty)::after{content:"";display:block;height:80vh}
+.tprev .para{margin:0;text-indent:var(--pind);text-align:justify;text-justify:inter-character;word-break:break-all;hanging-punctuation:allow-end}
+.tprev .para + .para,.tprev .gap + .para,.tprev .para + .gap{margin-top:.15em}
+.tprev .gap{margin:0;line-height:var(--plh)}
+.tprev.empty{color:var(--meok-3);display:flex;align-items:center;justify-content:center;text-align:center;font-size:1rem;line-height:1.9;font-family:var(--ui);padding-bottom:1.4rem}
+.tprev.wait{color:var(--inju)}
+#tpWrap{position:relative;flex:1;min-height:0;width:100%}
+#tpMirror,#tpInput{position:absolute;inset:0;padding:var(--tpadT,25%) 2.4rem var(--tpadB,62%);font-size:var(--ifz);line-height:var(--ilh);white-space:pre-wrap;word-break:break-word;border:0;background:transparent;font-family:var(--body);margin:0}
+#tpMirror{overflow:hidden;pointer-events:none;visibility:hidden}
+#tpInput{resize:none;overflow-y:auto;color:var(--meok);caret-color:var(--inju)}
+#tpInput:focus{outline:none}
+#tpInput::placeholder{color:var(--meok-3);font-family:var(--ui)}
+#tpWrap.focusing #tpMirror{visibility:visible}
+#tpWrap.focusing #tpInput{color:transparent}
+#tpMirror .ln{display:block;position:relative;color:#cdc7bb}
+#tpMirror .ln.on{color:var(--meok)}
+#tpWrap.nodim #tpMirror .ln{color:var(--meok)}
+#tpMirror .ln[data-n]::before{content:attr(data-n);position:absolute;left:-2rem;top:0;width:1.5rem;text-align:right;font-family:var(--ui);font-size:.62rem;line-height:calc(var(--ifz) * var(--ilh));color:#ddd8cd;font-variant-numeric:tabular-nums}
+#tpMirror .ln.on[data-n]::before{color:#c0b191}
+.tfoot{display:flex;align-items:center;gap:1rem;width:100%;padding:.6rem 2.4rem 1.6rem}
+.tfoot .tb{flex:none;background:none;border:0;padding:0 0 1px;font-size:.8rem;color:var(--meok-3);border-bottom:1px solid var(--seon);white-space:nowrap}
+.tfoot .tb:hover{color:var(--meok)}
+.tfoot .tb.on{color:var(--inju);border-bottom-color:var(--inju)}
+/* 분량·목표 — 오른쪽 창 위, 왼쪽 창의 윗줄과 같은 높이에 한 줄로 */
+.tstrip.rs{padding-left:2.4rem;padding-right:2.4rem;min-height:calc(1.1rem + .75rem * 1.9)}
+#tpCur{color:var(--meok-3);font-variant-numeric:tabular-nums;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tpCur b{font-weight:400;color:var(--meok)}
+#tpCur .ok,#tpCur .goal.cut{color:var(--inju)}
+#tpCur .cutnote{color:#c5bfb3}
+#tpCur .arr{background:none;border:0;padding:0 .15rem;margin:0;font-size:.9rem;line-height:1;color:var(--meok-3);vertical-align:-1px}
+#tpCur .arr:hover:enabled{color:var(--inju)}
+#tpCur .arr:disabled{opacity:.3;cursor:default}
+#tpStop{margin-left:auto}
+.tfoot .go{flex:none;background:none;border:1px solid var(--seon);padding:.4rem 1.1rem;border-radius:2px;font-size:.85rem;color:var(--meok-2);white-space:nowrap}
+.tfoot .go:enabled:hover{border-color:var(--inju);color:var(--inju)}
+.tfoot .go:disabled{opacity:.35;cursor:default}
+@media (max-width:760px){
+  #tp.on{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  .tpane.l{border-right:0;border-bottom:1px solid var(--seon)}
+  #tpGrip{display:none}
+  :root{--ppad:20px}
+  #tpMirror,#tpInput{padding:1.4rem 1.3rem 1rem 2rem}
+  #tpMirror .ln[data-n]::before{left:-1.6rem;width:1.2rem}
+  .tfoot{padding-left:1.3rem;padding-right:1.3rem;flex-wrap:wrap}
+  .tstrip.rs{padding-left:2rem;padding-right:1.3rem;padding-top:.7rem}
+}
+
+.act{background:none;border:0;padding:0;font-size:.75rem;color:var(--meok-3);border-bottom:1px solid transparent;white-space:nowrap;flex:none}
+.act:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.ms{display:flex;align-items:baseline;gap:.9rem;padding:.55rem 0;border-bottom:1px solid rgba(214,205,186,.5)}
+.ms .open{flex:1;min-width:0;background:none;border:0;padding:0;text-align:left;font-size:.95rem;font-family:var(--body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms .open:hover{color:var(--inju)}
+.ms.cur .open{color:var(--inju)}
+.ms .st{font-size:.75rem;color:var(--meok-3);white-space:nowrap;font-variant-numeric:tabular-nums;flex:none}
+.ms .st .no{color:var(--inju)}
+.blank{color:var(--meok-3);padding:2rem 0;text-align:center}
+h2{font-size:.85rem;font-weight:400;color:var(--meok-2);margin:2.2rem 0 .6rem;border-bottom:1px solid var(--seon);padding-bottom:.3rem}
+h2:first-child{margin-top:0}
+.row{display:flex;align-items:center;gap:.7rem;padding:.35rem 0;font-size:.9rem}
+.row label{flex:1}
+.row input[type=number]{width:5rem;border:0;border-bottom:1px solid var(--seon);background:transparent;text-align:right;font-size:.9rem;padding:.2rem 0}
+.row .unit{color:var(--meok-3);font-size:.8rem;width:1.6rem}
+#fontFileRow[hidden],#fontFileRow button[hidden]{display:none}
+#fontFileName{font-size:.85rem;color:var(--meok-3);max-width:14rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#fontFileRow button{flex:none;background:none;border:0;padding:0;margin-left:.4rem;font-size:.85rem;color:var(--meok-2);border-bottom:1px solid var(--seon)}
+#fontFileRow button:hover{color:var(--inju);border-bottom-color:var(--inju)}
+.row select{border:0;border-bottom:1px solid var(--seon);background:transparent;font-family:inherit;font-size:.9rem;color:inherit;padding:.2rem 0}
+.fontcheck{font-family:var(--body);font-size:1.05rem;color:var(--meok);margin:.9rem 0 0}
+.note{font-size:.8rem;color:var(--meok-3);line-height:1.8;margin:.4rem 0 0}
+#toast{position:fixed;left:50%;bottom:2rem;transform:translateX(-50%);background:var(--meok);color:var(--jongi);padding:.5rem 1.1rem;border-radius:2px;font-size:.85rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:90;max-width:90vw;text-align:center}
+#toast.on{opacity:1}
+.ms .st.when{color:#b9b1a4}
+.lead{font-size:.8rem;color:var(--meok-3);line-height:1.8;margin:0 0 1.2rem}
+nav button .n{color:var(--inju);margin-left:.25rem;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<header>
+  <span id="head"></span>
+  <nav>
+    <button data-view="list">인박스</button>
+    <button data-view="tp" class="on">400자</button>
+    <button data-view="set">설정</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tp" class="view on">
+    <div id="tpGrip" role="separator" aria-label="창 나누기" title="끌어서 창 비율 조절"></div>
+    <div class="tpane l">
+      <div class="tstrip" id="tpStrip">
+        <span class="tally" id="tpTally"></span>
+        <span class="when" id="tpWhen"></span>
+        <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
+      </div>
+      <div class="tprev empty" id="tpPrev"></div>
+    </div>
+    <div class="tpane r">
+      <div class="tstrip rs"><span id="tpCur"></span></div>
+      <div id="tpWrap">
+        <div id="tpMirror" aria-hidden="true"></div>
+        <textarea id="tpInput" placeholder="여기에 씁니다." spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></textarea>
+      </div>
+      <div class="tfoot">
+        <button class="tb" id="tpLine" type="button">한 줄씩</button>
+        <button class="tb" id="tpFix" type="button" title="지금 쓰는 대목을 몇 번이고 다시 치는 모드. 왼쪽 글은 바뀌지 않습니다.">고쳐쓰기</button>
+        <button class="go" id="tpStop" type="button" disabled title="400자를 넘긴 글을 정리의 카드로 넘깁니다. 오른쪽 글이 400자를 넘었으면 오른쪽 글을, 아니면 왼쪽 글을 넘깁니다. 넘긴 글감은 인박스에서 빠집니다.">정리로</button>
+        <button class="go" id="tpSend" type="button" disabled>보내기</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="list" class="view">
+    <div class="scroll"><div class="wrap" id="listWrap"></div></div>
+  </section>
+
+  <section id="set" class="view">
+    <div class="scroll"><div class="wrap">
+      <h2>왼쪽 화면</h2>
+      <div class="row"><label for="sPfz">글자 크기</label><input type="number" id="sPfz" min="12" max="28" step="1"><span class="unit">px</span></div>
+      <div class="row"><label for="sPlh">줄 간격</label><input type="number" id="sPlh" min="1.2" max="3" step="0.1"><span class="unit">배</span></div>
+
+      <h2>쓰는 칸</h2>
+      <div class="row"><label for="sIfz">글자 크기</label><input type="number" id="sIfz" min="12" max="28" step="1"><span class="unit">px</span></div>
+      <div class="row"><label for="sIlh">줄 간격</label><input type="number" id="sIlh" min="1.2" max="3" step="0.1"><span class="unit">배</span></div>
+
+      <h2>글꼴</h2>
+      <div class="row">
+        <label for="bodyFont">본문 글꼴</label>
+        <select id="bodyFont"><option value="gowun">고운바탕</option><option value="nanum">나눔명조</option><option value="custom">직접 입력</option></select>
+      </div>
+      <div class="row" id="fontFileRow"><label>글꼴 파일</label><span id="fontFileName"></span><button type="button" id="fontFileBtn">파일 넣기</button><button type="button" id="fontFromTp" title="4baek(없으면 타이핑)의 '직접 입력'에 넣어 둔 글꼴 파일을 이 앱으로 베껴 옵니다">4baek에서 가져오기</button><button type="button" id="fontFileDel">빼기</button><input type="file" id="fontFileIn" accept=".otf,.ttf,.woff,.woff2" hidden></div>
+      <p class="fontcheck">가을 햇살 아래, 나는 사백 자를 더 썼다.</p>
+      <p class="note" id="fontNote"></p>
+      <p class="note">왼쪽 글과 쓰는 칸이 모두 이 글꼴을 씁니다. 고운바탕과 나눔명조는 인터넷에서 받아 오는 글꼴이라 처음 한 번은 연결이 필요합니다. 다른 글꼴은 '직접 입력'에서 글꼴 파일(.otf, .ttf)을 넣어 씁니다. 넣은 파일은 이 브라우저 안에만 저장됩니다.</p>
+    </div></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+var KEY = "dari-v1";            /* 이 앱의 저장소 — 이 브라우저에만 있다 */
+var IN_KEY = "dari.in";         /* 받은편지함 — 방점(글감의 제목을 눌렀을 때)과 정리(아이디어의 "다리로")가 적어 둔다. [{id, text, origin, created_at}] */
+var OUT_KEY = "jeongri.cards.in";   /* 정리의 받은편지함 — '정리로'가 여기에 적고, 정리가 읽어 카드로 만든다. 정리의 저장소(jeongri.v1)에는 쓰지 않는다 */
+var GOAL = 400;                 /* 이만큼 넘겨야 정리로 넘길 수 있다 */
+var KEEP_SENT = 30 * 86400000;  /* 정리로 넘긴 글감은 화면에서 빠지지만 저장소에는 이만큼 남겨 둔다 */
+function $(s){ return document.querySelector(s); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* S.items: [{id, seed, base, baseAt, draft, cut, fix, fixText, fixN, at, editedAt, origin, sentAt, card}]
+     seed  — 처음 들어온 글감(바뀌지 않는다)
+     base  — 왼쪽 글. 처음에는 글감이고, 보내기를 하면 마지막으로 보낸 글이 된다
+     draft — 오른쪽에 쓰던 글. 다른 글감으로 옮겨 가도 조용히 남는다
+     sentAt·card — 정리로 넘긴 때와 정리의 카드 id. 넘긴 글감은 인박스에 보이지 않는다 */
+function fresh(){
+  return { items:[], cur:null, step:400, dim:true, lineMode:true, smart:true, split:50,
+           pfz:16, plh:1.9, ifz:16, ilh:1.9,
+           bodyFont:"gowun",   /* 본문 글꼴 — FONTS의 열쇠, 또는 "custom"(넣은 글꼴 파일) */
+           fontFile:"",        /* 넣은 글꼴 파일 이름 — 파일 자체는 IndexedDB "dari-fonts" */
+           fontAt:0,
+           copyFont:false };   /* 처음 열 때 4baek이 '직접 입력' 글꼴을 쓰고 있었다 — 그 파일을 한 번 베껴 온다 */
+}
+function load(){
+  var d = fresh(), had = false;
+  try{
+    var raw = localStorage.getItem(KEY);
+    if(raw){ had = true; var p = JSON.parse(raw); for(var k in d) if(p[k] !== undefined && p[k] !== null) d[k] = p[k]; if(p.cur === null) d.cur = null; }
+  }catch(e){}
+  if(!had){   /* 처음 — 글자 크기·줄 간격·글꼴은 4baek에 맞춰 둔 것을 본뜬다(4baek의 저장소는 읽기만 한다) */
+    try{
+      var b = JSON.parse(localStorage.getItem("4baek-v1")) || {};
+      ["pfz","plh","ifz","ilh","split"].forEach(function(k){ if(typeof b[k] === "number") d[k] = b[k]; });
+      if(b.bodyFont === "nanum") d.bodyFont = "nanum";
+      if(b.bodyFont === "custom" && b.fontFile) d.copyFont = true;
+    }catch(e){}
+  }
+  if(!Array.isArray(d.items)) d.items = [];
+  d.items = d.items.filter(function(m){ return m && m.id && !(m.sentAt && Date.now() - m.sentAt > KEEP_SENT); });
+  d.step = 400;
+  return d;
+}
+var S = load();
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast("저장하지 못했습니다 — 저장 공간을 확인하세요", 4000); } }
+
+function len(t){ return (t || "").replace(/\n/g, "").length; }
+function trimBlank(a){
+  a = a.map(function(l){ return l.trim(); });
+  while(a.length && !a[0]) a.shift();
+  while(a.length && !a[a.length-1]) a.pop();
+  return a;
+}
+function normal(t){ return trimBlank(String(t).replace(/\r/g, "").split("\n")).join("\n"); }
+function mae(n){ return (n/200).toFixed(1); }
+function fmt(n){ return Number(n).toLocaleString("ko-KR"); }
+function esc(t){ return String(t).replace(/[&<>"]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function two(n){ return (n < 10 ? "0" : "") + n; }
+function whenText(at){
+  if(!at) return "";
+  var d = new Date(at), n = new Date(), hm = two(d.getHours()) + ":" + two(d.getMinutes());
+  return d.toDateString() === n.toDateString() ? hm : (d.getMonth()+1) + "." + d.getDate() + " " + hm;
+}
+var elToast = $("#toast");
+function toast(msg, ms){
+  elToast.textContent = msg; elToast.classList.add("on");
+  clearTimeout(toast.t); toast.t = setTimeout(function(){ elToast.classList.remove("on"); }, ms || 1800);
+}
+function punct(t){
+  if(S.smart === false) return t;
+  var out = "", open = " \n\t([{<「『（";
+  for(var i=0;i<t.length;i++){
+    var ch = t.charAt(i);
+    if(ch === '"' || ch === "'"){
+      var prev = i ? out.charAt(out.length-1) : "";
+      var isOpen = (prev === "") || open.indexOf(prev) > -1;
+      out += (ch === '"') ? (isOpen ? "“" : "”") : (isOpen ? "‘" : "’");
+    }else if(ch === "." && t.substr(i,3) === "..."){ out += "⋯"; i += 2; }
+    else if(ch === "-" && t.charAt(i+1) === "-"){ out += "—"; i += 1; }
+    else out += ch;
+  }
+  return out;
+}
+function copyThen(text, after){
+  function fallback(){
+    var ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(e){}
+    document.body.removeChild(ta);
+    after();
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(after, fallback);
+  else fallback();
+}
+
+function itemById(id){ for(var i=0;i<S.items.length;i++) if(S.items[i].id === id) return S.items[i]; return null; }
+function cur(){ var m = S.cur ? itemById(S.cur) : null; return m && !m.sentAt ? m : null; }
+function live(){ return S.items.filter(function(m){ return !m.sentAt; }); }
+function firstLine(t){ var l = String(t || "").split("\n").filter(function(x){ return x.trim(); })[0] || ""; return l.trim(); }
+/* 정리 카드의 제목 — 첫 문장의 앞부분(스무 자쯤). 정리의 defTitle과 같은 법. 정리에서 고칠 수 있다 */
+function defTitle(text){
+  var s = firstLine(text).replace(/\s+/g, " "), m = s.match(/^(.+?)[.!?。…⋯](\s|$)/);
+  if(m) s = m[1];
+  if(s.length > 22){ var c = s.slice(0, 22), sp = c.lastIndexOf(" "); s = sp >= 10 ? c.slice(0, sp) : c; }
+  return s.replace(/[\s.,·:;!?'"“”‘’…⋯\-–—~]+$/, "").trim();
+}
+/* 다른 앱의 창 — 방점·Writer KYS와 같은 약속(그 앱이 이미 떠 있는 창을 다시 쓴다) */
+function winName(app){ var n = ""; try{ n = localStorage.getItem("appwin." + app) || ""; }catch(e){} if(!n || n === window.name) n = app; return n === window.name ? app + "2" : n; }
+function winMine(){ try{ if(!window.name) window.name = "dari"; localStorage.setItem("appwin.dari", window.name); }catch(e){} }
+
+/* ---------- 받은편지함 — 방점과 정리가 적어 둔 글감을 인박스로 들인다. 같은 id가 이미 있으면(넘긴 것까지) 다시 들이지 않는다 ---------- */
+function drainIn(){
+  var arr = []; try{ arr = JSON.parse(localStorage.getItem(IN_KEY)) || []; }catch(e){}
+  if(!Array.isArray(arr) || !arr.length) return 0;
+  var n = 0;
+  arr.forEach(function(x){
+    if(!x) return; var t = normal(x.text || ""); if(!t) return;
+    if(x.id && itemById(x.id)) return;
+    var at = x.created_at || Date.now();
+    S.items.push({ id:x.id || uid(), seed:t, base:t, baseAt:at, draft:"", at:at, origin:x.origin || "" }); n++;
+  });
+  try{ localStorage.removeItem(IN_KEY); }catch(e){}
+  if(n) save();
+  return n;
+}
+
+/* ---------- 화면 바꾸기 ---------- */
+function showView(v){
+  if(tpOn() && v !== "tp") tpStash(), save();
+  document.querySelectorAll("nav button").forEach(function(x){ x.classList.toggle("on", x.dataset.view === v); });
+  document.querySelectorAll(".view").forEach(function(x){ x.classList.toggle("on", x.id === v); });
+  if(v === "tp") tpShow();
+  if(v === "list") renderList();
+  if(v === "set") renderSet();
+  renderHead();
+}
+function viewNow(){ return tpOn() ? "tp" : $("#list").classList.contains("on") ? "list" : "set"; }
+document.querySelectorAll("nav button").forEach(function(b){ b.addEventListener("click", function(){ showView(b.dataset.view); }); });
+function renderHead(){
+  var m = cur(), n = live().length, t = m ? firstLine(m.seed || m.base) : "";
+  $("#head").innerHTML = m ? esc(t) : '<span class="w">dari</span>';
+  document.title = m ? t.slice(0, 30) + " — dari" : "dari";
+  document.querySelector('nav button[data-view="list"]').innerHTML = "인박스" + (n ? '<span class="n">' + n + "</span>" : "");
+}
+
+/* ===================== 400자 ===================== */
+var tpEl = {
+  view:$("#tp"), grip:$("#tpGrip"), tally:$("#tpTally"), when:$("#tpWhen"), toRight:$("#tpToRight"), prev:$("#tpPrev"),
+  wrap:$("#tpWrap"), mirror:$("#tpMirror"), input:$("#tpInput"), line:$("#tpLine"), fix:$("#tpFix"), cur:$("#tpCur"), stop:$("#tpStop"), send:$("#tpSend")
+};
+var tpWheelUntil = 0;
+var tpStackedMq = window.matchMedia("(max-width:760px)");
+function tpStacked(){ return tpStackedMq.matches; }
+function tpSideTo(){ return tpStacked() ? "위로" : "왼쪽으로"; }
+function tpOn(){ return tpEl.view.classList.contains("on"); }
+
+
+/* 인박스에서 글감을 골랐다 — 쓰던 글을 남겨 두고, 그 글감으로 400자 화면을 연다 */
+function tpOpen(id){
+  var m = itemById(id); if(!m || m.sentAt) return;
+  tpStash();
+  S.cur = id;
+  save(); renderHead();
+  showView("tp");
+}
+function tpShow(){
+  var m = cur();
+  tpEl.input.value = m ? (m.draft || "") : "";
+  tpEl.input.disabled = !m;
+  tpRender(); tpPad();
+  if(m){ tpEl.input.focus(); tpRenderMirror(); tpFollowCaret(); }
+}
+function tpStash(){
+  var m = cur(); if(!m || !tpOn()) return;
+  var v = tpEl.input.value;
+  if(m.fix && !v.trim() && m.fixText) v = m.fixText;
+  m.draft = v;
+}
+
+/* ---- 목표 ---- */
+function tpAutoGoal(m){ var n = len(m.base); return (Math.floor(n / S.step) + 1) * S.step; }
+function tpGoal(m){ var a = tpAutoGoal(m); if(typeof m.cut === "number" && m.cut >= S.step && m.cut < a) return m.cut; return a; }
+function tpIsCut(m){ return tpGoal(m) < tpAutoGoal(m); }
+function tpCutGoal(dir){
+  var m = cur(); if(!m) return;
+  var g = tpGoal(m), a = tpAutoGoal(m), next = g + dir * S.step;
+  if(next < S.step || next > a) return;
+  if(next >= a) delete m.cut; else m.cut = next;
+  save(); tpRenderStrip(); tpRenderCount(); tpEl.input.focus();
+}
+
+/* ---- 글 다듬기 ---- */
+/* 한 줄씩으로 친 글 → 본문. 엔터 한 번은 공백으로 이어 붙고, 빈 줄 하나는 행갈이(문단 나눔),
+   빈 줄 둘 이상은 행갈이에 빈 줄 하나를 더한 한 칸 띄우기가 된다 */
+function tpTidy(raw){
+  var out = [], c = [], blanks = 0;
+  raw.replace(/\r/g, "").split("\n").forEach(function(l){
+    var s = l.trim();
+    if(s){
+      if(!c.length && out.length && blanks >= 2) out.push("");
+      c.push(s); blanks = 0;
+    }else{
+      if(c.length){ out.push(c.join(" ")); c = []; }
+      blanks++;
+    }
+  });
+  if(c.length) out.push(c.join(" "));
+  return out.join("\n");
+}
+/* 본문 모양의 글 → 한 줄씩의 글(tpTidy의 거꾸로). 행갈이는 빈 줄 하나로, 한 칸 띄우기는 빈 줄 둘로 벌린다 */
+function tpSpread(raw){
+  var out = "", blanks = 0, any = false;
+  raw.replace(/\r/g, "").split("\n").forEach(function(l){
+    var s = l.trim();
+    if(!s){ blanks++; return; }
+    if(any) out += blanks ? "\n\n\n" : "\n\n";
+    out += s; any = true; blanks = 0;
+  });
+  return out;
+}
+function tpOutgoing(){
+  var v = tpEl.input.value;
+  return punct(S.lineMode !== false ? tpTidy(v) : trimBlank(v.split("\n")).join("\n"));
+}
+
+
+/* ---- 왼쪽 ---- */
+function tpLeftText(){ var m = cur(); if(!m) return ""; return m.fix ? (m.fixText || "") : (m.base || ""); }
+function tpRenderStrip(){
+  var m = cur();
+  tpEl.when.textContent = "";
+  if(!m){ tpEl.tally.textContent = "글감을 고르지 않았습니다"; return; }
+  var g = tpGoal(m), n = len(m.base);
+  if(m.fix){
+    tpEl.tally.innerHTML = '<span class="red">고쳐쓰기 중</span>' + (m.fixText ? " · " + m.fixN + "번째 · " + fmt(len(m.fixText)) + "자" : "") + " · 돌아가면 목표 " + fmt(g) + "자";
+  }else if(!m.base){
+    tpEl.tally.innerHTML = "글 없음 · 목표 " + fmt(g) + "자";
+  }else{
+    tpEl.tally.innerHTML = (m.base === m.seed ? "글감 · " : "") + "<b>" + fmt(n) + "</b>자 · " + mae(n) + "매 · 다음 목표 " + fmt(g) + "자" + (tpIsCut(m) ? ' <span class="red">낮춤</span>' : "");
+    tpEl.when.textContent = whenText(m.baseAt);
+  }
+}
+function tpRenderPrev(){
+  var m = cur(), p = tpEl.prev, st = tpStacked();
+  p.classList.remove("wait");
+  if(!m){
+    p.classList.add("empty");
+    p.innerHTML = live().length ? "인박스에서 글감을 고르세요." : "인박스가 비어 있습니다.<br>방점에서 글감의 제목을 누르면 여기로 들어옵니다.";
+    return;
+  }
+  var text;
+  if(m.fix){
+    if(!m.fixText){
+      p.classList.add("empty");
+      p.innerHTML = "고쳐쓰기 중입니다.<br>" + (st ? "아래 글을" : "오른쪽 글을") + " 이리로 옮기고, 보면서 다시 칩니다.<br>왼쪽 글은 바뀌지 않습니다.";
+      return;
+    }
+    text = m.fixText;
+  }else{
+    if(!m.base){
+      p.classList.add("empty");
+      p.innerHTML = "왼쪽에 글이 없습니다.<br>첫 " + fmt(S.step) + "자를 쓰고 " + tpSideTo() + " 보내세요.";
+      return;
+    }
+    text = m.base;
+  }
+  p.classList.remove("empty");
+  p.innerHTML = "";
+  trimBlank(text.split("\n")).forEach(function(line){
+    var e = document.createElement("p"), t = line.trim();
+    e.className = t ? "para" : "gap"; e.textContent = t || "​"; p.appendChild(e);
+  });
+  p.scrollTop = 0;
+}
+function tpRenderBtns(){
+  var m = cur(), st = tpStacked();
+  tpEl.line.classList.toggle("on", S.lineMode !== false);
+  tpEl.line.title = S.lineMode !== false ? "한 줄씩 — 엔터 한 번은 이어 붙고, 빈 줄 하나는 행갈이, 빈 줄 둘은 한 칸 띄우기가 됩니다. 눌러서 끄면 보통 입력창으로, 쓰던 글은 문단으로 합쳐 둡니다" : "눌러서 켜기 — 커서가 놓인 줄만 또렷하게. 쓰던 글의 문단은 빈 줄로 벌려 둡니다";
+  tpEl.fix.classList.toggle("on", !!(m && m.fix));
+  tpEl.fix.textContent = m && m.fix ? "고쳐쓰기 끄기" : "고쳐쓰기";
+  tpEl.toRight.hidden = !m || !!m.fix || !tpLeftText();
+  tpEl.toRight.textContent = st ? "아래 창으로" : "오른쪽 창으로";
+  tpEl.toRight.title = (st ? "위 글을 아래" : "왼쪽 글을 오른쪽") + " 입력창으로 옮깁니다. 그 뒤에 이어서 목표까지 씁니다. 처음부터 다시 쓰려면 누르지 않고 그냥 씁니다";
+}
+
+/* ---- 오른쪽: 커서가 놓인 줄만 또렷하게 ---- */
+function tpCaretLine(){ var pos = tpEl.input.selectionStart || 0; return tpEl.input.value.slice(0, pos).split("\n").length - 1; }
+function tpRenderMirror(){
+  var v = tpEl.input.value, ls = v.split("\n"), cl = tpCaretLine(), pos = tpEl.input.selectionStart || 0, head = 0;
+  for(var k = 0; k < cl && k < ls.length; k++) head += ls[k].length + 1;
+  var col = pos - head, n = 0;
+  tpEl.mirror.innerHTML = "";
+  ls.forEach(function(l, i){
+    var d = document.createElement("div");
+    d.className = "ln" + (i === cl ? " on" : "");
+    if(l.trim()) d.setAttribute("data-n", String(++n));
+    if(i === cl && l.length){
+      var c = Math.max(0, Math.min(col, l.length));
+      var pre = document.createElement("span"); pre.className = "pre"; pre.textContent = l.slice(0, c); d.appendChild(pre);
+      if(c < l.length) d.appendChild(document.createTextNode(l.slice(c)));
+    }else if(l.trim()) d.textContent = l;
+    else d.textContent = "​";
+    tpEl.mirror.appendChild(d);
+  });
+  tpEl.mirror.scrollTop = tpEl.input.scrollTop;
+}
+function tpCaretTop(){
+  var ln = tpEl.mirror.querySelector(".ln.on"); if(!ln) return null;
+  var pre = ln.querySelector(".pre");
+  if(pre){ var rects = pre.getClientRects(); if(rects.length){ var last = rects[rects.length-1]; return last.top - tpEl.mirror.getBoundingClientRect().top + tpEl.mirror.scrollTop; } }
+  return ln.offsetTop;
+}
+function tpFollowCaret(){
+  if(Date.now() < tpWheelUntil) return;
+  var top = tpCaretTop(); if(top === null) return;
+  var h = tpEl.input.clientHeight; if(!h) return;
+  var want = top - h * (S.lineMode !== false ? 2/3 : 1/2);
+  var max = tpEl.input.scrollHeight - h;
+  if(want < 0) want = 0; if(want > max) want = max;
+  if(Math.abs(tpEl.input.scrollTop - want) < 2) return;
+  tpEl.input.scrollTop = want; tpEl.mirror.scrollTop = want;
+}
+/* 입력칸 높이에 맞춰 위아래 여백 — 첫 줄이 위에서 4분의 1쯤 내려온 곳에서 시작한다 */
+function tpPad(){
+  if(tpStacked()){ tpEl.wrap.style.removeProperty("--tpadT"); tpEl.wrap.style.removeProperty("--tpadB"); return; }
+  var h = tpEl.wrap.clientHeight; if(!h) return;
+  var line = (S.ifz || 16) * (S.ilh || 1.9);
+  var top = Math.round(h * 0.25), bottom = Math.round(h * 0.62);
+  if(h - top - bottom < line * 1.5) bottom = Math.max(0, Math.round(h - top - line * 1.5));
+  tpEl.wrap.style.setProperty("--tpadT", top + "px"); tpEl.wrap.style.setProperty("--tpadB", bottom + "px");
+}
+function tpRenderMode(){
+  tpEl.wrap.classList.toggle("focusing", S.lineMode !== false);
+  tpEl.wrap.classList.toggle("nodim", S.dim === false);
+  tpRenderMirror();
+}
+
+
+/* ---- 정리로 넘길 글 — 오른쪽 글이 400자를 넘었으면 그것, 아니면 (고쳐쓰기 중이면 옮겨 둔 글,) 왼쪽 글. 어느 것도 400자가 안 되면 넘길 수 없다 ---- */
+function jrPick(m){
+  var r = tpOn() && cur() === m ? tpOutgoing() : "";
+  if(len(r) >= GOAL) return { t:r, from:"r" };
+  if(m.fix && len(m.fixText) >= GOAL) return { t:m.fixText, from:"f" };
+  if(len(m.base) >= GOAL) return { t:m.base, from:"l" };
+  return null;
+}
+/* ---- 분량 세기와 보내기 조건 ---- */
+function tpRenderCount(){
+  var m = cur();
+  if(!m){ tpEl.cur.innerHTML = ""; tpEl.send.disabled = tpEl.stop.disabled = true; tpEl.send.textContent = "보내기"; return; }
+  var t = tpOutgoing(), n = len(t);
+  tpEl.stop.disabled = !jrPick(m);
+  if(m.fix){
+    tpEl.cur.innerHTML = n ? "<b>" + fmt(n) + "</b>자 · " + mae(n) + "매" : "";
+    tpEl.send.disabled = !n; tpEl.send.textContent = "고쳐쓰기";
+    return;
+  }
+  var g = tpGoal(m), a = tpAutoGoal(m), cut = tpIsCut(m), ok = n >= g, left = g - n;
+  var arrows = '<button type="button" class="arr" data-g="-1" title="목표를 ' + fmt(S.step) + '자 낮추기"' + (g - S.step < S.step ? ' disabled' : '') + '>◂</button>'
+             + '<button type="button" class="arr" data-g="1" title="목표를 ' + fmt(S.step) + '자 올리기"' + (g + S.step > a ? ' disabled' : '') + '>▸</button>';
+  var goalTxt = '<span class="goal' + (cut ? ' cut' : '') + '">목표 ' + fmt(g) + '자</span>';
+  var html = "<b>" + fmt(n) + "</b>자 · " + mae(n) + "매 · " + arrows + " ";
+  html += ok ? '<span class="ok">' + goalTxt + ' 채움</span>' : goalTxt + "까지 " + fmt(left) + "자";
+  if(cut) html += ' <span class="cutnote">(원래 ' + fmt(a) + '자)</span>';
+  tpEl.cur.innerHTML = html;
+  tpEl.send.disabled = !ok;
+  tpEl.send.textContent = ok ? tpSideTo() + " 보내기" : fmt(left) + "자 더";
+}
+function tpRender(){ tpRenderBtns(); tpRenderStrip(); tpRenderPrev(); tpRenderMode(); tpRenderCount(); }
+
+/* ---- 고쳐쓰기 · 한 줄씩 ---- */
+function tpFixOnce(){
+  var m = cur(), t = tpOutgoing(); if(!m || !t) return;
+  m.fixText = t; m.fixN = (m.fixN || 0) + 1;
+  tpEl.input.value = ""; m.draft = "";
+  save(); tpRender(); tpEl.input.focus();
+}
+function tpToggleFix(){
+  var m = cur(); if(!m) return;
+  if(m.fix){
+    if(!tpEl.input.value.trim() && m.fixText){ tpEl.input.value = m.fixText; m.draft = m.fixText; }
+    m.fix = false; m.fixText = ""; m.fixN = 0;
+    toast("고쳐쓰기를 끝냈습니다");
+  }else{
+    m.fix = true; m.fixText = ""; m.fixN = 0;
+    toast("고쳐쓰기 — 왼쪽 글은 바뀌지 않습니다");
+  }
+  save(); tpRender(); tpEl.input.focus();
+}
+/* 한 줄씩 켜고 끄기 — 입력창의 글을 새 방식의 규칙에 맞게 바꿔 둔다(글은 잃지 않는다) */
+function tpToggleLine(){
+  var v = tpEl.input.value, m = cur();
+  if(S.lineMode !== false){ v = tpTidy(v); S.lineMode = false; }
+  else{ v = tpSpread(v); S.lineMode = true; }
+  tpEl.input.value = v; if(m) m.draft = v;
+  var n = v.length; tpEl.input.setSelectionRange(n, n);
+  save(); tpRenderBtns(); tpRenderMode(); tpRenderCount();
+  toast(S.lineMode !== false ? "한 줄씩 집중해서 씁니다" : "보통 입력창으로 씁니다 — 엔터가 그대로 남습니다");
+  tpEl.input.focus(); tpFollowCaret();
+}
+/* 왼쪽 글을 오른쪽 입력창으로 — 지금 입력 방식에 맞는 모양으로 옮겨, 그 뒤에 이어서 목표까지 쓴다 */
+function tpToRight(){
+  var m = cur(); if(!m || m.fix) return;
+  var t = tpLeftText(); if(!t) return;
+  var st = tpStacked();
+  if(tpEl.input.value.trim() && !confirm((st ? "아래" : "오른쪽") + " 창에 쓰던 글이 있습니다.\n" + (st ? "위" : "왼쪽") + " 글로 덮어쓸까요? 쓰던 글은 사라집니다.")){ tpEl.input.focus(); return; }
+  var v = S.lineMode !== false ? tpSpread(t) : trimBlank(t.split("\n")).join("\n");
+  tpEl.input.value = v; m.draft = v;
+  var n = v.length; tpEl.input.setSelectionRange(n, n);
+  save(); tpRender();
+  tpEl.input.focus(); tpFollowCaret();
+  var g = tpGoal(m), c = len(tpOutgoing());
+  toast("글을 옮겼습니다 · " + (c < g ? "목표 " + fmt(g) + "자까지 " + fmt(g - c) + "자" : "목표 " + fmt(g) + "자를 채웠습니다"), 3200);
+}
+
+
+/* ---- 보내기 — 오른쪽 글이 왼쪽 글이 되고, 다음 목표가 잡힌다 ---- */
+function tpSend(){
+  var m = cur(); if(!m) return;
+  if(m.fix){ tpFixOnce(); return; }
+  var t = tpOutgoing(); if(!t) return;
+  var g = tpGoal(m), n = len(t);
+  if(n < g){ toast("목표 " + fmt(g) + "자까지 " + fmt(g - n) + "자 남았습니다"); return; }
+  m.base = t; m.baseAt = Date.now(); delete m.cut;
+  m.editedAt = Date.now();
+  tpEl.input.value = ""; m.draft = "";
+  save(); tpRender();
+  toast("글 " + fmt(n) + "자 · 다음 목표 " + fmt(tpGoal(m)) + "자 · 이제 '정리로' 넘길 수 있습니다", 3200);
+  tpEl.input.focus();
+}
+
+/* ---- 정리로 — 400자를 넘긴 글을 정리의 카드로 넘긴다. 정리의 받은편지함(jeongri.cards.in)에 적고 정리를 그 카드로 연다.
+   정리가 읽어 카드를 만든다(제목은 첫 문장의 앞부분, 본문은 이 글). 넘긴 글감은 인박스에서 빠지고 저장소에는 한 달 남는다 ---- */
+function tpToJeongri(){
+  var m = cur(); if(!m) return;
+  var p = jrPick(m);
+  if(!p){ toast(fmt(GOAL) + "자를 넘겨야 정리로 넘길 수 있습니다"); return; }
+  var r = tpOutgoing(), st = tpStacked(), R = st ? "아래" : "오른쪽", L = st ? "위" : "왼쪽";
+  if(p.from === "r" && len(m.base) > len(p.t) && len(m.base) >= GOAL
+     && !confirm(R + " 글(" + fmt(len(p.t)) + "자)이 " + L + " 글(" + fmt(len(m.base)) + "자)보다 짧습니다.\n" + R + " 글을 정리로 넘깁니다. 넘길까요?")){ tpEl.input.focus(); return; }
+  if(p.from !== "r" && r
+     && !confirm(R + "에 쓰던 글(" + fmt(len(r)) + "자)은 " + fmt(GOAL) + "자가 안 되어 넘기지 않습니다.\n" + L + " 글(" + fmt(len(p.t)) + "자)만 정리로 넘깁니다. 넘길까요?")){ tpEl.input.focus(); return; }
+  var cid = "dr" + m.id, arr = [];
+  try{ arr = JSON.parse(localStorage.getItem(OUT_KEY)) || []; }catch(e){}
+  if(!Array.isArray(arr)) arr = [];
+  arr = arr.filter(function(x){ return x && x.id !== cid; });
+  arr.push({ id:cid, title:defTitle(p.t), text:p.t, seed:m.seed || "", origin:"dari", from:m.id, created_at:m.at || Date.now(), sent_at:Date.now() });
+  try{ localStorage.setItem(OUT_KEY, JSON.stringify(arr)); }
+  catch(e){ toast("정리로 보내지 못했습니다 — 저장 공간을 확인하세요", 4000); return; }
+  m.base = p.t; m.baseAt = Date.now(); m.draft = ""; delete m.cut;
+  m.fix = false; m.fixText = ""; m.fixN = 0;
+  m.sentAt = Date.now(); m.card = cid;
+  tpEl.input.value = ""; S.cur = null;
+  save(); showView("list");
+  toast("정리의 카드로 넘겼습니다 · " + fmt(len(p.t)) + "자", 3200);
+  try{ window.open(new URL("jeongri.html", location.href).href + "#" + encodeURIComponent("카드") + "=" + encodeURIComponent(cid), winName("jeongri")); }catch(e){}
+}
+
+/* ---- 잇기 ---- */
+tpEl.input.addEventListener("input", function(){
+  var m = cur(); if(!m) return;
+  m.draft = tpEl.input.value; m.editedAt = Date.now();
+  save(); tpRenderBtns(); tpRenderMirror(); tpRenderCount(); tpFollowCaret();
+  if(!m.base) tpRenderStrip(), m.fix || tpRenderPrev();
+});
+["keyup","click","focus","select"].forEach(function(ev){ tpEl.input.addEventListener(ev, function(){ tpRenderMirror(); tpFollowCaret(); }); });
+document.addEventListener("selectionchange", function(){ if(document.activeElement === tpEl.input) tpRenderMirror(); });
+tpEl.input.addEventListener("wheel", function(){ tpWheelUntil = Date.now() + 2500; }, { passive:true });
+tpEl.input.addEventListener("scroll", function(){ tpEl.mirror.scrollTop = tpEl.input.scrollTop; });
+tpEl.input.addEventListener("keydown", function(e){ if((e.metaKey || e.ctrlKey) && e.key === "Enter"){ e.preventDefault(); tpSend(); } });
+tpEl.send.addEventListener("click", tpSend);
+tpEl.stop.addEventListener("click", tpToJeongri);
+tpEl.cur.addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest("button[data-g]") : null;
+  if(!b || b.disabled) return;
+  tpCutGoal(parseInt(b.getAttribute("data-g"), 10));
+});
+tpEl.toRight.addEventListener("click", tpToRight);
+tpEl.line.addEventListener("mousedown", function(e){ e.preventDefault(); });
+tpEl.line.addEventListener("click", tpToggleLine);
+tpEl.fix.addEventListener("click", tpToggleFix);
+/* 가운데 선 끌기 */
+(function(){
+  var on = false;
+  function at(x){ var r = tpEl.view.getBoundingClientRect(); if(!r.width) return S.split; return Math.min(75, Math.max(25, (x - r.left) / r.width * 100)); }
+  function apply(){ var v = Math.min(75, Math.max(25, S.split || 50)); S.split = v; tpEl.view.style.setProperty("--tsplit", v + "%"); }
+  function move(e){ if(!on) return; e.preventDefault(); S.split = at(e.clientX); apply(); }
+  function up(){ if(!on) return; on = false; tpEl.view.classList.remove("dragging"); document.removeEventListener("mousemove", move); document.removeEventListener("mouseup", up); save(); tpRenderMirror(); }
+  tpEl.grip.addEventListener("mousedown", function(e){ if(e.button) return; e.preventDefault(); on = true; tpEl.view.classList.add("dragging"); document.addEventListener("mousemove", move); document.addEventListener("mouseup", up); });
+  tpEl.grip.addEventListener("dblclick", function(){ S.split = 50; apply(); save(); tpRenderMirror(); });
+  window.addEventListener("resize", function(){ if(tpOn()){ tpPad(); tpRenderMirror(); tpRenderBtns(); } });
+  if(window.ResizeObserver) new ResizeObserver(function(){ if(tpOn()){ tpPad(); tpRenderMirror(); } }).observe(tpEl.wrap);
+  apply();
+})();
+function tpOnStack(){ if(tpOn()){ tpPad(); tpRenderPrev(); tpRenderBtns(); tpRenderCount(); } }
+(tpStackedMq.addEventListener ? tpStackedMq.addEventListener("change", tpOnStack) : tpStackedMq.addListener(tpOnStack));
+
+
+/* ===================== 인박스 — 400자로 키우려고 기다리는 글감 ===================== */
+function el(tag, cls, text){ var e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; }
+function dayText(at){ var d = new Date(at); return (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + "." : "") + (d.getMonth()+1) + "." + d.getDate(); }
+function renderList(){
+  var w = $("#listWrap"); w.innerHTML = "";
+  var xs = live().sort(function(a, b){ return (b.at || 0) - (a.at || 0); });
+  w.appendChild(el("h2", "", "인박스" + (xs.length ? " · " + xs.length : "")));
+  w.appendChild(el("p", "lead", "400자로 키우려고 기다리는 글감입니다. 누르면 400자 화면이 열립니다. 왼쪽의 글감을 보며 오른쪽에 쓰고, " + fmt(GOAL) + "자를 넘겨 '정리로'를 누르면 정리의 카드가 됩니다."));
+  if(!xs.length){ var b = el("div", "blank"); b.innerHTML = "기다리는 글감이 없습니다.<br>방점에서 글감의 제목을 누르면 여기로 들어옵니다."; w.appendChild(b); return; }
+  xs.forEach(function(m){
+    var r = el("div", "ms" + (S.cur === m.id ? " cur" : ""));
+    var o = el("button", "open", firstLine(m.base || m.seed) || "(빈 글감)"); o.type = "button"; o.title = "400자 화면에서 엽니다";
+    o.onclick = function(){ tpOpen(m.id); };
+    var n = len(m.base), d = len(m.draft), st = el("span", "st");
+    st.innerHTML = fmt(n) + "자" + (d ? " · 쓰는 중 " + fmt(d) + "자" : "") + (n >= GOAL || d >= GOAL ? ' · <span class="no">정리로 넘길 수 있음</span>' : "");
+    var del = el("button", "act", "지우기"); del.type = "button"; del.title = "이 글감을 인박스에서 지웁니다";
+    del.onclick = function(){
+      if(!confirm("이 글감을 지울까요? 쓰던 글도 함께 사라집니다.\n\n" + firstLine(m.base || m.seed).slice(0, 60))) return;
+      S.items = S.items.filter(function(x){ return x !== m; }); if(S.cur === m.id) S.cur = null;
+      save(); renderList(); renderHead();
+    };
+    r.appendChild(o); r.appendChild(st); r.appendChild(el("span", "st when", dayText(m.at || m.baseAt || Date.now()))); r.appendChild(del);
+    w.appendChild(r);
+  });
+}
+
+/* ===================== 설정 — 좌우 창의 글자 크기·줄 간격, 글꼴 ===================== */
+/* ---------- 글꼴 — 타이핑의 설정 '글꼴'과 같은 방식 ----------
+   직접 입력: 사파리는 설치 글꼴을 웹에 보여 주지 않으므로 글꼴 파일을 IndexedDB("dari-fonts")에 넣어 두고 FontFace로 부른다 */
+var FONTS = {
+  gowun: { name:"고운바탕", as:"고운바탕으로", css:'"Gowun Batang","AppleMyungjo",serif' },
+  nanum: { name:"나눔명조", as:"나눔명조로", css:'"Nanum Myeongjo","Gowun Batang","AppleMyungjo",serif' }
+};
+function bodyFontKey(){ if(S.bodyFont === "custom") return "custom"; return FONTS[S.bodyFont] ? S.bodyFont : "gowun"; }
+function fontDb(name){
+  return new Promise(function(res, rej){
+    var q = indexedDB.open(name || "dari-fonts", 1);
+    q.onupgradeneeded = function(){ q.result.createObjectStore("f"); };
+    q.onsuccess = function(){ res(q.result); };
+    q.onerror = function(){ rej(q.error); };
+  });
+}
+function fontDbDo(mode, fn, name){
+  return fontDb(name).then(function(db){
+    return new Promise(function(res, rej){
+      var tx = db.transaction("f", mode), st = tx.objectStore("f"), out;
+      var q = fn(st); if(q) q.onsuccess = function(){ out = q.result; };
+      tx.oncomplete = function(){ db.close(); res(out); };
+      tx.onerror = tx.onabort = function(){ db.close(); rej(tx.error); };
+    });
+  });
+}
+var customFace = null, customFor = "", customState = "none";   /* none · loading · ok · fail */
+function customKey(){ return S.fontFile ? S.fontFile + "@" + (S.fontAt || 0) : ""; }
+function customRedraw(){
+  try{ if(tpOn()){ tpPad(); tpRenderMirror(); } }catch(e){}
+  try{ drawFontNote(); }catch(e){}
+}
+function useFontBuffer(buf){
+  var f = new FontFace("DariCustom", buf);
+  return f.load().then(function(){
+    if(customFace) document.fonts.delete(customFace);
+    document.fonts.add(f); customFace = f;
+    return f;
+  });
+}
+function ensureCustomFace(){
+  var key = customKey();
+  if(key === customFor) return;
+  customFor = key;
+  if(!key){
+    if(customFace){ document.fonts.delete(customFace); customFace = null; }
+    customState = "none"; return;
+  }
+  if(!window.indexedDB || !window.FontFace){ customState = "fail"; return; }
+  customState = "loading";
+  fontDbDo("readonly", function(st){ return st.get("custom"); }).then(function(rec){
+    if(customFor !== key) return;
+    if(!rec || !rec.data) throw new Error("없음");
+    return useFontBuffer(rec.data).then(function(){ if(customFor === key){ customState = "ok"; customRedraw(); } });
+  }).catch(function(){ if(customFor === key){ customState = "fail"; customRedraw(); } });
+}
+function bodyFontCss(){
+  var k = bodyFontKey();
+  if(k !== "custom") return FONTS[k].css;
+  ensureCustomFace();
+  return '"DariCustom","Gowun Batang","AppleMyungjo",serif';
+}
+function drawFontNote(){
+  var custom = $("#bodyFont").value === "custom", n = $("#fontNote");
+  $("#fontFileRow").hidden = !custom;
+  if(!custom){
+    n.textContent = "이 문장이 " + FONTS[bodyFontKey()].as + " 보이면 제대로 잡힌 것입니다. 다른 명조로 보이면 아직 글꼴을 받지 못한 것이니 인터넷 연결을 확인하세요.";
+    return;
+  }
+  $("#fontFileName").textContent = S.fontFile || "넣은 파일 없음";
+  $("#fontFileDel").hidden = !S.fontFile;
+  if(!S.fontFile){ n.textContent = "‘파일 넣기’로 글꼴 파일(.otf, .ttf)을 넣거나, 4baek이나 타이핑에 넣어 둔 글꼴을 가져오세요. 넣기 전에는 고운바탕으로 보입니다."; return; }
+  n.textContent = {
+    loading:"넣어 둔 글꼴을 불러오는 중입니다…",
+    ok:"‘" + S.fontFile + "’ 글꼴을 쓰고 있습니다. 이 문장이 그 글꼴로 보이면 제대로 잡힌 것입니다.",
+    fail:"넣어 둔 글꼴 파일을 이 브라우저에서 찾지 못해 고운바탕으로 보입니다. 파일을 다시 넣어 주세요.",
+    none:""
+  }[customState] || "";
+}
+function fontChanged(){
+  save(); applyLook(); drawFontNote();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){ if(tpOn()){ tpPad(); tpRenderMirror(); } });
+}
+/* 글꼴 파일(이름, 버퍼)을 이 앱의 것으로 넣는다 */
+function putFont(name, buf){
+  return useFontBuffer(buf.slice(0)).then(function(){
+    return fontDbDo("readwrite", function(st){ st.put({ name:name, data:buf }, "custom"); });
+  }).then(function(){
+    S.fontFile = name; S.fontAt = Date.now(); S.bodyFont = "custom";
+    customFor = customKey(); customState = "ok";
+    fontChanged();
+    toast("‘" + name + "’ 글꼴을 넣었습니다");
+  });
+}
+$("#bodyFont").addEventListener("change", function(){
+  S.bodyFont = this.value === "custom" ? "custom" : (FONTS[this.value] ? this.value : "gowun");
+  fontChanged();
+});
+$("#fontFileBtn").addEventListener("click", function(){ $("#fontFileIn").click(); });
+$("#fontFileIn").addEventListener("change", function(){
+  var file = this.files && this.files[0]; this.value = "";
+  if(!file) return;
+  if(!/\.(otf|ttf|woff2?)$/i.test(file.name)){ toast("글꼴 파일(.otf, .ttf, .woff)만 넣을 수 있습니다"); return; }
+  if(file.size > 40 * 1024 * 1024){ toast("글꼴 파일이 너무 큽니다 (40MB까지)"); return; }
+  $("#fontNote").textContent = "‘" + file.name + "’을(를) 읽는 중입니다…";
+  file.arrayBuffer().then(function(buf){ return putFont(file.name, buf); }).catch(function(){
+    drawFontNote(); toast("글꼴 파일을 읽지 못했습니다 — 다른 파일로 해 보세요");
+  });
+});
+/* 4baek(없으면 타이핑)의 '직접 입력'에 넣어 둔 글꼴 파일(같은 주소의 IndexedDB)을 읽어 이 앱에 베껴 넣는다. 저쪽은 건드리지 않는다 */
+function fontFrom(names, quiet){
+  var k = 0;
+  function next(){
+    if(k >= names.length){ if(!quiet) toast("4baek과 타이핑에 넣어 둔 글꼴 파일이 없습니다", 3000); return Promise.resolve(false); }
+    var nm = names[k++];
+    return fontDbDo("readonly", function(st){ return st.get("custom"); }, nm).then(function(rec){
+      if(!rec || !rec.data) return next();
+      return putFont(rec.name || "가져온 글꼴", rec.data).then(function(){ return true; });
+    }, next);
+  }
+  return next();
+}
+$("#fontFromTp").addEventListener("click", function(){ fontFrom(["4baek-fonts", "taiping-fonts"]).catch(function(){ toast("글꼴을 읽지 못했습니다", 3000); }); });
+$("#fontFileDel").addEventListener("click", function(){
+  if(!S.fontFile) return;
+  if(!confirm("넣어 둔 글꼴 ‘" + S.fontFile + "’을(를) 뺄까요? 본문은 고운바탕으로 돌아갑니다.")) return;
+  fontDbDo("readwrite", function(st){ st.delete("custom"); }).catch(function(){});
+  S.fontFile = ""; S.fontAt = 0; S.bodyFont = "gowun";
+  $("#bodyFont").value = "gowun";
+  fontChanged();
+});
+
+function applyLook(){
+  var r = document.documentElement.style;
+  r.setProperty("--body", bodyFontCss());
+  r.setProperty("--pfz", S.pfz + "px"); r.setProperty("--plh", S.plh);
+  r.setProperty("--ifz", S.ifz + "px"); r.setProperty("--ilh", S.ilh);
+}
+
+function renderSet(){
+  $("#sPfz").value = S.pfz; $("#sPlh").value = S.plh;
+  $("#sIfz").value = S.ifz; $("#sIlh").value = S.ilh;
+  $("#bodyFont").value = S.bodyFont === "custom" ? "custom" : bodyFontKey(); drawFontNote();
+}
+function numSet(sel, key, lo, hi, def, isInt){
+  $(sel).addEventListener("change", function(){
+    var n = isInt ? parseInt(this.value, 10) : parseFloat(this.value);
+    S[key] = (n >= lo && n <= hi) ? n : def; this.value = S[key];
+    save(); applyLook();
+  });
+}
+numSet("#sPfz", "pfz", 12, 28, 16, true);
+numSet("#sPlh", "plh", 1.2, 3, 1.9, false);
+numSet("#sIfz", "ifz", 12, 28, 16, true);
+numSet("#sIlh", "ilh", 1.2, 3, 1.9, false);
+
+/* ---------- 다른 창과 맞추기 — 받은편지함에 새 글감이 오면 들이고, 다른 dari 창이 저장했으면(앞에 있지 않은 이 창은) 따라 읽는다 ---------- */
+function redraw(){ applyLook(); if(tpOn()) tpShow(); else if(viewNow() === "list") renderList(); else renderSet(); renderHead(); }
+function takeIn(){
+  var n = drainIn(); if(!n) return 0;
+  if(viewNow() === "list") renderList(); else if(tpOn() && !cur()) tpRenderPrev();
+  renderHead(); toast("글감 " + n + "개가 인박스에 들어왔습니다", 2600);
+  return n;
+}
+window.addEventListener("storage", function(e){
+  if(e.key === IN_KEY && e.newValue){ takeIn(); return; }
+  if(e.key !== KEY || document.hasFocus()) return;
+  S = load(); redraw();
+});
+window.addEventListener("focus", function(){ winMine(); takeIn(); });
+window.addEventListener("pagehide", function(){ tpStash(); save(); });
+document.addEventListener("visibilitychange", function(){ if(document.hidden){ tpStash(); save(); } else takeIn(); });
+
+/* ---------- 시작 — 새 글감이 들어왔거나 고른 글감이 없으면 인박스부터 ---------- */
+if(S.cur && !cur()) S.cur = null;
+winMine(); applyLook();
+var came = drainIn();
+renderHead();
+showView(came || !cur() ? "list" : "tp");
+if(came) toast("글감 " + came + "개가 인박스에 들어왔습니다", 2600);
+if(S.copyFont){ S.copyFont = false; save(); try{ fontFrom(["4baek-fonts"], true).catch(function(){}); }catch(e){} }
+</script>
+</body>
+</html>
