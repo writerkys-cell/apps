@@ -98,7 +98,14 @@ details.menu>summary{white-space:nowrap}
 .panel textarea.body{min-height:46vh;font-size:16px;line-height:1.85;padding:12px 14px}
 .panel .start{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:8px 12px;background:var(--panel2);border-radius:var(--radius);font-size:13px}
 .panel .start b{font-weight:500}
-.panel .start a.go{background:var(--ink);color:#fff;padding:5px 12px;border-radius:var(--radius);white-space:nowrap}
+.panel .start a.go,.panel .start button.go{background:var(--ink);color:#fff;padding:5px 12px;border-radius:var(--radius);white-space:nowrap}
+.panel .start button.go{border:none;font-size:13px;cursor:pointer}
+.panel .start button.go:disabled{opacity:.5;cursor:default}
+.panel .start select{padding:4px 8px;font-size:13px}
+.panel .start .err{color:var(--bad);flex-basis:100%}
+.panel .notehd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-top:12px;font-size:12px}
+.panel .notehd>span:first-child{font-weight:500;color:var(--ink2)}
+.panel textarea.note{min-height:110px;max-height:50vh;overflow:auto;font-size:14px;line-height:1.7;margin-top:4px}
 .panel .grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 10px;align-items:start;margin-top:10px;font-size:12px;color:var(--muted)}
 .panel .grid>span{padding-top:5px}
 .panel .grid input,.panel .grid select{padding:4px 8px;font-size:13px}
@@ -141,6 +148,9 @@ details.menu>summary{white-space:nowrap}
    카드: 제목 + 글 + 태그 하나(글상자, 또는 4baek의 작품 하나). 데본씽크 자료, 4baek 원고, 관련서·조사 프롬프트.
    2026년 11월 20일(작가가 정함): 초고는 4baek, 개정은 타이핑. 카드는 이제 4baek으로만 넘긴다 — 태그의 작품도, 수첩에 보이는 작품 이름도 4baek의 것.
    예전에 타이핑으로 넘긴 카드의 보관 링크만 타이핑을 가리킨다.
+   2026년 11월 24일(작가가 정함): 400자를 채운 카드는 4baek이 아니라 writerKYS의 메모함으로 넘긴다 — 본문은 메모함 카드의 코멘트,
+   "메모함의 내용" 칸(AI가 링크를 읽고 정리해 준 글)은 내용이 된다. 데본씽크에 저장하던 것은 뺐다. 태그는 그대로 4baek의 작품이다(수첩은 건드리지 않았다).
+   예전에 4baek·타이핑으로 넘긴 카드의 원고 링크와 저절로 보관(linkPass)은 그대로 둔다.
    4baek의 저장소(4baek-v1)와 타이핑의 저장소(taiping-v1)는 읽기만 한다. storyM·문득은 건드리지 않는다(storyM으로 넘길 때 그 받은편지함에 적을 뿐) */
 const STORE_KEY='jeongri.v1';
 const CONF_KEY='jeongri.conf';
@@ -157,7 +167,7 @@ const lsGet=k=>{try{return localStorage.getItem(k)||'';}catch(e){return '';}};
    db.cards: {id,title,text,tag:null(글상자)|{id,name},srcs:[{u,n}],dt,dtq,tp(타이핑 원고 id),leads,ms,dropped(보관),sentAt(타이핑으로 넘긴 때),kept(되살린 카드),dropAt,at,editedAt,from} */
 let db=(()=>{try{const d=JSON.parse(localStorage.getItem(STORE_KEY));if(d&&typeof d==='object')return Object.assign({ideas:[],cards:[],order:'tp',updatedAt:0,cardsDirty:false},d);}catch(e){}return{ideas:[],cards:[],order:'tp',updatedAt:0,cardsDirty:false};})();
 if(!Array.isArray(db.ideas))db.ideas=[];if(!Array.isArray(db.cards))db.cards=[];
-const CONF_DEF={tpBase:'https://writerkys-cell.github.io/apps/taiping.html',sbBase:'https://writerkys-cell.github.io/apps/4baek.html'};
+const CONF_DEF={tpBase:'https://writerkys-cell.github.io/apps/taiping.html',sbBase:'https://writerkys-cell.github.io/apps/4baek.html',mbBase:'http://localhost:8790'};
 let conf=(()=>{try{return Object.assign({},CONF_DEF,JSON.parse(localStorage.getItem(CONF_KEY))||{});}catch(e){return Object.assign({},CONF_DEF);}})();
 const ui={pane:'idea',tag:null,open:null,find:'',sel:{},tpShow:null,draft:'',helpMode:null,focusNew:false};
 let saveT=null;
@@ -232,11 +242,52 @@ function tpRefresh(){readTp();linkPass();}
 const tpUrl=m=>(isOld(m)?conf.tpBase:conf.sbBase).split('#')[0]+'#원고='+encodeURIComponent(m.id);
 /* 원고로 가는 링크 — 4baek의 원고면 4baek 창으로, 예전에 타이핑으로 넘긴 원고면 타이핑 창으로 */
 const goLink=m=>isOld(m)?`<a class="go" href="${esc(tpUrl(m))}" target="taiping" data-win="taiping" title="타이핑의 그 원고 400자 탭을 엽니다">타이핑에서 이어 쓰기 ↗</a>`:`<a class="go" href="${esc(tpUrl(m))}" target="4baek" data-win="4baek" title="4baek의 그 원고 400자 탭을 엽니다">4baek에서 이어 쓰기 ↗</a>`;
-/* 원고가 아직 없는 카드 — 4baek에 이 카드 제목의 원고를 만들러 간다. 4baek의 hashNew가 읽는다.
-   글상자: #정리카드=<카드 id>&새원고=<제목>&글상자=1   ·   작품: #정리카드=<카드 id>&새원고=<제목>&작품=<작품 이름>&작품id=<작품 id> */
-function tpNewUrl(c){const t=norm(c.title);if(!t)return '';
-  const q=[['정리카드',c.id],['새원고',t]];if(c.tag&&c.tag.id)q.push(['작품',c.tag.name],['작품id',c.tag.id]);else q.push(['글상자','1']);
-  return conf.sbBase.split('#')[0]+'#'+q.map(x=>x[0]+'='+encodeURIComponent(x[1])).join('&');}
+/* ---------- 메모함으로 넘기기 (2026년 11월 24일) — writerKYS의 메모함 서버(memobox/server.py)의 /api/save에 카드를 보낸다.
+   내용(text)은 "메모함의 내용" 칸(c.note)과 자료 칸의 주소, 코멘트(comment)는 카드의 본문, 꼬리표(project)는 메모함의 꼬리표 하나.
+   제목(title)은 카드의 제목 — 메모함 화면에는 제목 칸이 없지만 서버는 받아서 파일 이름과 첫 줄에 쓴다.
+   서버는 깃허브 페이지와 localhost에서 오는 것을 받는다(/api/projects·/api/save). 설정의 주소로 먼저 보내고, 닿지 않으면 https(8791)로 한 번 더 보낸다.
+   보낸 카드는 c.mb={at,file,tag}를 적고 보관으로 넘긴다 ---------- */
+const MB_ALT='https://localhost:8791';
+const MB={tags:null,loading:null,busy:'',err:null};
+const mbBases=()=>{const x=String(conf.mbBase||CONF_DEF.mbBase).replace(/\/+$/,'');return x===MB_ALT?[x]:[x,MB_ALT];};
+async function mbFetch(path,opt){let err=null;
+  for(const base of mbBases()){
+    try{const r=await fetch(base+path,opt);let j=null;try{j=await r.json();}catch(e){}
+      if(!r.ok||!j||!j.ok)throw Object.assign(new Error((j&&j.error)||`메모함 서버가 ${r.status}로 답했습니다.`),{answered:true});
+      return j;}
+    catch(e){err=e;if(e.answered)break;}}
+  throw err;}
+/* 메모함의 꼬리표 목록 — 카드를 열 때 한 번 읽는다. 읽지 못하면 (미정)만 보인다 */
+function mbLoadTags(force){if(MB.tags&&!force)return Promise.resolve();if(MB.loading)return MB.loading;
+  MB.loading=(async()=>{try{const j=await mbFetch('/api/projects');MB.tags=Array.isArray(j.projects)?j.projects.map(String):[];}catch(e){}
+    MB.loading=null;document.querySelectorAll('select[data-cf="mbTag"]').forEach(el=>{if(document.activeElement===el)return;const c=cardById(el.dataset.id);if(c)el.innerHTML=mbTagOptions(c);});})();
+  return MB.loading;}
+/* 꼬리표의 처음 값 — 카드의 태그(4baek의 작품 이름)와 닮은 메모함 꼬리표. 같은 이름, 한쪽이 다른 쪽을 품은 이름, 낱말 하나가 같은 이름 순서로 찾는다 */
+const MB_COMMON=['소설','산문','에세이','글','책','원고'];
+function mbGuess(c){const n=c.tag&&c.tag.id?norm(c.tag.name):'';const ts=MB.tags||[];if(!n)return '';const ws=n.split(' ');
+  return ts.find(t=>t===n)||ts.find(t=>n.includes(t)||t.includes(n))||ts.find(t=>t.split(' ').some(w=>w.length>=2&&!MB_COMMON.includes(w)&&ws.includes(w)))||'';}
+const mbTagOf=c=>c.mbTag!=null?c.mbTag:mbGuess(c);
+function mbTagOptions(c){const cur=mbTagOf(c);const ts=(MB.tags||[]).slice();if(cur&&!ts.includes(cur))ts.push(cur);
+  return `<option value="" ${cur?'':'selected'}>(미정)</option>`+ts.map(t=>`<option value="${esc(t)}" ${t===cur?'selected':''}>${esc(t)}</option>`).join('');}
+/* 메모함의 내용 — "메모함의 내용" 칸의 글 + 자료 칸의 주소 가운데 그 글에 없는 것 */
+function mbText(c){let t=String(c.note||'').trim();
+  const extra=(c.srcs||[]).filter(x=>(x.u||'').trim()&&!t.includes(x.u.trim())).map(x=>`- ${norm(x.n)?norm(x.n)+' ':''}${x.u.trim()}`);
+  if(extra.length)t+=(t?'\n\n':'')+'자료\n'+extra.join('\n');return t;}
+function paintStart(c){const st=document.getElementById('start-'+c.id);if(st)st.innerHTML=startHtml(c);}
+async function mbSend(c){
+  if(MB.busy)return;const title=norm(c.title);if(bodyLen(c)<GOAL||!title)return;
+  if(c.mb&&!confirm('이 카드는 이미 메모함으로 보냈습니다. 다시 보내면 인박스에 메모가 하나 더 생깁니다. 다시 보낼까요?'))return;
+  MB.busy=c.id;MB.err=null;persist(true);paintStart(c);
+  try{await mbLoadTags();const tag=mbTagOf(c);
+    const j=await mbFetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text:mbText(c),comment:String(c.text||'').trim(),project:tag,device:'정리',created:new Date().toISOString()})});
+    const file=(Array.isArray(j.files)&&j.files[0])||'';const now=Date.now();
+    c.mb={at:now,file,tag};c.dropped=true;c.sentAt=now;c.dropAt=now;c.why='';delete c.kept;MB.busy='';
+    if(ui.open===c.id)ui.open=null;saveCards(true);renderDetail();
+    toast(`메모함의 인박스에 넣었습니다${file?' — '+file:''}. 카드는 보관으로 옮겼습니다.`);
+  }catch(e){MB.busy='';
+    MB.err={id:c.id,msg:e&&e.answered?('메모함이 받지 않았습니다: '+e.message):'메모함 서버에 닿지 못했습니다. 이 맥에서 메모함 서버가 켜져 있는지, 설정의 "메모함 서버 주소"가 맞는지 확인하세요. 카드는 그대로 있습니다.'};
+    paintStart(c);toast('메모함으로 보내지 못했습니다.');}
+}
 const cardAddr=c=>location.href.split('#')[0]+'#카드='+encodeURIComponent(c.id);
 
 /* ---------- 아이디어 ---------- */
@@ -274,7 +325,7 @@ const srcN=c=>(c.srcs||[]).filter(x=>(x.u||'').trim()).length;
 function addSrc(c,u,n){u=String(u||'').trim();if(!u)return;c.srcs=c.srcs||[];if(!c.srcs.some(x=>(x.u||'').trim()===u))c.srcs.push({u,n:n||''});srcSync(c);}
 function dtFind(c){const q=prompt('데본씽크에서 찾을 말',c.dtq||norm(c.title));if(q===null)return;const t=q.trim();if(!t)return;if(c.dtq!==t){c.dtq=t;saveCards();}
   const a=document.createElement('a');a.href='x-devonthink://search?query='+encodeURIComponent(t);document.body.appendChild(a);a.click();a.remove();}
-/* 본문이 이만큼 차야 타이핑으로 넘길 수 있다. 글자 수는 타이핑과 같게 센다(공백은 세고 줄바꿈은 세지 않는다) */
+/* 본문이 이만큼 차야 메모함으로 넘길 수 있다. 글자 수는 타이핑과 같게 센다(공백은 세고 줄바꿈은 세지 않는다) */
 const GOAL=400;
 const bodyLen=c=>chars(c.text);
 const editedAt=c=>c.editedAt||c.at||0;
@@ -301,7 +352,7 @@ function statHtml(){
   return '';}
 function render(){
   app.innerHTML=`<div class="app">
-    <div class="top"><h1>정리</h1><span class="muted small tagline">적은 생각을 카드로 정리하고, 카드에서 4baek으로 글을 키웁니다</span><span class="sp"></span>
+    <div class="top"><h1>정리</h1><span class="muted small tagline">적은 생각을 카드로 정리하고, 400자를 채운 카드는 메모함으로 넘깁니다</span><span class="sp"></span>
       <input class="find" type="search" id="find" value="${esc(ui.find)}" placeholder="찾기 ⏎" title="카드와 아이디어에서 찾습니다">
       <details class="menu"><summary>설정 ▾</summary><div>
         <div id="syncBox">${syncPanelHtml()}</div>
@@ -310,9 +361,10 @@ function render(){
         <button data-act="sqlCopy">표 SQL 복사</button>
         <div class="muted small" style="margin-top:6px">복사한 것을 수파베이스 대시보드의 SQL Editor에 붙여 실행합니다. 두 번 실행해도 됩니다. 표가 생기면 수첩에 적은 것이 들어오고, 카드가 수파베이스에도 올라갑니다.</div>
         <div class="sep"></div>
+        <label>메모함 서버 주소<input data-conf="mbBase" value="${esc(conf.mbBase)}"></label>
         <label>4baek 앱 주소<input data-conf="sbBase" value="${esc(conf.sbBase)}"></label>
         <label>타이핑 앱 주소<input data-conf="tpBase" value="${esc(conf.tpBase)}"></label>
-        <div class="muted small" style="margin-top:6px">카드는 4baek으로 넘깁니다. 타이핑 주소는 예전에 타이핑으로 넘긴 카드의 원고를 열 때만 씁니다.</div>
+        <div class="muted small" style="margin-top:6px">카드는 이 맥의 메모함으로 넘깁니다(닿지 않으면 https://localhost:8791로 한 번 더 보냅니다). 4baek과 타이핑 주소는 예전에 넘긴 카드의 원고를 열 때만 씁니다.</div>
         <div class="sep"></div>
         <button data-act="dlJson">JSON 백업 저장</button>
         <button data-act="importJson">JSON 불러오기</button>
@@ -327,7 +379,7 @@ function renderSide(){
   s.innerHTML=`<div class="srow ${ui.pane==='idea'?'sel':''}" data-act="pane" data-p="idea" title="방점에서 글감으로 보낸 것, 여기서 적은 것, 타이핑에서 보낸 것. 제목과 태그를 정하고 '카드로'를 눌러야 카드가 됩니다"><span>아이디어</span><span class="c ${ni?'w':''}">${ni||''}</span></div>
     <div class="srow ${all?'sel':''}" data-act="pane" data-p="card" title="정리한 카드 전체"><span>카드</span><span class="c">${nc||''}</span></div>
     <div class="tags">${tagList().map(t=>`<div class="tg ${ui.pane==='card'&&ui.tag===t.key?'sel':''}" data-act="tag" data-k="${esc(t.key)}" title="${t.key?'이 작품의 카드':'아직 어떤 글이 될지 모르는 카드'}"><span>${esc(t.name)}</span><span class="c">${t.n||''}</span></div>`).join('')}</div>
-    <div class="srow ${ui.pane==='drop'?'sel':''}" data-act="pane" data-p="drop" title="4baek으로(예전에는 타이핑으로) 넘긴 카드와 직접 보관한 카드"><span>보관</span><span class="c">${nd||''}</span></div>`;
+    <div class="srow ${ui.pane==='drop'?'sel':''}" data-act="pane" data-p="drop" title="메모함으로(예전에는 4baek·타이핑으로) 넘긴 카드와 직접 보관한 카드"><span>보관</span><span class="c">${nd||''}</span></div>`;
 }
 function renderDetail(){
   renderSide();const d=document.getElementById('detail');if(!d)return;
@@ -339,7 +391,7 @@ function renderDetail(){
 /* 아이디어 탭 */
 function ideaHtml(i){const m=i.meta||{};const from=i.origin==='phone'?'수첩에서':i.origin==='taiping'?'타이핑에서 쓰다가':i.origin==='bangjeom'?'방점의 글감':'';
   return `<div class="idea"><div class="ih"><input type="checkbox" data-isel="${i.id}" ${ui.sel[i.id]?'checked':''} title="여러 개를 골라 합칩니다"><textarea data-if="text" data-id="${i.id}" rows="1">${esc(i.text)}</textarea></div>
-    <div class="ir"><span class="lb">제목</span><input class="tt" data-if="title" data-id="${i.id}" value="${esc(m.title||'')}" placeholder="${esc(defTitle(i.text))||'제목'}" title="4baek 원고의 소제목이 됩니다. 비워 두면 첫 문장의 앞부분을 씁니다">
+    <div class="ir"><span class="lb">제목</span><input class="tt" data-if="title" data-id="${i.id}" value="${esc(m.title||'')}" placeholder="${esc(defTitle(i.text))||'제목'}" title="카드의 제목이 됩니다. 비워 두면 첫 문장의 앞부분을 씁니다">
       <span class="lb">태그</span><select data-if="tag" data-id="${i.id}" title="글상자는 아직 어떤 글이 될지 모르는 것. 작품을 고르면 그 작품의 글이 됩니다">${tagOptions(ideaTag(i))}</select>
       <button class="primary" data-act="toCard" data-id="${i.id}" title="이 아이디어를 카드로 옮깁니다. 아이디어 탭에서는 사라집니다">카드로</button></div>
     <div class="im"><span>${whenTxt(i.created_at)}</span>${from?`<span>${from}</span>`:''}${m.ms?`<a href="${esc(m.ms)}" target="taiping" data-win="taiping" title="이 아이디어를 적은 타이핑 원고">적은 원고 ↗${m.msTitle?' '+esc(m.msTitle):''}</a>`:''}<span class="sp"></span>
@@ -354,36 +406,45 @@ function ideaPaneHtml(){const is=liveIdeas();const nsel=is.filter(i=>ui.sel[i.id
     <div class="newbar"><textarea id="newIdea" rows="1" placeholder="맥에서 바로 적기 — ⏎ 저장, ⇧⏎ 줄바꿈">${esc(ui.draft)}</textarea><button data-act="saveNew">저장</button></div>
     ${is.map(ideaHtml).join('')||'<div class="empty">처리할 아이디어가 없습니다.</div>'}`;}
 /* 카드 — 본문을 고쳐 쓰고 자료를 붙이는 자리(2026년 11월 19일 저녁에 바꿈).
-   본문이 400자를 넘으면 "4baek에서 쓰기 시작"이 열리고, 4baek에 원고가 생기면 카드는 저절로 보관으로 넘어간다.
-   4baek으로 넘어가는 것은 제목(소제목)·본문(왼쪽 글)·자료 칸의 주소들이다(카드로 돌아오는 링크는 넘기지 않는다) */
+   본문이 400자를 넘으면 "메모함으로 보내기"가 열리고(2026년 11월 24일), 보낸 카드는 보관으로 넘어간다.
+   메모함으로 넘어가는 것은 제목·본문(코멘트)·"메모함의 내용" 칸과 자료 칸의 주소(내용)·꼬리표다 */
 const cntTxt=n=>n>=GOAL?`${fmtN(n)}자`:`${fmtN(n)} / ${GOAL}자`;
 const rowMeta=(c,n)=>`${cntTxt(n)}${srcN(c)?` · 자료 ${srcN(c)}`:''}`;
 function cardRowHtml(x,showTag){const c=x.c,n=x.n;const open=ui.open===c.id;const sub=oneLine(c.text);const ok=n>=GOAL;
   return `<div class="cwrap"><div class="crow ${ok?'f':''} ${open?'open':''}" data-act="cOpen" data-id="${c.id}">
-      <span class="glyph" title="${ok?'400자를 채웠습니다. 4baek에서 쓰기 시작할 수 있습니다':'아직 400자가 되지 않았습니다'}">${ok?'■':'□'}</span>
+      <span class="glyph" title="${ok?'400자를 채웠습니다. 메모함으로 넘길 수 있습니다':'아직 400자가 되지 않았습니다'}">${ok?'■':'□'}</span>
       <span class="ct"><b>${esc(norm(c.title))||'<span class="muted">제목 없음</span>'}</b>${showTag?`<span class="kd ${tagKey(c.tag)?'':'box'}">${esc(tagName(c.tag))}</span>`:''}${sub&&!open?`<div class="sub">${esc(sub)}</div>`:''}</span>
       <span class="cm" id="cm-${c.id}">${rowMeta(c,n)}</span></div>${open?cardPanelHtml(c):''}</div>`;}
 function srcRowsHtml(c){const rows=(c.srcs&&c.srcs.length)?c.srcs:[{u:'',n:''}];
   return rows.map((x,i)=>`<div class="with"><input data-sf="u" data-id="${c.id}" data-i="${i}" value="${esc(x.u)}" placeholder="데본씽크 항목(PDF는 쪽 링크)의 x-devonthink-item:// 주소나 웹 주소"><input class="sn" data-sf="n" data-id="${c.id}" data-i="${i}" value="${esc(x.n)}" placeholder="쪽수, 무엇">${(x.u||'').trim()?`<a href="${esc(x.u.trim())}"${tgt(x.u)} title="${openTip(x.u)}"><button type="button" tabindex="-1">열기 ↗</button></a>`:''}${rows.length>1||(x.u||x.n)?`<button type="button" class="ghost" data-act="srcDel" data-id="${c.id}" data-i="${i}" title="이 자료 링크를 뺍니다">✕</button>`:''}</div>`).join('');}
-/* 4baek으로 넘기는 줄 — 400자가 차기 전에는 얼마나 남았는지, 찬 뒤에는 "4baek에서 쓰기 시작" */
+/* 메모함으로 넘기는 줄 — 400자가 차기 전에는 얼마나 남았는지, 찬 뒤에는 꼬리표 고르기와 "메모함으로 보내기".
+   예전에 4baek·타이핑으로 넘겨 원고가 있는 카드는 그 원고로 가는 링크만 보인다 */
 function startHtml(c){const n=bodyLen(c);const m=msFor(c);
   if(m)return `<span>${isOld(m)?'타이핑':'4baek'}에 이 카드의 원고가 있습니다 · ${fmtN(msChars(m))}자 · ${msState(m)}</span>${goLink(m)}`;
-  if(n<GOAL)return `<span><b>${fmtN(n)} / ${GOAL}자</b></span><span class="muted">${fmtN(GOAL-n)}자를 더 쓰면 4baek에서 쓰기 시작할 수 있습니다.</span>`;
-  if(!norm(c.title))return `<span><b>${fmtN(n)}자</b></span><span class="muted">제목을 적으면 4baek에서 쓰기 시작할 수 있습니다.</span>`;
-  return `<span><b>${fmtN(n)}자</b> · 400자를 채웠습니다. 더 써도 됩니다.</span><a class="go" href="${esc(tpNewUrl(c))}" target="4baek" data-win="4baek" title="4baek의 ${esc(tagName(c.tag))}에 이 제목의 원고를 만들고, 이 본문을 왼쪽 글로, 자료 칸의 주소를 원고의 자료로 넘깁니다. 원고가 만들어지면 이 카드는 보관으로 넘어갑니다">4baek에서 쓰기 시작 ↗</a>${TP.ok?'':'<span class="muted">4baek의 저장소를 아직 읽지 못했습니다. 4baek에 원고가 생기면 이 카드는 저절로 보관으로 넘어갑니다.</span>'}`;}
-function leadHtml(c,x){return `<div class="lead"><div class="lh"><span>클로드가 찾은 것 · ${esc(x.title||'답')} · ${dayTxt(x.at||Date.now())} (확인 전)</span><span>${x.dt?`<span title="데본씽크에 만든 문서의 제목: ${esc(x.dt)}">데본씽크에 저장함</span>`:`<button class="sv" data-act="leadSave" data-id="${c.id}" data-lid="${x.id}" title="데본씽크 인박스에 이 글로 마크다운 문서를 만들고, 그 문서를 찾는 링크를 자료 칸에 붙입니다">데본씽크에 저장</button>`}<button data-act="leadDel" data-id="${c.id}" data-lid="${x.id}" title="이 글을 지웁니다">✕</button></span></div><div class="lb">${linkify(x.text)}</div></div>`;}
+  if(n<GOAL)return `<span><b>${fmtN(n)} / ${GOAL}자</b></span><span class="muted">${fmtN(GOAL-n)}자를 더 쓰면 메모함으로 넘길 수 있습니다.</span>`;
+  if(!norm(c.title))return `<span><b>${fmtN(n)}자</b></span><span class="muted">제목을 적으면 메모함으로 넘길 수 있습니다.</span>`;
+  const busy=MB.busy===c.id;const err=MB.err&&MB.err.id===c.id?MB.err.msg:'';
+  return `<span><b>${fmtN(n)}자</b> · 400자를 채웠습니다. 더 써도 됩니다.</span>
+    <select data-cf="mbTag" data-id="${c.id}" title="메모함의 꼬리표 — 어느 작품의 메모인지 알려 주는 힌트입니다. 메모는 꼬리표와 상관없이 인박스 하나로 들어갑니다">${mbTagOptions(c)}</select>
+    <button class="go" data-act="mbSend" data-id="${c.id}" ${busy?'disabled':''} title="이 본문을 코멘트로, 아래 '메모함의 내용' 칸과 자료 칸의 주소를 내용으로 메모함의 인박스에 넣습니다. 넣고 나면 이 카드는 보관으로 넘어갑니다">${busy?'보내는 중…':c.mb?'메모함으로 다시 보내기':'메모함으로 보내기'}</button>
+    ${c.mb?`<span class="muted">${dayTxt(c.mb.at)}에 메모함으로 보냈습니다${c.mb.file?' · '+esc(c.mb.file):''}</span>`:''}
+    ${norm(c.note)?'':'<span class="muted">"메모함의 내용" 칸이 비어 있습니다. 이대로 보내면 내용 없이 코멘트만 들어갑니다.</span>'}
+    ${err?`<span class="err">${esc(err)}</span>`:''}`;}
+function leadHtml(c,x){return `<div class="lead"><div class="lh"><span>클로드가 찾은 것 · ${esc(x.title||'답')} · ${dayTxt(x.at||Date.now())} (확인 전)</span><span>${x.dt?`<span title="데본씽크에 만든 문서의 제목: ${esc(x.dt)}">데본씽크에 저장함</span>`:''}<button data-act="leadDel" data-id="${c.id}" data-lid="${x.id}" title="이 글을 지웁니다">✕</button></span></div><div class="lb">${linkify(x.text)}</div></div>`;}
 function cardPanelHtml(c){
   return `<div class="panel">
-    <input class="tt" data-cf="title" data-id="${c.id}" value="${esc(c.title)}" placeholder="제목 — 4baek 원고의 소제목이 됩니다">
-    <textarea class="body" data-cf="text" data-id="${c.id}" placeholder="본문 — 아이디어를 고치고 덧붙여 글의 시작을 만듭니다. 400자를 넘기면 4baek으로 넘길 수 있습니다">${esc(c.text)}</textarea>
+    <input class="tt" data-cf="title" data-id="${c.id}" value="${esc(c.title)}" placeholder="제목 — 메모함에 넣을 때 메모의 이름이 됩니다">
+    <textarea class="body" data-cf="text" data-id="${c.id}" placeholder="본문 — 아이디어를 고치고 덧붙여 씁니다. 400자를 넘기면 메모함으로 넘길 수 있고, 이 글이 메모함 카드의 코멘트가 됩니다">${esc(c.text)}</textarea>
     <div class="start" id="start-${c.id}">${startHtml(c)}</div>
     ${(c.leads||[]).map(x=>leadHtml(c,x)).join('')}
+    <div class="notehd"><span>메모함의 내용</span><span class="muted">AI가 링크를 읽고 정리해 준 글을 주소째 붙여 넣습니다. 아래 "링크 읽고 정리 프롬프트"의 답입니다.</span></div>
+    <textarea class="note" data-cf="note" data-id="${c.id}" placeholder="## 읽은 자료&#10;- 자료 이름 — 무엇이 적혀 있는지&#10;  주소: 읽은 주소">${esc(c.note||'')}</textarea>
     <div class="grid">
-      <span>태그</span><div class="with"><select data-cf="tag" data-id="${c.id}">${tagOptions(c.tag)}</select><span class="muted">4baek의 이 작품에 원고가 만들어집니다.</span></div>
-      <span>자료</span><div class="srcs">${srcRowsHtml(c)}<div class="with"><button type="button" data-act="srcAdd" data-id="${c.id}">+ 자료 링크</button><button type="button" data-act="dtFind" data-id="${c.id}" title="검색어를 넣어 데본씽크를 검색합니다. 찾은 자료의 링크를 위 칸에 붙이세요">자료 찾기</button><span class="muted">여기에 붙인 주소는 4baek의 원고에 "자료"로 함께 넘어갑니다.</span></div></div>
+      <span>태그</span><div class="with"><select data-cf="tag" data-id="${c.id}">${tagOptions(c.tag)}</select><span class="muted">어느 작품의 글인지. 메모함의 꼬리표는 위 "메모함으로 보내기" 옆에서 따로 고릅니다.</span></div>
+      <span>자료</span><div class="srcs">${srcRowsHtml(c)}<div class="with"><button type="button" data-act="srcAdd" data-id="${c.id}">+ 자료 링크</button><button type="button" data-act="dtFind" data-id="${c.id}" title="검색어를 넣어 데본씽크를 검색합니다. 찾은 자료의 링크를 위 칸에 붙이세요">자료 찾기</button><span class="muted">여기에 붙인 주소는 메모함의 내용 끝에 "자료"로 함께 적힙니다.</span></div></div>
       ${c.ms?`<span>적은 곳</span><div class="tpinfo"><a href="${esc(c.ms)}" target="taiping" data-win="taiping">이 생각을 적은 타이핑 원고 ↗</a></div>`:''}
     </div>
-    <div class="tools help"><button data-act="helpCopy" data-id="${c.id}" data-m="src" title="이 카드에 맞는 책·논문·사료를 웹에서 찾아 달라고 합니다. 웹 검색이 켜진 클로드에서 씁니다">관련서 찾기 프롬프트</button><button data-act="helpCopy" data-id="${c.id}" data-m="dig" title="이 카드를 쓰는 데 알아야 할 사실을 웹에서 조사해 달라고 합니다. 웹 검색이 켜진 클로드에서 씁니다">조사 부탁 프롬프트</button><button data-act="helpImport" data-id="${c.id}" title="위 프롬프트의 답을 이 카드에 붙입니다. 데본씽크에도 함께 저장할 수 있습니다. 카드의 글은 바꾸지 않습니다">답 가져오기</button><span class="muted small" style="align-self:center">클로드가 찾아온 것은 실마리입니다. 확인하는 일은 그대로 남습니다.</span></div>
+    <div class="tools help"><button data-act="helpCopy" data-id="${c.id}" data-m="src" title="이 카드에 맞는 책·논문·사료를 웹에서 찾아 달라고 합니다. 웹 검색이 켜진 클로드에서 씁니다">관련서 찾기 프롬프트</button><button data-act="helpCopy" data-id="${c.id}" data-m="dig" title="이 카드를 쓰는 데 알아야 할 사실을 웹에서 조사해 달라고 합니다. 웹 검색이 켜진 클로드에서 씁니다">조사 부탁 프롬프트</button><button data-act="helpImport" data-id="${c.id}" title="관련서 찾기·조사 부탁의 답을 이 카드에 붙입니다. 카드의 글은 바꾸지 않습니다">답 가져오기</button><button data-act="helpCopy" data-id="${c.id}" data-m="sum" title="가져온 답과 자료 칸의 웹 주소를 클로드에게 보내, 주소를 실제로 열어 읽고 주소째 정리해 달라고 합니다. 그 답을 위의 '메모함의 내용' 칸에 붙여 넣습니다">링크 읽고 정리 프롬프트</button><span class="muted small" style="align-self:center">클로드가 찾아온 것은 실마리입니다. 확인하는 일은 그대로 남습니다.</span></div>
     <div class="tools"><button data-act="addr" data-id="${c.id}" title="데본씽크 항목의 URL 칸 같은 곳에 붙여 두면 거기서 이 카드로 옵니다">주소 복사</button><button data-act="drop" data-id="${c.id}" title="정리의 흐름에서 뺍니다. 지우지 않고 보관에 둡니다">보관</button><button class="danger" data-act="cDel" data-id="${c.id}">지우기</button></div>
   </div>`;}
 function cardPaneHtml(){
@@ -392,16 +453,16 @@ function cardPaneHtml(){
   const ob=(k,l,t)=>`<button class="${o===k?'on':''}" data-act="order" data-o="${k}" title="${t}">${l}</button>`;
   return `<div class="ghead"><div class="ttl">${esc(name)} <span class="muted small" style="font-weight:400">${xs.length?`카드 ${xs.length}장${ready?` · 400자를 채운 것 ${ready}장`:''}`:''}</span></div>
       <div class="gsw">${ob('edit','마지막으로 고친 날','가장 최근에 고친 카드부터')}${ob('chars','글자 수','본문이 긴 카드부터')}${ob('made','만든 날','카드를 만든 순서(새것부터)')}<button data-act="addCard" title="아이디어를 거치지 않고 카드를 바로 만듭니다">+ 카드</button></div></div>
-    <p class="muted small" style="margin:0 0 12px">카드를 열어 본문을 고쳐 쓰고 자료를 붙입니다. 본문이 400자를 넘으면 "4baek에서 쓰기 시작"이 열리고, 본문과 자료가 4baek의 ${all?'원고':ui.tag?'이 작품':'글상자'}로 넘어갑니다. 4baek에 원고가 생기면 카드는 보관으로 넘어갑니다. □는 400자가 안 된 카드, ■는 400자를 채운 카드입니다.</p>
+    <p class="muted small" style="margin:0 0 12px">카드를 열어 본문을 고쳐 쓰고 자료를 붙입니다. 본문이 400자를 넘으면 "메모함으로 보내기"가 열립니다. 본문은 메모함 카드의 코멘트로, "메모함의 내용" 칸과 자료는 내용으로 들어가고, 보낸 카드는 보관으로 넘어갑니다. □는 400자가 안 된 카드, ■는 400자를 채운 카드입니다.</p>
     ${xs.map(x=>cardRowHtml(x,all)).join('')||'<div class="empty">카드가 없습니다. 아이디어 탭에서 "카드로"를 누르면 여기에 옵니다.</div>'}`;}
-/* 보관 — 4baek으로(예전에는 타이핑으로) 넘긴 카드와 직접 보관한 카드. 지우지 않는다. 넘긴 카드에는 그 원고로 가는 링크가 남는다 */
+/* 보관 — 메모함으로(예전에는 4baek·타이핑으로) 넘긴 카드와 직접 보관한 카드. 지우지 않는다. 넘긴 카드에는 그 원고로 가는 링크가 남는다 */
 function dropPaneHtml(){const cs=dropCards().slice().sort((a,b)=>(b.dropAt||0)-(a.dropAt||0));
   const one=c=>{const m=msFor(c);const sent=!!c.sentAt;const n=bodyLen(c);const ss=(c.srcs||[]).filter(x=>(x.u||'').trim());
     return `<div class="idea"><div><b style="font-weight:500">${esc(norm(c.title))||'제목 없음'}</b><span class="kd ${tagKey(c.tag)?'':'box'}">${esc(tagName(c.tag))}</span></div>
-      <details style="margin-top:4px"><summary class="small muted" style="cursor:pointer">${esc(oneLine(c.text).slice(0,70))}${oneLine(c.text).length>70?'…':''} (${fmtN(n)}자)</summary><div style="white-space:pre-wrap;color:var(--ink2);margin-top:6px">${esc(c.text)}</div></details>
-      <div class="im"><span>${c.dropAt?dayTxt(c.dropAt)+' ':''}${sent?((m?!isOld(m):!!c.sb||!c.tp)?'4baek으로 넘김':'타이핑으로 넘김'):'보관'}</span>${m?`<span>원고 ${fmtN(msChars(m))}자 · ${msState(m)}</span>${goLink(m).replace(' class="go"','')}`:sent?'<span>넘긴 원고를 찾지 못했습니다</span>':''}${ss.map((x,k)=>`<a href="${esc(x.u.trim())}"${tgt(x.u)} title="${openTip(x.u)}">자료${ss.length>1?' '+(k+1):''} ↗</a>`).join('')}<span class="sp"></span><button class="sm" data-act="undrop" data-id="${c.id}" title="카드로 되돌립니다">되살리기</button><button class="sm danger" data-act="dropDel" data-id="${c.id}">아주 지우기</button></div></div>`;};
+      <details style="margin-top:4px"><summary class="small muted" style="cursor:pointer">${esc(oneLine(c.text).slice(0,70))}${oneLine(c.text).length>70?'…':''} (${fmtN(n)}자)</summary><div style="white-space:pre-wrap;color:var(--ink2);margin-top:6px">${esc(c.text)}</div>${norm(c.note)?`<div class="small muted" style="margin-top:10px">메모함의 내용</div><div style="white-space:pre-wrap;word-break:break-word;color:var(--ink2);margin-top:4px;font-size:13px">${linkify(c.note)}</div>`:''}</details>
+      <div class="im"><span>${c.dropAt?dayTxt(c.dropAt)+' ':''}${sent?(c.mb&&!m?'메모함으로 넘김':(m?!isOld(m):!!c.sb||!c.tp)?'4baek으로 넘김':'타이핑으로 넘김'):'보관'}</span>${m?`<span>원고 ${fmtN(msChars(m))}자 · ${msState(m)}</span>${goLink(m).replace(' class="go"','')}`:c.mb?`<span title="writerKYS 인박스에 생긴 파일">${esc(c.mb.file||'')}${c.mb.tag?' · '+esc(c.mb.tag):''}</span>`:sent?'<span>넘긴 원고를 찾지 못했습니다</span>':''}${ss.map((x,k)=>`<a href="${esc(x.u.trim())}"${tgt(x.u)} title="${openTip(x.u)}">자료${ss.length>1?' '+(k+1):''} ↗</a>`).join('')}<span class="sp"></span><button class="sm" data-act="undrop" data-id="${c.id}" title="카드로 되돌립니다">되살리기</button><button class="sm danger" data-act="dropDel" data-id="${c.id}">아주 지우기</button></div></div>`;};
   return `<div class="ghead"><div class="ttl">보관 <span class="muted small" style="font-weight:400">${cs.length||''}</span></div></div>
-    <p class="muted small" style="margin:0 0 12px">4baek으로(예전에는 타이핑으로) 넘긴 카드와 직접 보관한 카드입니다. 지우지 않았고, 되살리면 카드로 돌아옵니다. 넘긴 원고는 건드리지 않습니다.</p>
+    <p class="muted small" style="margin:0 0 12px">메모함으로(예전에는 4baek·타이핑으로) 넘긴 카드와 직접 보관한 카드입니다. 지우지 않았고, 되살리면 카드로 돌아옵니다. 메모함에 들어간 메모와 넘긴 원고는 건드리지 않습니다.</p>
     ${cs.map(one).join('')||'<div class="empty">보관한 카드가 없습니다.</div>'}`;}
 function findPaneHtml(){const q=norm(ui.find);const ws=q.toLowerCase().split(/\s+/).filter(Boolean);const hit=t=>ws.length&&ws.every(w=>String(t||'').toLowerCase().includes(w));
   const cs=db.cards.filter(c=>hit(c.title+' '+c.text));const live=sortCards(cs.filter(c=>!c.dropped));const dr=cs.filter(c=>c.dropped).length;const is=liveIdeas().filter(i=>hit(i.text+' '+((i.meta||{}).title||'')));
@@ -423,7 +484,7 @@ function toCard(i){
   const c=newCard({title,text:i.text,tag,from:i.id,ms:(i.meta||{}).ms||''});db.cards.push(c);
   i.state='done';i.meta=Object.assign({},i.meta,{to:'card',card:c.id});delete ui.sel[i.id];touchIdea(i,true);
   saveCards(true);renderDetail();
-  toast(`카드로 옮겼습니다 — ${tagName(tag)}. 카드에서 본문을 400자까지 채우면 4baek으로 넘길 수 있습니다.`);
+  toast(`카드로 옮겼습니다 — ${tagName(tag)}. 카드에서 본문을 400자까지 채우면 메모함으로 넘길 수 있습니다.`);
 }
 function splitIdea(i){const el=document.querySelector(`textarea[data-if="text"][data-id="${i.id}"]`);const text=el?el.value:i.text;let pos=el?el.selectionStart:0;
   const ok=p=>p>0&&p<text.length&&text.slice(0,p).trim()&&text.slice(p).trim();
@@ -459,7 +520,8 @@ app.addEventListener('click',e=>{
     case 'merge':mergeIdeas();break;
     case 'toStory':{const i=ideaById(id);if(i)toStory(i);break;}
     case 'iDel':{const i=ideaById(id);if(!i)break;if(!confirm('이 아이디어를 지울까요?'))break;i.deleted=true;delete ui.sel[id];touchIdea(i,true);renderDetail();break;}
-    case 'cOpen':{if(e.target.closest('a'))break;ui.open=ui.open===id?null:id;ui.tpShow=null;ui.focusCard=true;tpRefresh();renderDetail();break;}
+    case 'cOpen':{if(e.target.closest('a'))break;ui.open=ui.open===id?null:id;ui.tpShow=null;ui.focusCard=true;MB.err=null;tpRefresh();renderDetail();if(ui.open)mbLoadTags();break;}
+    case 'mbSend':{const c=cardById(id);if(c)mbSend(c);break;}
     case 'addCard':{const tag=ui.tag?tagFromValue(ui.tag):null;const c=newCard({tag});db.cards.push(c);db.order='made';ui.open=c.id;saveCards(true);renderDetail();const t=document.querySelector(`input[data-cf="title"][data-id="${c.id}"]`);if(t)t.focus();break;}
     case 'order':db.order=b.dataset.o;saveCards();renderDetail();break;
     case 'srcAdd':{const c=cardById(id);if(!c)break;if(!c.srcs.length)c.srcs.push({u:'',n:''});c.srcs.push({u:'',n:''});saveCards();renderDetail();const all=document.querySelectorAll(`[data-sf="u"][data-id="${id}"]`);if(all.length)all[all.length-1].focus();break;}
@@ -469,9 +531,11 @@ app.addEventListener('click',e=>{
     case 'addr':{const c=cardById(id);if(c)copyText(cardAddr(c)).then(ok=>toast(ok?'카드 주소를 복사했습니다.':'복사하지 못했습니다.'));break;}
     case 'drop':{const c=cardById(id);if(!c)break;c.dropped=true;c.dropAt=Date.now();c.why='';delete c.sentAt;if(ui.open===id)ui.open=null;saveCards(true);renderDetail();toast('보관으로 옮겼습니다. 보관에서 되살릴 수 있습니다.');break;}
     case 'undrop':{const c=cardById(id);if(!c)break;c.dropped=false;if(msFor(c))c.kept=true;ui.pane='card';ui.tag=null;ui.open=c.id;saveCards(true);renderDetail();toast('카드로 되살렸습니다');break;}
-    case 'leadSave':{const c=cardById(id);const x=c&&(c.leads||[]).find(y=>y.id===b.dataset.lid);if(!x)break;dtSave(c,x);renderDetail();toast('데본씽크 인박스에 문서를 만들고, 그 문서를 찾는 링크를 자료 칸에 붙였습니다.');break;}
     case 'cDel':case 'dropDel':{const c=cardById(id);if(!c)break;if(!confirm('이 카드를 아주 지웁니다. 되돌릴 수 없습니다. 남겨 두려면 "보관"을 쓰세요. 넘긴 원고는 지워지지 않습니다. 지울까요?'))break;db.cards=db.cards.filter(x=>x!==c);if(ui.open===id)ui.open=null;saveCards(true);renderDetail();break;}
-    case 'helpCopy':{const c=cardById(id);if(!c)break;const m=b.dataset.m;if(!norm(c.title)&&!norm(c.text)){toast('카드의 글을 먼저 적으세요.');break;}ui.helpMode={id,m};copyText(helpPrompt(c,m)).then(ok=>toast(ok?`"${HELP[m]}" 프롬프트를 복사했습니다. 웹 검색이 켜진 클로드에 붙여 넣으세요. 답은 이 카드의 "답 가져오기"에 넣습니다.`:'복사하지 못했습니다.'));break;}
+    case 'helpCopy':{const c=cardById(id);if(!c)break;const m=b.dataset.m;if(!norm(c.title)&&!norm(c.text)){toast('카드의 글을 먼저 적으세요.');break;}
+      if(m==='sum'){if(!(c.leads||[]).length&&!(c.srcs||[]).some(x=>isWeb(x.u))){toast('정리할 것이 없습니다. 먼저 조사 부탁이나 관련서 찾기의 답을 가져오거나, 자료 칸에 웹 주소를 붙이세요.');break;}
+        copyText(helpPrompt(c,m)).then(ok=>toast(ok?'"링크 읽고 정리" 프롬프트를 복사했습니다. 웹 검색이 켜진 클로드에 붙여 넣고, 답은 이 카드의 "메모함의 내용" 칸에 붙여 넣으세요.':'복사하지 못했습니다.'));break;}
+      ui.helpMode={id,m};copyText(helpPrompt(c,m)).then(ok=>toast(ok?`"${HELP[m]}" 프롬프트를 복사했습니다. 웹 검색이 켜진 클로드에 붙여 넣으세요. 답은 이 카드의 "답 가져오기"에 넣습니다.`:'복사하지 못했습니다.'));break;}
     case 'helpImport':{const c=cardById(id);if(c)openHelpImport(c);break;}
     case 'leadDel':{const c=cardById(id);if(!c)break;if(!confirm('클로드가 찾아온 이 글을 지울까요?'))break;c.leads=(c.leads||[]).filter(x=>x.id!==b.dataset.lid);saveCards();renderDetail();break;}
     case 'findNew':{ui.draft=(ui.draft?ui.draft+' ':'')+norm(ui.find)+' ';ui.pane='idea';ui.focusNew=true;renderDetail();break;}
@@ -488,16 +552,17 @@ app.addEventListener('input',e=>{const el=e.target;
     if(k==='text'){i.text=el.value;autogrow(el);const t=document.querySelector(`input[data-if="title"][data-id="${i.id}"]`);if(t)t.placeholder=defTitle(i.text)||'제목';touchIdea(i);}
     else if(k==='title'){i.meta=Object.assign({},i.meta,{title:el.value});touchIdea(i);}
     return;}
-  if(el.dataset.cf){const c=cardById(el.dataset.id);if(!c)return;const k=el.dataset.cf;if(k==='tag')return;c[k]=el.value;c.editedAt=Date.now();if(el.tagName==='TEXTAREA')autogrow(el);saveCards();
-    /* 글자 수와 "타이핑에서 쓰기 시작" 줄은 치는 대로 바뀐다 */
+  if(el.dataset.cf){const c=cardById(el.dataset.id);if(!c)return;const k=el.dataset.cf;if(k==='tag')return;if(k==='mbTag'){c.mbTag=el.value;saveCards();return;}c[k]=el.value;c.editedAt=Date.now();if(el.tagName==='TEXTAREA')autogrow(el);saveCards();
+    /* 글자 수와 "메모함으로 보내기" 줄은 치는 대로 바뀐다 */
     const st=document.getElementById('start-'+c.id);if(st)st.innerHTML=startHtml(c);const cm=document.getElementById('cm-'+c.id);if(cm)cm.innerHTML=rowMeta(c,bodyLen(c));return;}
   if(el.dataset.sf){const c=cardById(el.dataset.id);if(!c)return;const k=+el.dataset.i;if(!c.srcs[k])c.srcs[k]={u:'',n:''};c.srcs[k][el.dataset.sf]=el.value;srcSync(c);saveCards();return;}
 });
 app.addEventListener('change',e=>{const el=e.target;
   if(el.dataset.isel){if(el.checked)ui.sel[el.dataset.isel]=1;else delete ui.sel[el.dataset.isel];renderDetail();return;}
   if(el.dataset.if==='tag'){const i=ideaById(el.dataset.id);if(!i)return;const t=tagFromValue(el.value);i.meta=Object.assign({},i.meta);if(t)i.meta.tag=t;else delete i.meta.tag;touchIdea(i);return;}
+  if(el.dataset.cf==='mbTag')return;
   if(el.dataset.cf==='tag'){const c=cardById(el.dataset.id);if(!c)return;const t=tagFromValue(el.value);if(dupCard(c.title,t,c.id)){toast(`${tagName(t)}에 같은 제목의 카드가 이미 있습니다. 제목을 먼저 바꿔 주세요.`);renderDetail();return;}c.tag=t;c.editedAt=Date.now();saveCards();renderDetail();return;}
-  if(el.dataset.cf==='title'){const c=cardById(el.dataset.id);if(!c)return;if(dupCard(c.title,c.tag,c.id))toast(`${tagName(c.tag)}에 같은 제목의 카드가 또 있습니다. 4baek으로 넘기면 소제목이 겹치니 제목을 다르게 하는 편이 좋습니다.`);tpRefresh();renderDetail();return;}
+  if(el.dataset.cf==='title'){const c=cardById(el.dataset.id);if(!c)return;if(dupCard(c.title,c.tag,c.id))toast(`${tagName(c.tag)}에 같은 제목의 카드가 또 있습니다. 메모함에서 이름이 겹치니 제목을 다르게 하는 편이 좋습니다.`);tpRefresh();renderDetail();return;}
   if(el.dataset.sf){renderDetail();return;}
 });
 app.addEventListener('keydown',e=>{const el=e.target;if(e.key!=='Enter'||e.isComposing)return;
@@ -510,9 +575,11 @@ document.getElementById('importFile').addEventListener('change',e=>{const f=e.ta
       saveCards(true);ideaFlushSoon();tpRefresh();render();toast(`카드 ${nc}장, 아이디어 ${ni}개를 불러왔습니다(이미 있는 것은 건너뜁니다).`);}catch(err){toast('JSON 파일을 읽지 못했습니다.');}e.target.value='';};
   rd.readAsText(f);});
 
-/* ---------- 카드별 도움 — 관련서 찾기 · 조사 부탁. 답은 카드의 글을 바꾸지 않고 "확인 전"으로 붙는다.
-   답 속의 주소를 자료 칸에 저절로 쌓지 않는다(2026년 11월 19일 저녁) — 자료 칸에는 작가가 붙인 주소와 데본씽크에 저장한 문서의 링크만 둔다. 그것이 타이핑으로 넘어간다 ---------- */
-const HELP={src:'관련서 찾기',dig:'조사 부탁'};
+/* ---------- 카드별 도움 — 관련서 찾기 · 조사 부탁 · 링크 읽고 정리. 관련서·조사의 답은 카드의 글을 바꾸지 않고 "확인 전"으로 붙는다(답 가져오기).
+   답 속의 주소를 자료 칸에 저절로 쌓지 않는다(2026년 11월 19일 저녁) — 자료 칸에는 작가가 붙인 주소만 둔다.
+   링크 읽고 정리(2026년 11월 24일): 가져온 답들과 자료 칸의 웹 주소를 클로드에게 보내 주소를 실제로 읽고 주소째 정리해 달라고 한다.
+   그 답은 작가가 "메모함의 내용" 칸(c.note)에 붙여 넣는다. 데본씽크에 저장하던 것(dtSave)은 뺐다 — 예전에 저장한 답에는 "데본씽크에 저장함"만 남는다 ---------- */
+const HELP={src:'관련서 찾기',dig:'조사 부탁',sum:'링크 읽고 정리'};
 const linkify=t=>esc(t).replace(/(https?:\/\/[^\s<)\]]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
 const URL_RE=/https?:\/\/[^\s<)\]]+/g;
 const WEB_RULE=`지켜 주실 것:
@@ -520,8 +587,38 @@ const WEB_RULE=`지켜 주실 것:
 - 항목마다 직접 확인한 주소를 붙여 주세요. 주소를 붙일 수 없는 것은 "못 찾은 것"에 적습니다.
 - 한국어 자료를 먼저 찾고, 모자라면 일본어와 영어 자료도 찾습니다.
 - 글의 문장이나 줄거리를 대신 쓰지 마세요. 제가 직접 읽고 확인할 실마리만 필요합니다.`;
+function sumPrompt(c,ctx){
+  const leads=(c.leads||[]).filter(x=>String(x.text||'').trim()).map(x=>`[${x.title||'답'} · ${dayTxt(x.at||Date.now())}]\n${x.text.trim()}`).join('\n\n');
+  const srcs=(c.srcs||[]).filter(x=>isWeb(x.u)).map(x=>`- ${norm(x.n)?norm(x.n)+' ':''}${x.u.trim()}`).join('\n');
+  return `제가 쓰려는 글의 자료를 정리하고 있습니다. 아래 "조사된 것"에 나오는 주소를 하나씩 실제로 열어 읽고, 제 메모와 닿는 내용을 주소와 함께 정리해 주세요.
+
+${ctx}
+
+조사된 것:
+${leads||'(없음)'}
+${srcs?`\n제가 붙여 둔 주소:\n${srcs}\n`:''}
+지켜 주실 것:
+- 주소를 실제로 열어 읽은 것만 정리합니다. 열리지 않았거나 본문을 읽지 못한 주소는 내용을 짐작해 쓰지 말고 "읽지 못한 것"에 적습니다.
+- 자료에 적혀 있는 것만 옮깁니다. 제 메모에 맞추려고 자료에 없는 말을 보태지 마세요.
+- 자료마다 무엇이 적혀 있는지 서너 줄로 줄이고, 바로 아래에 읽은 주소를 붙입니다.
+- 자료끼리 말이 다르면 "설이 갈리는 곳"에 무엇이 어떻게 다른지 적습니다.
+- 글의 문장이나 줄거리를 대신 쓰지 마세요. 제 메모를 고치거나 평하지도 마세요.
+
+답은 아래 형식만 지켜서, 앞뒤 설명 없이 써 주세요.
+
+## 읽은 자료
+- 자료 이름 — 무엇이 적혀 있는지 (서너 줄)
+  주소: 읽은 주소
+
+## 설이 갈리는 곳
+- 무엇이 어떻게 다른지 (출처: 주소)
+
+## 읽지 못한 것
+- 주소 — 왜 읽지 못했는지`;
+}
 function helpPrompt(c,m){
   const ctx=`제목: ${norm(c.title)||'(없음)'}\n${c.tag&&c.tag.id?`이 글이 들어갈 작품: ${c.tag.name}\n`:''}\n제가 적어 둔 것:\n${c.text.trim()||'(없음)'}`;
+  if(m==='sum')return sumPrompt(c,ctx);
   if(m==='src')return `제가 쓰려는 글에 필요한 자료를 찾고 있습니다. 아래 메모에 맞는 책, 논문, 사료를 웹에서 찾아 주세요.
 
 ${ctx}
@@ -558,30 +655,18 @@ ${WEB_RULE}
 ## 못 찾은 것
 - 더 알아봐야 할 것 한 줄`;
 }
-/* 데본씽크에 저장 — 주소 명령(x-devonthink://createMarkdown)으로 인박스에 마크다운 문서를 만들고, 그 문서를 제목으로 찾는 링크를 카드의 자료 칸에 붙인다.
-   데본씽크는 만든 문서의 주소를 돌려주지 않으므로 항목 링크가 아니라 검색 링크다(제목을 바꾸면 못 찾는다). 정확한 항목 링크가 필요하면 데본씽크에서 복사해 그 칸에 덮어쓴다.
-   제목은 "카드 제목 + 종류 + 날짜 시각" — 검색어로 쓰이므로 문장부호는 뺀다 */
-function dtTitle(c,lead){const d=new Date(lead.at||Date.now());const z=n=>String(n).padStart(2,'0');
-  const base=(norm(c.title)||'제목 없음').replace(/["'“”‘’:;()\[\]{}<>~\-–—]/g,' ').replace(/\s+/g,' ').trim();
-  return `${base} ${lead.title||'자료'} ${z(d.getMonth()+1)}${z(d.getDate())} ${z(d.getHours())}${z(d.getMinutes())}`;}
-function dtSave(c,lead){const title=dtTitle(c,lead);
-  const a=document.createElement('a');a.href='x-devonthink://createMarkdown?title='+encodeURIComponent(title)+'&text='+encodeURIComponent(lead.text||'')+'&noselector=1';document.body.appendChild(a);a.click();a.remove();
-  lead.dt=title;addSrc(c,'x-devonthink://search?query='+encodeURIComponent(title),lead.title||'자료');saveCards(true);}
 function openHelpImport(c){
   const mode=ui.helpMode&&ui.helpMode.id===c.id?ui.helpMode.m:'';
   const bg=document.createElement('div');bg.className='modal-bg';
   bg.innerHTML=`<div class="modal"><h2>답 가져오기 — ${esc(norm(c.title))||'제목 없음'}</h2>
-    <p class="muted small" style="margin:0 0 8px">클로드의 답을 붙여 넣습니다. 답은 이 카드에 "클로드가 찾은 것(확인 전)"으로 붙습니다. 카드의 글은 바꾸지 않습니다.</p>
+    <p class="muted small" style="margin:0 0 8px">관련서 찾기·조사 부탁의 답을 붙여 넣습니다. 답은 이 카드에 "클로드가 찾은 것(확인 전)"으로 붙습니다. 카드의 글은 바꾸지 않습니다. 붙인 뒤 "링크 읽고 정리 프롬프트"를 누르면 이 답이 프롬프트에 함께 들어갑니다.</p>
     <textarea id="importText" placeholder="## 알아낸 것&#10;- 사실 하나 (출처: 주소)"></textarea>
-    <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;cursor:pointer"><input type="checkbox" id="importDt" ${conf.dtSave===false?'':'checked'} style="margin-top:3px"><span>데본씽크에도 저장 — 인박스에 이 답으로 마크다운 문서를 만들고, 그 문서를 찾는 링크를 카드의 자료 칸에 붙입니다. 자료 칸의 주소는 타이핑으로 넘어갈 때 원고에 따라갑니다.</span></label>
     <div class="acts"><span class="muted small" id="importCnt" style="margin-right:auto;align-self:center"></span><button data-m="cancel">취소</button><button class="primary" data-m="apply" id="importApply" disabled>가져오기</button></div></div>`;
   document.body.appendChild(bg);const ta=bg.querySelector('#importText');ta.focus();
   ta.addEventListener('input',()=>{const t=ta.value.trim();bg.querySelector('#importApply').disabled=!t;bg.querySelector('#importCnt').textContent=t?`${fmtN(chars(t))}자`:'';});
   bg.addEventListener('click',e=>{if(e.target===bg)return;const b=e.target.closest('[data-m]');if(!b)return;if(b.dataset.m==='cancel'){bg.remove();return;}
     const t=ta.value.replace(/\r/g,'').trim();if(!t)return;const lead={id:uid(),at:Date.now(),title:mode?HELP[mode]:'클로드의 답',text:t};c.leads=(c.leads||[]).concat([lead]);
-    const dt=bg.querySelector('#importDt').checked;conf.dtSave=dt;try{localStorage.setItem(CONF_KEY,JSON.stringify(conf));}catch(x){}
-    if(dt)dtSave(c,lead);
-    saveCards(true);bg.remove();renderDetail();toast(dt?'답을 카드에 붙이고, 데본씽크 인박스에 문서를 만들어 자료 칸에 링크를 붙였습니다.':'답을 카드에 붙였습니다. 확인하는 일이 남았습니다.');});
+    saveCards(true);bg.remove();renderDetail();toast('답을 카드에 붙였습니다. "링크 읽고 정리 프롬프트"로 주소를 읽혀 정리할 수 있습니다.');});
 }
 
 /* ---------- 수파베이스 — storyM과 같은 프로젝트, 같은 로그인(storyM.session). 표는 둘 ----------
