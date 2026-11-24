@@ -1337,7 +1337,11 @@ const enc = encodeURIComponent;
 const taskBody = t => [t.text, (t.note || '').trim(), t.url && !KIND_URLS.includes(t.url) ? t.url : ''].filter(Boolean).join('\n\n');
 const copyText = v => { try{ navigator.clipboard.writeText(v).catch(() => {}); }catch(e){} };   // 덤이다. 넘기는 길이 실패해도 붙여 넣을 수 있게
 const isTagKind = k => !!KINDS[k];
-const goable = t => !!t && !t.done && (isTagKind(t.kind) || !!t.url || !!t.gam);
+/* 맥에서만 하는 일(2026년 11월 24일 밤, 작가가 정함) — 쓰기(4baek)·개정(타이핑)·메모(데본씽크)는 아이패드·아이폰에서 제목을 눌러도 열리지 않는다.
+   4baek·타이핑은 쓰던 글을 맥의 브라우저에만 두고, 데본씽크는 맥에 있다. 꼬리표를 달고 고치는 것은 어디서나 된다 */
+const MAC_ONLY = {write:1, revise:1, memo:1};
+const macOnly = t => isTouchApple && !!t && !t.gam && !!MAC_ONLY[t.kind];
+const goable = t => !!t && !t.done && !macOnly(t) && (isTagKind(t.kind) || !!t.url || !!t.gam);
 function goTask(id){
   const t = byId(id); if(!goable(t)) return;
   if(t.gam){ const c = gamCount(); if(c && c.dari > 0) window.open(appUrl('dari.html'), winName('dari')); else window.open(appUrl('jeongri.html'), winName('jeongri')); return; }   // 글감 처리하기: 다리에 기다리는 글감이 있으면 다리를, 없으면 정리를 연다
@@ -1762,7 +1766,9 @@ function renderStage(){
     return;
   }
 
-  const title = isTagKind(a.kind) || a.gam
+  const title = macOnly(a)
+    ? `<span class="txt">${esc(a.text)}</span>`                                // 맥에서만 하는 일 — 아이패드·아이폰에서는 누를 수 없다
+    : isTagKind(a.kind) || a.gam
     ? `<a class="txt" href="#" data-go="${a.id}">${esc(a.text)}</a>`          // 태그가 있으면 태그의 길로(goTask)
     : a.url
     ? `<a class="txt" href="${esc(showUrl(a.url))}"${/^https?:/i.test(a.url) ? ' target="_blank" rel="noopener"' : ''}>${esc(a.text)}</a>`
