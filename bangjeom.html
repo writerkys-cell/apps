@@ -561,7 +561,7 @@ body.embed .sheet.editing #shTa{min-height:12rem;flex:none}
       <button id="btnRestore">직전으로 되돌리기</button>
     </div>
     <div class="note" id="syncNote"></div>
-    <p style="margin-top:.7rem">단축어로 할 일을 넣을 수도 있습니다. 같은 프로젝트의 <b>bangjeom_todo</b> 표에 줄을 넣으면 방점이 열릴 때와 연결돼 있는 동안 바로 목록 끝에 붙입니다. 단축어는 「URL 내용 가져오기」 하나로 됩니다. 방식 POST, 주소 <code>프로젝트URL/rest/v1/bangjeom_todo</code>, 머리글 <code>apikey</code>와 <code>Authorization: Bearer</code>에 anon 키, <code>Content-Type: application/json</code>, 본문 <code>{"list":"목록 이름","text":"제목 링크"}</code>. 공유 시트에서 받은 글을 본문에 넣으면 메일이나 웹페이지를 그대로 할 일로 보낼 수 있습니다.</p>
+    <p style="margin-top:.7rem">단축어로 할 일을 넣을 수도 있습니다. 같은 프로젝트의 <b>bangjeom_todo</b> 표에 줄을 넣으면 방점이 열릴 때와 연결돼 있는 동안 바로 목록 끝에 붙입니다. 단축어는 「URL 내용 가져오기」 하나로 됩니다. 방식 POST, 주소 <code>프로젝트URL/rest/v1/bangjeom_todo</code>, 머리글 <code>apikey</code>와 <code>Authorization: Bearer</code>에 anon 키, <code>Content-Type: application/json</code>, 본문 <code>{"list":"목록 이름","text":"제목 링크"}</code>. 공유 시트에서 받은 글을 본문에 넣으면 메일이나 웹페이지를 그대로 할 일로 보낼 수 있습니다. 여러 줄로 보내면 첫 줄이 제목, 나머지 줄은 그 일의 페이지가 됩니다. 따옴표나 줄바꿈이 든 글도 보내려면 단축어의 본문 요청을 JSON으로 두고 <code>list</code>·<code>text</code> 필드를 넣습니다.</p>
     <p style="margin-top:.7rem"><b>여러 줄 받기</b>: 아침 브리프의 「방점으로」 블록처럼 한 줄에 할 일 하나인 글을 목록 아래 「여러 줄 받기」 칸에 붙이거나, 입력칸에 그대로 붙여 넣으면 줄마다 <code>제목 @기한 링크</code>로 갈라 할 일이 됩니다. <code>[쓰기]</code>·<code>[읽기]</code>로 시작하는 줄은 그 종류로, <code>[오늘]</code>로 시작하는 줄은 오늘 할 일로, <code>#</code>으로 시작하는 줄은 제목 줄로 보고 건너뜁니다. 같은 제목이 아직 남아 있으면 넣지 않으니 같은 블록을 두 번 붙여도 겹치지 않습니다.</p>
     <p style="margin-top:.7rem"><b>방점 주머니</b>(jumeoni.html)는 같은 주소와 키로 목록을 읽어 보여주는 아이폰용 앱입니다. 거기서 누른 「끝냈다」와 페이지 한 줄은 <b>bangjeom_act</b> 표에 요청으로 남고, 방점이 열릴 때와 연결돼 있는 동안 바로 받아 처리합니다. 아이폰의 <b>Final Version</b>(final.html)도 같은 표로 새 할 일과 「끝」을 보냅니다.</p>
     <p style="margin-top:.7rem">끝낸 일은 같은 프로젝트의 <b>bangjeom_inbox</b> 표에도 한 줄씩 보냅니다. 앞에 <b>#완료</b> 태그가 붙고, 메모는 그 아래 자식 줄로 들어갑니다. 쪽글에 같은 주소와 키를 넣어 두면 쪽글이 그날 노트에 가져갑니다. 못 보낸 것은 다음에 연결될 때 다시 보냅니다. 반복되는 일은 보내지 않습니다.</p>
@@ -2635,9 +2635,14 @@ async function pullTodo(){
     let n = 0;
     data.forEach(r => {
       if(!r.text || !String(r.text).trim()) return;
-      const p = parseLine(String(r.text));
+      // 여러 줄로 온 글(2026년 11월 26일, 작가가 정함): 첫 줄이 제목, 나머지 줄은 페이지 — 수첩 받기(pullSucheop)와 같게. 단축어로 글감이나 밑줄을 보낼 때 쓴다.
+      // 머리말([쓰기]·[오늘])·@기한·링크는 전처럼 첫 줄에서 읽는다. 한 줄로 온 것은 전과 똑같다. 첫 줄이 #으로 시작해도 아래에 글이 있으면 버리지 않고 그대로 제목으로 삼는다
+      const lines = String(r.text).replace(/\r/g, '').split('\n'), k = lines.findIndex(l => l.trim());
+      const rest = lines.slice(k + 1).join('\n').trim();
+      const p = parseLine(lines[k]) || (rest ? {text:lines[k].trim(), url:'', kind:'', due:'', today:false} : null);
       if(!p) return;
       const t = addTask((p.url ? p.text + ' ' + p.url : p.text), p.kind || (KINDS[r.kind] ? r.kind : ''), p.due); n++;
+      if(t && rest){ t.note = rest; commit(); }
       if(t && !t.kind){ t.fresh = true; commit(); if(S.pick && S.pick.id === t.id) repick(true); }   // 종류 없이 온 것은 새 표시를 달고 들어온다(2026년 11월 22일, 작가가 정함). [쓰기]·[읽기]로 온 것은 이미 태그가 있다
       if(t && p.today){ t.today = true; commit(); repickUnlessToday(); }
     });
