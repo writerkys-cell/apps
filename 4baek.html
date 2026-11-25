@@ -324,7 +324,7 @@ table.st tr.noline td{border-bottom:0;padding-bottom:.1rem}
       <p class="note">왼쪽 글과 쓰는 칸이 모두 이 글꼴을 씁니다. 고운바탕과 나눔명조는 인터넷에서 받아 오는 글꼴이라 처음 한 번은 연결이 필요합니다. 사파리는 맥에 따로 설치한 글꼴을 웹 페이지에 보여 주지 않으므로, 다른 글꼴은 '직접 입력'에서 글꼴 파일(.otf, .ttf)을 넣어 씁니다. 넣은 파일은 이 브라우저 안에만 저장되고 백업 파일에는 들어가지 않습니다. 맥에 설치된 글꼴 파일은 파일 고르는 창에서 ⌘⇧G를 누르고 /Library/Fonts 를 적으면 찾을 수 있습니다.</p>
 
       <h2>시작에 올리기</h2>
-      <p class="note">날마다 늘어난 글자 수와 하루 목표, 작품의 매수만 수파베이스에 올려 시작(sijak)의 글쓰기·원고 칸이 어느 기기에서든 읽게 합니다. 원고의 글은 올리지 않고, 올린 것을 다시 받아 오지도 않습니다. 연결은 이 브라우저의 타이핑(없으면 시작)에 적어 둔 것을 빌려 씁니다. 4baek을 두 브라우저에서 쓰면 나중에 올린 쪽의 기록만 남습니다.</p>
+      <p class="note">날마다 늘어난 글자 수와 하루 목표, 작품의 매수를 수파베이스에 올려 시작(sijak)의 글쓰기·원고 칸이 어느 기기에서든 읽게 합니다. 끝나지 않은 원고의 소제목과 스크리브너 링크도 함께 올려, 애플 단축어가 원고를 목록으로 보이고 골라 열 수 있게 합니다. 원고의 글은 올리지 않고, 올린 것을 다시 받아 오지도 않습니다. 연결은 이 브라우저의 타이핑(없으면 시작)에 적어 둔 것을 빌려 씁니다. 4baek을 두 브라우저에서 쓰면 나중에 올린 쪽의 기록만 남습니다.</p>
       <p class="note" id="shareNote"></p>
 
       <h2>백업</h2>
@@ -1647,7 +1647,8 @@ window.addEventListener("focus", winMine);
 /* ---------- 시작에 올리기 (2026년 11월 20일) ----------
    시작(sijak)이 읽는 날짜별 분량 요약 — 타이핑이 days 줄을 올리는 것과 같은 표(botaegi_kv)의 sabaek 줄.
    { v, first:기록이 있는 첫날, adv:{날짜:늘어난 글자}(0이 아닌 날만, 하루는 자정에 바뀐다), goalBy:{날짜:그날의 하루 목표(매)},
-     dailyMae, dailyMode, works:[{id, title, goal, due, total(매), live(작업 중인 원고 수), done(완성한 원고 수)}] }
+     dailyMae, dailyMode, works:[{id, title, goal, due, total(매), live(작업 중인 원고 수), done(완성한 원고 수)}],
+     menu:{"작품 › 소제목": 스크리브너 링크} (2026년 11월 25일 — 애플 단축어 '오전타이핑'이 읽는다. shareMenu) }
    올리기만 하고 받지 않는다 — 본자리는 이 브라우저의 저장소다. 원고의 글과 기록 한 줄 한 줄은 올리지 않는다.
    연결(주소·열쇠)은 같은 주소의 타이핑(taiping-v1의 sbUrl·sbKey), 없으면 시작(sijak.cfg의 bt)에 적힌 것을 빌린다. 둘 다 없으면 올리지 않는다.
    이 모양을 바꾸면 시작의 loadWrite도 맞출 것 */
@@ -1663,7 +1664,24 @@ function shareObj(){
   S.log.forEach(function(e){ var k = dayKey(e.t); if(!first || k < first) first = k; adv[k] = (adv[k] || 0) + e.d; });
   Object.keys(adv).forEach(function(k){ if(!adv[k]) delete adv[k]; });
   return { v:1, first:first, adv:adv, goalBy:S.goalBy, dailyMae:S.dailyMae || 0, dailyMode:S.dailyMode === "due" ? "due" : "fixed",
-           works:S.works.map(function(wk){ var sm = workSums(wk); return { id:wk.id, title:wk.title, goal:wk.goal || 0, due:wk.due || "", total:sm.total, live:sm.liveCnt, done:sm.doneCnt }; }) };
+           works:S.works.map(function(wk){ var sm = workSums(wk); return { id:wk.id, title:wk.title, goal:wk.goal || 0, due:wk.due || "", total:sm.total, live:sm.liveCnt, done:sm.doneCnt }; }),
+           menu:shareMenu() };
+}
+/* 단축어가 읽는 원고 목록 (2026년 11월 25일) — {"작품 › 소제목": 스크리브너 링크}.
+   끝나지 않았고 스크리브너 링크가 있는 원고만, 작품과 원고가 놓인 차례대로.
+   단축어의 '목록에서 선택'은 사전을 받으면 열쇠를 보이고 고른 것의 값을 내놓으므로, 이 모양 그대로 고르고 열 수 있다.
+   이름이 같은 원고는 뒤의 것에 (2), (3)을 붙인다 — 열쇠가 겹치면 하나가 사라지므로. */
+function shareMenu(){
+  var o = {};
+  S.works.forEach(function(wk){
+    S.mss.forEach(function(m){
+      if(m.workId !== wk.id || m.done || !isScriv(m.link)) return;
+      var base = (wk.title || "작품") + " › " + (m.title || "원고"), name = base, n = 2;
+      while(Object.prototype.hasOwnProperty.call(o, name)) name = base + " (" + (n++) + ")";
+      o[name] = m.link;
+    });
+  });
+  return o;
 }
 function shareNote(t){ shareState = t; var e = document.getElementById("shareNote"); if(e) e.textContent = t; }
 function shareNow(){
