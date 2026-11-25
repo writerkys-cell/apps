@@ -1997,6 +1997,16 @@ function renderPrev(keepScroll){
     var mc = m.merged === "ch" && w && hasChapters(w) ? chById(w, m.chId) : null, lab = mc ? chNo(w, mc) + "장" : String(w && !isRevision(w) ? unitsOf(w).indexOf(m) + 1 : ui + 1);
     if(ui > 0){ var gp = document.createElement("p"); gp.className = "gap"; gp.textContent = "\u200b"; elPrev.appendChild(gp); }
     if(gy && gy.id === m.id){ elPrev.appendChild(gyBox(m, lab)); return; }
+    if(m.oj){
+      /* 오전타이핑 단축어가 이 원고를 스크리브너에서 열었다 — 곁·글에서 보내기 전까지 타이핑과 아이폰의 글은 옛것이다 */
+      var ob = document.createElement("p"); ob.className = "urv";
+      ob.appendChild(document.createTextNode(lab + " · " + ojSay(m)));
+      var ox = document.createElement("button"); ox.type = "button"; ox.textContent = "닫기";
+      ox.title = "스크리브너에서 고치지 않았거나 이미 맞췄을 때 · 표시만 지웁니다";
+      ox.onclick = function(){ ojClear(m); save(); renderWrite(true); renderList(); };
+      ob.appendChild(ox);
+      elPrev.appendChild(ob);
+    }
     if(m.phoneAt){
       /* 아이폰·교열에서 고친 글 — 스크리브너에 아직 없다. 복사해서 스크리브너 문서에 ⌘A, ⌘V */
       var pb = document.createElement("p"); pb.className = "urv";
@@ -2534,6 +2544,62 @@ function shareDays(){
     .then(function(r){ if(r.ok) daysSent = c; }).catch(function(){});
 }
 function queueDays(){ clearTimeout(daysT); daysT = setTimeout(shareDays, 3000); }
+/* ---------- 오전타이핑 단축어와 잇기 (2026년 11월 25일, 4baek에서 옮김) ----------
+   방점의 반복 할 일에서 애플 단축어 '오전타이핑1·2'를 먼저 돌리고 목록에서 원고를 고르는 흐름(작가가 정함).
+   ① 원고 목록 — botaegi_kv의 tpmenu 줄: { menu:{"작품 › 원고": 스크리브너 링크} }. 단축어가 data.menu를 읽어 '목록에서 선택' → 'URL 열기'.
+     타이핑은 작품 하나가 조각 여럿이라 다 올리면 길다. 끝나지 않은 작품마다(글상자 빼고) '이어 쓸 원고' 하나만 올린다 —
+     접지 않았고 완성하지 않았고 스크리브너 링크가 달린 원고 가운데 마지막으로 손본 것, 손본 것이 없으면 차례상 첫 원고.
+     다른 조각은 타이핑에서 원고를 고르고 머리줄의 타이핑1·2로 시작한다(그때는 링크가 단축어 입력으로 간다).
+   ② 쪽지 — 단축어가 원고를 연 직후 남기는 ojeon1·ojeon2 … 줄 { link, name, at }. 타이핑은 읽기만 한다.
+     같은 링크의 원고에 m.oj(연 때)를 적어 '스크리브너의 글을 아직 받지 않았다'고 알린다. 곁·글에서 그 원고를 보내면(takeReview) 풀린다.
+     '원고 복사'로 스크리브너를 덮기 전에는 한 번 묻는다. m.oj·m.ojDone은 이 저장소에만 둔다(수파베이스에 올리지 않는다) */
+function isScrivLink(u){ return /^(x-scrivener-item|scrivener):/i.test(String(u || "")); }
+function menuPick(w){
+  var us = unitsOf(w).filter(function(m){ return !finished(m) && isScrivLink(m.scrivLink); }), b = null;
+  us.forEach(function(m){ if(m.editedAt && (!b || m.editedAt > b.editedAt)) b = m; });
+  return b || us[0] || null;
+}
+function menuObj(){
+  var o = {};
+  S.works.forEach(function(w){
+    if(!w || isBox(w) || !workActive(w)) return;
+    var m = menuPick(w); if(!m) return;
+    var wt = String(w.title || "작품").replace(/\s+/g, " ").trim(), mt = String(m.title || "원고").replace(/\s+/g, " ").trim();
+    var base = mt.indexOf(wt) === 0 ? mt : wt + " › " + mt, name = base, n = 2;
+    while(Object.prototype.hasOwnProperty.call(o, name)) name = base + " (" + (n++) + ")";
+    o[name] = m.scrivLink;
+  });
+  return { menu:o };
+}
+var menuSent = "";
+function shareMenu(){
+  if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
+  var c = JSON.stringify(menuObj());
+  if(c === menuSent) return;
+  sb("botaegi_kv", { method:"POST", headers:{ "Prefer":"resolution=merge-duplicates,return=minimal" },
+    body:JSON.stringify({ id:"tpmenu", data:JSON.parse(c), updated_at:new Date().toISOString() }) })
+    .then(function(r){ if(r.ok) menuSent = c; }).catch(function(){});
+}
+function ojApply(rows){
+  var changed = false;
+  (rows || []).forEach(function(row){
+    var d = row && row.data; if(!d || !d.link) return;
+    var at = Date.parse(d.at) || Date.parse(row.updated_at) || 0; if(!at) return;
+    S.mss.forEach(function(m){
+      if(m.folded || m.scrivLink !== d.link) return;
+      if(at <= (m.ojDone || 0) || at <= (m.oj || 0)) return;
+      m.oj = at; changed = true;
+    });
+  });
+  return changed;
+}
+function readOjeon(){
+  if(!cloudOn()) return Promise.resolve();
+  return sb("botaegi_kv?id=like.ojeon*&select=id,data,updated_at").then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){ if(ojApply(rows)){ save(); renderWrite(true); renderList(); } }).catch(function(){});
+}
+function ojClear(m){ if(!m) return false; var had = !!m.oj; delete m.oj; m.ojDone = Date.now(); return had; }
+function ojSay(m){ return "오전타이핑에서 열었습니다 · " + whenText(m.oj) + " · 스크리브너의 글을 아직 받지 않았습니다"; }
 var confSent = "";
 function shareConf(){
   if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
@@ -2923,6 +2989,7 @@ function worksObj(){
   });
 }
 function shareWorks(){
+  shareMenu();   /* 오전타이핑 단축어의 원고 목록 — 작품·원고가 바뀌는 자리마다 함께 본다 */
   if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
   var c = JSON.stringify(worksObj());
   if(c === worksSent) return;
@@ -3137,7 +3204,7 @@ function cloudPull(loud){
   /* 이 창의 첫 읽기 — 작품 목록을 올리기 전에 구름의 작품 목록을 받아 둔다(다른 저장소가 올린 부·장을 알아야 모르는 원고를 제자리에 넣는다) */
   return fetchCloudWorks(worksSent === "").then(flush).then(function(){ return fresh0 ? null : applyReqs(); }).then(function(){
     shareConf(); shareDays(); shareWorks(); shareSess(); shareNow();
-    return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo(), pullNotes()]);
+    return Promise.all([importSess().then(dropDupRows), readNow(), loadTteo(), pullNotes(), readOjeon()]);
   }).then(function(){
     return sb(TABLE + "?select=id,title,work_title,review,review_at,review_base,done_req,review_src");
   }).then(function(r){
@@ -3183,6 +3250,8 @@ function cloudPull(loud){
       if(base !== mine && !safe){ stale++; staleMs = m; staleSrc = row.review_src; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
       var rv = normal(row.review);
       var fromPhone = row.review_src === "phone";
+      /* 곁·글(스크리브너)에서 그 원고를 보냈다 — 오전타이핑 표시를 푼다. 글이 같아도 스크리브너와 맞춘 것이다 */
+      if(row.review_src === "scriv" && ojClear(m)) changed = true;
       /* 아이폰에서 온 빈 글로 본문을 비우지는 않는다 — 의견 모드의 빈 고치기 칸이 올라온 것이지 뜻한 일이 아니다 */
       if(fromPhone && !rv && normal(m.text)){ emptyN++; emptyMs = m; cloudClearReview(m.id); if(m.review){ m.review = null; changed = true; } return; }
       /* 곁(스크리브너)에서 온 글이면 스크리브너가 다시 최신 — 아이폰 수정 표시를 지운다 */
@@ -3464,6 +3533,7 @@ function nearLink(m){
 function phoneCopy(m){
   var body = lines(m).join("\n");
   if(!body){ toast("복사할 원고가 없습니다"); return; }
+  if(m.oj && m.scrivLink && !confirm(ojSay(m) + ".\n이 글로 스크리브너 문서를 덮으면 그때 쓴 글이 사라집니다. 그래도 복사할까요?\n(취소한 뒤 스크리브너의 곁이나 글에서 이 원고를 보내면 새 글을 받습니다.)")) return;
   var own = m.scrivLink || "", nr = own ? null : nearLink(m), link = own || (nr && nr.link) || "";
   var tt = own ? "" : String(m.title || "").replace(/\s+/g, " ").trim();
   var text = tt ? tt + "\n\n" + body : body;
@@ -3659,7 +3729,7 @@ function putLink(m){
   var link = askLink(m, "스크리브너 링크를 붙여넣으세요.");
   if(link === null) return;
   m.scrivLink = link; if(link) delete m.linkWait;
-  save(); renderHead(); renderWrite(); renderList();
+  save(); shareMenu(); renderHead(); renderWrite(); renderList();
   if(link) toast("링크를 넣었습니다 · 다음부터 '원고 복사'가 이 문서를 엽니다");
 }
 /* ---------- 인쇄의 첫 장 — 오늘의 한 장 (2026년 11월 16일) ----------
@@ -4783,6 +4853,7 @@ function renderList(){
     if(m.doneAt && !isRevMs(m)){ var bd = document.createElement("span"); bd.className = "badge"; bd.textContent = "한 편"; top.appendChild(bd); }
     var nn = notesOf(m).length;
     if(nn){ var bn = document.createElement("button"); bn.type = "button"; bn.className = "badge nt"; bn.textContent = "의견 " + nn; bn.title = "아이폰에서 온 의견 · 누르면 의견 창"; bn.onclick = function(e){ e.stopPropagation(); openNotesWin(m); }; top.appendChild(bn); }
+    if(m.oj){ var bo = document.createElement("span"); bo.className = "badge"; bo.textContent = "오전타이핑"; bo.title = ojSay(m) + " · 곁이나 글에서 이 원고를 보내면 사라집니다"; top.appendChild(bo); }
     if(finished(m)){ /* 완성은 제목 색으로 */ }
     else if(handed(m)){ var bs = document.createElement("span"); bs.className = "badge sc"; bs.textContent = m.scrivLink ? "스크리브너" : "넘기는 중"; top.appendChild(bs); }
     box.appendChild(top);
@@ -7288,7 +7359,7 @@ setInterval(takeNoteReqs, 2000);
 setInterval(function(){ if(document.visibilityState === "visible" && !staleHere()) cloudPull(); }, 60000);
 /* 곁의 '지금 도는 것'은 자주 본다 — 교열을 시작하기 전에 곁이 도는지 알도록(한 줄만 읽는다) */
 setInterval(function(){ if(document.visibilityState === "visible" && !staleHere()) readNow(); }, 15000);
-window.addEventListener("focus", function(){ readNow(); });
+window.addEventListener("focus", function(){ readNow(); if(!staleHere()) readOjeon(); });
 window.addEventListener("online", function(){ if(!staleHere()) cloudPull(); });
 document.addEventListener("visibilitychange", function(){
   if(document.visibilityState === "visible"){ cloudPull(); tick(); if(S.sess && S.sess.pending && !cutWaitT) armFocusCut(); }
