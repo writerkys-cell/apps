@@ -88,10 +88,46 @@ a.linkish{display:inline-block}
    연결 정보는 서가와 같은 localStorage 'seoga.sb'({url,key})를 쓴다. 적을 것은 먼저 'seoga.phone.out'에 담아 두고 보낸다(끊겨 있으면 이어질 때 보낸다). */
 const SBKEY='seoga.sb', OUTKEY='seoga.phone.out', CACHEKEY='seoga.phone.cache';
 const NOTE_URL='./sucheop.html', CURKEY='seoga.phone.cur';   /* 수첩(같은 폴더), 수첩에 다녀오는 동안 펴 놓았던 책을 기억하는 자리(이 창에서만) */
+/* ── 적고 다리로 (2026년 11월 25일 밤, 사용자가 정함) ──
+   글감이 될 만한 밑줄·코멘트를 다리(dari.html)에 넣어 둔다. 실제로 키우는 것은 맥이나 아이패드의 다리에서 한다.
+   다리는 기기끼리 맞추는 표(정리·수첩과 같은 프로젝트의 jeongri 표, 글감 하나가 id 'dari-…'인 한 줄)를 쓰므로, 여기서 그 표에 한 줄을 올리면 모든 기기의 다리가 받는다.
+   · 로그인은 수첩·정리·다리와 같은 것(storyM.session)을 빌린다. 이 앱 안에서 '적고 수첩에서 열기'로 수첩에 한 번 로그인해 두면 된다.
+   · 올릴 것은 'seoga.phone.dari'에 담아 두고 보낸다. 로그인이 없거나 끊겨 있으면 남겨 두었다가 다음에 보낸다(열 때, 다시 보일 때, 이어질 때).
+   · 줄의 모양은 다리의 글감과 같다: {id:'sg'+서가 기록 id, seed, base, baseAt, draft:'', at, origin:'seoga', src:{kind,title,author,page,text}} — 맥의 서가가 보내는 것과 id가 같아 두 번 들어가지 않는다 */
+const DARIKEY='seoga.phone.dari', D_SESS='storyM.session', D_TABLE='jeongri', D_PRE='dari-';
+const D_URL=(localStorage.getItem('storyM.sbUrl')||'https://bmuslkayijcgosmgvnah.supabase.co').replace(/\/+$/,''), D_KEY=localStorage.getItem('storyM.sbKey')||'sb_publishable_sEHvPL_9_RHCZK4Fpw3zoA_VM7j9pyt';
+let dout=[], dbusy=false;   /* dout은 아래에서 lsGet이 정해진 뒤에 읽는다 */
+const dExp=t=>{ try{ return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).exp*1000; }catch(e){ return 0; } };
+async function dToken(){
+  let ss=lsGet(D_SESS,null); if(!ss||!ss.access_token||!ss.user) return null;
+  if(dExp(ss.access_token)-Date.now()<60000){
+    if(!ss.refresh_token) return null;
+    const r=await fetch(D_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:D_KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:ss.refresh_token})});
+    if(!r.ok){ if(r.status===400||r.status===401) return null; throw new Error('auth '+r.status); }
+    const j=await r.json(); ss={access_token:j.access_token,refresh_token:j.refresh_token,user:ss.user,email:ss.email}; lsSet(D_SESS,ss);
+  }
+  return ss;
+}
+/* 돌려주는 값: 'sent' 올림 · 'login' 로그인이 없음 · 'wait' 끊겼거나 받지 않음 · '' 올릴 것이 없음 */
+async function dariFlush(){
+  if(dbusy) return 'wait'; if(!dout.length) return '';
+  dbusy=true;
+  try{
+    const ss=await dToken(); if(!ss) return 'login';
+    const rows=dout.map(x=>({id:D_PRE+x.id,user_id:ss.user,updated_at:x.at,data:{id:x.id,seed:x.text,base:x.text,baseAt:x.at,draft:'',at:x.at,origin:'seoga',src:x.src}}));
+    const r=await fetch(D_URL+'/rest/v1/'+D_TABLE+'?on_conflict=user_id,id',{method:'POST',headers:{apikey:D_KEY,Authorization:'Bearer '+ss.access_token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows)});
+    if(!r.ok) return 'wait';
+    const sent=new Set(rows.map(x=>x.id.slice(D_PRE.length))); dout=dout.filter(x=>!sent.has(x.id)); lsSet(DARIKEY,dout);
+    return 'sent';
+  }catch(e){ return 'wait'; }
+  finally{ dbusy=false; }
+}
+function dariNote(){ return dout.length?`<p class="hint">다리로 보낼 것 ${dout.length}개가 기다립니다. 로그인이 없으면 ‘적고 수첩에서 열기’로 수첩에 한 번 로그인해 주세요. 이어지면 저절로 올라갑니다.</p>`:''; }
 let lastFlush=null;   /* 방금 시작한 올리기 — 수첩으로 넘어가기 전에 잠깐 기다린다 */
 const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
 const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
 let cfg=lsGet(SBKEY,{}), out=lsGet(OUTKEY,[]), C=lsGet(CACHEKEY,{reading:[],wait:[],at:''});
+dout=lsGet(DARIKEY,[]);
 let view='list', cur=null, draft=null, scanOn=null, quoteOn=false, setup=false, busy=false, loading=false, state='';
 
 const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -157,7 +193,7 @@ async function apply(it){
     x.at=at; x.updated=now; rows.push(x);
     b.page=to; b.pageAt=d; b.updated=now;
   }
-  if(it.text){ const m={id:it.mid,kind:it.scan?'scan':'mark',bookId:b.id,title:b.title,page:to,text:it.text,date:d,at,updated:now}; if(it.quote) m.quote=true; rows.push(m); }
+  if(it.text){ const m={id:it.mid,kind:it.scan?'scan':'mark',bookId:b.id,title:b.title,page:to,text:it.text,date:d,at,updated:now}; if(it.quote) m.quote=true; if(it.dari) m.dariAt=now; rows.push(m); }
   if(rows.length) await upsert('seoga_reads',rows.map(x=>({id:x.id,data:x,updated_at:now})));
   if(setPage) await upsert('seoga_books',[{id:b.id,data:b,updated_at:now}]);
 }
@@ -232,14 +268,28 @@ function bookHTML(){
     <div class="field"><div class="seg"><button class="${quoteOn?'':'on'}" onclick="setQuote(false)">코멘트</button><button class="${quoteOn?'on q':''}" onclick="setQuote(true)">밑줄</button></div>
       <textarea id="tx" rows="4" placeholder="${quoteOn?'책의 문장':'이 쪽에 대한 코멘트 · 비워도 됩니다'}" aria-label="${quoteOn?'밑줄':'코멘트'}"></textarea></div>
     <button class="toggle${scanWanted(b)?' on':''}" onclick="toggleScan()"><span class="box"></span>이 쪽을 스캔한다${b.lent?' · 빌린 책':''}</button>
-    <div class="rowbtns"><button class="primary" onclick="save()">적기</button>${scanWanted(b)?'':'<button class="linkish" onclick="saveToNote()">적고 수첩에서 열기</button>'}<button class="linkish" onclick="back()">뒤로</button></div>
-    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다. ‘적고 수첩에서 열기’는 서가에 적은 뒤 그 글을 수첩의 입력창으로 가져갑니다(스캔을 켜면 보이지 않습니다).</p>`;
+    <div class="rowbtns"><button class="primary" onclick="save()">적기</button>${scanWanted(b)?'':'<button class="linkish" onclick="saveToDari()">적고 다리로</button><button class="linkish" onclick="saveToNote()">적고 수첩에서 열기</button>'}<button class="linkish" onclick="back()">뒤로</button></div>
+    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다. ‘적고 다리로’는 서가에 적은 뒤 그 글을 다리에 넣어 둡니다 — 맥이나 아이패드의 다리에서 400자로 키웁니다. ‘적고 수첩에서 열기’는 서가에 적은 뒤 그 글을 수첩의 입력창으로 가져갑니다(둘 다 스캔을 켜면 보이지 않습니다).</p>${dariNote()}`;
 }
 function openBook(id){ cur=id; view='book'; scanOn=null; quoteOn=false; render(); window.scrollTo(0,0); }
 /* 적고 수첩에서 열기 — 적기(save)와 똑같이 서가에 적고, 적은 글과 출처(『제목』, 지은이, 쪽)를 수첩의 입력창에 넣은 채로 같은 창에서 연다. 수첩이 주소의 #적기= 를 읽는다.
    글이 없거나 스캔이 켜져 있으면 그냥 적기다(스캔은 단축어로 넘어가므로 한 번에 하나만).
    서가에 올리는 것을 잠깐(길어야 3초) 기다렸다가 넘어간다. 그 안에 못 올려도 적을 것은 seoga.phone.out에 남아 돌아오면 올라간다(apply는 다시 해도 같은 줄을 덮는다).
    돌아왔을 때 이 책이 펴져 있도록 책 id를 이 창의 sessionStorage에 적어 둔다 */
+/* 적고 다리로 — 적기(save)와 똑같이 서가에 적고, 같은 글을 출처와 함께 다리에 넣는다. 화면은 이 책에 머문다 */
+async function saveToDari(){
+  const b=findB(cur); if(!b) return;
+  const text=document.getElementById('tx').value.trim();
+  if(!text){ toast('다리로 보낼 코멘트나 밑줄을 적어주세요'); return; }
+  if(scanWanted(b)){ save(); return; }
+  const v=parseInt(document.getElementById('pg').value,10), to=v>0?v:0, quote=quoteOn;
+  const n=out.length; save(); if(out.length<=n) return;   /* 적히지 않았으면 보내지 않는다 */
+  const it=out[out.length-1]; it.dari=true; lsSet(OUTKEY,out);   /* 서가의 기록에 보낸 때(dariAt)를 남긴다 — apply */
+  dout.push({id:'sg'+it.mid,text,at:Date.now(),src:{kind:quote?'quote':'comment',title:b.title||'',author:b.author||'',page:to,text}}); lsSet(DARIKEY,dout);
+  const r=await dariFlush();
+  toast(r==='sent'?'적었습니다 · 다리에 넣었습니다':r==='login'?'적었습니다 · 다리에는 로그인 뒤에 올라갑니다':'적었습니다 · 다리에는 이어지면 올라갑니다');
+  if(view==='book') keepInputs(()=>{});
+}
 async function saveToNote(){
   const b=findB(cur); if(!b) return;
   const text=document.getElementById('tx').value.trim();
@@ -285,8 +335,10 @@ function save(){
 restoreCur();     /* 수첩에 다녀왔으면 그 책을 펴 둔다 */
 render(); setState(out.length?'on':'');
 load();
-window.addEventListener('online',()=>load());
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') load(); });
+const dariLater=()=>dariFlush().then(r=>{ if(r==='sent'&&view==='book') keepInputs(()=>{}); });
+dariLater();
+window.addEventListener('online',()=>{ load(); dariLater(); });
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ load(); dariLater(); } });
 </script>
 </body>
 </html>
