@@ -234,7 +234,7 @@ function nameClash(c){return null;}
 /* 4baek을 읽은 뒤 카드를 맞춘다 — 4baek에 원고가 생긴 카드는 원고 번호를 기억하고 저절로 보관으로 넘긴다(2026년 11월 19일 저녁, 작가가 정함).
    되살린 카드(kept)는 다시 넘기지 않는다. 작품 이름이 바뀌었으면 태그의 이름을 고친다 */
 function linkPass(){
-  if(!TP.ok)return false;let ch=false;const moved=[];
+  if(!TP.ok&&!OLD.ok)return false;let ch=false;const moved=[];
   db.cards.forEach(c=>{
     const m=msFor(c);
     if(m){const k=isOld(m)?'tp':'sb';if(c[k]!==m.id){c[k]=m.id;ch=true;}
@@ -244,10 +244,12 @@ function linkPass(){
   });
   db.ideas.forEach(i=>{const t=(i.meta||{}).tag;if(t&&t.id){const w=tpWorkById(t.id)||TP.works.find(x=>!x.box&&norm(x.title)===norm(t.name));if(w&&(w.title!==t.name||w.id!==t.id)){i.meta=Object.assign({},i.meta,{tag:{id:w.id,name:w.title}});}}});
   if(ch)saveCards();
-  if(moved.length)toast(moved.length===1?`"${norm(moved[0].title)||'제목 없음'}"이(가) 4baek의 원고가 되어 보관으로 옮겼습니다.`:`카드 ${moved.length}장이 4baek의 원고가 되어 보관으로 옮겼습니다.`);
+  if(moved.length){const app=moved.every(c=>c.tp&&!c.sb)?'타이핑':'4baek';toast(moved.length===1?`"${norm(moved[0].title)||'제목 없음'}"이(가) ${app}의 원고가 되어 보관으로 옮겼습니다.`:`카드 ${moved.length}장이 ${app}의 원고가 되어 보관으로 옮겼습니다.`);}
   return ch;
 }
 function tpRefresh(){readTp();linkPass();}
+/* 타이핑에서 쓰기 시작(2026년 11월 25일에 되살림) — #작품=<이름>&작품id=<id>&새원고=<제목>&정리카드=<카드 id>. 타이핑이 이 저장소(jeongri.v1)에서 카드의 본문과 자료를 읽어 간다 */
+const tpNewUrl=c=>conf.tpBase.split('#')[0]+'#'+[['작품',c.work.name||''],['작품id',c.work.id],['새원고',norm(c.title)],['정리카드',c.id]].map(x=>encodeURIComponent(x[0])+'='+encodeURIComponent(x[1])).join('&');
 const tpUrl=m=>(isOld(m)?conf.tpBase:conf.sbBase).split('#')[0]+'#원고='+encodeURIComponent(m.id);
 /* 원고로 가는 링크 — 4baek의 원고면 4baek 창으로, 예전에 타이핑으로 넘긴 원고면 타이핑 창으로 */
 const goLink=m=>isOld(m)?`<a class="go" href="${esc(tpUrl(m))}" target="taiping" data-win="taiping" title="타이핑의 그 원고 400자 탭을 엽니다">타이핑에서 이어 쓰기 ↗</a>`:`<a class="go" href="${esc(tpUrl(m))}" target="4baek" data-win="4baek" title="4baek의 그 원고 400자 탭을 엽니다">4baek에서 이어 쓰기 ↗</a>`;
@@ -321,7 +323,12 @@ function drainInbox(){let arr=[];try{arr=JSON.parse(localStorage.getItem(IN_KEY)
    같은 id의 카드가 이미 있으면 다시 만들지 않는다. 새 카드가 생기면 카드 탭에서 그 카드를 연다(글을 치는 중이 아니면) */
 function drainCards(){let arr=[];try{arr=JSON.parse(localStorage.getItem(CARD_IN))||[];}catch(e){}if(!Array.isArray(arr)||!arr.length)return 0;
   let n=0,last=null;arr.forEach(x=>{if(!x||!String(x.text||'').trim())return;if(x.id&&cardById(x.id))return;
-    const c=newCard({id:x.id||uid(),title:norm(x.title)||defTitle(x.text),text:String(x.text).trim(),tag:null,from:x.from||'',seed:x.seed||'',left:x.left||'',origin:'dari'});db.cards.push(c);last=c;n++;});
+    const c=newCard({id:x.id||uid(),title:norm(x.title)||defTitle(x.text),text:String(x.text).trim(),tag:null,from:x.from||'',seed:x.seed||'',left:x.left||'',origin:'dari'});
+    /* 작품 꼬리표(2026년 11월 25일) — 타이핑의 "아이디어 보내기"에서 다리를 거쳐 온 카드. work는 타이핑의 작품 {id,name}, wms는 적은 원고 {id,title}.
+       태그(tag)는 4baek의 작품이라 따로 둔다. 꼬리표가 있는 카드는 메모함이 아니라 타이핑의 그 작품으로(새 원고) 넘긴다 */
+    if(x.work&&x.work.id)c.work={id:String(x.work.id),name:String(x.work.name||'')};
+    if(x.ms&&x.ms.id)c.wms={id:String(x.ms.id),title:String(x.ms.title||'')};
+    db.cards.push(c);last=c;n++;});
   try{localStorage.removeItem(CARD_IN);}catch(e){}
   if(n){saveCards(true);if(!typing()){ui.pane='card';ui.tag=null;ui.open=last.id;ui.focusCard=true;MB.err=null;renderDetail();mbLoadTags();}else renderSide();
     toast(n===1?`다리에서 "${norm(last.title)||'제목 없음'}" 카드가 들어왔습니다.`:`다리에서 카드 ${n}장이 들어왔습니다.`);}
@@ -448,6 +455,16 @@ function srcRowsHtml(c){const rows=(c.srcs&&c.srcs.length)?c.srcs:[{u:'',n:''}];
    예전에 4baek·타이핑으로 넘겨 원고가 있는 카드는 그 원고로 가는 링크만 보인다 */
 function startHtml(c){const n=bodyLen(c);const m=msFor(c);
   if(m)return `<span>${isOld(m)?'타이핑':'4baek'}에 이 카드의 원고가 있습니다 · ${fmtN(msChars(m))}자 · ${msState(m)}</span>${goLink(m)}`;
+  if(c.work&&c.work.id){   /* 타이핑의 작품에서 온 쓸 거리 — 조사한 것과 함께 그 작품의 새 원고로 돌아간다 */
+    const wn=esc(c.work.name||'작품'),off=`<button type="button" data-act="workOff" data-id="${c.id}" title="작품 꼬리표를 뗍니다. 그러면 이 카드는 여느 글감처럼 메모함으로 넘깁니다">꼬리표 떼기</button>`;
+    const from=`<span class="muted">타이핑의 '${wn}'에서 온 쓸 거리${c.wms&&c.wms.title?` · 적은 원고: ${esc(c.wms.title)}`:''}</span>`;
+    if(n<GOAL)return `<span><b>${fmtN(n)} / ${GOAL}자</b></span><span class="muted">${fmtN(GOAL-n)}자를 더 쓰면 타이핑으로 넘길 수 있습니다.</span>${from}${off}`;
+    if(!norm(c.title))return `<span><b>${fmtN(n)}자</b></span><span class="muted">제목을 적으면 타이핑으로 넘길 수 있습니다. 제목이 새 원고의 이름이 됩니다.</span>${from}${off}`;
+    return `<span><b>${fmtN(n)}자</b> · 400자를 채웠습니다. 더 써도 됩니다.</span>
+      <a class="go" href="${esc(tpNewUrl(c))}" target="taiping" data-win="taiping" title="타이핑의 '${wn}'에 이 제목으로 새 원고를 만듭니다. 본문이 첫 판본으로, 자료 칸의 주소가 원고의 자료로 들어갑니다. '메모함의 내용' 칸에 적은 조사 글은 이 카드에 남고, 원고의 자료 맨 앞에서 엽니다. 원고가 생기면 이 카드는 보관으로 넘어갑니다">타이핑에서 쓰기 시작 ↗</a>
+      ${from}${off}
+      ${norm(c.title).indexOf('.')>-1?'<span class="err">제목에 마침표가 있습니다. 오전타이핑 단축어가 이 원고를 찾지 못하니 마침표를 빼 주세요.</span>':''}`;
+  }
   if(n<GOAL)return `<span><b>${fmtN(n)} / ${GOAL}자</b></span><span class="muted">${fmtN(GOAL-n)}자를 더 쓰면 메모함으로 넘길 수 있습니다.</span>`;
   if(!norm(c.title))return `<span><b>${fmtN(n)}자</b></span><span class="muted">제목을 적으면 메모함으로 넘길 수 있습니다.</span>`;
   const busy=MB.busy===c.id;const err=MB.err&&MB.err.id===c.id?MB.err.msg:'';
@@ -555,6 +572,7 @@ app.addEventListener('click',e=>{
     case 'iDel':{const i=ideaById(id);if(!i)break;if(!confirm('이 아이디어를 지울까요?'))break;i.deleted=true;delete ui.sel[id];touchIdea(i,true);renderDetail();break;}
     case 'cOpen':{if(e.target.closest('a'))break;ui.open=ui.open===id?null:id;ui.tpShow=null;ui.focusCard=true;MB.err=null;tpRefresh();renderDetail();if(ui.open)mbLoadTags();break;}
     case 'mbSend':{const c=cardById(id);if(c)mbSend(c);break;}
+    case 'workOff':{const c=cardById(id);if(c&&c.work&&confirm(`'${c.work.name||'작품'}' 꼬리표를 뗍니다.\n이 카드는 타이핑이 아니라 메모함으로 넘기게 됩니다.`)){c.workWas=c.work;delete c.work;saveCards();paintStart(c);mbLoadTags();}break;}
     case 'addCard':{const tag=ui.tag?tagFromValue(ui.tag):null;const c=newCard({tag});db.cards.push(c);db.order='made';ui.open=c.id;saveCards(true);renderDetail();const t=document.querySelector(`input[data-cf="title"][data-id="${c.id}"]`);if(t)t.focus();break;}
     case 'order':db.order=b.dataset.o;saveCards();renderDetail();break;
     case 'srcAdd':{const c=cardById(id);if(!c)break;if(!c.srcs.length)c.srcs.push({u:'',n:''});c.srcs.push({u:'',n:''});saveCards();renderDetail();const all=document.querySelectorAll(`[data-sf="u"][data-id="${id}"]`);if(all.length)all[all.length-1].focus();break;}
