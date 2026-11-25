@@ -324,7 +324,7 @@ table.st tr.noline td{border-bottom:0;padding-bottom:.1rem}
       <p class="note">왼쪽 글과 쓰는 칸이 모두 이 글꼴을 씁니다. 고운바탕과 나눔명조는 인터넷에서 받아 오는 글꼴이라 처음 한 번은 연결이 필요합니다. 사파리는 맥에 따로 설치한 글꼴을 웹 페이지에 보여 주지 않으므로, 다른 글꼴은 '직접 입력'에서 글꼴 파일(.otf, .ttf)을 넣어 씁니다. 넣은 파일은 이 브라우저 안에만 저장되고 백업 파일에는 들어가지 않습니다. 맥에 설치된 글꼴 파일은 파일 고르는 창에서 ⌘⇧G를 누르고 /Library/Fonts 를 적으면 찾을 수 있습니다.</p>
 
       <h2>시작에 올리기</h2>
-      <p class="note">날마다 늘어난 글자 수와 하루 목표, 작품의 매수를 수파베이스에 올려 시작(sijak)의 글쓰기·원고 칸이 어느 기기에서든 읽게 합니다. 끝나지 않은 원고의 소제목과 스크리브너 링크도 함께 올려, 애플 단축어가 원고를 목록으로 보이고 골라 열 수 있게 합니다. 원고의 글은 올리지 않고, 올린 것을 다시 받아 오지도 않습니다. 연결은 이 브라우저의 타이핑(없으면 시작)에 적어 둔 것을 빌려 씁니다. 4baek을 두 브라우저에서 쓰면 나중에 올린 쪽의 기록만 남습니다.</p>
+      <p class="note">날마다 늘어난 글자 수와 하루 목표, 작품의 매수를 수파베이스에 올려 시작(sijak)의 글쓰기·원고 칸이 어느 기기에서든 읽게 합니다. 끝나지 않은 원고의 소제목과 스크리브너 링크도 함께 올려, 애플 단축어가 원고를 목록으로 보이고 골라 열 수 있게 합니다. 애플 단축어가 남긴 '오전타이핑에서 이 원고를 열었다'는 쪽지는 읽어서, 그 원고를 스크리브너에서 새로 받기 전에는 덮어쓰지 않게 알립니다. 원고의 글은 올리지 않고, 올린 것을 다시 받아 오지도 않습니다. 연결은 이 브라우저의 타이핑(없으면 시작)에 적어 둔 것을 빌려 씁니다. 4baek을 두 브라우저에서 쓰면 나중에 올린 쪽의 기록만 남습니다.</p>
       <p class="note" id="shareNote"></p>
 
       <h2>백업</h2>
@@ -352,7 +352,8 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
      base  — 왼쪽 글. 스크리브너에서 붙여넣은 글이거나 마지막으로 보낸 글. 판본은 쌓지 않고 이것 하나만 둔다
      draft — 오른쪽에 쓰던 글. 다른 원고로 옮겨 가도 조용히 남는다 */
 function fresh(){
-  return { works:[], mss:[], cur:null, armed:false, step:400, dim:true, lineMode:true, smart:true, split:50,
+  return { noteSeen:{},   /* 본 오전타이핑 쪽지 — 쪽지 이름마다 그 내용(JSON 글자). 아래 '오전타이핑 쪽지 받기' */
+           works:[], mss:[], cur:null, armed:false, step:400, dim:true, lineMode:true, smart:true, split:50,
            pfz:16, plh:1.9, ifz:16, ilh:1.9,
            bodyFont:"gowun",   /* 본문 글꼴 — FONTS의 열쇠, 또는 "custom"(넣은 글꼴 파일) */
            fontFile:"",        /* 넣은 글꼴 파일 이름 — 파일 자체는 IndexedDB "4baek-fonts" */
@@ -498,6 +499,7 @@ function tpOpen(id){
   showView("tp");
   if(m.link && !openLink(m.link)) toast("스크리브너 링크가 아니어서 열지 않았습니다 — 원고 탭에서 링크를 고치세요", 4000);
   else if(!m.link) toast("링크가 없는 원고입니다 — 스크리브너에서 직접 열어 복사하세요", 3500);
+  noteFetch(true);
 }
 function tpShow(){
   var m = cur();
@@ -588,7 +590,10 @@ function tpRenderStrip(){
     tpEl.when.textContent = whenText(m.baseAt);
   }
   /* '그만'을 누른 뒤 — 돌아왔을 때 무엇을 해야 하는지 남겨 둔다. 다시 쓰기 시작하거나 새로 붙여넣으면 사라진다 */
-  if(m.stopAt && !tpEl.input.value.trim()){
+  if(m.ext){
+    tpEl.note.hidden = false;
+    tpEl.note.textContent = extSay(m) + " 스크리브너의 글이 바뀌었을 수 있습니다. '스크리브너 ↗'를 눌러 ⌘A ⌘C로 복사한 뒤, 돌아와 ⌘V로 새로 받으세요. 받기 전에 '그만'을 누르면 스크리브너의 글을 이 글로 덮어쓰게 됩니다.";
+  }else if(m.stopAt && !tpEl.input.value.trim()){
     tpEl.note.hidden = false;
     tpEl.note.textContent = "그만 · " + whenText(m.stopAt) + " · " + fmt(m.stopN || 0) + "자를 복사했습니다. "
       + (m.link ? "스크리브너에서 ⌘A ⌘V로 덮어쓰세요. 덮기 전에 스냅숏(⌘5)을 찍어 두면 기울임·주석이 있던 예전 글로 돌아갈 수 있습니다."
@@ -769,6 +774,10 @@ function tpSend(){
   var t = tpOutgoing(); if(!t) return;
   var g = tpGoal(m), n = len(t);
   if(n < g){ toast("목표 " + fmt(g) + "자까지 " + fmt(g - n) + "자 남았습니다"); return; }
+  if(m.ext && m.extOk !== m.ext){
+    if(!confirm(extSay(m) + "\n새로 받지 않은 글에 이어 쓰고 있습니다. 그래도 보낼까요?\n(취소한 뒤 '스크리브너 ↗'로 열어 ⌘A ⌘C, 돌아와 ⌘V로 새로 받을 수 있습니다. 오른쪽에 쓰던 글은 그대로 남습니다.)")){ tpEl.input.focus(); return; }
+    m.extOk = m.ext;   /* 이 쪽지에 대해서는 다시 묻지 않는다. '그만'은 언제나 묻는다 */
+  }
   logGrow(m, n - len(m.base), "send");
   m.base = t; m.baseAt = Date.now(); delete m.cut; delete m.stopAt;
   m.editedAt = Date.now(); m.dirty = true;   /* 보냈지만 아직 '그만'하지 않았다 — 스크리브너에 없는 글 */
@@ -786,6 +795,7 @@ function tpStop(){
   var t = tpOutgoing(), fromRight = !!t;
   if(!t) t = m.fix ? (m.fixText || "") : (m.base || "");
   if(!t){ toast("복사할 글이 없습니다"); return; }
+  if(m.ext && !confirm(extSay(m) + "\n새로 받지 않았습니다. 이 글로 스크리브너 원고를 덮어쓰면 그때 쓴 글이 사라집니다.\n그래도 그만할까요?")){ tpEl.input.focus(); return; }
   if(fromRight && m.base && len(t) < len(m.base)
      && !confirm("오른쪽 글(" + fmt(len(t)) + "자)이 왼쪽 글(" + fmt(len(m.base)) + "자)보다 짧습니다.\n이 글로 스크리브너 원고를 덮어쓰게 됩니다. 그만할까요?")){ tpEl.input.focus(); return; }
   if(fromRight) logGrow(m, len(t) - len(m.base), "stop");
@@ -794,6 +804,7 @@ function tpStop(){
   tpEl.input.value = ""; m.draft = "";
   m.stopAt = Date.now(); m.stopN = len(t);
   m.editedAt = Date.now(); delete m.dirty;
+  extClear(m);   /* 이 글이 스크리브너의 글이 된다 */
   if(!m.link) m.linkWait = true;
   S.armed = false;
   save(); tpRender();
@@ -856,12 +867,13 @@ document.addEventListener("paste", function(e){
   var t = normal(raw);
   if(!t) return;
   e.preventDefault();
-  if(m.base && m.base === t){ S.armed = false; save(); tpRender(); toast("왼쪽 글과 같은 글입니다"); tpEl.input.focus(); return; }
+  if(m.base && m.base === t){ var wasExt = !!m.ext; extClear(m); S.armed = false; save(); tpRender(); toast(wasExt ? "스크리브너의 글이 왼쪽 글과 같습니다 · 이어서 쓰면 됩니다" : "왼쪽 글과 같은 글입니다", wasExt ? 3200 : undefined); tpEl.input.focus(); return; }
   if(m.base && !confirm("왼쪽 글(" + fmt(len(m.base)) + "자)을 붙여넣은 글(" + fmt(len(t)) + "자)로 바꿉니다.\n" + (tpEl.input.value.trim() ? "오른쪽에 쓰던 글은 그대로 둡니다. " : "") + "바꿀까요?")){
     S.armed = false; save(); tpRender(); tpEl.input.focus(); return;
   }
   m.base = t; m.baseAt = Date.now(); delete m.cut; delete m.stopAt;
   m.editedAt = Date.now(); delete m.dirty;
+  extClear(m);   /* 스크리브너의 글을 새로 받았다 — 오전타이핑 표시를 푼다 */
   if(m.fix){ m.fix = false; m.fixText = ""; m.fixN = 0; }
   S.armed = false;
   save(); tpRender(); renderHead();
@@ -921,6 +933,7 @@ function actBtn(text, fn, title){ var b = el("button", "act", text); b.type = "b
 function mae1(n){ return Math.round(n / 20) / 10; }
 function msStatus(m){
   var s = m.base ? mae(len(m.base)) + "매" : '<span class="no">' + (m.link ? "아직 가져오지 않음" : "링크 없음") + "</span>";
+  if(m.ext) s = '<span class="no" title="단축어 오전타이핑으로 이 원고를 연 뒤 스크리브너의 글을 새로 받지 않았습니다">오전타이핑에서 열림 ' + whenText(m.ext) + " · 새로 받기 전</span> · " + s;
   if(m.draft && m.draft.trim()) s += " · 쓰던 글 " + mae(len(m.draft)) + "매";
   if(m.dirty) s += ' · <span class="no" title="보내기는 했지만 \'그만\'을 누르지 않아 스크리브너에는 아직 없는 글입니다">스크리브너에 아직 없음</span>';
   else if(m.stopAt) s += " · 그만 " + whenText(m.stopAt);
@@ -1643,6 +1656,73 @@ function hashNew(q){
 }
 window.addEventListener("hashchange", hashOpen);
 window.addEventListener("focus", winMine);
+window.addEventListener("focus", function(){ noteFetch(); });
+document.addEventListener("visibilitychange", function(){ if(!document.hidden) noteFetch(); });
+
+/* ---------- 오전타이핑 쪽지 받기 (2026년 11월 25일) ----------
+   애플 단축어 '오전타이핑1·2'는 4baek의 원고 목록(shareObj의 menu)에서 원고를 골라 스크리브너에서 열고,
+   botaegi_kv에 쪽지를 남긴다 — 줄 이름은 ojeon1, ojeon2 …(ojeon으로 시작), data:{ link:그 원고의 스크리브너 링크, name:"작품 › 소제목", at:연 때 }.
+   4baek은 스크리브너를 들여다보지 못하므로, 이 쪽지로만 "밖에서 이 원고를 열었다"를 안다.
+   쪽지의 때가 그 원고를 스크리브너와 마지막으로 맞춘 때(m.syncAt — 붙여넣어 받은 때, '그만'으로 넘긴 때)보다 뒤이면 m.ext에 그때를 적는다.
+   m.ext가 있는 원고는 원고 탭과 400자 탭에 알리고, '보내기'는 한 번, '그만'은 언제나 묻는다. 새로 받거나(⌘V) '그만'으로 덮어쓰면 풀린다(extClear).
+   쪽지는 읽기만 한다 — 지우지도 고치지도 않는다. 실제로 고쳤는지는 알 수 없다(연 것만 안다).
+   쪽지 한 장에는 마지막으로 연 원고 하나만 있다. 표시는 원고(m.ext)에 적어 두므로 쪽지가 다른 원고로 바뀌어도 남는다. */
+function msSyncAt(m){ return m.syncAt !== undefined ? (m.syncAt || 0) : (m.baseAt || 0); }   /* syncAt이 없던 때의 원고는 왼쪽 글의 때로 */
+function extClear(m){ delete m.ext; delete m.extOk; m.syncAt = Date.now(); }
+function extSay(m){ return "오전타이핑에서 이 원고를 열었습니다 · " + whenText(m.ext) + "."; }
+/* 쪽지의 때 — 단축어가 넣는 날짜는 모양이 여러 가지다. ISO 8601, 숫자, "2026. 11. 25. 오전 9:30" 같은 글 */
+function noteTime(v){
+  if(typeof v === "number" && isFinite(v)) return v > 1e11 ? v : v * 1000;
+  if(typeof v !== "string" || !v.trim()) return 0;
+  var t = Date.parse(v); if(!isNaN(t)) return t;
+  t = Date.parse(v.replace(/\s+at\s+/i, " ")); if(!isNaN(t)) return t;   /* "Nov 25, 2026 at 9:30 AM" */
+  /* 해·달·날이 점·줄·빗금·한글로 이어진 것만 날짜로 본다 — "2026 at 9:30"을 2026년 9월 30일로 읽지 않게 */
+  var D = "(\\d{4})\\s*[.\\-\\/년]\\s*(\\d{1,2})\\s*[.\\-\\/월]\\s*(\\d{1,2})";
+  var x = v.match(new RegExp(D + "(?:\\D*?(오전|오후|AM|PM|am|pm))?\\D*?(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*(오전|오후|AM|PM|am|pm)?"));
+  if(!x){ x = v.match(new RegExp(D)); return x ? new Date(+x[1], +x[2] - 1, +x[3]).getTime() : 0; }
+  var ap = x[4] || x[8] || "", h = +x[5];
+  if(/오후|pm/i.test(ap) && h < 12) h += 12;
+  if(/오전|am/i.test(ap) && h === 12) h = 0;
+  return new Date(+x[1], +x[2] - 1, +x[3], h, +x[6], +(x[7] || 0)).getTime();
+}
+/* 받은 쪽지들을 원고에 견준다. 바뀐 것이 있으면 true */
+function noteApply(rows){
+  var ch = false;
+  (Array.isArray(rows) ? rows : []).forEach(function(r){
+    var d = r && r.data; if(!d || typeof d !== "object") return;
+    var link = String(d.link || "").trim(); if(!link) return;
+    var sig = JSON.stringify(d), seen = S.noteSeen[r.id], at = noteTime(d.at);
+    if(!at){   /* 때를 읽지 못했다 — 쪽지가 처음이거나 바뀌었으면 지금 본 때로, 그대로면 줄의 updated_at으로 */
+      if(seen !== sig) at = Date.now(); else at = noteTime(r.updated_at);
+      if(!at) return;
+    }
+    if(seen !== sig){ S.noteSeen[r.id] = sig; ch = true; }
+    S.mss.forEach(function(m){
+      if(m.done || String(m.link || "").trim() !== link) return;
+      if(at > msSyncAt(m) && at > (m.ext || 0)){ m.ext = at; ch = true; }
+    });
+  });
+  return ch;
+}
+var noteAt = 0, noteBusy = false;
+function noteFetch(force){
+  var c = shareConf(); if(!c || noteBusy) return;
+  if(!force && Date.now() - noteAt < 15000) return;   /* 창을 오갈 때마다 읽지는 않는다 */
+  noteBusy = true; noteAt = Date.now();
+  fetch(c.url + "/rest/v1/botaegi_kv?id=like.ojeon*&select=id,data,updated_at", { headers:{ "apikey":c.key, "Authorization":"Bearer " + c.key } })
+    .then(function(r){ return r.ok ? r.json() : []; })
+    .then(function(rows){
+      noteBusy = false;
+      if(!noteApply(rows)) return;
+      var m = cur();
+      if(m && m.ext && tpOn() && !tpEl.input.value.trim()) S.armed = true;   /* 쓰던 글이 없으면 바로 받을 채비를 한다 */
+      save();
+      if(tpOn()) tpRender();
+      else if(document.getElementById("list").classList.contains("on") && !listForm) renderList();
+      if(m && m.ext && tpOn()) toast("오전타이핑에서 이 원고를 열었습니다 — 스크리브너에서 새로 받으세요", 4200);
+    })
+    .catch(function(){ noteBusy = false; });
+}
 
 /* ---------- 시작에 올리기 (2026년 11월 20일) ----------
    시작(sijak)이 읽는 날짜별 분량 요약 — 타이핑이 days 줄을 올리는 것과 같은 표(botaegi_kv)의 sabaek 줄.
@@ -1709,6 +1789,7 @@ winMine(); applyLook(); renderHead(); todayGoal();
 if(!hashOpen()) showView(S.mss.length ? "tp" : "list");
 booted = true;
 queueShare();
+noteFetch(true);
 </script>
 </body>
 </html>
