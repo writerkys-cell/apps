@@ -138,6 +138,8 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .ask input{width:100%;background:none;border:none;border-bottom:1px solid var(--rule);padding:.5rem 0;font-size:1rem;font-family:inherit;color:var(--ink)}
 .ask input::placeholder{color:var(--ink-faint)}
 .ask .row{display:flex;justify-content:center;gap:1.5rem;margin-top:1rem}
+.ask label.fxtd{display:flex;align-items:center;gap:.5rem;margin-top:.9rem;font-size:.9rem;color:var(--ink);cursor:pointer}
+.ask label.fxtd input{width:auto;border:none;padding:0;margin:0;accent-color:var(--seal)}
 .ask .row button{color:var(--seal);font-size:.9rem;border-bottom:1px dotted var(--seal-soft);padding-bottom:1px}
 .ask .row button.dim{color:var(--ink-faint);border-bottom-color:var(--rule)}
 .nt .ts{display:block;font-size:.78em;color:var(--ink-faint);letter-spacing:.06em;margin:.5em 0 .15em;font-family:"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif}
@@ -1792,12 +1794,13 @@ function renderStage(){
       ${a.gam && gamInfo(a) ? `<div class="dueline">${gamInfo(a).replace(/<\/?span[^>]*>/g, '')}</div>` : ''}
       ${lastLine(a)}
       ${memo}
-    </div>` + (cont && cont.at === 'stage' ? contHtml(a, true) : ask && ask.id === a.id ? askHtml(ask.how) : `
+    </div>` + (cont && cont.at === 'stage' ? contHtml(a, true) : fix === a.id ? fixHtml(a) : ask && ask.id === a.id ? askHtml(ask.how) : `
     <div class="acts">
       <button id="actPart">계속</button>
       ${a.gam ? '' : '<button class="done" id="actDone">끝</button>'}
       ${a.rep || a.gam ? '' : '<button class="drop" id="actHold">미결</button>'}
       <button class="page" id="actPage">페이지 열기</button>
+      ${a.gam ? '' : '<button class="page" id="actEdit">수정</button>'}
     </div>
     <div class="skiprow">${dotMode
       ? '<button class="skip" id="unDots">점 풀기</button>'
@@ -1807,13 +1810,15 @@ function renderStage(){
   if(me) me.onclick = () => openSheet(a.id);
   // 「끝」은 먼저 한 줄을 묻고 페이지에 남긴 뒤 넘긴다. 「계속」은 제목과 한 줄을 묻는 창(contHtml)을 연다(2026년 11월 22일에 「조금 했다」에서 바뀜)
   if(cont && cont.at === 'stage'){ wireCont(); return; }
+  if(fix === a.id){ wireFix(a); return; }
   if(ask && ask.id === a.id){
     wireAsk(a, () => finish(a.id, null, true));   // 점 찍은 일이면 추천은 그대로 둔다(quiet). 추천이던 일이면 다시 고른다
     return;
   }
   $('#actPage').onclick = () => openSheet(a.id);
-  const ad = $('#actDone'); if(ad) ad.onclick = () => { ask = {id:a.id, how:'done'}; renderStage(); };
-  $('#actPart').onclick = () => { ask = null; cont = {id:a.id, at:'stage'}; renderStage(); };
+  const ad = $('#actDone'); if(ad) ad.onclick = () => { fix = null; ask = {id:a.id, how:'done'}; renderStage(); };
+  $('#actPart').onclick = () => { fix = null; ask = null; cont = {id:a.id, at:'stage'}; renderStage(); };
+  const ae = $('#actEdit'); if(ae) ae.onclick = () => { ask = null; fix = a.id; renderStage(); };
   const ah = $('#actHold'); if(ah) ah.onclick = () => { closeSheet(); if(toggleHold(a.id)) toast('미결로 표시했습니다 · 매듭을 지으면 미결함으로 갑니다'); };
   const ud = $('#unDots'); if(ud) ud.onclick = () => { const n = clearDots(); if(n) toast(`점 ${n}개를 풀었습니다`); };
   const sp = $('#skipPick'); if(sp) sp.onclick = skipPick;
@@ -1826,6 +1831,39 @@ function nextsHtml(list, dotMode){
 }
 // 계속의 창: 제목(바꿀 수 있다)과 페이지에 남길 한 줄. 오늘 탭 카드와 목록 줄 아래에서 같은 것을 쓴다. cont = {id, at:'stage'|'list'}
 let cont = null;
+/* 오늘 탭 카드의 「수정」(2026년 11월 25일 밤, 작가가 정함) — 카드에 뜬 일의 제목을 고치고 '오늘' 표를 떼거나 붙인다.
+   목록 탭의 수정 칸(editorHtml)에서 이 둘만 꺼낸 것이다. 태그·기한·메모·반복은 전처럼 목록 탭에서 고친다.
+   '오늘' 표가 바뀌면 지금 할 일이 달라질 수 있어 다시 고른다. 반복 일에는 '오늘' 표가 없다 */
+let fix = null;
+function fixHtml(t){
+  return `<div class="ask cont">
+        <label>제목</label>
+        <input id="fxTxt" value="${esc(t.text)}" autocomplete="off" enterkeyhint="done">
+        ${t.rep ? '' : `<label class="fxtd"><input type="checkbox" id="fxToday"${t.today ? ' checked' : ''}> 「오늘」 표 · 오늘 꼭 할 일</label>`}
+        <div class="row"><button id="fxGo">저장</button><button id="fxCancel" class="dim">돌아가기</button></div>
+      </div>`;
+}
+function wireFix(a){
+  const tx = $('#fxTxt'); if(!tx) return;
+  const id = a.id;
+  const save = () => {
+    const t = byId(id); fix = null;
+    if(!t || t.done){ render(); return; }
+    const r = splitLink(tx.value);
+    if(!r.text){ fix = id; toast('제목을 적어 주세요'); return; }
+    const q = splitDue(r.text);
+    t.text = q.text || r.text; if(r.url) t.url = r.url; if(q.due && !t.rep) t.due = q.due;
+    const td = $('#fxToday'), was = !!t.today;
+    if(td){ if(td.checked){ t.today = true; delete S.skip[t.id]; } else delete t.today; }
+    commit();
+    if(td && was !== !!t.today){ toast(t.today ? '「오늘」 표를 붙였습니다' : '「오늘」 표를 뗐습니다'); repick(true); }
+    else render();
+  };
+  $('#fxGo').onclick = save;
+  $('#fxCancel').onclick = () => { fix = null; renderStage(); };
+  tx.onkeydown = e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); save(); } else if(e.key === 'Escape'){ fix = null; renderStage(); } };
+  tx.focus(); try{ tx.setSelectionRange(tx.value.length, tx.value.length); }catch(e){}
+}
 function contHtml(t, onStage){
   const inner = `
         <label>제목 · 바꿀 수 있습니다</label>
@@ -2641,6 +2679,27 @@ async function scToken(p){
   })().catch(() => null).finally(() => { scTokP = null; });
   return scTokP;
 }
+/* ── 맥의 수첩(2026년 11월 25일 밤, 작가가 정함) ──
+   타이핑 400자 탭의 「수첩」이 같은 브라우저의 받은편지함 bangjeom.in에 적어 둔 줄 [{id, text, origin, created_at}]을 목록 맨 끝에 새 표시를 달고 넣는다.
+   아이폰의 수첩에서 온 줄과 같은 모양이다. 열 때, 창이 앞으로 올 때, 다른 창이 적었을 때(storage) 들인다. 같은 id가 이미 있으면 건너뛴다 */
+const LOCAL_IN = 'bangjeom.in';
+function drainLocalIn(){
+  let arr = []; try{ arr = JSON.parse(localStorage.getItem(LOCAL_IN)) || []; }catch(e){}
+  if(!Array.isArray(arr) || !arr.length) return 0;
+  try{ localStorage.removeItem(LOCAL_IN); }catch(e){}
+  let n = 0;
+  arr.forEach(x => {
+    if(!x) return;
+    const v = String(x.text || '').replace(/\s+/g, ' ').trim(); if(!v) return;
+    const id = 'ln' + (x.id || uid()); if(byId(id)) return;
+    const q = splitLink(v);
+    S.tasks.push({id, text:q.text || v, url:q.url || '', note:'', kind:'', fresh:true, done:false, doneAt:null, createdAt:new Date(+x.created_at || Date.now()).toISOString()});
+    n++;
+  });
+  if(n){ commit(); toast(`수첩에서 ${n}개를 받았습니다`); }
+  return n;
+}
+window.addEventListener('storage', e => { if(e.key === LOCAL_IN && e.newValue) drainLocalIn(); });
 let scBusy = false;
 async function pullSucheop(){
   if(scBusy) return;
@@ -2672,6 +2731,7 @@ async function pullSucheop(){
   finally{ scBusy = false; }
 }
 setInterval(() => { if(!document.hidden) pullSucheop(); }, 60*1000);
+setTimeout(drainLocalIn, 800);   // 열 때 한 번 — 방점이 닫혀 있는 동안 타이핑이 적어 둔 것
 
 // 주머니·final이 남긴 요청(bangjeom_act: done·line·add·title)을 읽어 제 규칙대로 처리한다. 먼저 차지한 뒤 적용하므로 두 기기가 겹쳐도 한 번만
 async function pullActs(){
@@ -2870,6 +2930,7 @@ async function wake(){
   if(sb){ await pull(true); pullTodo(); pullActs(); }
   if(synced || !(cfg.url && cfg.key)) autoKnot();
   pullSucheop();
+  drainLocalIn();
   tick();
 }
 document.addEventListener('visibilitychange', wake);
