@@ -122,7 +122,15 @@ async function dariFlush(){
   }catch(e){ return 'wait'; }
   finally{ dbusy=false; }
 }
-function dariNote(){ return dout.length?`<p class="hint">다리로 보낼 것 ${dout.length}개가 기다립니다. 로그인이 없으면 ‘적고 수첩에서 열기’로 수첩에 한 번 로그인해 주세요. 이어지면 저절로 올라갑니다.</p>`:''; }
+/* 로그인 — 따로 화면을 만들지 않고 수첩의 로그인을 빌린다. 로그인이 없을 때만 링크를 보이고, 누르면 수첩이 열려 로그인한 뒤 '쪽 적기로 돌아가기'로 돌아온다.
+   '적고 수첩에서 열기' 단추는 2026년 11월 25일 밤에 뺐다(독서에서 나온 글은 수첩을 거치지 않고 다리로 바로 간다). saveToNote는 부르는 곳이 없는 쉬는 함수다 */
+const dLogged=()=>{ const ss=lsGet(D_SESS,null); return !!(ss&&ss.access_token&&ss.user); };
+function goLogin(){ try{ if(cur) sessionStorage.setItem(CURKEY,cur); }catch(e){} location.href=NOTE_URL+'#적기=&돌아갈곳=seoga-phone.html'; }
+function dariNote(){
+  const w=dout.length?`다리로 보낼 것 ${dout.length}개가 기다립니다. `:'';
+  if(!dLogged()) return `<p class="hint">${w}다리로 보내려면 한 번 로그인해야 합니다. <button class="linkish" onclick="goLogin()">로그인</button> — 수첩이 열립니다. 로그인한 뒤 ‘쪽 적기로 돌아가기’를 누르세요.</p>`;
+  return w?`<p class="hint">${w}이어지면 저절로 올라갑니다.</p>`:'';
+}
 let lastFlush=null;   /* 방금 시작한 올리기 — 수첩으로 넘어가기 전에 잠깐 기다린다 */
 const lsGet=(k,d)=>{ try{ const v=JSON.parse(localStorage.getItem(k)); return v==null?d:v; }catch(e){ return d; } };
 const lsSet=(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} };
@@ -268,8 +276,8 @@ function bookHTML(){
     <div class="field"><div class="seg"><button class="${quoteOn?'':'on'}" onclick="setQuote(false)">코멘트</button><button class="${quoteOn?'on q':''}" onclick="setQuote(true)">밑줄</button></div>
       <textarea id="tx" rows="4" placeholder="${quoteOn?'책의 문장':'이 쪽에 대한 코멘트 · 비워도 됩니다'}" aria-label="${quoteOn?'밑줄':'코멘트'}"></textarea></div>
     <button class="toggle${scanWanted(b)?' on':''}" onclick="toggleScan()"><span class="box"></span>이 쪽을 스캔한다${b.lent?' · 빌린 책':''}</button>
-    <div class="rowbtns"><button class="primary" onclick="save()">적기</button>${scanWanted(b)?'':'<button class="linkish" onclick="saveToDari()">적고 다리로</button><button class="linkish" onclick="saveToNote()">적고 수첩에서 열기</button>'}<button class="linkish" onclick="back()">뒤로</button></div>
-    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다. ‘적고 다리로’는 서가에 적은 뒤 그 글을 다리에 넣어 둡니다 — 맥이나 아이패드의 다리에서 400자로 키웁니다. ‘적고 수첩에서 열기’는 서가에 적은 뒤 그 글을 수첩의 입력창으로 가져갑니다(둘 다 스캔을 켜면 보이지 않습니다).</p>${dariNote()}`;
+    <div class="rowbtns"><button class="primary" onclick="save()">적기</button>${scanWanted(b)?'':'<button class="linkish" onclick="saveToDari()">적고 다리로</button>'}<button class="linkish" onclick="back()">뒤로</button></div>
+    <p class="hint">쪽만 적으면 현재 쪽이 바뀌고, 글만 적으면 그 쪽의 코멘트나 밑줄로 남습니다. 글과 함께 적은 쪽이 현재 쪽보다 앞이면 현재 쪽은 그대로 둡니다. 밑줄은 서가의 밑줄 뽑기에 나옵니다. ‘적고 다리로’는 서가에 적은 뒤 그 글을 다리에 넣어 둡니다 — 맥이나 아이패드의 다리에서 400자로 키웁니다(스캔을 켜면 보이지 않습니다).</p>${dariNote()}`;
 }
 function openBook(id){ cur=id; view='book'; scanOn=null; quoteOn=false; render(); window.scrollTo(0,0); }
 /* 적고 수첩에서 열기 — 적기(save)와 똑같이 서가에 적고, 적은 글과 출처(『제목』, 지은이, 쪽)를 수첩의 입력창에 넣은 채로 같은 창에서 연다. 수첩이 주소의 #적기= 를 읽는다.
