@@ -281,7 +281,10 @@ const mbTagOf=c=>c.mbTag!=null?c.mbTag:mbGuess(c);
 function mbTagOptions(c){const cur=mbTagOf(c);const ts=(MB.tags||[]).slice();if(cur&&!ts.includes(cur))ts.push(cur);
   return `<option value="" ${cur?'':'selected'}>(미정)</option>`+ts.map(t=>`<option value="${esc(t)}" ${t===cur?'selected':''}>${esc(t)}</option>`).join('');}
 /* 메모함의 내용 — "메모함의 내용" 칸의 글 + 자료 칸의 주소 가운데 그 글에 없는 것 */
-function mbText(c){let t=String(c.note||'').trim();
+const srcLabel=x=>{if(!x)return '';const a=[];if(x.title)a.push(`『${x.title}』`);if(x.author)a.push(x.author);if(x.page)a.push(x.page+'쪽');return a.join(', ');};
+/* 독서에서 온 카드의 내용 머리 — 밑줄이면 책의 문장, 코멘트면 "출처를 읽고" 한 줄 */
+const srcHead=c=>{const x=c.src;if(!x)return '';const l=srcLabel(x);return x.kind==='quote'?String(x.text||'').trim():(l?l+'을 읽고':'');};
+function mbText(c){let t=[srcHead(c),String(c.note||'').trim()].filter(Boolean).join('\n\n');
   const extra=(c.srcs||[]).filter(x=>(x.u||'').trim()&&!t.includes(x.u.trim())).map(x=>`- ${norm(x.n)?norm(x.n)+' ':''}${x.u.trim()}`);
   if(extra.length)t+=(t?'\n\n':'')+'자료\n'+extra.join('\n');return t;}
 function paintStart(c){const st=document.getElementById('start-'+c.id);if(st)st.innerHTML=startHtml(c);}
@@ -290,7 +293,7 @@ async function mbSend(c){
   if(c.mb&&!confirm('이 카드는 이미 메모함으로 보냈습니다. 다시 보내면 인박스에 메모가 하나 더 생깁니다. 다시 보낼까요?'))return;
   MB.busy=c.id;MB.err=null;persist(true);paintStart(c);
   try{await mbLoadTags();const tag=mbTagOf(c);
-    const j=await mbFetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text:mbText(c),comment:String(c.text||'').trim(),project:tag,device:'정리',created:new Date().toISOString()})});
+    const j=await mbFetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,text:mbText(c),source:srcLabel(c.src),comment:String(c.text||'').trim(),project:tag,device:'정리',created:new Date().toISOString()})});
     const file=(Array.isArray(j.files)&&j.files[0])||'';const now=Date.now();
     c.mb={at:now,file,tag};c.dropped=true;c.sentAt=now;c.dropAt=now;c.why='';delete c.kept;MB.busy='';
     if(ui.open===c.id)ui.open=null;saveCards(true);renderDetail();
@@ -328,6 +331,9 @@ function drainCards(){let arr=[];try{arr=JSON.parse(localStorage.getItem(CARD_IN
        태그(tag)는 4baek의 작품이라 따로 둔다. 꼬리표가 있는 카드는 메모함이 아니라 타이핑의 그 작품으로(새 원고) 넘긴다 */
     if(x.work&&x.work.id)c.work={id:String(x.work.id),name:String(x.work.name||'')};
     if(x.ms&&x.ms.id)c.wms={id:String(x.ms.id),title:String(x.ms.title||'')};
+    /* 출처(2026년 11월 25일 밤) — 서가의 "다리로"에서 온 카드. src:{kind:'quote'|'comment',title,author,page,text}.
+       메모함으로 보낼 때 출처 줄(source)이 되고, 밑줄이면 그 문장이 내용의 맨 앞에, 코멘트면 "…을 읽고" 한 줄이 내용의 맨 앞에 들어간다 */
+    if(x.src&&typeof x.src==='object')c.src={kind:x.src.kind==='quote'?'quote':'comment',title:String(x.src.title||''),author:String(x.src.author||''),page:+x.src.page||0,text:String(x.src.text||'')};
     db.cards.push(c);last=c;n++;});
   try{localStorage.removeItem(CARD_IN);}catch(e){}
   if(n){saveCards(true);if(!typing()){ui.pane='card';ui.tag=null;ui.open=last.id;ui.focusCard=true;MB.err=null;renderDetail();mbLoadTags();}else renderSide();
@@ -471,7 +477,8 @@ function startHtml(c){const n=bodyLen(c);const m=msFor(c);
     <select data-cf="mbTag" data-id="${c.id}" title="메모함의 꼬리표 — 어느 작품의 메모인지 알려 주는 힌트입니다. 메모는 꼬리표와 상관없이 인박스 하나로 들어갑니다">${mbTagOptions(c)}</select>
     <button class="go" data-act="mbSend" data-id="${c.id}" ${busy?'disabled':''} title="이 본문을 코멘트로, 아래 '메모함의 내용' 칸과 자료 칸의 주소를 내용으로 메모함의 인박스에 넣습니다. 넣고 나면 이 카드는 보관으로 넘어갑니다">${busy?'보내는 중…':c.mb?'메모함으로 다시 보내기':'메모함으로 보내기'}</button>
     ${c.mb?`<span class="muted">${dayTxt(c.mb.at)}에 메모함으로 보냈습니다${c.mb.file?' · '+esc(c.mb.file):''}</span>`:''}
-    ${norm(c.note)?'':'<span class="muted">"메모함의 내용" 칸이 비어 있습니다. 이대로 보내면 내용 없이 코멘트만 들어갑니다.</span>'}
+    ${c.src?`<span class="muted">서가에서 온 ${c.src.kind==='quote'?'밑줄':'코멘트'}${srcLabel(c.src)?' · '+esc(srcLabel(c.src)):''} — 메모함의 출처 줄에 적히고, ${c.src.kind==='quote'?'밑줄 문장이':'"…을 읽고" 한 줄이'} 내용의 맨 앞에 들어갑니다.</span>`:''}
+    ${norm(c.note)||c.src?'':'<span class="muted">"메모함의 내용" 칸이 비어 있습니다. 이대로 보내면 내용 없이 코멘트만 들어갑니다.</span>'}
     ${err?`<span class="err">${esc(err)}</span>`:''}`;}
 function leadHtml(c,x){return `<div class="lead"><div class="lh"><span>클로드가 찾은 것 · ${esc(x.title||'답')} · ${dayTxt(x.at||Date.now())} (확인 전)</span><span>${x.dt?`<span title="데본씽크에 만든 문서의 제목: ${esc(x.dt)}">데본씽크에 저장함</span>`:''}<button data-act="leadDel" data-id="${c.id}" data-lid="${x.id}" title="이 글을 지웁니다">✕</button></span></div><div class="lb">${linkify(x.text)}</div></div>`;}
 /* 다리에서 딸려 온 글 — 처음 글감(seed)과, 넘기지 않은 왼쪽 글(left). 접어 둔다. 메모함으로는 가지 않는다 */

@@ -98,6 +98,7 @@ body.solo .top{padding-bottom:14px}
 .solo-sb{margin-bottom:30px}
 .draw .drawbtns{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:16px}
 .draw .drawbtns .ghost{margin-top:0}
+.markfoot .twobtn{display:flex;align-items:center;gap:14px;flex:none}
 .jar{margin:0 0 30px}
 .cfind{margin:0 0 30px}
 .cfind>label{display:block;font-size:13.5px;color:var(--ink-soft);margin-bottom:2px}
@@ -556,6 +557,28 @@ function render(reset){
 /* 밑줄 뽑기: 한눈에 탭 날짜 아래. 저장하지 않는다(뽑힌 것은 메모리에만). 『밑줄들』의 밑줄만 뽑는다(책에 적은 코멘트는 뽑지 않는다, 2026-11-03). */
 let drawId=null;
 /* 2026년 11월 19일: 책에 적으며 ‘밑줄’로 고른 것(quote:true — 읽기 탭과 아이폰 앱 ‘쪽 적기’의 코멘트/밑줄 선택)도 함께 뽑는다. 책에 붙은 밑줄은 제목·지은이·쪽이 함께 나온다. */
+/* ---------- 다리로 (2026년 11월 25일 밤, 사용자가 정함) ----------
+   글감이 될 만한 밑줄이나 코멘트를 다리(dari.html)의 받은편지함(dari.in)에 적는다. 다리에서 400자 이상으로 키우고 정리에서 조사한 뒤 메모함으로 간다.
+   같은 주소·같은 브라우저의 다리가 가져간다(맥). 서가의 기록은 그대로 두고, 보낸 때만 dariAt에 적는다(같은 것을 또 보내려 하면 묻는다).
+   줄의 모양: {id:'sg'+기록 id, text, origin:'seoga', created_at, src:{kind:'quote'|'comment', title, author, page, text}} — 출처(src)는 메모함까지 따라간다 */
+function dariSrc(x){
+  const b=x.bookId===JAR?null:book(x.bookId), read=x.kind==='read';
+  return {kind:(isQuote(x)||x.bookId===JAR)?'quote':'comment', title:b?b.title:(x.bookId===JAR?'':(x.title||'')), author:b&&b.author?b.author:'',
+          page:read?0:(x.page||0), text:String((read?x.memory:x.text)||'').trim()};
+}
+function toDari(rid,quiet){
+  const x=R.reads.find(r=>r.id===rid&&!r.gone); if(!x) return false;
+  const src=dariSrc(x); if(!src.text){ toast('보낼 글이 없습니다'); return false; }
+  if(x.dariAt&&!quiet&&!confirm('이 '+(src.kind==='quote'?'밑줄':'코멘트')+'은 '+mdLabel(String(x.dariAt).slice(0,10))+'에 다리로 보냈습니다.\n다리에 그 글감이 남아 있으면 다시 들어가지 않습니다. 그래도 보낼까요?')) return false;
+  let arr=[]; try{ arr=JSON.parse(localStorage.getItem('dari.in'))||[]; }catch(e){} if(!Array.isArray(arr)) arr=[];
+  arr=arr.filter(y=>y&&y.id!=='sg'+x.id);
+  arr.push({id:'sg'+x.id,text:src.text,origin:'seoga',created_at:Date.now(),src});
+  try{ localStorage.setItem('dari.in',JSON.stringify(arr)); }catch(e){ toast('다리로 보내지 못했습니다'); return false; }
+  x.dariAt=new Date().toISOString(); x.updated=x.dariAt; saveR();
+  if(!quiet){ toast('다리로 보냈습니다 · 400자로 키워 정리로 넘깁니다'); render(); }
+  return true;
+}
+function dariBtn(x){ return `<button class="linkish" onclick="event.stopPropagation();toDari('${x.id}')" title="글감이 될 만하면 다리로 보냅니다. 다리에서 400자 이상으로 키우고 정리에서 조사한 뒤 메모함으로 갑니다">${x.dariAt?'다리로 · 보냄':'다리로'}</button>`; }
 function isQuote(x){ return !!x.quote&&(x.kind==='mark'||x.kind==='scan'); }
 function drawPool(){ return R.reads.filter(x=>((x.kind==='mark'&&x.bookId===JAR)||isQuote(x))&&!x.gone&&(x.text||'').trim()); }
 function drawHTML(){
@@ -566,7 +589,7 @@ function drawHTML(){
   const meta=x.bookId===JAR?mdLabel(x.date):[esc(b?b.title:(x.title||'')),b&&b.author?esc(b.author):'',x.page?x.page+'쪽':'',mdLabel(x.date)].filter(Boolean).join(' · ');
   return `<section class="draw"><p class="dq">${esc(x.text.trim()).replace(/\n/g,'<br>')}</p><div class="dm">${meta}</div>
     <div class="drawbtns"><button class="ghost" onclick="drawMark()">다시 뽑기</button>
-    <button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}',true)">지우기</button></div></section>`;
+    ${dariBtn(x)}<button class="linkish" onclick="editMark('${x.id}')">고치기</button><button class="linkish" onclick="dropMark('${x.id}',true)">지우기</button></div></section>`;
 }
 function drawMark(){
   const pool=drawPool(); if(!pool.length) return;
@@ -616,7 +639,7 @@ function cfPlace(b){ if(!b) return '<span class="place none">책 없음</span>';
 function cfLI(x,k){ const b=book(x.bookId), read=x.kind==='read';
   const pg=read?rangeText(x):(x.page?x.page+'쪽':'쪽 없음');
   return `<li><div class="lt">${hl(read?x.memory:x.text,k)}</div>
-    <button class="linkish cfw" onclick="goMark('${x.bookId}','${x.id}')"><b>${esc(b?b.title:(x.title||''))}</b>${b&&b.author?' · '+esc(b.author):''} · ${cfPlace(b)} · ${pg} · ${mdLabel(x.date)}${read?' · 한 줄':x.kind==='scan'?' · 스캔':''}</button>${x.kind==='scan'?scanWhere(x):''}</li>`; }
+    <button class="linkish cfw" onclick="goMark('${x.bookId}','${x.id}')"><b>${esc(b?b.title:(x.title||''))}</b>${b&&b.author?' · '+esc(b.author):''} · ${cfPlace(b)} · ${pg} · ${mdLabel(x.date)}${read?' · 한 줄':x.kind==='scan'?' · 스캔':''}</button>${x.kind==='scan'?scanWhere(x):''}<div class="la">${dariBtn(x)}</div></li>`; }
 function cfindHTML(){
   return `<section class="cfind"><label for="cq">코멘트 찾기</label>
     <input type="text" id="cq" value="${esc(cq)}" placeholder="내가 적은 코멘트와 한 줄에서 찾기" oninput="onCfind(this)" autocomplete="off">
@@ -1611,7 +1634,8 @@ function readPanel(b,reading){
       <div class="markrow"><div class="pg"><input type="number" inputmode="numeric" id="rm-page" placeholder="쪽" aria-label="쪽"></div>
         <div class="tx"><textarea id="rm-text" rows="2" placeholder="${readQuote?'책의 문장':'이 쪽에 대한 코멘트'}" aria-label="${readQuote?'밑줄':'코멘트'}" onkeydown="${ent('readAddMark')}"></textarea></div></div>
       <div class="markfoot"><div class="hint">적은 쪽이 현재 쪽보다 뒤이면 현재 쪽도 함께 올라갑니다</div>
-        <button class="ghost" style="padding:7px 16px" onclick="readAddMark('${b.id}')">적기</button></div>
+        <span class="twobtn"><button class="linkish" onclick="readAddMark('${b.id}',true)" title="책에 적고, 같은 글을 다리로도 보냅니다. 다리에서 400자 이상으로 키우고 정리에서 조사한 뒤 메모함으로 갑니다">적고 다리로</button>
+        <button class="ghost" style="padding:7px 16px" onclick="readAddMark('${b.id}')">적기</button></span></div>
       <div class="markscan"><button class="toggle${readScanWanted(b)?' on':''}" onclick="toggleReadScan('${b.id}')"><span class="box"></span>이 쪽을 스캔한다${borrowedNow(b)?' · 빌린 책':''}</button></div></div>
     ${reading?`<div class="acts"><button onclick="finishRead('${b.id}')">완독</button><button onclick="quitRead('${b.id}')">그만 읽기</button></div>`:''}
   </li>`;
@@ -1635,7 +1659,7 @@ function toggleReadScan(id){
 }
 /* 읽기 탭에서 적는 코멘트: 목록 탭의 '코멘트 적기'와 같은 기록(kind:'mark'|'scan')을 남기고, 적은 쪽이 현재 쪽보다 뒤이면 현재 쪽도 올린다.
    목록 탭에서 적는 코멘트(addMarkTo)는 지금처럼 쪽을 건드리지 않는다(훑으며 적는 것은 독서가 아니다). */
-function readAddMark(id){
+function readAddMark(id,dari){
   const b=book(id), i=document.getElementById('rm-text'); if(!b||!i) return; const t=i.value.trim();
   const qt=readQuote, what=qt?'밑줄':'코멘트';
   if(!t){ toast(qt?'밑줄 문장을 적어주세요':'코멘트를 적어주세요'); i.focus(); return; }
@@ -1643,9 +1667,9 @@ function readAddMark(id){
   const rec={id:uid(),kind:scan?'scan':'mark',bookId:b.id,title:b.title,page,text:t,date:today(),at:now,updated:now}; if(qt) rec.quote=true;
   R.reads.push(rec); readQuote=false;
   if(page>(b.page||0)){ logPage(b,page); save(); }
-  saveR(); render();
-  if(!scan){ toast(what+'을 책에 저장했습니다'); return; }
-  toast(what+'을 저장했습니다 · 스캔 단축어를 엽니다');
+  saveR(); const sent=dari?toDari(rec.id,true):false; render();
+  if(!scan){ toast(what+'을 책에 저장했습니다'+(sent?' · 다리로도 보냈습니다':'')); return; }
+  toast(what+'을 저장했습니다'+(sent?' · 다리로도 보냈습니다':'')+' · 스캔 단축어를 엽니다');
   runShortcut(R.settings.sc.scan||'스캔',scanTag(b.title)+'|'+(page||''));
 }
 /* 완독 · 그만 읽기: 읽는 중 목록에서 빼면서 남기기와 처분 가운데 하나를 묻는다.

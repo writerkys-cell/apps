@@ -88,6 +88,7 @@ main{flex:1;min-height:0}
 .tbox.refs .rr .x:hover{color:var(--inju)}
 .tbox.refs form{display:flex;gap:.6rem;align-items:baseline;margin-top:.35rem}
 .tbox.refs form input.n{flex:none;width:7rem;min-width:0}
+.tsrc{width:100%;margin:0 auto;padding:.5rem var(--ppad) 0;font-size:.75rem;color:var(--meok-3)}
 .tprev{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:1.4rem var(--ppad) 0;margin:0 auto;width:100%;font-size:var(--pfz);line-height:var(--plh);font-family:var(--body)}
 .tprev:not(.empty)::after{content:"";display:block;height:80vh}
 .tprev .para{margin:0;text-indent:var(--pind);text-align:justify;text-justify:inter-character;word-break:break-all;hanging-punctuation:allow-end}
@@ -191,6 +192,7 @@ nav button .n{color:var(--inju);margin-left:.25rem;font-variant-numeric:tabular-
         <span class="when" id="tpWhen"></span>
         <button class="lnk" id="tpToRight" type="button" hidden>오른쪽 창으로</button>
       </div>
+      <div class="tsrc" id="tpSrc" hidden></div>
       <div class="tprev empty" id="tpPrev"></div>
     </div>
     <div class="tpane r">
@@ -365,6 +367,8 @@ function winName(app){ var n = ""; try{ n = localStorage.getItem("appwin." + app
 function winMine(){ try{ if(!window.name) window.name = "dari"; localStorage.setItem("appwin.dari", window.name); }catch(e){} }
 
 /* ---------- 받은편지함 — 방점과 정리가 적어 둔 글감을 인박스로 들인다. 같은 id가 이미 있으면(넘긴 것까지) 다시 들이지 않는다 ---------- */
+function srcLabel(c){ if(!c) return ""; var a = []; if(c.title) a.push("『" + c.title + "』"); if(c.author) a.push(c.author); if(c.page) a.push(c.page + "쪽"); return a.join(", "); }
+function srcLine(c){ if(!c) return ""; var l = srcLabel(c); return (c.kind === "quote" ? "밑줄" : "코멘트") + (l ? " · " + l : " · 밑줄들"); }
 function drainIn(){
   var arr = []; try{ arr = JSON.parse(localStorage.getItem(IN_KEY)) || []; }catch(e){}
   if(!Array.isArray(arr) || !arr.length) return 0;
@@ -378,6 +382,10 @@ function drainIn(){
        꼬리표가 있으면 정리에서 메모함이 아니라 타이핑의 그 작품으로(새 원고) 돌아간다 */
     if(x.work && x.work.id) it.work = { id:String(x.work.id), name:String(x.work.name || "") };
     if(x.ms && x.ms.id) it.ms = { id:String(x.ms.id), title:String(x.ms.title || "") };
+    /* 출처(2026년 11월 25일 밤) — 서가의 "다리로"가 단 것. {kind:'quote'|'comment', title, author, page, text}. 밑줄이면 책의 문장, 코멘트면 내 글.
+       정리까지 실어 나르고, 메모함에서 출처 줄과 내용이 된다 */
+    if(x.src && typeof x.src === "object") it.src = { kind:x.src.kind === "quote" ? "quote" : "comment", title:String(x.src.title || ""), author:String(x.src.author || ""),
+                                                   page:+x.src.page || 0, text:String(x.src.text || t) };
     S.items.push(it); n++;
   });
   try{ localStorage.removeItem(IN_KEY); }catch(e){}
@@ -489,6 +497,7 @@ function tpOutgoing(){
 function tpLeftText(){ var m = cur(); if(!m) return ""; return m.fix ? (m.fixText || "") : (m.base || ""); }
 function tpRenderStrip(){
   var m = cur();
+  var se = document.getElementById("tpSrc"); if(se){ se.hidden = !(m && m.src); se.textContent = m && m.src ? srcLine(m.src) : ""; }
   tpEl.when.textContent = "";
   if(!m){ tpEl.tally.textContent = "글감을 고르지 않았습니다"; return; }
   var g = tpGoal(m), n = len(m.base);
@@ -706,7 +715,8 @@ function tpToJeongri(){
   if(!Array.isArray(arr)) arr = [];
   arr = arr.filter(function(x){ return x && x.id !== cid; });
   arr.push({ id:cid, title:defTitle(p.t), text:p.t, seed:(m.seed && m.seed !== p.t) ? m.seed : "", left:left, origin:"dari", from:m.id, created_at:m.at || Date.now(), sent_at:Date.now(),
-             work: m.work ? { id:m.work.id, name:m.work.name } : null, ms: m.ms ? { id:m.ms.id, title:m.ms.title } : null });
+             work: m.work ? { id:m.work.id, name:m.work.name } : null, ms: m.ms ? { id:m.ms.id, title:m.ms.title } : null,
+             src: m.src ? { kind:m.src.kind, title:m.src.title, author:m.src.author, page:m.src.page, text:m.src.text } : null });
   try{ localStorage.setItem(OUT_KEY, JSON.stringify(arr)); }
   catch(e){ toast("정리로 보내지 못했습니다 — 저장 공간을 확인하세요", 4000); return; }
   m.sent = p.t; m.draft = ""; delete m.cut;
@@ -773,6 +783,7 @@ function renderList(){
     o.onclick = function(){ tpOpen(m.id); };
     var n = len(m.base), d = len(m.draft), st = el("span", "st");
     st.innerHTML = (m.work ? '<b class="wk"></b> · ' : "") + fmt(n) + "자" + (d ? " · 쓰는 중 " + fmt(d) + "자" : "") + ((d ? d : n) >= GOAL ? ' · <span class="no">정리로 넘길 수 있음</span>' : "");
+    if(m.src){ var sb = document.createElement("b"); sb.className = "wk"; sb.textContent = srcLine(m.src); sb.title = "서가에서 온 글감 — 400자로 키워 정리로 넘기면 메모함에서 출처가 따라갑니다"; st.insertBefore(document.createTextNode(" · "), st.firstChild); st.insertBefore(sb, st.firstChild); }
     if(m.work){ var wk = st.querySelector(".wk"); wk.textContent = m.work.name || "작품"; wk.title = "타이핑의 '" + (m.work.name || "") + "'에서 온 쓸 거리 — 정리에서 조사한 뒤 그 작품의 새 원고로 돌아갑니다" + (m.ms && m.ms.title ? " · 적은 원고: " + m.ms.title : ""); }
     var del = el("button", "act", "지우기"); del.type = "button"; del.title = "이 글감을 인박스에서 지웁니다";
     del.onclick = function(){
