@@ -84,6 +84,15 @@ ol.tasks .ar:hover{border-color:var(--seal-soft);color:var(--seal)}
 .think input::placeholder{color:var(--ink-faint)}
 .think button{color:var(--seal);font-size:.9rem;flex:none}
 .sent{font-size:.82rem;color:var(--ink-faint);min-height:1.5em;text-align:left;margin-top:.2rem}
+/* 방금 한 것 한 줄 (2026년 11월 26일) */
+.note{margin-top:1.3rem;text-align:left;border:1px solid var(--ink);border-radius:2px;padding:.8rem .9rem}
+.note:empty{display:none}
+.note label{display:block;font-size:.85rem;color:var(--ink-soft);margin-bottom:.4rem;line-height:1.5}
+.note label b{color:var(--ink)}
+.note textarea{width:100%;min-height:4.2rem;resize:vertical;background:none;border:1px solid var(--rule);border-radius:2px;padding:.5rem .6rem;font:inherit;font-size:.95rem;line-height:1.6;color:var(--ink)}
+.note .row{display:flex;justify-content:flex-end;gap:1.2rem;margin-top:.5rem;font-size:.9rem}
+.note .row .go{color:var(--seal);font-weight:700}
+.note .row .dim{color:var(--ink-faint)}
 ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding:.6rem 0}
 .set.conn{margin-top:.8rem}
 .set.conn input{width:13rem;text-align:left}
@@ -102,6 +111,7 @@ ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding
     <div class="clock" id="clock"></div>
     <div class="until" id="until"></div>
     <div class="acts" id="acts"></div>
+    <div class="note" id="noteBox"></div>
     <div class="today" id="today"></div>
     <div class="think"><input id="think" placeholder="떠오른 생각 한 줄 — 방점 목록 끝으로 보냅니다" enterkeyhint="send" autocomplete="off"><button id="thinkGo">보내기</button></div>
     <div class="sent" id="sent"></div>
@@ -177,7 +187,7 @@ const $ = s => document.querySelector(s);
 // 7단계에 더한 것: cfg.long·every·daily·bj{url,key,list}, tasks(방점에서 가져온 일 [{id,text,url,kind,ref,rep}]), loadedAt,
 //   plan {day, n:{일 id: 오늘 할 포모도로 수}, sel: 고른 일 id}, recs(기록 [{d:날짜, id:일 id, text, min:분, void:무효 여부, at}]) — 방점에 합칠 때 그대로 받을 수 있는 모양
 const CFG0 = {focus:25, rest:5, long:15, every:4, daily:8, bj:{url:'', key:'', list:''}};
-const blank = () => ({cfg:JSON.parse(JSON.stringify(CFG0)), run:null, ring:null, tasks:[], loadedAt:0, plan:null, recs:[], out:[], log:[]});   // out: 방점에 아직 못 보낸 요청 [{kind, target, text, at}]
+const blank = () => ({cfg:JSON.parse(JSON.stringify(CFG0)), run:null, ring:null, tasks:[], loadedAt:0, plan:null, recs:[], out:[], log:[], note:null});   // note: 방금 끝난 포모도로에 적을 한 줄을 기다리는 것 {id, text, n, startAt, focusEnd}(2026년 11월 26일)   // out: 방점에 아직 못 보낸 요청 [{kind, target, text, at}]
 let S = blank();
 try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && typeof p === 'object') S = Object.assign(blank(), p); }catch(e){}
 S.cfg = Object.assign(JSON.parse(JSON.stringify(CFG0)), S.cfg || {});
@@ -339,6 +349,7 @@ function start(o){
   ensureAudio();
   if(notiState() === 'default') askNoti();
   if(S.ring) dismiss(true);
+  if(S.note) noteSend('');
   const long = !o && (cnt().done + 1) % Math.max(1, Math.round(S.cfg.every)) === 0;
   const fm = o ? o.focus : S.cfg.focus, rm = o ? o.rest : (long ? S.cfg.long : S.cfg.rest);
   const t = o ? null : taskOf(plan().sel);
@@ -383,12 +394,14 @@ const restMin = r => (r.restEnd - r.focusEnd) / 60000;
 function tick(){
   const now = Date.now();
   // 다른 탭이 먼저 넘겼으면 그것을 따른다(두 탭이 같은 포모도로를 두 번 세지 않게)
-  try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.run) !== JSON.stringify(S.run)){ S.run = p.run || null; S.ring = p.ring || null; S.recs = p.recs || S.recs; S.log = p.log || S.log; } }catch(e){}
+  try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.run) !== JSON.stringify(S.run)){ S.run = p.run || null; S.ring = p.ring || null; S.recs = p.recs || S.recs; S.log = p.log || S.log; }
+  try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.note || null) !== JSON.stringify(S.note || null)){ S.note = p.note || null; S.out = p.out || S.out; renderNote(); } }catch(e){} }catch(e){}
   if(S.run && S.run.phase === 'focus' && now >= S.run.focusEnd){
     S.run.phase = 'rest';
     if(!S.run.test){
       recAdd(S.run, (S.run.focusEnd - S.run.startAt) / 60000, false);
-      if(S.run.id) bjSend('line', S.run.id, stamp(S.run.focusEnd) + `포모도로 ${cnt(S.run.id).done} · ${minTxt((S.run.focusEnd - S.run.startAt) / 60000)}`);   // 방점의 그 일 페이지에 한 줄
+      if(S.note) noteSend('');                 // 전 것을 아직 안 적었으면 그대로 보낸다
+      if(S.run.id) S.note = {id:S.run.id, text:S.run.text || '', n:cnt(S.run.id).done, startAt:S.run.startAt, focusEnd:S.run.focusEnd};   // 휴식 알람과 함께 '방금 한 것' 칸이 뜬다. 적거나 건너뛰면 방점의 그 일 페이지에 한 줄
       shareSoon();
     }
     S.ring = {kind:'rest', at:S.run.focusEnd};
@@ -448,6 +461,7 @@ function render(){
   const w = $('#warn');
   w.classList.toggle('on', !!need);
   if(need) w.textContent = '소리가 잠들어 있습니다. 여기를 한 번 누르면 깨어나 알람이 다시 예약됩니다.';
+  renderNote();
   renderStat();
 }
 function renderStat(){
@@ -562,6 +576,32 @@ async function bjFlush(){
   }catch(e){ /* 다음에 다시 */ }
   finally{ flushing = false; renderSent(); }
 }
+/* 방금 한 것 한 줄(2026년 11월 26일, 작가가 정함) — 포모도로가 끝나 휴식 알람이 울릴 때 칸이 뜬다. 적고 「방점에 적기」를 누르면 그 일의 방점 페이지에 한 줄:
+   '— 11/26 09:40 · 포모도로 2 · 09:15~09:40 · 장면 둘 씀'. 시각은 시작~끝(방점은 끝낸 시각만 알아서, 작업일지가 언제 무엇을 했는지 읽게).
+   「건너뛰기」나 다음 포모도로를 시작하면 적은 글 없이 같은 줄(전처럼)을 보낸다 — 기록은 어느 쪽이든 남는다. 휴식이 끝나도 칸은 남아 있다.
+   흐름을 막지 않는다: 알람·휴식·시작은 칸과 상관없이 돈다. 줄바꿈은 한 칸으로(방점의 한 줄) */
+function noteSend(v){
+  const x = S.note; if(!x) return;
+  const t = String(v || '').replace(/\s+/g, ' ').trim();
+  bjSend('line', x.id, stamp(x.focusEnd) + `포모도로 ${x.n} · ${hm(x.startAt)}~${hm(x.focusEnd)}` + (t ? ' · ' + t : ''));
+  S.note = null; save(); renderNote();
+  if(t) sentMsg = `‘${t.length > 24 ? t.slice(0, 24) + '…' : t}’ · 방점의 ‘${x.text.length > 14 ? x.text.slice(0, 14) + '…' : x.text}’ 페이지에 적습니다`;
+  renderSent();
+}
+let noteKey = '';
+function renderNote(){
+  const x = S.note, box = $('#noteBox'), k = x ? x.id + '|' + x.focusEnd : '';
+  if(k === noteKey) return;                      // 같은 칸이면 다시 그리지 않는다(쓰던 글을 잃지 않게)
+  noteKey = k;
+  box.innerHTML = x ? `<label><b>방금 한 것</b> · ${esc(x.text)} · 포모도로 ${x.n} · ${hm(x.startAt)}~${hm(x.focusEnd)}<br>적으면 방점의 이 일 페이지에 시각과 함께 남습니다.</label>
+      <textarea id="noteTa" placeholder="이 25분 동안 한 것 한 줄" enterkeyhint="send"></textarea>
+      <div class="row"><button class="dim" id="noteSkip">건너뛰기</button><button class="go" id="noteGo">방점에 적기</button></div>` : '';
+  const ta = $('#noteTa');
+  if(ta){
+    ta.onkeydown = e => { if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); noteSend(ta.value); } };
+    if(!document.hidden) setTimeout(() => { try{ ta.focus({preventScroll:true}); }catch(e){} }, 50);
+  }
+}
 let sentMsg = '';
 function renderSent(){
   const n = S.out.length;
@@ -654,6 +694,8 @@ document.addEventListener('click', e => {
   if(e.target.closest('#warn')){ ensureAudio(); return; }
   if(e.target.closest('#bDone')){ finishTask(); return; }
   if(e.target.closest('#thinkGo')){ sendThought(); return; }
+  if(e.target.closest('#noteGo')){ noteSend(($('#noteTa') || {}).value); return; }
+  if(e.target.closest('#noteSkip')){ noteSend(''); return; }
   const g = e.target.closest('[data-go]'); if(g){ e.preventDefault(); goTask(g.dataset.go); return; }
   const up = e.target.closest('[data-up]'); if(up){ setN(up.dataset.up, 1); return; }
   const dn = e.target.closest('[data-dn]'); if(dn){ setN(dn.dataset.dn, -1); return; }
