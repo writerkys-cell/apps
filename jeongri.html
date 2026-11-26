@@ -458,6 +458,7 @@ function srcRowsHtml(c){const rows=(c.srcs&&c.srcs.length)?c.srcs:[{u:'',n:''}];
   return rows.map((x,i)=>`<div class="with"><input data-sf="u" data-id="${c.id}" data-i="${i}" value="${esc(x.u)}" placeholder="데본씽크 항목(PDF는 쪽 링크)의 x-devonthink-item:// 주소나 웹 주소"><input class="sn" data-sf="n" data-id="${c.id}" data-i="${i}" value="${esc(x.n)}" placeholder="쪽수, 무엇">${(x.u||'').trim()?`<a href="${esc(x.u.trim())}"${tgt(x.u)} title="${openTip(x.u)}"><button type="button" tabindex="-1">열기 ↗</button></a>`:''}${rows.length>1||(x.u||x.n)?`<button type="button" class="ghost" data-act="srcDel" data-id="${c.id}" data-i="${i}" title="이 자료 링크를 뺍니다">✕</button>`:''}</div>`).join('');}
 /* 메모함으로 넘기는 줄 — 400자가 차기 전에는 얼마나 남았는지, 찬 뒤에는 꼬리표 고르기와 "메모함으로 보내기".
    예전에 4baek·타이핑으로 넘겨 원고가 있는 카드는 그 원고로 가는 링크만 보인다 */
+const IS_TOUCH_APPLE=/iPhone|iPad/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 function startHtml(c){const n=bodyLen(c);const m=msFor(c);
   if(m)return `<span>${isOld(m)?'타이핑':'4baek'}에 이 카드의 원고가 있습니다 · ${fmtN(msChars(m))}자 · ${msState(m)}</span>${goLink(m)}`;
   if(c.work&&c.work.id){   /* 타이핑의 작품에서 온 쓸 거리 — 조사한 것과 함께 그 작품의 새 원고로 돌아간다 */
@@ -465,6 +466,8 @@ function startHtml(c){const n=bodyLen(c);const m=msFor(c);
     const from=`<span class="muted">타이핑의 '${wn}'에서 온 쓸 거리${c.wms&&c.wms.title?` · 적은 원고: ${esc(c.wms.title)}`:''}</span>`;
     if(n<GOAL)return `<span><b>${fmtN(n)} / ${GOAL}자</b></span><span class="muted">${fmtN(GOAL-n)}자를 더 쓰면 타이핑으로 넘길 수 있습니다.</span>${from}${off}`;
     if(!norm(c.title))return `<span><b>${fmtN(n)}자</b></span><span class="muted">제목을 적으면 타이핑으로 넘길 수 있습니다. 제목이 새 원고의 이름이 됩니다.</span>${from}${off}`;
+    /* 맥에서만(2026년 11월 26일, 작가가 정함) — 타이핑은 쓰던 글을 맥의 브라우저에만 둔다. 아이패드·아이폰에서는 단추 대신 안내만 보인다. 방점의 isTouchApple과 같은 법 */
+    if(IS_TOUCH_APPLE)return `<span><b>${fmtN(n)}자</b> · 400자를 채웠습니다. 더 써도 됩니다.</span><span class="muted">타이핑으로 넘기는 것은 맥에서 합니다.</span>${from}${off}`;
     return `<span><b>${fmtN(n)}자</b> · 400자를 채웠습니다. 더 써도 됩니다.</span>
       <a class="go" href="${esc(tpNewUrl(c))}" target="taiping" data-win="taiping" title="타이핑의 '${wn}'에 이 제목으로 새 원고를 만듭니다. 본문이 첫 판본으로, 자료 칸의 주소가 원고의 자료로 들어갑니다. '메모함의 내용' 칸에 적은 조사 글은 이 카드에 남고, 원고의 자료 맨 앞에서 엽니다. 원고가 생기면 이 카드는 보관으로 넘어갑니다">타이핑에서 쓰기 시작 ↗</a>
       ${from}${off}

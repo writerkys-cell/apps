@@ -457,7 +457,7 @@ function renderStat(){
   $('#stat').innerHTML = `소리 <b>${a}</b> · 맥 알림 <b>${n}</b> · 화면 꺼짐 막기 <b>${wl}</b>${sched && S.run ? ` · 알람 예약 <b>${hms(sched.focusEnd)} / ${hms(sched.restEnd)}</b>` : ''}`;
 }
 const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const KINDS = {write:'쓰기', revise:'개정', read:'읽기'};
+const KINDS = {write:'쓰기', read:'읽기', lecture:'강연'};   // 방점의 태그와 같게(2026년 11월 26일: 개정은 쓰기에 합쳐지고 강연이 생겼다). 글감은 방점에서 다리로 보내는 일이라 여기에 싣지 않는다
 const kindTag = t => (KINDS[t.kind] ? `<span class="kind">${KINDS[t.kind]}</span>` : '') + (t.rep ? '<span class="kind rep">반복</span>' : '');
 // 목록: 포모도로 수를 정한 일이 위로(그 안에서는 방점의 순서). 줄을 누르면 고르고, 제목을 누르면 링크로, ▲▼로 수를 정한다
 let listKey = '';
@@ -524,7 +524,7 @@ async function loadTasks(reset){
     if(!data || !Array.isArray(data.tasks)) throw new Error(`방점에 '${b.list}' 목록이 없습니다`);
     const k = dayKey();
     S.tasks = data.tasks.filter(t => t && t.id && !t.done && !t.fresh && !t.hold && t.kind !== 'idea' && t.kind !== 'memo' && (!t.rep || repDue(t, k)))
-      .map(t => ({id:String(t.id), text:String(t.text || ''), url:t.url || '', kind:t.kind || '', ...(t.ref ? {ref:{id:t.ref.id, name:t.ref.name || ''}} : {}), ...(t.rep ? {rep:true} : {})}));
+      .map(t => ({id:String(t.id), text:String(t.text || ''), url:t.url || '', kind:t.kind === 'revise' ? 'write' : (t.kind || ''), ...(t.ref ? {ref:{id:t.ref.id, name:t.ref.name || ''}} : {}), ...(t.rep ? {rep:true} : {})}));
     S.loadedAt = Date.now();
     if(reset){ S.plan = {day:k, n:{}, sel:null}; }
     else { const P = plan(); if(P.sel && !taskOf(P.sel)) P.sel = null; }
@@ -632,6 +632,7 @@ function goTask(id){
   const t = taskOf(id) || (S.run && S.run.id === id ? {id, kind:''} : null); if(!t) return;
   const k = t.kind || '', ref = t.ref && t.ref.id;
   if(k === 'write' || k === 'revise'){ window.open(tpUrl(t.ref), winName('taiping')); return; }   // 쓰기도 타이핑에서(2026년 11월 25일)
+  if(k === 'lecture'){ window.open('https://writerkys-cell.github.io/apps/lecture.html', winName('lecture')); return; }   // 강연 원고(2026년 11월 26일)
   if(k === 'read'){ window.open(appUrl('seoga.html') + '#' + (ref ? enc('읽기') + '=' + enc(ref) : 'read'), '_blank'); return; }
   if(t.url && !AUTO_URLS.includes(t.url)){
     if(/^https?:/i.test(t.url)) window.open(t.url, '_blank', 'noopener');
