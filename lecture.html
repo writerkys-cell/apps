@@ -220,6 +220,35 @@ kbd{font:inherit;font-size:11px;border:1px solid var(--line2);border-radius:4px;
 
 <script>
 'use strict';
+/* 다른 앱이 부를 때(2026년 11월 26일) — 방점·fomo는 '강연' 일의 제목을 누르면 이 창을 찾는다.
+   ① 자기 창 이름을 appwin.lecture에 적어 둔다(이름이 없으면 'lecture'). 링크로 연 창이면 부른 앱이 이 이름으로 찾아 새로 고치지 않고 앞으로 꺼낸다.
+   ② 책갈피 등으로 따로 연 창은 이름으로 찾지 못한다. 그래서 BroadcastChannel 'appwin'에 '있나?'(ask)가 오면 '여기 있다'(here)고 답하고,
+      '나와 달라'(raise)가 오면 제목을 깜박이고 맥 알림을 띄운다(알림을 누르면 이 탭으로 온다). 브라우저는 다른 탭이 이 탭을 끌어오지 못하게 한다 */
+(function(){
+  const APP='lecture';
+  try{ if(!window.name) window.name=APP; localStorage.setItem('appwin.'+APP,window.name); }catch(e){}
+  if(!('BroadcastChannel' in window)) return;
+  let bc=null; try{ bc=new BroadcastChannel('appwin'); }catch(e){ return; }
+  let flash=null;
+  bc.onmessage=e=>{
+    const m=e.data||{};
+    if(m.ask===APP){ bc.postMessage({here:APP,id:m.id}); return; }
+    if(m.raise!==APP) return;
+    if(m.hash&&location.hash!==m.hash) location.hash=m.hash;
+    try{ window.focus(); }catch(_){}
+    if(document.hasFocus()) return;
+    if(!flash){
+      const t0=document.title; let i=0;
+      flash=setInterval(()=>{ document.title=(i++%2)?t0:'● 여기 있습니다 · lecture'; if(i>20||document.hasFocus()){ clearInterval(flash); flash=null; document.title=t0; } },700);
+    }
+    try{
+      if('Notification' in window&&Notification.permission==='granted'){
+        const n=new Notification('강연 원고는 여기 있습니다',{body:'누르면 이 탭으로 갑니다.',tag:'appwin-lecture'});
+        n.onclick=()=>{ try{ window.focus(); }catch(_){} n.close(); };
+      }
+    }catch(_){}
+  };
+})();
 const STORE_KEY='lecture.v1';
 const COLORS=['#7F77DD','#5DCAA5','#F0997B','#85B7EB','#FAC775','#ED93B1','#97C459','#B4B2A9'];
 const app=document.getElementById('app');

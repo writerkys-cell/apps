@@ -1401,9 +1401,55 @@ function setTag(id, kind, ref){
    글감 → 복사하고 다리의 받은편지함(dari.in)에 넣고, 로그인이 있으면 다리의 맞추기 표에도 바로 올리고(dariSend), 다리(dari.html)를 연 뒤 끝낸 일로
    (2026년 11월 24일, 작가가 정함: 글감은 정리로 바로 가지 않고 다리에서 400자로 자란 뒤 정리의 카드가 된다)
    할일 → 링크가 있으면 그 링크. 메모 태그(데본씽크로 보내기)는 2026년 11월 26일에 없앴다 */
-const LECTURE_URL = 'https://writerkys-cell.github.io/apps/lecture.html';
+const LECTURE_URL = 'lecture.html';            // 같은 폴더(apps)의 강연 원고 앱
 const winName = app => { let n = ''; try{ n = localStorage.getItem('appwin.' + app) || ''; }catch(e){} if(!n || n === window.name) n = app; return n === window.name ? app + '2' : n; };   // Writer KYS의 winName과 같게: 그 앱이 이미 떠 있는 창을 다시 쓴다
 const appUrl = f => new URL(f, location.href).href;      // 방점과 같은 폴더의 앱
+/* 앱을 부를 때 — 이미 떠 있으면 새로 고치지 않고 앞으로 꺼낸다(2026년 11월 26일, 작가가 정함)
+   1) 그 이름의 창을 먼저 찾는다(window.open('', 이름)은 있는 창을 건드리지 않고 돌려준다). 같은 앱이 떠 있으면 주소를 다시 넣지 않고 앞으로만.
+      해시가 다르면(타이핑의 #원고=, 서가의 #읽기=) 해시만 바꾼다 — 두 앱은 hashchange를 받는다. 다른 앱이 떠 있던 창이면 전처럼 그 창에 연다.
+   2) 이름으로 못 찾아 빈 창이 생겼으면, 책갈피 등으로 따로 연 같은 앱이 있는지 BroadcastChannel 'appwin'으로 0.25초 묻는다.
+      답이 오면 빈 창을 닫고 그 앱에게 '나와 달라'(raise)고 보낸다. 브라우저는 남의 탭을 앞으로 끌어오지 못하게 하므로,
+      그 앱이 제목을 깜박이고 맥 알림을 띄운다(누르면 그 탭으로 간다). 답하는 앱은 지금 lecture뿐이다.
+   돌려주는 것: 'front' 앞으로 꺼냄 · 'new' 새로 엶 · 'elsewhere' 다른 탭에 있어 알림을 보냄 */
+const APP_BC = (() => { try{ return 'BroadcastChannel' in window ? new BroadcastChannel('appwin') : null; }catch(e){ return null; } })();
+function askApp(app){
+  return new Promise(res => {
+    if(!APP_BC || !app) return res(false);
+    const id = Math.random().toString(36).slice(2);
+    let done = false;
+    const end = v => { if(done) return; done = true; APP_BC.removeEventListener('message', h); res(v); };
+    const h = e => { const m = e.data || {}; if(m.here === app && m.id === id) end(true); };
+    APP_BC.addEventListener('message', h);
+    APP_BC.postMessage({ask:app, id});
+    setTimeout(() => end(false), 250);
+  });
+}
+async function openApp(url, name, app){
+  const u = new URL(url, location.href);
+  let w = null;
+  try{ w = window.open('', name); }catch(e){}
+  if(!w){ window.open(u.href, name); return 'new'; }           // 막혔으면 전처럼
+  let cur = null;
+  try{ cur = w.location.href; }catch(e){}                       // 다른 주소의 창이면 읽지 못한다 → 그 창에 연다
+  const norm = p => p.replace(/\.html$/, '').replace(/\/+$/, '');
+  if(cur && cur !== 'about:blank'){
+    const c = new URL(cur);
+    if(c.origin === u.origin && norm(c.pathname) === norm(u.pathname)){
+      if(u.hash && c.hash !== u.hash) w.location.hash = u.hash;
+      try{ w.focus(); }catch(e){}
+      return 'front';
+    }
+  }else if(cur === 'about:blank' && await askApp(app)){
+    try{ w.close(); }catch(e){}
+    APP_BC.postMessage({raise:app, hash:u.hash || ''});
+    return 'elsewhere';
+  }
+  w.location.href = u.href;
+  try{ w.focus(); }catch(e){}
+  return 'new';
+}
+const APP_NAMES = {lecture:'강연 원고', taiping:'타이핑', dari:'다리', jeongri:'정리', seoga:'서가'};
+const callApp = (url, app) => openApp(url, winName(app), app).then(r => { if(r === 'elsewhere') toast(`${APP_NAMES[app] || app} 창이 다른 탭에 열려 있습니다 · 맥 알림을 누르면 그리로 갑니다`); });
 const enc = encodeURIComponent;
 const taskBody = t => [t.text, (t.note || '').trim(), t.url && !KIND_URLS.includes(t.url) ? t.url : ''].filter(Boolean).join('\n\n');
 const copyText = v => { try{ navigator.clipboard.writeText(v).catch(() => {}); }catch(e){} };   // 덤이다. 넘기는 길이 실패해도 붙여 넣을 수 있게
@@ -1430,11 +1476,11 @@ function tpUrl(r){
 }
 function goTask(id){
   const t = byId(id); if(!goable(t)) return;
-  if(t.gam){ const c = gamCount(); if(c && c.dari > 0) window.open(appUrl('dari.html'), winName('dari')); else window.open(appUrl('jeongri.html'), winName('jeongri')); return; }   // 글감 처리하기: 다리에 기다리는 글감이 있으면 다리를, 없으면 정리를 연다
+  if(t.gam){ const c = gamCount(); if(c && c.dari > 0) callApp(appUrl('dari.html'), 'dari'); else callApp(appUrl('jeongri.html'), 'jeongri'); return; }   // 글감 처리하기: 다리에 기다리는 글감이 있으면 다리를, 없으면 정리를 연다
   const k = t.kind || '', ref = t.ref && t.ref.id;
-  if(k === 'write'){ window.open(tpUrl(t.ref), winName('taiping')); return; }   // 쓰기도 타이핑에서(2026년 11월 25일)
-  if(k === 'lecture'){ window.open(LECTURE_URL, winName('lecture')); return; }  // 강연 원고. 일은 그대로 남는다
-  if(k === 'read'){ window.open(appUrl('seoga.html') + '#' + (ref ? enc('읽기') + '=' + enc(ref) : 'read'), '_blank'); return; }
+  if(k === 'write'){ callApp(tpUrl(t.ref), 'taiping'); return; }   // 쓰기도 타이핑에서(2026년 11월 25일)
+  if(k === 'lecture'){ callApp(appUrl(LECTURE_URL), 'lecture'); return; }  // 강연 원고. 일은 그대로 남는다
+  if(k === 'read'){ callApp(appUrl('seoga.html') + '#' + (ref ? enc('읽기') + '=' + enc(ref) : 'read'), 'seoga'); return; }   // 서가도 한 창으로(전에는 늘 새 탭)
   if(k === 'idea'){
     const text = taskBody(t); copyText(text);
     const at = Date.now();
@@ -1445,7 +1491,7 @@ function goTask(id){
     try{ localStorage.setItem('dari.in', JSON.stringify(arr)); gamMemo = null; }catch(e){ local = false; }
     const queued = dariQueue({id:'bj' + t.id, text, at});        // 다른 기기의 다리에도 바로 가게 표에 올린다. 못 올리면 기다렸다가 다시
     if(!local && !queued){ toast('다리로 보내지 못했습니다 · 내용은 복사해 두었습니다'); return; }
-    window.open(appUrl('dari.html'), winName('dari'));
+    callApp(appUrl('dari.html'), 'dari');
     finish(id, null, true);
     toast('다리로 보내고 끝낸 일로 두었습니다 · 내용은 복사해 두었습니다');
     dariFlush();
