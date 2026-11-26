@@ -80,6 +80,9 @@ ol.tasks .ar{flex:none;width:1.7rem;height:1.75rem;color:var(--ink-soft);font-si
 ol.tasks .ar:hover{border-color:var(--seal-soft);color:var(--seal)}
 /* 생각 보내기 (8단계) */
 .think{display:flex;gap:.5rem;margin-top:1.4rem;border-bottom:1px solid var(--rule)}
+.think[hidden]{display:none}
+.think.prog{border-bottom-color:var(--ink)}
+.think.prog + .think{margin-top:.5rem}
 .think input{flex:1;min-width:0;background:none;border:none;padding:.5rem 0;font-size:.95rem}
 .think input::placeholder{color:var(--ink-faint)}
 .think button{color:var(--seal);font-size:.9rem;flex:none}
@@ -95,16 +98,26 @@ ol.tasks .ar:hover{border-color:var(--seal-soft);color:var(--seal)}
 .note .row .dim{color:var(--ink-faint)}
 ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding:.6rem 0}
 .set.conn{margin-top:.8rem}
+/* 탭과 자동 넘김 (2026년 11월 26일) */
+header{gap:.8rem}
+header small{margin-right:auto}
+nav.tabs{display:flex;gap:1.1rem;flex:none}
+nav.tabs button{font-size:.92rem;color:var(--ink-faint);padding-bottom:1px;border-bottom:1px solid transparent}
+nav.tabs button.on{color:var(--seal);border-bottom-color:var(--seal)}
+#v-set section:first-child{margin-top:0;border-top:none;padding-top:0}
+.set.auto{margin-top:.9rem;flex-direction:column;align-items:flex-start;gap:.35rem}
+.set input[type=checkbox]{width:auto;margin:0 .2rem 0 0;accent-color:var(--seal)}
 .set.conn input{width:13rem;text-align:left}
 .set.conn label{flex-wrap:wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><h1>fo<span>mo</span></h1><small>방점의 일을 포모도로로</small></header>
+  <header><h1>fo<span>mo</span></h1><small>방점의 일을 포모도로로</small><nav class="tabs"><button data-tab="work" class="on">할 일</button><button data-tab="set">설정</button></nav></header>
 
   <button class="warn" id="warn"></button>
 
+  <div id="v-work">
   <div class="stage" id="stage">
     <div class="task" id="task"></div>
     <div class="phase" id="phase"></div>
@@ -113,6 +126,7 @@ ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding
     <div class="acts" id="acts"></div>
     <div class="note" id="noteBox"></div>
     <div class="today" id="today"></div>
+    <div class="think prog" id="progBox" hidden><input id="prog" placeholder="지금 어디까지 했나 — 이 일의 방점 페이지에 시각과 함께 적습니다" enterkeyhint="send" autocomplete="off"><button id="progGo">적기</button></div>
     <div class="think"><input id="think" placeholder="떠오른 생각 한 줄 — 방점 목록 끝으로 보냅니다" enterkeyhint="send" autocomplete="off"><button id="thinkGo">보내기</button></div>
     <div class="sent" id="sent"></div>
   </div>
@@ -124,6 +138,9 @@ ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding
     <div class="links"><button id="reload">방점에서 새로 불러오기</button></div>
     <div class="stat" id="bjStat"></div>
   </section>
+  </div>
+
+  <div id="v-set" hidden>
 
   <section>
     <h2>설정</h2>
@@ -133,6 +150,10 @@ ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding
       <label>긴 휴식 <input id="cLong" type="number" min="0.1" step="0.1" inputmode="decimal"> 분</label>
       <label><input id="cEvery" type="number" min="1" step="1" inputmode="numeric"> 포모도로마다 긴 휴식</label>
       <label>하루 기본 <input id="cDaily" type="number" min="0" step="1" inputmode="numeric"> 포모도로</label>
+    </div>
+    <div class="set auto">
+      <label><input id="cAutoRest" type="checkbox"> 포모도로가 끝나면 휴식을 저절로 시작</label>
+      <label><input id="cAutoStart" type="checkbox"> 휴식이 끝나면 다음 포모도로를 저절로 시작</label>
     </div>
     <div class="set conn">
       <label>방점 주소 <input id="bUrl" placeholder="비우면 이 브라우저의 방점 설정을 씁니다" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
@@ -163,11 +184,13 @@ ol.tasks li.empty{cursor:default;color:var(--ink-faint);font-size:.92rem;padding
   <section class="help">
     <h2>쓰는 법</h2>
     <p>‘방점에서 새로 불러오기’를 누르면 방점의 할 일을 받아 옵니다(쓰기·개정·읽기·할일만. ‘새’ 표시가 붙은 일, 글감·메모, 미결은 오지 않습니다). 일마다 ▲▼로 오늘 몇 포모도로를 할지 정하면 그 일이 목록 위로 올라오고, 위에 오늘의 합이 보입니다. 줄을 눌러 일을 고르면 맨 위에 뜨고 시작 단추가 나옵니다. 제목을 누르면 방점처럼 4baek·타이핑·서가나 그 일의 링크가 열립니다. 새로 불러오면 계획과 고른 일은 비워지고 기록은 남습니다. 날이 바뀌면 계획은 저절로 비워집니다.</p>
+    <p>일을 골라 포모도로나 휴식이 도는 동안에는 ‘지금 어디까지 했나’ 칸이 떠 있습니다. 적으면 방점의 그 일 페이지에 시각과 함께 한 줄이 남습니다. 몇 번이든 적을 수 있습니다.</p>
     <p>포모도로를 마칠 때마다 방점의 그 일 페이지에 한 줄이 남고(예: 포모도로 1 · 25분), 도중에 멈추면 ‘무효 · 방해’ 한 줄이 남습니다. ‘이 일 끝’을 누르면 방점에서도 끝난 일이 됩니다. 떠오른 생각을 적어 보내면 방점 목록 끝에 ‘새’ 표시로 들어갑니다. 이것들은 방점(또는 방점을 끼운 시작)이 열릴 때 받아 갑니다. 오늘 한 포모도로 수는 방점 맨 위 줄에 ‘포모도로 3 / 9 · 무효 1’처럼 보입니다.</p>
-    <p>‘시작’을 누르면 포모도로가 돌고, 끝나면 <b>휴식 알람</b>(따르릉)이 울리며 휴식이 저절로 시작됩니다(정한 횟수마다 긴 휴식). 휴식이 끝나면 <b>시작 알람</b>(딩·동·댕)이 ‘알람 끄기’를 누를 때까지 울립니다. 다음 포모도로는 손으로 시작합니다. 도중에 ‘멈춤’을 누르면 그 포모도로는 무효입니다.</p>
+    <p>‘시작’을 누르면 포모도로가 돌고, 끝나면 <b>휴식 알람</b>(따르릉)이 울리며 휴식이 저절로 시작됩니다(정한 횟수마다 긴 휴식). 휴식이 끝나면 <b>시작 알람</b>(딩·동·댕)이 한 번 울리고 다음 포모도로가 저절로 시작됩니다. 저절로 넘어가는 것은 위의 두 칸에서 따로 끌 수 있습니다. 끄면 단추를 눌러야 넘어가고, 시작 알람은 ‘알람 끄기’를 누를 때까지 울립니다. 켜 두어도 고른 일의 오늘 정한 수를 다 했거나, 고른 일이 없거나, 맥이 자다 깨어 1분 넘게 늦었으면 저절로 시작하지 않고 알람만 울립니다. 도중에 ‘멈춤’을 누르면 그 포모도로는 무효가 됩니다.</p>
     <p>두 알람은 ‘시작’을 누르는 순간 끝나는 시각에 맞춰 미리 예약해 둡니다. 그래서 fomo가 다른 탭이나 다른 앱 뒤에 있어도 제때 울립니다. 맥 알림도 함께 뜹니다(허락했을 때).</p>
     <p><b>울리지 않는 경우</b>: 맥이 잠자기에 들어갔을 때, 소리를 껐을 때, 이 탭을 닫았을 때. 탭을 새로 고치면 타이머는 이어지지만 소리는 한 번 눌러 깨워야 합니다(위에 붉은 줄이 뜹니다).</p>
   </section>
+  </div>
 </div>
 
 <script>
@@ -186,8 +209,8 @@ const KEY = 'fomo.v1';
 const $ = s => document.querySelector(s);
 // 7단계에 더한 것: cfg.long·every·daily·bj{url,key,list}, tasks(방점에서 가져온 일 [{id,text,url,kind,ref,rep}]), loadedAt,
 //   plan {day, n:{일 id: 오늘 할 포모도로 수}, sel: 고른 일 id}, recs(기록 [{d:날짜, id:일 id, text, min:분, void:무효 여부, at}]) — 방점에 합칠 때 그대로 받을 수 있는 모양
-const CFG0 = {focus:25, rest:5, long:15, every:4, daily:8, bj:{url:'', key:'', list:''}};
-const blank = () => ({cfg:JSON.parse(JSON.stringify(CFG0)), run:null, ring:null, tasks:[], loadedAt:0, plan:null, recs:[], out:[], log:[], note:null});   // note: 방금 끝난 포모도로에 적을 한 줄을 기다리는 것 {id, text, n, startAt, focusEnd}(2026년 11월 26일)   // out: 방점에 아직 못 보낸 요청 [{kind, target, text, at}]
+const CFG0 = {focus:25, rest:5, long:15, every:4, daily:8, autoRest:true, autoStart:true, bj:{url:'', key:'', list:''}};
+const blank = () => ({cfg:JSON.parse(JSON.stringify(CFG0)), run:null, ring:null, tasks:[], loadedAt:0, plan:null, recs:[], out:[], log:[], note:null, wait:null});   // wait: 휴식을 손으로 시작하기를 기다리는 것 {min, long, id, text, at}(저절로 넘어가기를 껐을 때)   // note: 방금 끝난 포모도로에 적을 한 줄을 기다리는 것 {id, text, n, startAt, focusEnd}(2026년 11월 26일)   // out: 방점에 아직 못 보낸 요청 [{kind, target, text, at}]
 let S = blank();
 try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && typeof p === 'object') S = Object.assign(blank(), p); }catch(e){}
 S.cfg = Object.assign(JSON.parse(JSON.stringify(CFG0)), S.cfg || {});
@@ -228,7 +251,11 @@ function logIt(m){
 
 /* ══════════ 소리 ══════════ */
 let ctx = null, master = null, keep = null;
-let nodes = {rest:[], start:[], try:[]};          // 예약해 둔 소리. 무리마다 따로 끈다
+let nodes = {rest:[], start:[], try:[], tail:[]};   // tail: 저절로 다음 포모도로로 넘어갈 때 한 번 울리는 시작 알람
+const AUTO_RING = 5;                               // 그때는 딩·동·댕 한 번만(5초)
+const chainOn = r => !!S.cfg.autoStart && !!r && !r.test;     // 휴식 뒤에 저절로 시작하나. 시험 한 바퀴는 한 바퀴로 끝난다
+const restOn = r => !!S.cfg.autoRest || !!(r && r.test);       // 포모도로 뒤에 휴식이 저절로 시작하나
+const schedK = () => (chainOn(S.run) ? 1 : 0) + '|' + (restOn(S.run) ? 1 : 0);          // 예약해 둔 소리. 무리마다 따로 끈다
 let sched = null;                                  // {c0: 예약할 때의 오디오 시계, w0: 그때의 벽시계, focusEnd, restEnd}
 const REST_RING = 45, START_RING = 15 * 60;        // 휴식 알람은 45초(휴식은 어차피 저절로 간다), 시작 알람은 끌 때까지 — 15분어치를 예약해 둔다
 function ensureAudio(){
@@ -294,8 +321,9 @@ function schedule(){
   const now = Date.now(), c = ctx.currentTime;
   const at = ms => c + (ms - now) / 1000;
   if(S.run.focusEnd > now) ringRest('rest', at(S.run.focusEnd), REST_RING);
-  if(S.run.restEnd > now) ringStart('start', at(S.run.restEnd), START_RING);
-  sched = {c0:c, w0:now, focusEnd:S.run.focusEnd, restEnd:S.run.restEnd};
+  const short = chainOn(S.run);
+  if(S.run.restEnd > now && (S.run.phase === 'rest' || restOn(S.run))) ringStart('start', at(S.run.restEnd), short ? AUTO_RING : START_RING);
+  sched = {c0:c, w0:now, focusEnd:S.run.focusEnd, restEnd:S.run.restEnd, short, k:schedK()};
   keepOn();
   return true;
 }
@@ -312,7 +340,7 @@ function resync(force){
   if(!audioOk()) return;
   if(S.run){
     const drift = sched ? Math.abs((ctx.currentTime - sched.c0) * 1000 - (Date.now() - sched.w0)) : Infinity;
-    if(force || !sched || drift > 1500 || sched.focusEnd !== S.run.focusEnd || sched.restEnd !== S.run.restEnd){
+    if(force || !sched || drift > 1500 || sched.focusEnd !== S.run.focusEnd || sched.restEnd !== S.run.restEnd || sched.k !== schedK()){
       const was = sched && drift > 1500 && isFinite(drift);
       schedule();
       if(was) logIt(`소리 예약을 다시 맞춤 (시계가 ${Math.round(drift / 1000)}초 어긋남)`);
@@ -345,11 +373,13 @@ function wakeOff(){ if(wake){ try{ wake.release(); }catch(e){} wake = null; } }
 
 /* ══════════ 흐름 ══════════ */
 // o: 시험 한 바퀴일 때 {focus, rest}(분). 없으면 설정대로 — 오늘 한 포모도로가 정한 횟수의 배수가 되는 차례면 긴 휴식
-function start(o){
+// auto: 휴식이 끝나 저절로 시작할 때. 적던 한 줄은 그대로 둔다(다음 포모도로가 끝날 때까지 적을 수 있다)
+function start(o, auto){
   ensureAudio();
-  if(notiState() === 'default') askNoti();
+  if(!auto && notiState() === 'default') askNoti();
   if(S.ring) dismiss(true);
-  if(S.note) noteSend('');
+  if(S.note && !auto) noteSend('');
+  S.wait = null;
   const long = !o && (cnt().done + 1) % Math.max(1, Math.round(S.cfg.every)) === 0;
   const fm = o ? o.focus : S.cfg.focus, rm = o ? o.rest : (long ? S.cfg.long : S.cfg.rest);
   const t = o ? null : taskOf(plan().sel);
@@ -359,8 +389,39 @@ function start(o){
   save();
   const ok = schedule();
   wakeOn();
-  logIt(`포모도로 시작${t ? ' · ' + t.text : ''} · ${minTxt(fm)} · ${hms(S.run.focusEnd)}에 끝남${ok ? ' · 두 알람 예약함' : ' · 소리를 예약하지 못함'}`);
+  logIt(`포모도로 ${auto ? '저절로 ' : ''}시작${t ? ' · ' + t.text : ''} · ${minTxt(fm)} · ${hms(S.run.focusEnd)}에 끝남${ok ? ' · 두 알람 예약함' : ' · 소리를 예약하지 못함'}`);
   render();
+}
+// 저절로 넘어가기를 껐을 때: 포모도로가 끝나고 기다리던 휴식을 손으로 시작한다. 휴식은 누른 때부터 잰다
+function startRest(){
+  const w = S.wait; if(!w) return;
+  ensureAudio();
+  if(S.ring) dismiss(true);
+  const now = Date.now();
+  S.run = {phase:'rest', startAt:now, focusEnd:now, restEnd:now + w.min * 60000, id:w.id || null, text:w.text || '', long:!!w.long, test:false};
+  S.wait = null; ringing = {rest:false, start:false};
+  save();
+  const ok = schedule();
+  wakeOn();
+  logIt(`${w.long ? '긴 ' : ''}휴식 ${minTxt(w.min)} 시작 · ${hms(S.run.restEnd)}에 끝남${ok ? ' · 시작 알람 예약함' : ' · 소리를 예약하지 못함'}`);
+  render();
+}
+function skipRest(){
+  if(!S.wait) return;
+  S.wait = null;
+  if(S.ring) dismiss(true);
+  keepOff(); wakeOff(); save();
+  logIt('휴식을 건너뜀');
+  render();
+}
+// 휴식이 끝났을 때 다음 포모도로를 저절로 시작해도 되나. 안 되면 까닭(끈 것이면 빈 글)
+function chainWhy(was, now){
+  if(!chainOn(was)) return {ok:false, why:''};
+  if(now - was.restEnd > 60000) return {ok:false, why:'1분 넘게 늦어서'};
+  const P = plan(), t = taskOf(P.sel);
+  if(!t && S.tasks.length) return {ok:false, why:'고른 일이 없어서'};
+  if(t && P.n[t.id] > 0 && cnt(t.id).done >= P.n[t.id]) return {ok:false, why:'이 일의 정한 수를 다 해서'};
+  return {ok:true, why:''};
 }
 // 포모도로 도중에 멈추면 무효. 휴식 도중이면 휴식만 그만둔다
 function stop(){
@@ -394,33 +455,54 @@ const restMin = r => (r.restEnd - r.focusEnd) / 60000;
 function tick(){
   const now = Date.now();
   // 다른 탭이 먼저 넘겼으면 그것을 따른다(두 탭이 같은 포모도로를 두 번 세지 않게)
-  try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.run) !== JSON.stringify(S.run)){ S.run = p.run || null; S.ring = p.ring || null; S.recs = p.recs || S.recs; S.log = p.log || S.log; }
+  try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.run) !== JSON.stringify(S.run)){ S.run = p.run || null; S.ring = p.ring || null; S.wait = p.wait || null; S.recs = p.recs || S.recs; S.log = p.log || S.log; }
   try{ const p = JSON.parse(localStorage.getItem(KEY) || 'null'); if(p && JSON.stringify(p.note || null) !== JSON.stringify(S.note || null)){ S.note = p.note || null; S.out = p.out || S.out; renderNote(); } }catch(e){} }catch(e){}
   if(S.run && S.run.phase === 'focus' && now >= S.run.focusEnd){
-    S.run.phase = 'rest';
-    if(!S.run.test){
-      recAdd(S.run, (S.run.focusEnd - S.run.startAt) / 60000, false);
+    const run = S.run, auto = restOn(run);
+    run.phase = 'rest';
+    if(!run.test){
+      recAdd(run, (run.focusEnd - run.startAt) / 60000, false);
       if(S.note) noteSend('');                 // 전 것을 아직 안 적었으면 그대로 보낸다
-      if(S.run.id) S.note = {id:S.run.id, text:S.run.text || '', n:cnt(S.run.id).done, startAt:S.run.startAt, focusEnd:S.run.focusEnd};   // 휴식 알람과 함께 '방금 한 것' 칸이 뜬다. 적거나 건너뛰면 방점의 그 일 페이지에 한 줄
+      if(run.id) S.note = {id:run.id, text:run.text || '', n:cnt(run.id).done, startAt:run.startAt, focusEnd:run.focusEnd};   // 휴식 알람과 함께 '방금 한 것' 칸이 뜬다. 적거나 건너뛰면 방점의 그 일 페이지에 한 줄
       shareSoon();
     }
-    S.ring = {kind:'rest', at:S.run.focusEnd};
-    ringing.rest = !!(sched && sched.focusEnd === S.run.focusEnd && audioOk());      // 예약해 둔 소리가 지금 나고 있다
-    save();
-    const late = Math.round((now - S.run.focusEnd) / 1000);
-    const nt = notify('포모도로 끝 · 휴식', `${minTxt(restMin(S.run))} 쉽니다. ${hm(S.run.restEnd)}에 끝납니다.`);
-    logIt(`포모도로 끝 → ${S.run.long ? '긴 ' : ''}휴식 ${minTxt(restMin(S.run))} 시작${late > 1 ? ` (${late}초 늦게 알아챔)` : ''} · 휴식 알람 ${ringing.rest ? '예약대로 울림' : '예약 없음'}${nt ? ' · 맥 알림 띄움' : ''}`);
+    S.ring = {kind:'rest', at:run.focusEnd};
+    ringing.rest = !!(sched && sched.focusEnd === run.focusEnd && audioOk());      // 예약해 둔 소리가 지금 나고 있다
+    const late = Math.round((now - run.focusEnd) / 1000), lateTxt = late > 1 ? ` (${late}초 늦게 알아챔)` : '', ringTxt = ` · 휴식 알람 ${ringing.rest ? '예약대로 울림' : '예약 없음'}`;
+    if(auto){
+      save();
+      const nt = notify('포모도로 끝 · 휴식', `${minTxt(restMin(run))} 쉽니다. ${hm(run.restEnd)}에 끝납니다.`);
+      logIt(`포모도로 끝 → ${run.long ? '긴 ' : ''}휴식 ${minTxt(restMin(run))} 시작${lateTxt}${ringTxt}${nt ? ' · 맥 알림 띄움' : ''}`);
+    }else{                                     // 저절로 넘어가기를 껐다: 휴식은 단추를 눌러야 시작한다
+      S.wait = {min:restMin(run), long:!!run.long, id:run.id || null, text:run.text || '', at:run.focusEnd};
+      S.run = null; killNodes('start'); sched = null;
+      save();
+      const nt = notify('포모도로 끝', `${run.long ? '긴 ' : ''}휴식 ${minTxt(S.wait.min)}을 시작하세요.`);
+      logIt(`포모도로 끝 · 휴식은 손으로 시작${lateTxt}${ringTxt}${nt ? ' · 맥 알림 띄움' : ''}`);
+    }
   }
   if(S.run && S.run.phase === 'rest' && now >= S.run.restEnd){
-    const end = S.run.restEnd, had = !!(sched && sched.restEnd === end && audioOk());
+    const was = S.run, end = was.restEnd, had = !!(sched && sched.restEnd === end && audioOk()), short = !!(sched && sched.short);
     killNodes('rest'); ringing.rest = false;
-    S.run = null;
-    S.ring = {kind:'start', at:end};
-    ringing.start = had;
-    save();
-    const late = Math.round((now - end) / 1000);
-    const nt = notify('휴식 끝 · 다음 포모도로', '알람을 끄고 다음 포모도로를 시작하세요.');
-    logIt(`휴식 끝${late > 1 ? ` (${late}초 늦게 알아챔)` : ''} · 시작 알람 ${had ? '예약대로 울림' : '예약 없음'}${nt ? ' · 맥 알림 띄움' : ''}`);
+    const late = Math.round((now - end) / 1000), lateTxt = late > 1 ? ` (${late}초 늦게 알아챔)` : '';
+    const ch = chainWhy(was, now);
+    if(ch.ok){                                   // 저절로 다음 포모도로. 시작 알람은 한 번만 울린다
+      killNodes('tail');
+      if(had && short){ nodes.tail = nodes.start; nodes.start = []; }
+      else { killNodes('start'); if(audioOk()) ringStart('tail', ctx.currentTime + 0.05, AUTO_RING); }
+      S.run = null; S.ring = null;
+      logIt(`휴식 끝${lateTxt} · 시작 알람 ${had && short ? '예약대로 울림' : audioOk() ? '바로 울림' : '소리 없음'}`);
+      start(null, true);
+      notify('휴식 끝 · 포모도로 시작', `${S.run && S.run.text ? S.run.text + ' · ' : ''}${S.run ? hm(S.run.focusEnd) : ''}에 끝납니다.`);
+    }else{
+      S.run = null;
+      S.ring = {kind:'start', at:end};
+      ringing.start = had && !short;             // 짧게 예약해 둔 것이면 resync가 끌 때까지 울리는 것으로 다시 낸다
+      if(had && short) killNodes('start');
+      save();
+      const nt = notify('휴식 끝 · 다음 포모도로', '알람을 끄고 다음 포모도로를 시작하세요.');
+      logIt(`휴식 끝${lateTxt}${ch.why ? ` · ${ch.why} 저절로 시작하지 않음` : ''} · 시작 알람 ${had ? '예약대로 울림' : '예약 없음'}${nt ? ' · 맥 알림 띄움' : ''}`);
+    }
   }
   if(S.ring && S.ring.kind === 'rest' && now - S.ring.at > REST_RING * 1000){       // 휴식 알람은 45초 뒤 저절로 그친다
     killNodes('rest'); ringing.rest = false; S.ring = null; save();
@@ -436,8 +518,9 @@ function render(){
   const P = plan(), selT = taskOf(P.sel), canStart = !!selT || !S.tasks.length;      // 일을 골라야 시작 단추가 나온다. 가져온 일이 하나도 없으면 일 없이 돈다
   const startBtn = canStart ? `<button class="go" id="bStart">${minTxt(S.cfg.focus)} 시작</button>` : '';
   let phase = '준비', left = S.cfg.focus * 60000, until = canStart ? '' : '목록에서 일을 하나 고르세요', acts = '';
-  if(r && r.phase === 'focus'){ phase = '포모도로'; left = r.focusEnd - now; until = `${hm(r.focusEnd)}에 끝나고 ${r.long ? '긴 ' : ''}휴식 ${minTxt(restMin(r))}`; acts = '<button class="dim" id="bStop">멈춤 · 이 포모도로는 무효가 됩니다</button>'; }
-  else if(r && r.phase === 'rest'){ phase = '휴식'; left = r.restEnd - now; until = `${hm(r.restEnd)}에 시작 알람이 울립니다`; acts = (ring ? '<button class="off" id="bOff">알람 끄기</button>' : '') + '<button class="dim" id="bStop">휴식 그만</button>'; }
+  if(r && r.phase === 'focus'){ phase = '포모도로'; left = r.focusEnd - now; until = restOn(r) ? `${hm(r.focusEnd)}에 끝나고 ${r.long ? '긴 ' : ''}휴식 ${minTxt(restMin(r))}` : `${hm(r.focusEnd)}에 끝납니다 · 휴식은 눌러서 시작`; acts = '<button class="dim" id="bStop">멈춤 · 이 포모도로는 무효가 됩니다</button>'; }
+  else if(r && r.phase === 'rest'){ phase = '휴식'; left = r.restEnd - now; until = chainOn(r) ? `${hm(r.restEnd)}에 다음 포모도로가 저절로 시작됩니다` : `${hm(r.restEnd)}에 시작 알람이 울립니다`; acts = (ring ? '<button class="off" id="bOff">알람 끄기</button>' : '') + '<button class="dim" id="bStop">휴식 그만</button>'; }
+  else if(S.wait){ const w = S.wait; phase = '포모도로 끝'; left = w.min * 60000; until = '휴식을 시작하세요'; acts = (ring ? '<button class="off" id="bOff">알람 끄기</button>' : '') + `<button class="go" id="bRest">${w.long ? '긴 ' : ''}휴식 ${minTxt(w.min)} 시작</button><button class="dim" id="bSkip">휴식 건너뛰기</button>`; }
   else if(ring && ring.kind === 'start'){ phase = '휴식 끝'; left = 0; until = '알람을 끄고 다음 포모도로를 시작하세요'; acts = `<button class="off" id="bOff">알람 끄기</button>${startBtn}`; }
   else { phase = '준비'; acts = startBtn; }
   if(selT && !(r && r.phase === 'focus')) acts += '<button class="dim" id="bDone">이 일 끝 · 방점에서도 끝냅니다</button>';
@@ -455,12 +538,13 @@ function render(){
   if($('#acts').dataset.k !== acts){ $('#acts').innerHTML = acts; $('#acts').dataset.k = acts; }
   const d = cnt();
   $('#today').innerHTML = `오늘 포모도로 <b>${d.done}</b>${d.void ? ` · 무효 <b>${d.void}</b>` : ''}`;
-  document.title = (r ? `${clock} ${r.phase === 'focus' ? '포모도로' : '휴식'}` : ring ? '⏰ 휴식 끝' : 'fomo');
+  document.title = (r ? `${clock} ${r.phase === 'focus' ? '포모도로' : '휴식'}` : S.wait ? '⏰ 포모도로 끝' : ring ? '⏰ 휴식 끝' : 'fomo');
   // 소리가 잠들어 있으면 알린다: 도는 중이거나 울려야 하는데 오디오가 깨어 있지 않을 때
   const need = (r || ring) && !audioOk();
   const w = $('#warn');
   w.classList.toggle('on', !!need);
   if(need) w.textContent = '소리가 잠들어 있습니다. 여기를 한 번 누르면 깨어나 알람이 다시 예약됩니다.';
+  $('#progBox').hidden = !progId();
   renderNote();
   renderStat();
 }
@@ -492,7 +576,7 @@ function renderList(){
       <span class="cnt">${did || n ? `${did} / <b>${n}</b>` : ''}</span>
       <button class="ar" data-up="${esc(t.id)}" aria-label="하나 더">▲</button><button class="ar" data-dn="${esc(t.id)}" aria-label="하나 덜">▼</button>
     </li>`;
-  }).join('') : `<li class="empty">${bjCfg() ? '가져온 일이 없습니다. ‘방점에서 새로 불러오기’를 누르세요.' : '방점 연결이 없습니다. 아래 설정에 방점의 주소·키·목록 이름을 넣거나, 방점을 쓰는 브라우저에서 여세요.'}</li>`;
+  }).join('') : `<li class="empty">${bjCfg() ? '가져온 일이 없습니다. ‘방점에서 새로 불러오기’를 누르세요.' : '방점 연결이 없습니다. 설정 탭에 방점의 주소·키·목록 이름을 넣거나, 방점을 쓰는 브라우저에서 여세요.'}</li>`;
   if(h !== listKey){ $('#tasks').innerHTML = h; listKey = h; }
   $('#bjStat').textContent = bjMsg || (S.loadedAt ? `${new Date(S.loadedAt).getMonth() + 1}/${new Date(S.loadedAt).getDate()} ${hm(S.loadedAt)}에 불러옴 · ${S.tasks.length}개` : '');
 }
@@ -617,6 +701,17 @@ function finishTask(){
   save(); logIt(`‘${t.text}’ 끝 · 방점에 알림`);
   shareSoon(); renderList(); render();
 }
+/* 지금 어디까지 한 줄(2026년 11월 26일, 작가가 정함) — 일을 골라 포모도로나 휴식이 도는 동안 생각 칸 위에 늘 떠 있다. 적으면 그 일의 방점 페이지에
+   '— 11/26 10:12 · 둘째 장면 중간까지' 한 줄(시각은 적은 때). 몇 번이든 적을 수 있다. '방금 한 것' 칸(포모도로가 끝날 때 한 번)을 놓쳐도 적을 자리가 있게 한 것 */
+const progId = () => (S.run && S.run.id) || (S.wait && S.wait.id) || null;
+function sendProg(){
+  const id = progId(), inp = $('#prog'), v = inp.value.replace(/\s+/g, ' ').trim(); if(!id || !v) return;
+  inp.value = '';
+  const name = (S.run && S.run.text) || (S.wait && S.wait.text) || '';
+  bjSend('line', id, stamp(Date.now()) + v);
+  sentMsg = `‘${v.length > 24 ? v.slice(0, 24) + '…' : v}’ · 방점의 ‘${name.length > 14 ? name.slice(0, 14) + '…' : name}’ 페이지에 적습니다`;
+  renderSent();
+}
 function sendThought(){
   const inp = $('#think'), v = inp.value.replace(/\s+/g, ' ').trim(); if(!v) return;
   inp.value = '';
@@ -690,10 +785,14 @@ function renderLog(){
 document.addEventListener('click', e => {
   if(e.target.closest('#bStart')){ start(); return; }
   if(e.target.closest('#bStop')){ stop(); return; }
+  if(e.target.closest('#bRest')){ startRest(); return; }
+  if(e.target.closest('#bSkip')){ skipRest(); return; }
+  const tb = e.target.closest('[data-tab]'); if(tb){ showTab(tb.dataset.tab); return; }
   if(e.target.closest('#bOff')){ ensureAudio(); dismiss(false); return; }
   if(e.target.closest('#warn')){ ensureAudio(); return; }
   if(e.target.closest('#bDone')){ finishTask(); return; }
   if(e.target.closest('#thinkGo')){ sendThought(); return; }
+  if(e.target.closest('#progGo')){ sendProg(); return; }
   if(e.target.closest('#noteGo')){ noteSend(($('#noteTa') || {}).value); return; }
   if(e.target.closest('#noteSkip')){ noteSend(''); return; }
   const g = e.target.closest('[data-go]'); if(g){ e.preventDefault(); goTask(g.dataset.go); return; }
@@ -701,6 +800,14 @@ document.addEventListener('click', e => {
   const dn = e.target.closest('[data-dn]'); if(dn){ setN(dn.dataset.dn, -1); return; }
   const row = e.target.closest('[data-row]'); if(row){ pick(row.dataset.row); return; }
 });
+// 탭: 할 일(시계와 목록) · 설정(설정, 소리와 알림, 기록, 쓰는 법). 열 때는 늘 할 일
+function showTab(k){
+  $('#v-work').hidden = k !== 'work'; $('#v-set').hidden = k !== 'set';
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === k));
+  window.scrollTo(0, 0);
+}
+const AF = {cAutoRest:'autoRest', cAutoStart:'autoStart'};
+Object.keys(AF).forEach(id => { $('#' + id).checked = !!S.cfg[AF[id]]; $('#' + id).addEventListener('change', () => readCfg()); });
 const CF = {cFocus:'focus', cRest:'rest', cLong:'long', cEvery:'every', cDaily:'daily'}, BF = {bUrl:'url', bKey:'key', bList:'list'};
 Object.keys(CF).forEach(id => { $('#' + id).value = S.cfg[CF[id]]; });
 Object.keys(BF).forEach(id => { $('#' + id).value = S.cfg.bj[BF[id]] || ''; });
@@ -712,7 +819,8 @@ const readCfg = () => {
   if(v('cEvery') >= 1) S.cfg.every = Math.min(20, Math.round(v('cEvery')));
   if(v('cDaily') >= 0 && $('#cDaily').value !== '') S.cfg.daily = Math.min(60, Math.round(v('cDaily')));
   Object.keys(BF).forEach(id => { S.cfg.bj[BF[id]] = $('#' + id).value.trim(); });
-  save(); renderList(); render();                     // 도는 중인 것은 그대로, 다음 포모도로부터
+  Object.keys(AF).forEach(id => { S.cfg[AF[id]] = $('#' + id).checked; });      // 도는 중에 바꾸면 그 포모도로·휴식의 끝부터 따른다(알람 예약도 다시 맞춘다)
+  save(); resync(false); renderList(); render();                     // 도는 중인 것은 그대로, 다음 포모도로부터
 };
 Object.keys(CF).concat(Object.keys(BF)).forEach(id => $('#' + id).addEventListener('change', readCfg));
 $('#quick').onclick = () => {                         // 시험 한 바퀴만 짧게. 설정도 기록도 건드리지 않는다
@@ -720,6 +828,7 @@ $('#quick').onclick = () => {                         // 시험 한 바퀴만 �
   start({focus:20 / 60, rest:15 / 60});
 };
 $('#reload').onclick = () => loadTasks(true);
+$('#prog').addEventListener('keydown', e => { if(e.key !== 'Enter') return; e.preventDefault(); setTimeout(sendProg, 0); });
 $('#think').addEventListener('keydown', e => { if(e.key !== 'Enter') return; e.preventDefault(); setTimeout(sendThought, 0); });   // 한글 조합이 끝난 뒤 읽는다
 function tryRing(kind){
   if(!ensureAudio()) return;
