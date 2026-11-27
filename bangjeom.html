@@ -1099,6 +1099,7 @@ function dropOldKeys(){
   if(!S.ojeon || typeof S.ojeon !== 'object' || Array.isArray(S.ojeon)){ S.ojeon = {}; had = true; }
   if(!S.routine || typeof S.routine !== 'object' || Array.isArray(S.routine)){ S.routine = {}; had = true; }
   if(!S.rtFrom){ S.rtFrom = dayKey(); had = true; }      // 루틴은 이 기능을 넣은 날부터 센다(2026년 11월 27일)
+  if(!S.danyeo || typeof S.danyeo !== 'object' || Array.isArray(S.danyeo)){ S.danyeo = {}; had = true; }   // 다녀올게의 메모·자리 비움(2026년 11월 27일)
   // 쉬는일을 없앴다(2026년 11월 13일): 있던 항목은 종류 없는 보통 일로. 끝낸 기록 사본(echo)도. 매듭의 옛 기록(log)은 건드리지 않는다
   S.tasks.forEach(t => { if(t.kind === 'rest'){ t.kind = ''; had = true; } });
   if('rest' in S){ delete S.rest; had = true; }
@@ -2670,7 +2671,10 @@ ${(() => { const v = ojOf(k); return v.length ? `\n오전타이핑 (방점이 �
 ${items.length ? items.map(one).join('\n') : '(없음)'}
 
 미결함에 넣은 일 ${held.length}개
-${held.length ? held.map(v => '- ' + v).join('\n') : '(없음)'}`;
+${held.length ? held.map(v => '- ' + v).join('\n') : '(없음)'}${(() => {
+  const v = danyeoLines(k, new Set(items.map(i => normTitle(i.text))));
+  return v.length ? `\n\n다녀올게 기록 — 일하는 도중의 메모와 자리 비움 (끝낸 일의 페이지에 이미 들어간 메모는 뺐다)\n${v.join('\n')}` : '';
+})()}`;
 }
 async function copyDiaryAsk(k){
   try{ await navigator.clipboard.writeText(diaryPrompt(k)); toast('복사했습니다 · 클로드에게 붙여 넣고, 받은 글을 「받은 일지 붙여 넣기」에 넣으세요'); }
@@ -3172,6 +3176,41 @@ async function pullSucheop(){
 setInterval(() => { if(!document.hidden) pullSucheop(); }, 60*1000);
 setTimeout(drainLocalIn, 800);   // 열 때 한 번 — 방점이 닫혀 있는 동안 타이핑이 적어 둔 것
 
+/* 다녀올게(바탕화면 앱, 2026년 11월 27일, 작가가 정함): 일하는 도중의 메모와 자리 비움을 bangjeom_act로 보낸다.
+   memo: text = {"at":ms, "tag":"메모|전화|메일|…", "t":적은 글, "task":그때 고른 일의 제목}
+   away: text = {"at":떠난 ms, "back":돌아온 ms, "why":이유, "t":하던 일, "task":그때 고른 일의 제목}
+   S.danyeo[날짜] = [{kind, at, back?, tag?, why?, text, task}] 로 모아 일지용 글(diaryPrompt)에 「다녀올게 기록」으로 넣는다.
+   메모는 target(고른 일)이 있으면 그 일의 페이지에도 시각과 함께 한 줄 붙인다. 120일이 지난 날은 지운다 */
+function danyeoTake(r){
+  let o = null; try{ o = JSON.parse(r.text); }catch(e){}
+  if(!o || !+o.at) return false;
+  const at = +o.at, k = dayKey(at), text = String(o.t || '').replace(/\s+/g, ' ').trim(), task = String(o.task || '').replace(/\s+/g, ' ').trim();
+  const e = r.kind === 'memo'
+    ? {kind:'memo', at, tag:String(o.tag || '메모'), text, task}
+    : {kind:'away', at, back:+o.back || null, why:String(o.why || ''), text, task};
+  if(e.kind === 'memo' && !text) return false;
+  S.danyeo = S.danyeo || {};
+  const day = S.danyeo[k] = S.danyeo[k] || [];
+  if(day.some(x => x.kind === e.kind && x.at === e.at && x.text === e.text)) return false;   // 같은 것을 두 번 받지 않게
+  day.push(e); day.sort((a, b) => a.at - b.at);
+  if(e.kind === 'memo'){
+    const t = byId(r.target);
+    if(t){ const d = new Date(at); addDated(t, {mo:d.getMonth() + 1, d:d.getDate(), time:pad2(d.getHours()) + ':' + pad2(d.getMinutes()), text:(e.tag !== '메모' ? `[${e.tag}] ` : '') + text}); }
+  }
+  const cut = dayKey(Date.now() - 120*86400000);
+  Object.keys(S.danyeo).forEach(d => { if(d < cut) delete S.danyeo[d]; });
+  return true;
+}
+const danyeoMin = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간${m % 60 ? ' ' + m % 60 + '분' : ''}`; };
+function danyeoLines(k, doneNames){
+  return ((S.danyeo || {})[k] || []).filter(e => !(e.kind === 'memo' && e.task && doneNames.has(normTitle(e.task)))).map(e => {
+    const during = e.task ? ` (${e.task} 하던 중)` : '';
+    if(e.kind === 'memo') return `- ${hm(e.at)} [${e.tag}] ${e.text}${during}`;
+    const span = e.back ? `${hm(e.at)}–${hm(e.back)}` : `${hm(e.at)}–`;
+    return `- ${span} 자리 비움 · ${e.why || '이유 안 적음'}${e.back ? ' · ' + danyeoMin(e.back - e.at) : ''}${e.text ? ' · 하던 일: ' + e.text : ''}`;
+  });
+}
+
 // 주머니·final이 남긴 요청(bangjeom_act: done·line·add·title)을 읽어 제 규칙대로 처리한다. 먼저 차지한 뒤 적용하므로 두 기기가 겹쳐도 한 번만
 async function pullActs(){
   if(!sb) return;
@@ -3214,6 +3253,8 @@ async function pullActs(){
           if(dl) addDated(t, dl); else t.note = appendLine(t.note, v);
           n++;
         }
+      }else if(r.kind === 'memo' || r.kind === 'away'){
+        if(danyeoTake(r)) n++;
       }
     });
     if(n){ commit(); toast(`주머니·final에서 ${n}개를 받았습니다`); if(added && !pickTask()) repick(true); }
