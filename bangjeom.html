@@ -1254,7 +1254,10 @@ const pickTask = () => { const t = S.pick && byId(S.pick.id); return t && !t.don
 const ojMorning = ex => blockOf() !== 'am' ? [] : S.tasks.filter(t => isRep(t) && !t.hold && /오전\s*타이핑/.test(t.text) && t.rep.block === 'am' && repDue(t)
   && !S.skip[t.id] && !(ex && ex.has(t.id))).sort((a, b) => String(a.text).replace(/\s+/g, '').localeCompare(String(b.text).replace(/\s+/g, ''), 'ko', {numeric:true}));   // OJ_RE·normTitle은 아래에서 정의돼 여기서는 직접 쓴다
 const todayBack = () => S.pick.kind !== 'today' && !ojMorning().length && S.tasks.some(t => t.today && !t.done && !t.hold && !t.rep && !noRec(t) && !(S.skip[t.id] > Date.now()));
-const pickStale = () => !pickTask() || Date.now() - (S.pick.at || 0) >= SLOT || blockOf(S.pick.at) !== blockOf() || todayBack();
+// 오전에 오전타이핑이 남아 있는데 지금 추천이 오전타이핑이 아니면, 슬롯을 기다리지 않고 다시 고른다(2026년 11월 27일).
+// 0번 규칙을 넣기 전에 고른 오늘 일이 30분 동안 자리를 지키던 것을 막는다. 오전타이핑을 「다른 것」으로 뺐으면 ojMorning에 없으니 다시 고르지 않는다
+const ojBack = () => { const v = ojMorning(); return v.length > 0 && !v.some(t => t.id === S.pick.id); };
+const pickStale = () => !pickTask() || Date.now() - (S.pick.at || 0) >= SLOT || blockOf(S.pick.at) !== blockOf() || todayBack() || ojBack();
 
 // 이 시간대에 4~6번 규칙으로 뜰 수 있는 일들. withSkipped면 이번 슬롯에서 뺀 것도 넣는다(‘모두 뺐습니다’를 가리는 데 쓴다)
 function blockPool(withSkipped){
