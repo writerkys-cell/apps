@@ -1250,7 +1250,10 @@ const SLOT = 30*60*1000;                  // 한 슬롯. 지나면 다시 고른
 const pickTask = () => { const t = S.pick && byId(S.pick.id); return t && !t.done && !t.hold && !noRec(t) && !(t.rep && (repDoneToday(t) || t.rep.block !== blockOf())) ? t : null; };   // 반복 일은 제 시간대에만
 // 30분이 지났거나 시간대가 바뀌었으면(정오·저녁 6시·자정) 다시 고른다
 // 뺐던 오늘 일이 돌아왔는데(뺀 시간이 지남) 지금 추천이 오늘 일이 아니면, 슬롯을 기다리지 않고 다시 고른다(2026년 11월 24일)
-const todayBack = () => S.pick.kind !== 'today' && S.tasks.some(t => t.today && !t.done && !t.hold && !t.rep && !noRec(t) && !(S.skip[t.id] > Date.now()));
+// 오전(정오 전)에 아직 안 한 오전타이핑(2026년 11월 27일, 작가가 정함). 제목 순이라 '오전타이핑 1'이 '2'보다 먼저. ex·skip한 것은 뺀다
+const ojMorning = ex => blockOf() !== 'am' ? [] : S.tasks.filter(t => isRep(t) && !t.hold && /오전\s*타이핑/.test(t.text) && t.rep.block === 'am' && repDue(t)
+  && !S.skip[t.id] && !(ex && ex.has(t.id))).sort((a, b) => String(a.text).replace(/\s+/g, '').localeCompare(String(b.text).replace(/\s+/g, ''), 'ko', {numeric:true}));   // OJ_RE·normTitle은 아래에서 정의돼 여기서는 직접 쓴다
+const todayBack = () => S.pick.kind !== 'today' && !ojMorning().length && S.tasks.some(t => t.today && !t.done && !t.hold && !t.rep && !noRec(t) && !(S.skip[t.id] > Date.now()));
 const pickStale = () => !pickTask() || Date.now() - (S.pick.at || 0) >= SLOT || blockOf(S.pick.at) !== blockOf() || todayBack();
 
 // 이 시간대에 4~6번 규칙으로 뜰 수 있는 일들. withSkipped면 이번 슬롯에서 뺀 것도 넣는다(‘모두 뺐습니다’를 가리는 데 쓴다)
@@ -1275,6 +1278,10 @@ function choose(ex){
   const ofKind = k => open.filter(t => slotKind(t.kind) === k).sort(byDue);   // 개정은 쓰기 시간대에
   const blk = blockOf(t0), B = BLOCKS[blk];
 
+  // 0. 오전타이핑(2026년 11월 27일, 작가가 정함): 정오 전에는 오늘 차례인 오전타이핑을 1, 2 순서로 먼저. 다 끝내거나 뺐으면 아래(오늘 일부터)로.
+  //    오늘 하기로 한 일은 그다음이다 — 오전에 오전타이핑이 남아 있는 동안은 오늘 일이 뜨지 않는다
+  const oj = ojMorning(ex);
+  if(oj.length) return made(oj[0], 'rep', oj.length > 1 ? `오전은 오전타이핑부터 · ${oj.length}개 남음` : '오전은 오전타이핑부터 · 마지막');
   // 1. 오늘: 「오늘」이 붙은 일이 남아 있는 동안은 그중에서 무작위로. 다른 규칙도 시간대도 보지 않는다.
   //    이번 슬롯에서 뺀 것(다른 것·조금 했다)은 피하되, 다 뺐으면 그래도 오늘 일 중에서. 둘 이상이면 직전 것은 피한다
   const todayAll = S.tasks.filter(t => !t.done && !t.hold && !noRec(t) && !t.rep && t.today && !(ex && ex.has(t.id)));
