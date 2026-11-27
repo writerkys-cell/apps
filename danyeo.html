@@ -25,7 +25,8 @@
   .crt{
     position:fixed;inset:0;padding:5vh 6vw 4vh;
     background:radial-gradient(ellipse at center,#06140a 0%,var(--bg) 70%,#000 100%);
-    display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:2.2vh;
+    display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"head head" "setup setup" "screen side" "bottom side";column-gap:3vw;
     text-shadow:0 0 2px currentColor,0 0 10px rgba(57,255,122,.35);
   }
   .crt::before{ /* 주사선 */
@@ -83,7 +84,32 @@
   header a{color:var(--gd);text-decoration:none;border-bottom:1px dotted var(--gx)}
   header a.on{color:var(--g)}
   header a:hover{color:var(--g2)}
-  .crt.setting{grid-template-rows:auto auto minmax(0,1fr) auto}
+  header{grid-area:head;margin-bottom:2.2vh}
+  #setup{grid-area:setup;margin-bottom:2.2vh}
+  #screen{grid-area:screen}
+  .bottom{grid-area:bottom;margin-top:2.2vh}
+
+  /* ── 오른쪽 루틴 칸 ── */
+  #side{grid-area:side;width:clamp(240px,21vw,340px);border-left:1px dashed var(--gx);padding-left:2.4vw;
+        display:flex;flex-direction:column;gap:.35em;font-size:.85em;overflow:hidden}
+  #side .hd{display:flex;justify-content:space-between;color:var(--gd);letter-spacing:.06em;margin-bottom:.4em}
+  #side .hd b{color:var(--g2);font-weight:normal}
+  #side .grp{color:var(--gd);font-size:.8em;margin-top:.9em;letter-spacing:.1em}
+  #side .r{display:grid;grid-template-columns:1.3em minmax(0,1fr) auto;gap:.4em;align-items:baseline}
+  #side .r .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #side .r .st{font-size:.8em;color:var(--gd);white-space:nowrap}
+  #side .r.todo{color:var(--g2)}
+  #side .r.todo .mk{color:var(--g)}
+  #side .r.done{color:var(--gd)}
+  #side .r.done .mk{color:var(--gd)}
+  #side .r.part .mk,#side .r.part .st{color:#c9ff5a}
+  #side .r.miss .mk,#side .r.miss .st{color:#ffb347}
+  #side .empty,#side .foot{color:var(--gx);font-size:.8em}
+  #side .foot{margin-top:auto;padding-top:1em}
+  @media (max-width:1099px){
+    .crt{grid-template-columns:minmax(0,1fr);grid-template-areas:"head" "setup" "screen" "bottom"}
+    #side{display:none}
+  }
   #setup{display:grid;gap:.5em;font-size:.85em;border:1px dashed var(--gx);padding:1em 1.2em}
   #setup label{display:flex;gap:1em;color:var(--gd)}
   #setup input{flex:1;background:transparent;border:0;border-bottom:1px solid var(--gx);outline:0;
@@ -103,6 +129,17 @@
   #why .chips button i{font-style:normal;opacity:.6;margin-right:.4em}
   #why .sub{color:var(--gx);font-size:.75em}
   .bottom{display:grid}
+  /* ── 화면 보호 ── */
+  #dark{position:fixed;inset:0;background:#000;z-index:50;opacity:0;pointer-events:none;transition:opacity 1s linear}
+  #dark.on{pointer-events:auto;cursor:none}
+  #float{position:absolute;left:10vw;top:30vh;max-width:62vw;opacity:0;transition:opacity 2s linear;
+         font-family:"D2Coding","Menlo","Apple SD Gothic Neo",monospace;color:var(--g);
+         text-shadow:0 0 3px currentColor,0 0 14px rgba(57,255,122,.4)}
+  #float .f1{font-size:calc(var(--fs)*2);line-height:1.35;word-break:keep-all}
+  #float .f2{font-size:var(--fs);color:var(--g);opacity:.75;margin-top:.4em}
+  #modeLbl{cursor:pointer;user-select:none}
+  #modeLbl.th{color:#c9ff5a}
+  #wl{color:var(--gx)}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -110,7 +147,7 @@
 <div class="crt">
   <header>
     <span>다녀올게 · 자리 비움 기록기 v4</span>
-    <span><a id="bjLink" href="#">방점 연결 없음</a> &nbsp; <span id="clock"></span></span>
+    <span><a id="bjLink" href="#">방점 연결 없음</a> &nbsp; <span id="wl"></span> <span id="clock"></span></span>
   </header>
 
   <form id="setup" hidden>
@@ -124,18 +161,15 @@
 
   <main id="screen"></main>
 
+  <aside id="side"></aside>
+
   <div class="bottom">
-    <div id="why" hidden>
-      <div class="q">왜 일어서나요?</div>
-      <div class="chips" id="chips"></div>
-      <div class="sub">숫자 키 또는 ← → 로 고르고 Enter · Esc는 취소</div>
-    </div>
     <footer>
       <div style="flex:1;min-width:0" id="here">
         <div class="now" id="nowLine"></div>
         <div class="prompt">
-          <span class="ps">&gt;</span>
-          <textarea id="what" rows="1" placeholder="메모를 적고 Enter · 일어설 땐 ⌘Enter" autofocus></textarea>
+          <span class="ps" id="modeLbl" title="Tab으로 바꾸기">메모 &gt;</span>
+          <textarea id="what" rows="1" placeholder="" autofocus></textarea>
         </div>
       </div>
       <div class="msg" id="away" hidden>돌아오면 단추를 누르세요 <span class="cursor"></span></div>
@@ -146,6 +180,7 @@
     </footer>
   </div>
 </div>
+<div id="dark"><div id="float"><div class="f1" id="f1"></div><div class="f2" id="f2"></div></div></div>
 
 <script>
 /* ═════════ 저장 (v1부터 같은 자리) ═════════
@@ -177,7 +212,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
    쓰기: bangjeom_act에 memo·away 줄을 넣기만 한다(포모와 같은 길). 방점이 열릴 때 받아 일지용 글에 넣는다. */
 const BJ_KEY = 'danyeo.bj';
 const RECENT_H = 12;
-let recent = [], pick = null, fomoNow = null, bjState = 'none', bjAt = 0;
+let recent = [], pick = null, fomoNow = null, bjData = null, bjState = 'none', bjAt = 0;
 /* 지금 하는 일: 포모가 돌고 있거나 막 끝낸 지 30분 안이면 포모의 일, 아니면 방점이 고른 일 */
 const cur = () => fomoNow ? { id:fomoNow.id, name:fomoNow.name, src:'포모' } : pick ? { ...pick, src:'방점' } : null;
 const lastEnd = () => recent.find(e => !e.start);   // '시작' 줄을 뺀 가장 최근 기록
@@ -194,12 +229,13 @@ const SRC = { fomo:'포모', jumeoni:'주머니', final:'final', typing:'타이�
 
 async function pullRecent(){
   const c = bjCfg();
-  if (!c){ bjState = 'none'; recent = []; pick = null; fomoNow = null; paint(); return; }
+  if (!c){ bjState = 'none'; recent = []; pick = null; fomoNow = null; bjData = null; paint(); return; }
   const since = new Date(Date.now() - RECENT_H*3600000).toISOString();
   try{
     const r = await fetch(`${c.url}/rest/v1/bangjeom?select=data&id=eq.${encodeURIComponent(c.list)}`, { headers:hdr(c) });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = await r.json(), data = (rows[0] && rows[0].data) || {}, tasks = data.tasks || [];
+    bjData = data;
     const byId = id => tasks.find(t => t && String(t.id) === String(id));
     const name = id => { const t = byId(id); return t ? one(t.text) : ''; };
     const p = data.pick && byId(data.pick.id);
@@ -247,6 +283,70 @@ async function pullRecent(){
   paint(); render(); flush();
 }
 
+/* ═════════ 오른쪽 칸: 오늘의 오전타이핑과 루틴 ═════════
+   방점의 판정(ojCompute·rtCompute, 2026년 11월 26~27일)을 그대로 옮겼다. 방점의 규칙이 바뀌면 여기도 고친다.
+   - 오전타이핑: 제목에 '오전타이핑'이 든 반복 일 중 오늘 차례인 것. 끝낸 시각이 12시 전 am · 18시 전 pm · 그 뒤 eve,
+     안 끝냈으면 페이지에 오늘 줄이 있으면 touch, 없으면 오전엔 wait · 오후부터 open.
+   - 루틴: 반복 주기가 '매일'(rep.type 'daily')인 일(오전타이핑 빼고). done · touch · open.
+   - 끝냄은 반복 일이 남기는 기록 사본(echo)의 끝낸 시각으로 본다(data.log의 그날 items + data.tasks의 끝낸 것). */
+const OJ_RE = /오전\s*타이핑/;
+const LOG_RE = /^— (\d{1,2}\/\d{1,2}(?: \d{2}:\d{2})?) · (.*)$/;
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const dayKey = t => keyOf(new Date(t == null ? Date.now() : t));          // 방점의 DAY_H = 0(자정)
+const dateOf = iso => iso ? dayKey(Date.parse(iso)) : dayKey();
+const normTitle = v => String(v || '').replace(/\s+/g,' ').trim().toLowerCase();
+function routines(){
+  const D = bjData; if (!D || !Array.isArray(D.tasks)) return null;
+  const k = dayKey(), md0 = `${+k.slice(5,7)}/${+k.slice(8,10)} `, wd = new Date().getDay();
+  const lg = (D.log || []).find(x => x && x.date === k);
+  const echoes = ((lg && lg.items) || []).filter(i => i.echo).map(i => ({ text:i.text, at:i.at }))
+    .concat(D.tasks.filter(t => t && t.done && t.echo && t.doneAt && dateOf(t.doneAt) === k).map(t => ({ text:t.text, at:t.doneAt })));
+  const doneAt = t => { const d = echoes.filter(i => normTitle(i.text) === normTitle(t.text)).sort((a,b) => String(a.at).localeCompare(String(b.at)))[0]; return d ? Date.parse(d.at) : 0; };
+  const touched = t => String(t.note || '').split('\n').some(l => { const m = l.trim().match(LOG_RE); return m && (m[1] + ' ').startsWith(md0); });
+  const born = t => !(t.createdAt && dateOf(t.createdAt) > k);
+  const live = D.tasks.filter(t => t && t.rep && !t.done && born(t));
+  const byName = (a,b) => normTitle(a.text).localeCompare(normTitle(b.text));
+  const oj = live.filter(t => OJ_RE.test(t.text) && (t.rep.type === 'week' ? (t.rep.days || []).includes(wd) : true)).sort(byName).map(t => {
+    const at = doneAt(t);
+    if (at){ const h = new Date(at).getHours(); return { name:t.text, st:h < 12 ? 'am' : h < 18 ? 'pm' : 'eve', at }; }
+    if (touched(t)) return { name:t.text, st:'touch' };
+    return { name:t.text, st:new Date().getHours() < 12 ? 'wait' : 'open' };
+  });
+  const rt = live.filter(t => t.rep.type === 'daily' && !OJ_RE.test(t.text)).sort(byName).map(t => {
+    const at = doneAt(t);
+    return at ? { name:t.text, st:'done', at } : touched(t) ? { name:t.text, st:'touch' } : { name:t.text, st:'open' };
+  });
+  return { oj, rt };
+}
+function paintSide(){
+  const el = $('side'), R = routines();
+  if (!R){ el.innerHTML = `<div class="hd"><span>오늘의 루틴</span></div><div class="empty">${bjCfg() ? '방점을 읽는 중…' : '방점에 연결하면 여기 보입니다.'}</div>`; return; }
+  const row = (cls, mk, name, st) => `<div class="r ${cls}"><span class="mk">${mk}</span><span class="nm">${esc(name)}</span><span class="st">${st}</span></div>`;
+  const ojName = n => { const v = one(n).replace(OJ_RE, '').trim(); return v ? `오전타이핑 ${v}` : '오전타이핑'; };
+  const OJ = {
+    am:   x => row('done', '✓', ojName(x.name), hm(x.at)),
+    pm:   x => row('done miss', '✓', ojName(x.name), `늦게 ${hm(x.at)}`),
+    eve:  x => row('done miss', '✓', ojName(x.name), `늦게 ${hm(x.at)}`),
+    touch:x => row('part', '◐', ojName(x.name), '손댐'),
+    wait: x => row('todo', '○', ojName(x.name), '아직'),
+    open: x => row('todo miss', '✕', ojName(x.name), '오전에 못 끝냄'),
+  };
+  const RT = {
+    done: x => row('done', '✓', x.name, hm(x.at)),
+    touch:x => row('part', '◐', x.name, '손댐'),
+    open: x => row('todo', '○', x.name, ''),
+  };
+  // 아직인 것을 위로, 끝낸 것을 아래로
+  const order = { open:0, touch:1, done:2 };
+  const rt = R.rt.slice().sort((a,b) => order[a.st] - order[b.st]);
+  const n = R.rt.filter(x => x.st === 'done').length;
+  let h = `<div class="hd"><span>오늘의 루틴</span><b>${n} / ${R.rt.length}</b></div>`;
+  if (R.oj.length) h += R.oj.map(x => OJ[x.st](x)).join('') + (R.rt.length ? '<div class="grp">매일</div>' : '');
+  h += R.rt.length ? rt.map(x => RT[x.st](x)).join('') : (R.oj.length ? '' : '<div class="empty">매일 반복하는 일이 없습니다.</div>');
+  h += `<div class="foot">방점 ${hm(bjAt)} 기준 · 1분마다 새로</div>`;
+  el.innerHTML = h;
+}
+
 /* 보내기 — 못 보낸 것은 S.out에 남겨 다시(열 때, 창이 앞으로 올 때, 1분마다) */
 let flushing = false;
 function send(kind, target, obj){
@@ -270,21 +370,47 @@ async function flush(){
 }
 
 function paint(){
+  paintSide();
   const a = $('bjLink'), n = S.out.length;
   a.className = bjState === 'on' && !n ? 'on' : '';
   a.textContent = (bjState === 'on' ? `방점 ${hm(bjAt)}에 읽음` : bjState === 'err' ? '방점 못 읽음 — 연결 확인' : '방점 연결 없음')
                 + (n ? ` · 못 보낸 것 ${n}개` : '');
   const c = cur();
   const who = !c ? '' : c.src === '포모' ? (fomoNow.focus ? `포모가 하는 일 (${hm(fomoNow.end)}까지)` : '포모로 하던 일') : '방점이 고른 일';
-  $('nowLine').innerHTML = c ? `${who} <b>${esc(c.name)}</b> — 메모는 이 일의 페이지에도 붙습니다` : '지금 하는 일 모름 — 메모는 그날의 기록으로만 갑니다';
+  if ($('nowLine').dataset.hint) return;
+  $('nowLine').innerHTML = c ? `${who} <b>${esc(c.name)}</b>` : '지금 하는 일 모름 — 메모는 그날의 기록으로만, 생각은 적을 곳이 없습니다';
 }
 
 /* ═════════ 메모 ═════════
    '전화: 출판사 교정 일정'처럼 앞에 말머리를 붙이면 종류로 묶인다 */
-const TAGS = ['전화','메일','문자','연락','손님','약속','발견','생각','할일','메모'];
+const TAGS = ['전화','메일','문자','연락','손님','약속','발견','할일','메모'];   // '생각'은 따로(Tab)
 function parseMemo(v){
   const m = one(v).match(/^([^\s:：]{1,3})\s*[:：]\s*(.+)$/);
   return m && TAGS.includes(m[1]) ? { tag:m[1], text:m[2] } : { tag:'메모', text:one(v) };
+}
+/* 적기에는 두 가지(2026년 11월 27일, 작가가 정함). Tab으로 바꾼다. 고른 채로 남는다.
+   메모: 일지(다녀올게 기록)에도, 지금 하는 일의 페이지에도.
+   생각: 지금 하는 일의 페이지에만 — bangjeom_act의 line으로 '11/27 10:12 [생각] …'을 보낸다. 방점이 일지용 글을 만들 때 [생각] 줄은 뺀다 */
+let writeMode = 'memo';
+function setMode(m){
+  writeMode = m;
+  $('modeLbl').textContent = m === 'memo' ? '메모 >' : '생각 >';
+  $('modeLbl').classList.toggle('th', m === 'thought');
+  $('what').placeholder = m === 'memo' ? '메모는 일지에도 들어갑니다 · Enter · Tab은 생각 · 일어설 땐 ⌘Enter'
+                                       : '생각은 지금 하는 일의 페이지에만 붙습니다 · Enter · Tab은 메모';
+}
+$('modeLbl').onclick = () => { setMode(writeMode === 'memo' ? 'thought' : 'memo'); $('what').focus(); };
+function write(){ writeMode === 'thought' ? thought() : memo(); }
+let toastT = 0;
+function hint(msg){ const l = $('nowLine'); l.dataset.hint = msg; l.innerHTML = `<b>${esc(msg)}</b>`; clearTimeout(toastT); toastT = setTimeout(() => { delete l.dataset.hint; paint(); }, 3500); }
+function thought(){
+  const v = one($('what').value); if (!v) return;
+  const c = cur();
+  if (!c){ hint('지금 하는 일이 없어서 생각을 붙일 페이지가 없습니다. 메모로 적으려면 Tab.'); return; }
+  const d = new Date(), at = d.getTime();
+  S.notes.push({ kind:'thought', at, text:v, task:c.name }); S.notes = S.notes.slice(-400);
+  S.out.push({ kind:'line', target:c.id, text:`${d.getMonth()+1}/${d.getDate()} ${hm(at)} [생각] ${v}` }); save(); flush();
+  $('what').value = ''; grow(); render(); $('what').focus();
 }
 function memo(){
   const v = $('what').value; if (!one(v)) return;
@@ -294,24 +420,6 @@ function memo(){
   send('memo', c && c.id, { at, tag, t:text, task });
   $('what').value = ''; grow(); render(); $('what').focus();
 }
-
-/* ═════════ 일어서는 이유 ═════════ */
-const WHY = ['할 일 마치고','전화','손님·택배','식사','쉼','화장실','기타'];
-let whyOpen = false, whySel = 0;
-function suggestWhy(){   // 포모나 방점에서 10분 안에 끝낸 것이 있으면 '할 일 마치고'
-  const top = lastEnd();
-  if (fomoNow && fomoNow.focus) return 4;   // 포모도로 도중이면 '할 일 마치고'가 아니다
-  return top && Date.now() - top.at < 10*60000 ? 0 : 4;
-}
-function openWhy(){
-  whyOpen = true; whySel = suggestWhy();
-  $('why').hidden = false; drawWhy();
-}
-function drawWhy(){
-  $('chips').innerHTML = WHY.map((w,i) => `<button type="button" data-i="${i}" class="${i===whySel?'sel':''}"><i>${i+1}</i>${w}</button>`).join('');
-}
-function closeWhy(){ whyOpen = false; $('why').hidden = true; $('what').focus(); }
-$('chips').onclick = e => { const b = e.target.closest('button'); if (b){ whySel = +b.dataset.i; leave(); } };
 
 /* ═════════ 비운 동안 쌓일 말 ═════════ */
 const SCRIPT = [
@@ -333,7 +441,7 @@ const SCRIPT = [
 function awayLines(c, now){
   const el = now - c.left, out = [];
   const say = (min, text, cls='') => out.push({ at: c.left + min*60000, text, cls });
-  say(0, `${hm(c.left)}에 자리를 비웠습니다${c.why ? ' · ' + c.why : ''}.`);
+  say(0, `${hm(c.left)}에 자리를 비웠습니다.`);
   out.push({ at:null, text: taskOf(c), cls:'big' });
   if (c.recent && c.recent.length){
     out.push({ at:null, text:'그 전에 한 일', cls:'dim' });
@@ -352,15 +460,17 @@ function hereLines(){
   const old = S.log.filter(e => !sameDay(e.left, now)).slice(0, 8).reverse();
   if (old.length){
     L.push({ at:null, text:'지난 자리 비움', cls:'dim' });
-    for (const e of old) L.push({ at:null, text:`${md(e.left)} ${hm(e.left)}–${hm(e.back)}  (${dur(e.back-e.left)})  ${e.why ? e.why + ' · ' : ''}${taskOf(e)}`, cls:'dim' });
+    for (const e of old) L.push({ at:null, text:`${md(e.left)} ${hm(e.left)}–${hm(e.back)}  (${dur(e.back-e.left)})  ${taskOf(e)}`, cls:'dim' });
     L.push({ at:null, text:'', cls:'gap' });
   }
   const today = [];
   for (const e of recent) if (sameDay(e.at, now)) today.push({ at:e.at, html:`<span class="src">[${esc(e.src)}]</span> ${esc(e.text)}` });
+  for (const n of S.notes) if (sameDay(n.at, now) && n.kind === 'thought')
+    today.push({ at:n.at, html:`<span class="tag" style="color:#c9ff5a">[생각]</span> ${esc(n.text)} <span class="src">· ${esc(n.task)} 페이지에만</span>` });
   for (const n of S.notes) if (sameDay(n.at, now) && n.kind === 'memo')
     today.push({ at:n.at, html:`<span class="tag">[${esc(n.tag)}]</span> ${esc(n.text)}${n.task ? ` <span class="src">· ${esc(n.task)} 하던 중</span>` : ''}` });
   for (const e of S.log) if (sameDay(e.left, now))
-    today.push({ at:e.left, html:`<span class="src">[자리 비움]</span> ${hm(e.left)}–${hm(e.back)} · ${esc(e.why || '')} · ${dur(e.back-e.left)}`, dim:true });
+    today.push({ at:e.left, html:`<span class="src">[자리 비움]</span> ${hm(e.left)}–${hm(e.back)} · ${dur(e.back-e.left)}`, dim:true });
   today.sort((a,b) => a.at - b.at);
   L.push({ at:null, text:`오늘 — ${new Date().getMonth()+1}월 ${new Date().getDate()}일`, cls:'dim' });
   if (!today.length) L.push({ at:null, text:'아직 없음. 메모는 Enter, 자리를 뜰 땐 ⌘Enter.', cls:'dim' });
@@ -413,38 +523,30 @@ function leave(){
   const fresh = le && Date.now() - le.at < 10*60000 && !(fomoNow && fomoNow.focus) ? le.text : '';
   const auto = fresh || (now ? now.name : '') || (le ? le.text : '');
   S.state = 'away';
-  S.current = { text: typed || auto, why: WHY[whySel], task: now ? now.name : '', taskId: now ? now.id : null,
+  S.current = { text: typed || auto, task: now ? now.name : '', taskId: now ? now.id : null,
                 left: Date.now(), recent: recent.slice(0,5).map(({at,src,text}) => ({at,src,text})) };
   S.returned = null;
   $('what').value = ''; grow();
-  whyOpen = false; $('why').hidden = true;
   save(); render(); $('btn').blur();
 }
 function back(){
   const c = S.current, now = Date.now();
-  const e = { text:c.text, why:c.why || '', task:c.task || '', left:c.left, back:now };
+  const e = { text:c.text, task:c.task || '', left:c.left, back:now };
   S.log.unshift(e); S.log = S.log.slice(0,200);
   S.returned = e;
   S.state = 'here'; S.current = null;
-  send('away', c.taskId, { at:c.left, back:now, why:e.why, t:one(c.text), task:e.task });
+  send('away', c.taskId, { at:c.left, back:now, t:one(c.text), task:e.task });
   save(); render(); $('what').focus();
 }
-$('btn').onclick = () => S.state === 'away' ? back() : (whyOpen ? leave() : openWhy());
-$('memoBtn').onclick = memo;
+$('btn').onclick = () => S.state === 'away' ? back() : leave();
+$('memoBtn').onclick = write;
 
 document.addEventListener('keydown', e => {
   if (!$('setup').hidden) return;
   if (S.state === 'away'){ if (e.key === 'Enter'){ e.preventDefault(); back(); } return; }
-  if (whyOpen){
-    if (e.key === 'Escape'){ e.preventDefault(); closeWhy(); }
-    else if (e.key === 'Enter'){ e.preventDefault(); leave(); }
-    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); whySel = (whySel+1) % WHY.length; drawWhy(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); whySel = (whySel+WHY.length-1) % WHY.length; drawWhy(); }
-    else if (/^[1-7]$/.test(e.key)){ e.preventDefault(); whySel = +e.key - 1; leave(); }
-    return;
-  }
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); openWhy(); }
-  else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && document.activeElement === $('what')){ e.preventDefault(); memo(); }
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); leave(); }
+  else if (e.key === 'Tab' && !e.isComposing && document.activeElement === $('what')){ e.preventDefault(); setMode(writeMode === 'memo' ? 'thought' : 'memo'); }
+  else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && document.activeElement === $('what')){ e.preventDefault(); write(); }
 });
 const grow = () => { const ta = $('what'); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140)+'px'; };
 $('what').addEventListener('input', grow);
@@ -467,12 +569,88 @@ $('setup').onsubmit = e => {
 
 window.addEventListener('storage', e => { if (e.key === KEY){ S = Object.assign({ notes:[], out:[] }, load() || S); mode = null; render(); } });
 addEventListener('focus', () => { if (Date.now() - bjAt > 30000) pullRecent(); else flush(); });
-setInterval(() => { if (!document.hidden && S.state === 'here') pullRecent(); else flush(); }, 60000);
+setInterval(() => { if (!document.hidden) pullRecent(); else flush(); }, 60000);
 
 const fit = () => document.documentElement.style.setProperty('--fs', Math.max(15, Math.min(24, innerWidth/46))+'px');
 addEventListener('resize', fit); fit();
 
-paint(); tick(); setInterval(tick, 15000);
+/* ═════════ 화면 보호 (2026년 11월 27일, 작가가 정함) ═════════
+   손대지 않은 지 IDLE이 지나면 OUT초에 걸쳐 검정이 되고, 검은 화면에 글 한 덩어리만 흐리게 떠 있다:
+     자리 비움 중 — 하던 일 / '09:12에 일어섬 · 23분째'
+     적는 화면   — 지금 하는 일 / '마지막으로 손댄 때 09:40 · 25분 전'(단추를 안 누르고 일어섰을 때)
+   덩어리는 MOVE초마다 FADE초에 걸쳐 사라졌다가 다른 자리에서 나타난다(같은 자리에 오래 있지 않게).
+   잠든 동안의 첫 입력(키·누르기)은 깨우기만 한다. 맥의 입력기 표시(「한」)가 남지 않게 입력창에서 커서를 뺐다가 깨면 돌려놓는다. */
+const SAVER = { IDLE:5*60, OUT:30, MOVE:60, FADE:2, DIM:0.45 };   // 초 · 덩어리 밝기
+let lastInput = Date.now(), saverPhase = 'awake', swallowUntil = 0, refocus = null, floatShown = false, floatNext = 0;
+const sleeping = () => saverPhase === 'sleep';
+function floatText(){
+  const now = Date.now();
+  if (S.state === 'away' && S.current){
+    const el = now - S.current.left;
+    return [taskOf(S.current), el < 60000 ? `${hm(S.current.left)}에 일어섬 · 방금` : `${hm(S.current.left)}에 일어섬 · ${dur(el)}째`];
+  }
+  const c = cur();
+  return [c ? c.name : '하던 일 모름', `마지막으로 손댄 때 ${hm(lastInput)} · ${dur(now - lastInput)} 전`];
+}
+function placeFloat(){
+  const f = $('float'), m = 0.06;
+  const w = f.offsetWidth, h = f.offsetHeight;
+  const x = innerWidth*m + Math.random() * Math.max(0, innerWidth*(1-2*m) - w);
+  const y = innerHeight*m + Math.random() * Math.max(0, innerHeight*(1-2*m) - h);
+  f.style.left = Math.round(x) + 'px'; f.style.top = Math.round(y) + 'px';
+}
+function saverTick(){
+  const ph = (Date.now() - lastInput) / 1000 < SAVER.IDLE ? 'awake' : 'sleep';
+  const d = $('dark'), f = $('float');
+  if (ph !== saverPhase){
+    if (ph === 'sleep'){
+      const a = document.activeElement;
+      if (a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT')){ refocus = a; a.blur(); }
+      d.style.transitionDuration = SAVER.OUT + 's'; d.style.opacity = 1; d.classList.add('on');
+      floatShown = false; floatNext = Date.now() + SAVER.OUT*1000;   // 검정이 다 된 뒤에 처음 나타난다
+    }else{
+      d.style.transitionDuration = '.25s'; d.style.opacity = 0; d.classList.remove('on');
+      f.style.transitionDuration = '.2s'; f.style.opacity = 0; floatShown = false;
+      if (refocus && !refocus.closest('[hidden]')) refocus.focus();
+      refocus = null;
+    }
+    saverPhase = ph;
+  }
+  if (ph !== 'sleep') return;
+  const [a, b] = floatText();
+  if ($('f1').textContent !== a) $('f1').textContent = a;
+  if ($('f2').textContent !== b) $('f2').textContent = b;
+  if (Date.now() < floatNext) return;
+  f.style.transitionDuration = SAVER.FADE + 's';
+  if (floatShown){ f.style.opacity = 0; floatShown = false; floatNext = Date.now() + SAVER.FADE*1000 + 300; }
+  else { placeFloat(); f.style.opacity = SAVER.DIM; floatShown = true; floatNext = Date.now() + SAVER.MOVE*1000; }
+}
+function wake(e){
+  const was = sleeping();
+  lastInput = Date.now();
+  if (was){ swallowUntil = Date.now() + 600; saverTick(); }   // 이어 오는 click까지 삼킨다
+  if (was || Date.now() < swallowUntil){
+    if (e.type !== 'mousemove' && e.type !== 'wheel'){ e.preventDefault(); e.stopImmediatePropagation(); }
+  }
+}
+['keydown','mousedown','click','touchstart'].forEach(t => addEventListener(t, wake, true));
+['mousemove','wheel'].forEach(t => addEventListener(t, () => { const was = sleeping(); lastInput = Date.now(); if (was){ swallowUntil = Date.now() + 600; saverTick(); } }, { capture:true, passive:true }));
+setInterval(saverTick, 500);
+
+/* 화면 꺼짐 막기 — 크롬의 Wake Lock. 다녀올게 창이 보이는 동안만. 안 되면 조용히 넘어간다(맥 설정을 쓴다) */
+let wakeLock = null;
+async function keepScreen(){
+  if (!('wakeLock' in navigator) || document.hidden) { $('wl').textContent = ''; return; }
+  try{
+    wakeLock = await navigator.wakeLock.request('screen');
+    $('wl').textContent = '· 화면 켜 둠';
+    wakeLock.addEventListener('release', () => { $('wl').textContent = ''; });
+  }catch(e){ $('wl').textContent = ''; }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) keepScreen(); });
+keepScreen();
+
+setMode('memo'); paint(); tick(); setInterval(tick, 15000);
 pullRecent();
 </script>
 </body>
