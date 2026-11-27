@@ -1013,7 +1013,7 @@ h2:first-child{margin-top:0}
       <div class="row" id="pMaeRow"><label for="pMae">한 편 분량</label><input type="number" id="pMae" min="1" max="500" step="0.5"><span class="unit">매</span></div>
       <div class="row"><label for="dayStart">하루가 바뀌는 시각</label><input type="number" id="dayStart" min="0" max="6" step="1"><span class="unit">시</span></div>
       <p class="note">한 편 분량은 청탁이 아닌 모든 원고에 걸립니다. 청탁 작품의 원고는 작품에 적은 청탁 매수를 목표로 삼습니다.</p>
-      <p class="note">글자 수는 공백을 포함하고 문단 나눔은 세지 않습니다. 하루 분량은 그날 원고가 실제로 늘어난 만큼(순증)으로 셉니다. 고쳐 쓰다 짧아지면 그만큼 줄고, 되돌리기도 셈에 들어갑니다. 여러 원고를 오간 날은 모두 합쳐 셉니다. 하루는 이 시각에 바뀌며, 몰입 기록과 같은 경계를 씁니다.</p>
+      <p class="note">글자 수는 공백을 포함하고 문단 나눔은 세지 않습니다. 하루 분량은 그날 원고가 실제로 늘어난 만큼(순증)으로 셉니다. 고쳐 쓰다 짧아지면 그만큼 줄고, 되돌리기도 셈에 들어갑니다. 여러 원고를 오간 날은 모두 합쳐 셉니다. 개정 원고는 하루 분량에 들지 않고, 그날 늘고 준 글자(개정 순증)와 넣고 지운 글자를 더한 것(고침)으로 따로 셉니다. 하루는 이 시각에 바뀌며, 몰입 기록과 같은 경계를 씁니다.</p>
 
       <h2>왼쪽 화면</h2>
       <div class="row"><label for="pfz">글자 크기</label><input type="number" id="pfz" min="12" max="28" step="1"><span class="unit">px</span></div>
@@ -1378,6 +1378,8 @@ function fresh(){
     advSince:null,   /* 나아감을 따로 세기 시작한 날(그 전의 날은 원고 전체로만) */
     hit:{},      /* 하루 분량을 채운 날 — 글자(五) */
     hitRev:{},   /* 하루 쪽수를 채운 날 — 개정(改) */
+    revNet:{},   /* 날마다 개정 원고가 늘고 준 글자 수(2026년 11월 28일부터). 초고의 순증·나아감과 따로 센다 */
+    revEd:{},    /* 날마다 개정 원고에서 고친 글자 수 — 넣은 글자와 지운 글자를 더한 것 */
     dailyPg:0,   /* 하루에 고칠 쪽수(0이면 쪽수로는 도장을 찍지 않는다) */
     fold:{ w:{}, p:{}, c:{}, seen:null },
     prScope:{},   /* 작품마다 인쇄 범위 — "all", "p:<부 id>", "c:<장 id>" */   /* 원고 탭에서 접고 편 것 — 작품(w)·장(c)마다 true면 접힘. 적지 않은 것은 처음 모양을 따른다 */
@@ -1757,6 +1759,9 @@ function todayNet(){ return S.net[dayKey(Date.now())] || 0; }
 /* 그날의 나아감 — 따로 세기 전의 날은 원고 전체의 증감으로 대신한다 */
 function advOf(k){ return k >= S.advSince ? (S.adv[k] || 0) : (S.net[k] || 0); }
 function todayAdv(){ return S.adv[dayKey(Date.now())] || 0; }
+/* 개정 — 그날 개정 원고의 순증과 고친 글자 */
+function revNetOf(k){ return (S.revNet && S.revNet[k]) || 0; }
+function revEdOf(k){ return (S.revEd && S.revEd[k]) || 0; }
 function dayText(t){
   var d = new Date(t);
   return (d.getFullYear()===new Date().getFullYear() ? "" : d.getFullYear()+"년 ")
@@ -1986,7 +1991,9 @@ function renderNet(){
   var v = todayAdv();
   var sign = v > 0 ? "+" : "";
   /* 목표는 머리줄에 보이지 않는다(설정·달력·도장에서는 그대로 쓴다) */
-  elNet.textContent = "오늘 " + sign + fmt(v) + "자";
+  var tk = dayKey(Date.now()), re = revEdOf(tk), rn = revNetOf(tk);
+  elNet.textContent = "오늘 " + sign + fmt(v) + "자" + (re || rn ? " · 개정 " + signed(rn) + "자 · 고침 " + fmt(re) + "자" : "");
+  elNet.title = re || rn ? "앞의 숫자는 초고(새 글)의 나아감, 개정은 개정 원고가 늘고 준 글자, 고침은 개정 원고에서 넣고 지운 글자를 더한 것입니다" : "";
   elNet.classList.remove("met");
 }
 
@@ -2490,9 +2497,17 @@ elStamp.addEventListener("click", function(){ clearTimeout(stampT); nextStamp();
 
 /* ---------- 원고 바꾸기 ---------- */
 /* d — 원고 전체가 늘고 준 글자. m이 완성 전 원고면 나아감에도 더한다(하루 분량과 도장은 나아감으로) */
-function bump(d, m){
-  if(m && isRevMs(m)) return;   /* 개정 원고는 얼마나 입력하든 세지 않는다 */
+function bump(d, m, ed){
   var k = dayKey(Date.now());
+  /* 개정 원고는 초고의 순증·나아감·도장에 넣지 않고, 개정 순증(revNet)과 고친 글자(revEd)로 따로 센다 */
+  if(m && isRevMs(m)){
+    if(!S.revNet) S.revNet = {};
+    if(!S.revEd) S.revEd = {};
+    if(d) S.revNet[k] = (S.revNet[k] || 0) + d;
+    if(ed) S.revEd[k] = Math.max(0, (S.revEd[k] || 0) + ed);
+    queueDays();
+    return;
+  }
   S.net[k] = (S.net[k] || 0) + d;
   if(m && !finished(m) && !m.folded) S.adv[k] = (S.adv[k] || 0) + d;
   if(S.daily && !S.hit[k] && (S.adv[k] || 0) >= S.daily){
@@ -2501,9 +2516,59 @@ function bump(d, m){
   }
   queueDays();
 }
+/* 고친 글자 — 앞 글(a)에서 뒤 글(b)로 갈 때 넣은 글자와 지운 글자를 더한 것(줄바꿈은 세지 않는다).
+   앞뒤로 같은 부분을 떼고, 가운데는 문단끼리 견주어 같은 문단은 건너뛰고, 바뀐 문단 묶음은 다시 앞뒤를 떼어 남은 글자만 센다 */
+function editVol(a, b){
+  a = a || ""; b = b || "";
+  if(a === b) return 0;
+  function trim2(x, y){
+    var p = 0, n = Math.min(x.length, y.length);
+    while(p < n && x.charCodeAt(p) === y.charCodeAt(p)) p++;
+    var q = 0;
+    while(q < n - p && x.charCodeAt(x.length - 1 - q) === y.charCodeAt(y.length - 1 - q)) q++;
+    return [x.slice(p, x.length - q), y.slice(p, y.length - q)];
+  }
+  var t = trim2(a, b);
+  if(!t[0] || !t[1]) return len(t[0]) + len(t[1]);
+  var A = t[0].split("\n"), B = t[1].split("\n"), na = A.length, nb = B.length;
+  /* 문단끼리 견주기(Myers) — 같은 문단의 짝을 찾는다. 바뀐 문단이 너무 많으면 문단 비교 없이 */
+  var MAX = Math.min(na + nb, 2000), off = MAX + 1, V = new Int32Array(2 * MAX + 3), trace = [], D = -1, d, k, x, y;
+  for(d = 0; d <= MAX && D < 0; d++){
+    trace.push(V.slice(off - d - 1, off + d + 2));   /* 이번 차례에 쓸 칸만 남긴다 */
+    for(k = -d; k <= d; k += 2){
+      x = (k === -d || (k !== d && V[off + k - 1] < V[off + k + 1])) ? V[off + k + 1] : V[off + k - 1] + 1;
+      y = x - k;
+      while(x < na && y < nb && A[x] === B[y]){ x++; y++; }
+      V[off + k] = x;
+      if(x >= na && y >= nb){ D = d; break; }
+    }
+  }
+  if(D < 0) return len(t[0]) + len(t[1]);
+  /* 거꾸로 따라가며 같은 문단의 짝을 모은다 */
+  var pairs = [];
+  x = na; y = nb;
+  for(d = D; d > 0; d--){
+    var Vp = trace[d], o2 = d + 1; k = x - y;
+    var pk = (k === -d || (k !== d && Vp[o2 + k - 1] < Vp[o2 + k + 1])) ? k + 1 : k - 1;
+    var px = Vp[o2 + pk], py = px - pk;
+    while(x > px && y > py){ x--; y--; pairs.push([x, y]); }
+    x = px; y = py;
+  }
+  while(x > 0 && y > 0){ x--; y--; pairs.push([x, y]); }
+  pairs.reverse();
+  var vol = 0, ia = 0, ib = 0;
+  function gap(a1, b1){
+    if(a1 > ia || b1 > ib){ var u = trim2(A.slice(ia, a1).join("\n"), B.slice(ib, b1).join("\n")); vol += len(u[0]) + len(u[1]); }
+  }
+  pairs.forEach(function(pr){ gap(pr[0], pr[1]); ia = pr[0] + 1; ib = pr[1] + 1; });
+  gap(na, nb);
+  return vol;
+}
 /* ---------- 기록 ---------- */
-function logEdit(m, before, after, how){
-  S.log.edits.push({ t:Date.now(), ms:m.id, b:before, a:after, how:how });
+function logEdit(m, before, after, how, ed){
+  var o = { t:Date.now(), ms:m.id, b:before, a:after, how:how };
+  if(ed != null) o.ed = ed;   /* 개정 원고에서 고친 글자 */
+  S.log.edits.push(o);
 }
 function logSess(o){
   o.rid = o.rid || uid(); o.src = o.src || "mac"; o.up = false;
@@ -2608,7 +2673,12 @@ function daysObj(){
     if(!first) first = k;
     var v = advOf(k); if(v) o[k] = v;
   });
-  return { dayStart:S.dayStart, since:S.advSince, first:first, adv:o };
+  /* 개정 원고의 날마다 순증(net)과 고친 글자(ed) — 0이 아닌 날만. adv에는 들지 않는다 */
+  var rv = {};
+  Object.keys(S.revEd || {}).concat(Object.keys(S.revNet || {})).forEach(function(k){
+    var n = revNetOf(k), e = revEdOf(k); if(n || e) rv[k] = { net:n, ed:e };
+  });
+  return { dayStart:S.dayStart, since:S.advSince, first:first, adv:o, rev:rv };
 }
 function shareDays(){
   if(!cloudOn() || virgin()) return;   /* 자리표뿐인 저장소는 공유 값을 올리지 않는다 */
@@ -2831,7 +2901,10 @@ function commit(m, text, label, how){
   var prev = S.lastEditId !== m.id ? msById(S.lastEditId) : null;
   if(prev){ prev.undo = null; prev.redo = null; }
   S.lastEditId = m.id;
-  logEdit(m, before, len(text), how || "write");
+  /* 개정 원고에서 고친 글자 — 처음 들어온 글(처음 글로 삼는 것)은 고친 것이 아니다. 비웠다 다시 채운 글은 늘고 준 만큼만 */
+  var rv = isRevMs(m), firstIn = rv && !m.merged && m.baseChars == null && !len(m.text) && len(text) > 0;
+  var ed = !rv ? null : firstIn ? 0 : wasCleared ? Math.abs(len(text) - before) : editVol(m.text, text);
+  logEdit(m, before, len(text), how || "write", ed);
   if(isRevMs(m) && !m.merged && m.baseChars == null && len(text) > 0) m.baseChars = len(text);
   m.undo = wasCleared ? null : { text:m.text, label:label };
   m.redo = null;
@@ -2839,7 +2912,7 @@ function commit(m, text, label, how){
   m.editedAt = Date.now();
   if(hasReview(m)) m.seenReviewAt = m.reviewAt || "seen";
   m.review = null;   /* 새 원고가 되면 아이폰 자국은 사라진다 */
-  bump(len(text) - before, m);
+  bump(firstIn ? 0 : len(text) - before, m, ed || 0);
   checkDone(m);
   cloudPush(m);
 }
@@ -2870,7 +2943,7 @@ function send(){
 }
 
 function swapBack(){
-  var m = msById(S.lastEditId) || cur(), before = len(m.text), msg;
+  var m = msById(S.lastEditId) || cur(), before = len(m.text), oldT = m.text, msg;
   if(m.redo){
     m.undo = { text:m.text, label:m.redo.label };
     m.text = m.redo.text;
@@ -2891,8 +2964,10 @@ function swapBack(){
   m.editedAt = Date.now();
   if(hasReview(m)) m.seenReviewAt = m.reviewAt || "seen";
   m.review = null;
-  logEdit(m, before, len(m.text), msg === "다시 했습니다" ? "redo" : "undo");
-  bump(len(m.text) - before, m);
+  /* 개정 원고 — 되돌리면 그 고침만큼 고친 글자를 덜고, 다시 하면 다시 더한다 */
+  var ed = isRevMs(m) ? editVol(oldT, m.text) * (msg === "다시 했습니다" ? 1 : -1) : null;
+  logEdit(m, before, len(m.text), msg === "다시 했습니다" ? "redo" : "undo", ed);
+  bump(len(m.text) - before, m, ed || 0);
   checkDone(m);
   cloudPush(m);
   S.sel = null;
@@ -4216,6 +4291,9 @@ function patternBlock(){
   var h = [];
   h.push('<h3>요즘의 글쓰기 · 최근 30일</h3>');
   h.push('<table><tr><th>장르</th><th>시간</th><th>매수</th><th>1시간당</th><th>1매에</th>' + (hasD ? '<th>떠들기까지</th>' : '') + '</tr>' + rows.join('') + '</table>');
+  var pN = 0, pE = 0;
+  for(var k3 = from; k3 <= today; k3 = addDays(k3, 1)){ pN += revNetOf(k3); pE += revEdOf(k3); }
+  if(pN || pE) h.push('<p>개정 원고 · 순증 ' + signed(pN) + '자(' + m1(maeOf(pN)) + '매) · 고친 글자 ' + fmt(pE) + '자 — 위의 매수에는 들지 않습니다</p>');
   if(hasD) h.push('<p class="note">떠들기까지는 같은 기간에 그 장르 작품에 이어 둔 떠들기 시간(' + spanText(dAll) + ')을 더해 1매에 든 시간입니다. 시간 칸에는 넣지 않았습니다.</p>');
   h.push('<p>하루 평균 ' + m1(maeOf(cAll) / days) + '매 · 30일 모두 ' + m1(maeOf(cAll)) + '매 · 쓴 날 ' + wrote + ' / ' + days + '일</p>');
   h.push('<p class="note">매수는 순증 기준이라 다듬으며 덜어낸 달에는 줄거나 마이너스가 될 수 있습니다. 장르별 줄은 ' + fullDate(S.logSince) + '부터의 기록으로 세고, 그 전의 날은 \'모두\'에만 들어갑니다.</p>');
@@ -4701,7 +4779,7 @@ function deleteChapter(w, c){
 /* 개정 작품의 원고 — 개정 ↔ 새 글. 바꾼 때부터만 새 규칙으로 세고 지나간 날의 기록은 그대로 */
 function switchRev(m){
   var to = isRevMs(m) ? "새 글" : "개정";
-  if(!confirm("'" + m.title + "'을 " + to + " 원고로 바꿉니다.\n" + (to === "개정" ? "이제부터 이 원고에서 늘고 준 글자는 순증·나아감에 들지 않고, 지금 분량(" + fmt(nowChars(m)) + "자)을 처음 글로 삼습니다." : "이제부터 이 원고에서 늘어난 글자를 순증·나아감으로 셉니다.") + "\n지나간 날의 기록은 그대로입니다.")) return;
+  if(!confirm("'" + m.title + "'을 " + to + " 원고로 바꿉니다.\n" + (to === "개정" ? "이제부터 이 원고에서 늘고 준 글자는 순증·나아감에 들지 않고 개정 순증·고친 글자로 따로 셉니다. 지금 분량(" + fmt(nowChars(m)) + "자)을 처음 글로 삼습니다." : "이제부터 이 원고에서 늘어난 글자를 순증·나아감으로 셉니다.") + "\n지나간 날의 기록은 그대로입니다.")) return;
   m.rev = to;
   if(to === "개정") m.baseChars = nowChars(m);
   m.dirty = true;
@@ -5235,12 +5313,13 @@ function renderCal(){
 
   var upto = (y === today.getFullYear() && mo === today.getMonth()) ? today.getDate()
            : (new Date(y, mo, 1) > today ? 0 : last);
-  var sum = 0, hits = 0, streak = 0, best = 0, chars = 0, pages = 0;
+  var sum = 0, hits = 0, streak = 0, best = 0, chars = 0, pages = 0, rvN = 0, rvE = 0;
   for(var d=1; d<=upto; d++){
     var k0 = keyOf(y,mo,d);
     sum += S.days[k0] || 0;
     chars += advOf(k0);
     pages += pagesOn(k0);
+    rvN += revNetOf(k0); rvE += revEdOf(k0);
     if(hitDay(k0)){ hits++; streak++; if(streak>best) best = streak; }
     else streak = 0;
   }
@@ -5251,6 +5330,7 @@ function renderCal(){
     if(best > 1) bits.push("가장 길게 이어진 " + best + "일");
     bits.push("이달 나아감 " + mae(chars) + "매");
     if(pages) bits.push("이달 고친 " + pages + "쪽");
+    if(rvE || rvN) bits.push("이달 개정 " + signed(rvN) + "자 · 고침 " + fmt(rvE) + "자");
   }
   $("#calSum").textContent = bits.join(" · ");
 
@@ -5267,7 +5347,8 @@ function renderCal(){
     c.title = (mo+1) + "월 " + d2 + "일 · " + (ms ? "몰입 " + spanText(ms) : "쉼")
             + (k >= S.advSince ? (av ? " · 나아감 " + signed(av) + "자" : "") + (nt && nt !== av ? " · 원고 전체 " + signed(nt) + "자" : "")
                                 : (nt ? " · 원고 전체 " + signed(nt) + "자" : ""))
-            + (pg ? " · 고친 " + pg + "쪽" : "");
+            + (pg ? " · 고친 " + pg + "쪽" : "")
+            + (revEdOf(k) || revNetOf(k) ? " · 개정 " + signed(revNetOf(k)) + "자 · 고침 " + fmt(revEdOf(k)) + "자" : "");
     var n = document.createElement("span"); n.className = "n"; n.textContent = d2;
     c.appendChild(n);
     if(fins[k]){ var f = document.createElement("span"); f.className = "fin"; f.textContent = "편"; c.appendChild(f); }
@@ -5380,6 +5461,15 @@ function writeMsIn(rg){
   });
   return t;
 }
+/* 기간 안에서 개정 원고에 들인 시간 */
+function revMsIn(rg){
+  var t = 0;
+  S.log.sess.forEach(function(x){
+    if(!inRange(dayKey(x.start), rg)) return;
+    var m = msById(x.ms); if(m && isRevMs(m)) t += Math.max(0, x.end - x.start);
+  });
+  return t;
+}
 function renderAnaSum(rg){
   var html = "", nDays = 0, focus = 0, net = 0, adv = 0, hits = 0, wrote = 0;
   for(var k = rg[0]; k <= rg[1]; k = addDays(k, 1)){
@@ -5396,6 +5486,14 @@ function renderAnaSum(rg){
   var wt = writeMsIn(rg);
   if(wt) html += kv("쓰기 한 시간당 나아감", fmt(Math.round(adv / hrs(wt))) + "자", "완성 전 원고의 시간 " + spanText(wt));
   html += kv("원고 전체의 증감", signed(net) + "자", m1(maeOf(net)) + "매");
+  /* 개정 — 초고와 따로. 개정 순증은 개정 원고가 늘고 준 글자, 고친 글자는 넣고 지운 글자를 더한 것(2026년 11월 28일부터 셈) */
+  var rvN = 0, rvE = 0, rvD = 0;
+  for(var k2 = rg[0]; k2 <= rg[1]; k2 = addDays(k2, 1)){ rvN += revNetOf(k2); rvE += revEdOf(k2); if(revEdOf(k2) || revNetOf(k2)) rvD++; }
+  if(rvN || rvE){
+    html += kv("개정 순증", signed(rvN) + "자", m1(maeOf(rvN)) + "매 · 개정 원고가 늘고 준 것");
+    var rt = revMsIn(rg);
+    html += kv("개정에서 고친 글자", fmt(rvE) + "자", "고친 날 " + rvD + "일 · 하루 평균 " + fmt(Math.round(rvE / Math.max(1, rvD))) + "자" + (rt ? " · 한 시간당 " + fmt(Math.round(rvE / hrs(rt))) + "자" : ""));
+  }
   var pgs = pagesIn(rg);
   if(pgs) html += kv("고친 쪽수", pgs + "쪽", "개정 회차 · 하루 평균 " + m1(pgs / Math.max(1, nDays)) + "쪽");
   if(S.daily || S.dailyPg) html += kv("하루 분량(" + (S.daily ? fmt(S.daily) + "자" : "") + (S.daily && S.dailyPg ? " 또는 " : "") + (S.dailyPg ? S.dailyPg + "쪽" : "") + ")을 채운 날", hits + "일", Math.round(hits / Math.max(1, nDays) * 100) + "%");
