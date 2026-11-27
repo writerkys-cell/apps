@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>다녀올게</title>
+<style>
+  :root{
+    --bg:#020603;
+    --g:#39ff7a;          /* 형광 초록 */
+    --g2:#7dffa6;         /* 밝은 줄 */
+    --gd:#1f9e4a;         /* 흐린 줄 */
+    --gx:#0f4a24;         /* 아주 흐림 */
+    --fs:20px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#000;overflow:hidden}
+  body{
+    font-family:"D2Coding","Menlo","Apple SD Gothic Neo",monospace;
+    font-size:var(--fs);line-height:1.7;color:var(--g);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ── 브라운관 ───────────────────── */
+  .crt{
+    position:fixed;inset:0;padding:5vh 6vw 4vh;
+    background:radial-gradient(ellipse at center,#06140a 0%,var(--bg) 70%,#000 100%);
+    display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:2.2vh;
+    text-shadow:0 0 2px currentColor,0 0 10px rgba(57,255,122,.35);
+  }
+  .crt::before{ /* 주사선 */
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.28) 3px);
+  }
+  .crt::after{ /* 유리 가장자리 어둠 */
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:4;
+    box-shadow:inset 0 0 120px 30px #000;border-radius:18px;
+  }
+
+  header{display:flex;justify-content:space-between;color:var(--gd);font-size:.75em;letter-spacing:.06em;
+         border-bottom:1px dashed var(--gx);padding-bottom:.6em}
+
+  /* 쌓이는 줄 */
+  #screen{overflow-y:auto;scrollbar-width:none;padding-right:1em}
+  #screen::-webkit-scrollbar{display:none}
+  .ln{white-space:pre-wrap;word-break:keep-all}
+  .ln .t{color:var(--gd);margin-right:1.2em}
+  .ln.dim{color:var(--gd)}
+  .ln.dim .t{color:#1a7a3c}
+  .ln.big{font-size:1.75em;line-height:1.45;color:var(--g2);margin:.35em 0 .5em;
+          text-shadow:0 0 3px currentColor,0 0 18px rgba(125,255,166,.45)}
+  .ln.rule{color:var(--gx);overflow:hidden;white-space:nowrap}
+  .ln.gap{height:.8em}
+  .ln.new{animation:on .5s ease-out}
+  @keyframes on{from{opacity:0;filter:brightness(2.5)}to{opacity:1;filter:none}}
+
+  /* 아래 입력줄 */
+  footer{display:flex;align-items:flex-end;gap:1.2em;border-top:1px dashed var(--gx);padding-top:1em}
+  .prompt{flex:1;display:flex;gap:.6em;align-items:flex-start;min-width:0}
+  .prompt .ps{color:var(--gd);white-space:nowrap}
+  textarea{
+    flex:1;background:transparent;border:0;outline:0;resize:none;
+    font:inherit;color:var(--g2);text-shadow:inherit;caret-color:var(--g);
+    line-height:1.7;min-height:1.7em;
+  }
+  textarea::placeholder{color:var(--gx)}
+  .msg{flex:1;color:var(--gd)}
+
+  button{
+    font:inherit;font-size:.9em;color:var(--bg);background:var(--g);border:0;cursor:pointer;
+    padding:.35em 1.1em;letter-spacing:.08em;white-space:nowrap;
+    box-shadow:0 0 14px rgba(57,255,122,.55);text-shadow:none;
+  }
+  button:hover{background:var(--g2)}
+  button:active{transform:translateY(1px)}
+  button.ghost{background:transparent;color:var(--g);box-shadow:inset 0 0 0 1px var(--g),0 0 14px rgba(57,255,122,.3);
+               text-shadow:inherit}
+  .key{color:var(--gx);font-size:.65em;margin-left:.6em}
+
+  .cursor{display:inline-block;width:.6em;height:1.1em;background:var(--g);vertical-align:-.15em;
+          animation:blink 1.1s steps(1) infinite;box-shadow:0 0 8px var(--g)}
+  @keyframes blink{50%{opacity:0}}
+  header a{color:var(--gd);text-decoration:none;border-bottom:1px dotted var(--gx)}
+  header a.on{color:var(--g)}
+  header a:hover{color:var(--g2)}
+  .crt.setting{grid-template-rows:auto auto minmax(0,1fr) auto}
+  #setup{display:grid;gap:.5em;font-size:.85em;border:1px dashed var(--gx);padding:1em 1.2em}
+  #setup label{display:flex;gap:1em;color:var(--gd)}
+  #setup input{flex:1;background:transparent;border:0;border-bottom:1px solid var(--gx);outline:0;
+               font:inherit;color:var(--g2);text-shadow:inherit;caret-color:var(--g)}
+  #setup input::placeholder{color:var(--gx)}
+  .src{color:var(--gd)}
+  .ln .tag{color:var(--g2)}
+  .now{color:var(--gd);font-size:.8em;margin-bottom:.4em}
+  .now b{color:var(--g);font-weight:normal}
+  .btns{display:flex;gap:.6em}
+  /* 일어서는 이유 */
+  #why{position:relative;display:grid;gap:.7em;border:1px dashed var(--gd);padding:1em 1.2em;margin-bottom:.4em}
+  #why .q{color:var(--g2)}
+  #why .chips{display:flex;flex-wrap:wrap;gap:.5em}
+  #why .chips button{font-size:.85em;background:transparent;color:var(--g);box-shadow:inset 0 0 0 1px var(--gx);text-shadow:inherit}
+  #why .chips button.sel{background:var(--g);color:var(--bg);text-shadow:none;box-shadow:0 0 14px rgba(57,255,122,.55)}
+  #why .chips button i{font-style:normal;opacity:.6;margin-right:.4em}
+  #why .sub{color:var(--gx);font-size:.75em}
+  .bottom{display:grid}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="crt">
+  <header>
+    <span>다녀올게 · 자리 비움 기록기 v4</span>
+    <span><a id="bjLink" href="#">방점 연결 없음</a> &nbsp; <span id="clock"></span></span>
+  </header>
+
+  <form id="setup" hidden>
+    <div class="ln">방점 연결 — 방점의 기록은 읽기만 하고, 메모와 자리 비움만 방점의 요청 표(bangjeom_act)에 보냅니다.</div>
+    <label>주소 <input id="cfUrl" placeholder="https://xxxx.supabase.co" autocomplete="off"></label>
+    <label>키 &nbsp; <input id="cfKey" type="password" placeholder="방점 설정에 넣은 것과 같은 키" autocomplete="off"></label>
+    <label>목록 <input id="cfList" placeholder="bangjeom" autocomplete="off"></label>
+    <div class="ln dim">비워 두면 같은 브라우저 주소에 있는 방점의 설정을 빌립니다 (깃허브에 올렸을 때만 해당).</div>
+    <div><button type="submit">저장하고 읽어 오기</button> <button type="button" class="ghost" id="cfClose">닫기</button></div>
+  </form>
+
+  <main id="screen"></main>
+
+  <div class="bottom">
+    <div id="why" hidden>
+      <div class="q">왜 일어서나요?</div>
+      <div class="chips" id="chips"></div>
+      <div class="sub">숫자 키 또는 ← → 로 고르고 Enter · Esc는 취소</div>
+    </div>
+    <footer>
+      <div style="flex:1;min-width:0" id="here">
+        <div class="now" id="nowLine"></div>
+        <div class="prompt">
+          <span class="ps">&gt;</span>
+          <textarea id="what" rows="1" placeholder="메모를 적고 Enter · 일어설 땐 ⌘Enter" autofocus></textarea>
+        </div>
+      </div>
+      <div class="msg" id="away" hidden>돌아오면 단추를 누르세요 <span class="cursor"></span></div>
+      <div class="btns">
+        <button class="ghost" id="memoBtn">적기</button>
+        <button id="btn">다녀올게</button>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script>
+/* ═════════ 저장 (v1부터 같은 자리) ═════════
+   S.state 'here'|'away' · S.current 비운 중인 것 · S.log 지난 자리 비움 · S.notes 내가 적은 메모·자리 비움(화면용) · S.out 아직 못 보낸 것 */
+const KEY = 'danyeo.v1';
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || null } catch { return null } };
+let S = Object.assign({ state:'here', current:null, log:[], notes:[], out:[] }, load() || {});
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+const $ = id => document.getElementById(id);
+
+/* ═════════ 시간 말 ═════════ */
+const pad = n => String(n).padStart(2,'0');
+const hm  = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+const md  = t => { const d = new Date(t); return `${d.getMonth()+1}.${pad(d.getDate())}` };
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+const dur = ms => {
+  const m = Math.floor(ms/60000);
+  if (m < 1) return '1분이 안 되게';
+  if (m < 60) return `${m}분`;
+  const h = Math.floor(m/60), r = m%60;
+  return r ? `${h}시간 ${r}분` : `${h}시간`;
+};
+const one = s => String(s || '').replace(/\s+/g,' ').trim();
+const taskOf = c => one(c.text) || '(적지 않고 떠남)';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ═════════ 방점 연결 ═════════
+   읽기: bangjeom 표(data.tasks의 최근에 끝낸 일, data.pick 지금 고른 일), bangjeom_act의 최근 cont·line·done·now(포모·주머니가 보낸 것) — select만.
+   쓰기: bangjeom_act에 memo·away 줄을 넣기만 한다(포모와 같은 길). 방점이 열릴 때 받아 일지용 글에 넣는다. */
+const BJ_KEY = 'danyeo.bj';
+const RECENT_H = 12;
+let recent = [], pick = null, fomoNow = null, bjState = 'none', bjAt = 0;
+/* 지금 하는 일: 포모가 돌고 있거나 막 끝낸 지 30분 안이면 포모의 일, 아니면 방점이 고른 일 */
+const cur = () => fomoNow ? { id:fomoNow.id, name:fomoNow.name, src:'포모' } : pick ? { ...pick, src:'방점' } : null;
+const lastEnd = () => recent.find(e => !e.start);   // '시작' 줄을 뺀 가장 최근 기록
+function bjCfg(){
+  let own = {}, b = {};
+  try{ own = JSON.parse(localStorage.getItem(BJ_KEY) || '{}') || {}; }catch(e){}
+  try{ b = JSON.parse(localStorage.getItem('bangjeom.cfg') || '{}') || {}; }catch(e){}
+  const url = own.url || b.url || '', key = own.key || b.key || '', list = own.list || b.list || 'bangjeom';
+  return url && key ? { url:String(url).replace(/\/+$/,''), key, list } : null;
+}
+const hdr = c => ({ apikey:c.key, Authorization:'Bearer ' + c.key });
+const stripStamp = s => one(String(s||'').replace(/^—?\s*\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}\s*·?\s*/, ''));
+const SRC = { fomo:'포모', jumeoni:'주머니', final:'final', typing:'타이핑', taiping:'타이핑' };
+
+async function pullRecent(){
+  const c = bjCfg();
+  if (!c){ bjState = 'none'; recent = []; pick = null; fomoNow = null; paint(); return; }
+  const since = new Date(Date.now() - RECENT_H*3600000).toISOString();
+  try{
+    const r = await fetch(`${c.url}/rest/v1/bangjeom?select=data&id=eq.${encodeURIComponent(c.list)}`, { headers:hdr(c) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json(), data = (rows[0] && rows[0].data) || {}, tasks = data.tasks || [];
+    const byId = id => tasks.find(t => t && String(t.id) === String(id));
+    const name = id => { const t = byId(id); return t ? one(t.text) : ''; };
+    const p = data.pick && byId(data.pick.id);
+    pick = p && !p.done ? { id:String(p.id), name:one(p.text) } : null;
+    const ev = [];
+    for (const t of tasks){
+      const at = t && t.done && t.doneAt ? Date.parse(t.doneAt) : 0;
+      if (at && Date.now() - at < RECENT_H*3600000) ev.push({ at, src:'방점', text:`끝냄 · ${one(t.text)}`, task:one(t.text) });
+    }
+    try{
+      const q = `${c.url}/rest/v1/bangjeom_act?select=kind,target,text,device,created_at&list=eq.${encodeURIComponent(c.list)}` +
+                `&kind=in.(cont,line,done,now)&created_at=gte.${encodeURIComponent(since)}&order=created_at.desc&limit=60`;
+      const a = await fetch(q, { headers:hdr(c) });
+      const acts = a.ok ? await a.json() : [];
+      // 포모의 now(포모도로 시작) — 가장 최근 것 뒤에 멈춤(무효)·끝냄이 없고, 끝날 시각 + 30분 안이면 지금 포모의 일
+      fomoNow = null;
+      const nows = acts.filter(x => x.kind === 'now').map(x => { let o = {}; try{ o = JSON.parse(x.text) || {}; }catch(e){} return { id:String(x.target), at:+o.at || Date.parse(x.created_at), end:+o.end || 0, name: name(x.target) || one(o.t) }; }).sort((a,b) => b.at - a.at);
+      const n = nows[0];
+      if (n && n.end && Date.now() < n.end + 30*60000){
+        const after = acts.filter(x => String(x.target) === n.id && Date.parse(x.created_at) > n.at);
+        const killed = after.some(x => x.kind === 'done' || (x.kind === 'line' && /포모도로 무효/.test(x.text || '')));
+        if (!killed) fomoNow = { ...n, focus: Date.now() < n.end && !after.some(x => x.kind === 'cont') };
+      }
+      for (const x of acts){
+        let at = Date.parse(x.created_at), body = '';
+        if (x.kind === 'now'){
+          let o = {}; try{ o = JSON.parse(x.text) || {}; }catch(e){}
+          const task = name(x.target) || one(o.t);
+          ev.push({ at:+o.at || at, src:'포모', text:`${task} · 포모도로 시작`, task, act:true, start:true });
+          continue;
+        }
+        if (x.kind === 'cont'){ let o = null; try{ o = JSON.parse(x.text); }catch(e){} body = stripStamp(o && o.l ? o.l : x.text); if (o && +o.at) at = +o.at; }
+        else if (x.kind === 'line') body = stripStamp(x.text);
+        else body = '끝냄';
+        const task = name(x.target);
+        if (!body && !task) continue;
+        ev.push({ at, src: SRC[x.device] || x.device || '요청', text: task ? `${task} · ${body}` : body, task, act:true });
+      }
+    }catch(e){}
+    // 포모가 보낸 것을 방점이 받아 만든 '끝낸 사본'은 같은 분(±1)의 같은 일이면 뺀다
+    const actKeys = new Set(ev.filter(e => e.act).flatMap(e => [-1,0,1].map(d => `${e.task}|${Math.round(e.at/60000)+d}`)));
+    recent = ev.filter(e => e.act || !actKeys.has(`${e.task}|${Math.round(e.at/60000)}`)).sort((a,b) => b.at - a.at).slice(0, 12);
+    bjState = 'on'; bjAt = Date.now();
+  }catch(e){ bjState = 'err'; }
+  paint(); render(); flush();
+}
+
+/* 보내기 — 못 보낸 것은 S.out에 남겨 다시(열 때, 창이 앞으로 올 때, 1분마다) */
+let flushing = false;
+function send(kind, target, obj){
+  S.out.push({ kind, target: target || null, text: JSON.stringify(obj) }); save(); flush();
+}
+async function flush(){
+  const c = bjCfg();
+  if (flushing || !S.out.length || !c){ paint(); return; }
+  flushing = true;
+  try{
+    while (S.out.length){
+      const x = S.out[0];
+      const r = await fetch(`${c.url}/rest/v1/bangjeom_act`, { method:'POST',
+        headers:{ ...hdr(c), 'Content-Type':'application/json', Prefer:'return=minimal' },
+        body: JSON.stringify({ list:c.list, kind:x.kind, target:x.target, text:x.text, device:'danyeo' }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      S.out.shift(); save();
+    }
+  }catch(e){}
+  finally{ flushing = false; paint(); }
+}
+
+function paint(){
+  const a = $('bjLink'), n = S.out.length;
+  a.className = bjState === 'on' && !n ? 'on' : '';
+  a.textContent = (bjState === 'on' ? `방점 ${hm(bjAt)}에 읽음` : bjState === 'err' ? '방점 못 읽음 — 연결 확인' : '방점 연결 없음')
+                + (n ? ` · 못 보낸 것 ${n}개` : '');
+  const c = cur();
+  const who = !c ? '' : c.src === '포모' ? (fomoNow.focus ? `포모가 하는 일 (${hm(fomoNow.end)}까지)` : '포모로 하던 일') : '방점이 고른 일';
+  $('nowLine').innerHTML = c ? `${who} <b>${esc(c.name)}</b> — 메모는 이 일의 페이지에도 붙습니다` : '지금 하는 일 모름 — 메모는 그날의 기록으로만 갑니다';
+}
+
+/* ═════════ 메모 ═════════
+   '전화: 출판사 교정 일정'처럼 앞에 말머리를 붙이면 종류로 묶인다 */
+const TAGS = ['전화','메일','문자','연락','손님','약속','발견','생각','할일','메모'];
+function parseMemo(v){
+  const m = one(v).match(/^([^\s:：]{1,3})\s*[:：]\s*(.+)$/);
+  return m && TAGS.includes(m[1]) ? { tag:m[1], text:m[2] } : { tag:'메모', text:one(v) };
+}
+function memo(){
+  const v = $('what').value; if (!one(v)) return;
+  const { tag, text } = parseMemo(v), at = Date.now();
+  const c = cur(), task = c ? c.name : '';
+  S.notes.push({ kind:'memo', at, tag, text, task }); S.notes = S.notes.slice(-400);
+  send('memo', c && c.id, { at, tag, t:text, task });
+  $('what').value = ''; grow(); render(); $('what').focus();
+}
+
+/* ═════════ 일어서는 이유 ═════════ */
+const WHY = ['할 일 마치고','전화','손님·택배','식사','쉼','화장실','기타'];
+let whyOpen = false, whySel = 0;
+function suggestWhy(){   // 포모나 방점에서 10분 안에 끝낸 것이 있으면 '할 일 마치고'
+  const top = lastEnd();
+  if (fomoNow && fomoNow.focus) return 4;   // 포모도로 도중이면 '할 일 마치고'가 아니다
+  return top && Date.now() - top.at < 10*60000 ? 0 : 4;
+}
+function openWhy(){
+  whyOpen = true; whySel = suggestWhy();
+  $('why').hidden = false; drawWhy();
+}
+function drawWhy(){
+  $('chips').innerHTML = WHY.map((w,i) => `<button type="button" data-i="${i}" class="${i===whySel?'sel':''}"><i>${i+1}</i>${w}</button>`).join('');
+}
+function closeWhy(){ whyOpen = false; $('why').hidden = true; $('what').focus(); }
+$('chips').onclick = e => { const b = e.target.closest('button'); if (b){ whySel = +b.dataset.i; leave(); } };
+
+/* ═════════ 비운 동안 쌓일 말 ═════════ */
+const SCRIPT = [
+  [0,   '저장했습니다. 천천히 다녀오세요.'],
+  [3,   '화면은 켜 둔 채로 기다립니다.'],
+  [10,  '물 한 잔 마시고 오기 딱 좋은 시간입니다.'],
+  [20,  '돌아오면 할 일 ▸ {일}'],
+  [30,  '산책이었다면, 좋은 산책.'],
+  [45,  '돌아오면 마지막 문장 하나만 다시 읽으세요. 금방 이어집니다.'],
+  [60,  '한 시간. 하던 일은 그대로 여기 있습니다 ▸ {일}'],
+  [90,  '점심이었나요, 낮잠이었나요. 어느 쪽이든 괜찮습니다.'],
+  [120, '두 시간. 처음부터 다 할 필요 없습니다. 오 분만 해도 됩니다.'],
+  [180, '세 시간. 커서는 아직 깜빡이고 있습니다.'],
+  [240, '네 시간. 돌아오면 할 일 ▸ {일}'],
+  [360, '여섯 시간. 오늘은 여기까지였을 수도 있겠습니다.'],
+  [480, '여덟 시간. 내일의 당신에게 남겨 둡니다 ▸ {일}'],
+  [720, '열두 시간. 새 하루, 같은 자리. 시작은 ▸ {일}'],
+];
+function awayLines(c, now){
+  const el = now - c.left, out = [];
+  const say = (min, text, cls='') => out.push({ at: c.left + min*60000, text, cls });
+  say(0, `${hm(c.left)}에 자리를 비웠습니다${c.why ? ' · ' + c.why : ''}.`);
+  out.push({ at:null, text: taskOf(c), cls:'big' });
+  if (c.recent && c.recent.length){
+    out.push({ at:null, text:'그 전에 한 일', cls:'dim' });
+    for (const e of c.recent.slice(0,5)) out.push({ at:e.at, text:`[${e.src}] ${e.text}`, cls:'dim' });
+    out.push({ at:null, text:'', cls:'gap' });
+  }
+  for (const [m, t] of SCRIPT) if (el >= m*60000) say(m, t.replace('{일}', taskOf(c)));
+  for (let m = 1080; el >= m*60000; m += 360) say(m, `${m/60}시간째. 하던 일 ▸ ${taskOf(c)}`);
+  return out;
+}
+
+/* ═════════ 적는 화면 ═════════
+   위에서 아래로: 지난 자리 비움(어제까지) → 오늘 한 일(방점·포모·내 메모·자리 비움을 시각 순으로) → 방금 돌아왔으면 그 안내 */
+function hereLines(){
+  const L = [], now = Date.now();
+  const old = S.log.filter(e => !sameDay(e.left, now)).slice(0, 8).reverse();
+  if (old.length){
+    L.push({ at:null, text:'지난 자리 비움', cls:'dim' });
+    for (const e of old) L.push({ at:null, text:`${md(e.left)} ${hm(e.left)}–${hm(e.back)}  (${dur(e.back-e.left)})  ${e.why ? e.why + ' · ' : ''}${taskOf(e)}`, cls:'dim' });
+    L.push({ at:null, text:'', cls:'gap' });
+  }
+  const today = [];
+  for (const e of recent) if (sameDay(e.at, now)) today.push({ at:e.at, html:`<span class="src">[${esc(e.src)}]</span> ${esc(e.text)}` });
+  for (const n of S.notes) if (sameDay(n.at, now) && n.kind === 'memo')
+    today.push({ at:n.at, html:`<span class="tag">[${esc(n.tag)}]</span> ${esc(n.text)}${n.task ? ` <span class="src">· ${esc(n.task)} 하던 중</span>` : ''}` });
+  for (const e of S.log) if (sameDay(e.left, now))
+    today.push({ at:e.left, html:`<span class="src">[자리 비움]</span> ${hm(e.left)}–${hm(e.back)} · ${esc(e.why || '')} · ${dur(e.back-e.left)}`, dim:true });
+  today.sort((a,b) => a.at - b.at);
+  L.push({ at:null, text:`오늘 — ${new Date().getMonth()+1}월 ${new Date().getDate()}일`, cls:'dim' });
+  if (!today.length) L.push({ at:null, text:'아직 없음. 메모는 Enter, 자리를 뜰 땐 ⌘Enter.', cls:'dim' });
+  for (const t of today) L.push({ at:t.at, html:t.html, cls:t.dim ? 'dim' : '' });
+
+  const r = S.returned;
+  if (r && now - r.back < 30*60000){
+    L.push({ at:null, text:'', cls:'gap' });
+    L.push({ at:r.back, text:`돌아왔습니다. ${dur(r.back - r.left)} 동안 비웠습니다.` });
+    L.push({ at:null, text:'아까 하던 일 ▸' });
+    L.push({ at:null, text: taskOf(r), cls:'big' });
+  }
+  return L;
+}
+
+/* ═════════ 그리기 ═════════ */
+let shown = 0, mode = null;
+const line = o => `<div class="ln ${o.cls||''}">${o.at ? `<span class="t">${hm(o.at)}</span>` : ''}${o.html != null ? o.html : esc(o.text)}</div>`;
+function render(){
+  const away = S.state === 'away';
+  if (mode !== S.state){ shown = 0; mode = S.state; $('screen').innerHTML = ''; $('screen').dataset.last = ''; }
+  $('here').hidden = away; $('away').hidden = !away; $('memoBtn').hidden = away;
+  $('btn').textContent = away ? '돌아왔어' : '다녀올게';
+  $('btn').classList.toggle('ghost', away);
+  const scr = $('screen');
+  if (!away){
+    const html = hereLines().map(line).join('');
+    if (html !== scr.dataset.last){ scr.innerHTML = html; scr.dataset.last = html; scr.scrollTop = scr.scrollHeight; }
+    return;
+  }
+  const L = awayLines(S.current, Date.now());
+  if (L.length < shown){ scr.innerHTML = ''; shown = 0; }
+  if (L.length > shown){
+    scr.insertAdjacentHTML('beforeend', L.slice(shown).map(line).join(''));
+    if (shown > 0) [...scr.children].slice(shown).forEach(el => el.classList.add('new'));
+    shown = L.length; scr.scrollTop = scr.scrollHeight;
+  }
+}
+function tick(){
+  const d = new Date();
+  $('clock').textContent = `${d.getFullYear()}.${md(d)} ${hm(d)}`;
+  render();
+}
+
+/* ═════════ 떠나기 · 돌아오기 ═════════ */
+function leave(){
+  const typed = one($('what').value);
+  // 하던 일: 직접 적은 것 → 10분 안에 끝낸 것(포모도로 도중이 아닐 때) → 지금 하는 일(포모 → 방점) → 가장 최근 기록
+  const le = lastEnd(), now = cur();
+  const fresh = le && Date.now() - le.at < 10*60000 && !(fomoNow && fomoNow.focus) ? le.text : '';
+  const auto = fresh || (now ? now.name : '') || (le ? le.text : '');
+  S.state = 'away';
+  S.current = { text: typed || auto, why: WHY[whySel], task: now ? now.name : '', taskId: now ? now.id : null,
+                left: Date.now(), recent: recent.slice(0,5).map(({at,src,text}) => ({at,src,text})) };
+  S.returned = null;
+  $('what').value = ''; grow();
+  whyOpen = false; $('why').hidden = true;
+  save(); render(); $('btn').blur();
+}
+function back(){
+  const c = S.current, now = Date.now();
+  const e = { text:c.text, why:c.why || '', task:c.task || '', left:c.left, back:now };
+  S.log.unshift(e); S.log = S.log.slice(0,200);
+  S.returned = e;
+  S.state = 'here'; S.current = null;
+  send('away', c.taskId, { at:c.left, back:now, why:e.why, t:one(c.text), task:e.task });
+  save(); render(); $('what').focus();
+}
+$('btn').onclick = () => S.state === 'away' ? back() : (whyOpen ? leave() : openWhy());
+$('memoBtn').onclick = memo;
+
+document.addEventListener('keydown', e => {
+  if (!$('setup').hidden) return;
+  if (S.state === 'away'){ if (e.key === 'Enter'){ e.preventDefault(); back(); } return; }
+  if (whyOpen){
+    if (e.key === 'Escape'){ e.preventDefault(); closeWhy(); }
+    else if (e.key === 'Enter'){ e.preventDefault(); leave(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); whySel = (whySel+1) % WHY.length; drawWhy(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); whySel = (whySel+WHY.length-1) % WHY.length; drawWhy(); }
+    else if (/^[1-7]$/.test(e.key)){ e.preventDefault(); whySel = +e.key - 1; leave(); }
+    return;
+  }
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); openWhy(); }
+  else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && document.activeElement === $('what')){ e.preventDefault(); memo(); }
+});
+const grow = () => { const ta = $('what'); ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140)+'px'; };
+$('what').addEventListener('input', grow);
+
+/* 연결 설정 */
+$('bjLink').onclick = e => {
+  e.preventDefault();
+  let o = {}; try{ o = JSON.parse(localStorage.getItem(BJ_KEY) || '{}') || {}; }catch(_){}
+  $('cfUrl').value = o.url || 'https://bmuslkayijcgosmgvnah.supabase.co';   // 방점이 쓰는 곳
+  $('cfKey').value = o.key || ''; $('cfList').value = o.list || 'bangjeom';
+  $('setup').hidden = false; document.querySelector('.crt').classList.add('setting'); $('cfKey').focus();
+};
+const closeSetup = () => { $('setup').hidden = true; document.querySelector('.crt').classList.remove('setting'); };
+$('cfClose').onclick = closeSetup;
+$('setup').onsubmit = e => {
+  e.preventDefault();
+  localStorage.setItem(BJ_KEY, JSON.stringify({ url:$('cfUrl').value.trim(), key:$('cfKey').value.trim(), list:$('cfList').value.trim() }));
+  closeSetup(); pullRecent();
+};
+
+window.addEventListener('storage', e => { if (e.key === KEY){ S = Object.assign({ notes:[], out:[] }, load() || S); mode = null; render(); } });
+addEventListener('focus', () => { if (Date.now() - bjAt > 30000) pullRecent(); else flush(); });
+setInterval(() => { if (!document.hidden && S.state === 'here') pullRecent(); else flush(); }, 60000);
+
+const fit = () => document.documentElement.style.setProperty('--fs', Math.max(15, Math.min(24, innerWidth/46))+'px');
+addEventListener('resize', fit); fit();
+
+paint(); tick(); setInterval(tick, 15000);
+pullRecent();
+</script>
+</body>
+</html>
