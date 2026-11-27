@@ -89,6 +89,9 @@ nav button.sel{color:var(--ink);border-bottom-color:var(--seal)}
 .stage{padding:.2rem 0 0}
 .now{text-align:center;padding:.4rem 0 0}
 .now .lab{font-size:.8rem;color:var(--ink-soft);letter-spacing:.16em}
+.now .fvq{font-size:.82rem;color:var(--ink-faint);margin-top:.5rem}
+#fomoDock{margin:1.2rem 0 .4rem;border-top:1px dotted var(--rule);padding-top:.4rem}
+#fomoDock iframe{display:block;width:100%;border:0;height:330px;background:transparent}
 .now .lab .td{margin-left:.6rem;letter-spacing:.04em;color:var(--ink-faint)}
 .now .txt{
   font-size:1.6rem;line-height:1.45;margin:.55rem auto 0;max-width:100%;
@@ -540,6 +543,7 @@ body.embed .sheet.editing #shTa{min-height:12rem;flex:none}
 <div class="view sel" id="v-today">
   <p class="goals" id="goals"></p>
   <div class="stage" id="stage"></div>
+  <div id="fomoDock" hidden></div>
   <div id="freshBox"></div>
   <div class="addrow" id="todayAdd">
     <input id="todayIn" placeholder="떠오른 일을 목록 끝에 적어둡니다" enterkeyhint="done">
@@ -1332,6 +1336,18 @@ setInterval(() => { if(!document.hidden) isLeader(); }, 20*1000);
 /* ══════════ 점 · 미결 · 계속 (2026년 11월 22일, final FV 4.0의 방식) ══════════ */
 // 점: 목록을 훑으며 하고 싶은 일에 찍는다. 마지막에 찍은 것부터 오늘 탭의 추천 자리에 뜬다. 시작(#embed) 안에서는 점을 보지 않고 추천만 보인다
 const dotted = () => S.tasks.filter(t => t.dot && !t.done && !t.hold).sort((a, b) => b.dot - a.dot);
+/* 맨 위의 일에는 늘 점(2026년 11월 27일, 작가가 정함 — Final Version의 첫 표시). 목록에서 루틴·미결·새 표시·글감이 아닌 첫 일에
+   dot = 1(가장 먼저 찍은 점이라 차례의 맨 끝)과 rootDot 표시를 저장한다. 포모·다녀올게는 따로 규칙을 몰라도 점 찍은 일로 본다.
+   그 일을 끝내거나 계속(맨 아래로)하면 다음 맨 위의 일에 옮겨 찍힌다. 풀어도 다시 찍힌다. 시작(EMBED)과 서버를 받기 전에는 건드리지 않는다 */
+const rootOk = t => !t.done && !t.hold && !t.rep && !t.fresh && !t.gam && t.kind !== 'idea' && t.kind !== 'memo';
+function rootDot(){
+  if(EMBED || !(synced || !(cfg.url && cfg.key))) return false;
+  const root = S.tasks.find(rootOk);
+  let ch = false;
+  S.tasks.forEach(t => { if(t.rootDot && t !== root){ delete t.rootDot; if(t.dot === 1) delete t.dot; ch = true; } });
+  if(root && !root.dot){ root.dot = 1; root.rootDot = true; ch = true; }
+  return ch;
+}
 const stageTask = () => pickTask() || (!EMBED && dotted()[0]) || null;   // 루틴이 남아 있으면 루틴, 다 했으면 점 찍은 일(2026년 11월 27일. 전에는 점 찍은 일이 먼저)
 function toggleDot(id){
   const t = byId(id); if(!t || t.done || t.hold) return;
@@ -1786,6 +1802,7 @@ const noteOpen = new Set();               // 목록에서 메모를 펼쳐 둔 �
 const grow = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
 
 function render(){
+  if(rootDot()){ commit(); return; }        // 맨 위의 점이 옮겨졌으면 저장(서버에도)하고 다시 그린다. 두 번째에는 바뀔 것이 없다
   if(dropOldKeys() | fillKindUrls()) LS.set('bangjeom.state', JSON.stringify(S));
   { const g = $('#btnGam'); if(g) g.textContent = S.tasks.some(isGam) ? '「글감 처리하기」 줄 없애기' : '「글감 처리하기」 줄 만들기'; }
   renderGoals();
@@ -1858,6 +1875,7 @@ const lastLine = t => { const l = lastLog(t); return l ? `<div class="last"><sma
 const previewNote = n => (n || '').split('\n').filter(l => !LOG_RE.test(l.trim())).join('\n').trim();
 
 function renderStage(){
+  dockFomo();
   const box = $('#stage');
   const liveCount = S.tasks.filter(t => !t.done).length;
   if(ask && !(byId(ask.id) && !byId(ask.id).done)) ask = null;     // 그새 끝났거나 없어진 일이면 접는다
@@ -1910,11 +1928,12 @@ function renderStage(){
     <div class="now">
       <span class="lab">지금 할 일${freshTag(a)}${urgTag(a)}${kindTag(a.kind, a)}${repTag(a)}</span>
       <div>${title}</div>
-      <div class="why">${dotMode ? `점 찍은 일 · 포모에서 위에서부터${ds.length > 1 ? ` · ${ds.length}개 가운데 마지막에 찍은 것` : ''}` : esc(S.pick.why || '') + (ds.length ? ` · 루틴을 마치면 점 찍은 일 ${ds.length}개` : '')}</div>
+      <div class="why">${dotMode ? `${a.rootDot ? '목록의 맨 위' : '점 찍은 일'}${ds.length > 1 ? ` · 점 ${ds.length}개 가운데 마지막에 찍은 것` : ''}` : esc(S.pick.why || '') + (ds.length ? ` · 루틴을 마치면 점 찍은 일 ${ds.length}개` : '')}</div>
       ${!dotMode && S.pick.kind === 'due' ? '' : dueLine(a)}
       ${a.gam && gamInfo(a) ? `<div class="dueline">${gamInfo(a).replace(/<\/?span[^>]*>/g, '')}</div>` : ''}
       ${lastLine(a)}
       ${memo}
+      ${dotMode ? '<div class="fvq">이것보다 더 하고 싶은 일이 있으면 목록에서 점을 찍으세요</div>' : ''}
     </div>` + (cont && cont.at === 'stage' ? contHtml(a, true) : fix === a.id ? fixHtml(a) : ask && ask.id === a.id ? askHtml(ask.how) : `
     <div class="acts">
       <button id="actPart">계속</button>
@@ -1924,7 +1943,7 @@ function renderStage(){
       ${a.gam ? '' : '<button class="page" id="actEdit">수정</button>'}
     </div>
     <div class="skiprow">${dotMode
-      ? '<button class="skip" id="unDots">점 풀기</button>'
+      ? (ds.some(t => !t.rootDot) ? '<button class="skip" id="unDots">점 풀기</button>' : '')   // 맨 위의 점뿐이면 풀어도 다시 찍히니 숨긴다
       : '<button class="skip" id="skipPick">다른 것</button><button class="skip" id="rePick">지금 다시 고르기</button>'}
     </div>` + nextsHtml(dotMode ? ds.slice(1) : nextPicks(3), dotMode));
   const me = $('#memoEdit');
@@ -1944,6 +1963,39 @@ function renderStage(){
   const ud = $('#unDots'); if(ud) ud.onclick = () => { const n = clearDots(); if(n) toast(`점 ${n}개를 풀었습니다`); };
   const sp = $('#skipPick'); if(sp) sp.onclick = skipPick;
   const rp = $('#rePick'); if(rp) rp.onclick = () => repick(true, true);
+}
+/* 포모 끼우기(2026년 11월 27일, 작가가 정함 — 맥에서만). 오늘 탭에 루틴이 아닌 할 일(점 찍은 일)이 떠 있으면 카드 아래에 포모(fomo.html#embed)를
+   작게 끼워, 포모에 가지 않고 여기서 포모도로·휴식을 한다. 포모를 복사하지 않고 그대로 불러온다(알람 예약·화면 켜 두기·기록·now가 다 포모의 것).
+   · 끼운 칸은 한 번 만들면 지우지 않는다(지우면 예약해 둔 알람이 사라진다). 보일지만 바꾼다: 할 일이 떠 있거나 포모가 도는 중이면.
+   · 떠 있는 일이 바뀌면 postMessage로 알린다(bj-task). 포모는 그 일을 고른 일로 쓴다. 끝·계속은 이 카드의 단추로 한다(끼운 포모에는 없다).
+   · 포모가 높이를 알려 온다(fomo-h). 포모의 상태가 바뀌면 storage 이벤트로 다시 본다 */
+const FOMO_ON = !EMBED && !isTouchApple;
+let fomoFrame = null, fomoFor = '';
+const fomoBusy = () => { try{ const f = JSON.parse(localStorage.getItem('fomo.v1') || 'null'); return !!(f && (f.run || f.wait || f.ring)); }catch(e){ return false; } };
+function dockFomo(){
+  const dock = $('#fomoDock'); if(!FOMO_ON || !dock) return;
+  const a = stageTask(), want = !!a && !pickTask() && !a.rep && !a.gam;
+  const show = want || (!!fomoFrame && fomoBusy());
+  if(show && !fomoFrame){
+    fomoFrame = document.createElement('iframe');
+    fomoFrame.title = '포모'; fomoFrame.allow = 'screen-wake-lock; autoplay';
+    fomoFrame.onload = () => { fomoFor = ''; dockFomo(); };
+    fomoFrame.src = 'fomo.html#embed';
+    dock.appendChild(fomoFrame);
+  }
+  dock.hidden = !show;
+  const key = want ? a.id + '\n' + a.text : '';
+  if(want && fomoFrame && fomoFrame.contentWindow && fomoFor !== key){
+    fomoFrame.contentWindow.postMessage({type:'bj-task', id:a.id, text:a.text, kind:a.kind || '', url:a.url || '', ref:a.ref ? {id:a.ref.id, name:a.ref.name || ''} : null}, '*');
+    fomoFor = key;
+  }
+}
+if(FOMO_ON){
+  window.addEventListener('message', e => {
+    if(!fomoFrame || e.source !== fomoFrame.contentWindow || !e.data) return;
+    if(e.data.type === 'fomo-h' && +e.data.h > 0) fomoFrame.style.height = Math.ceil(+e.data.h) + 'px';
+  });
+  window.addEventListener('storage', e => { if(e.key === 'fomo.v1') dockFomo(); });
 }
 // 추천 자리 아래: 점 찍은 일의 다음 것들, 또는 추천의 그다음 두세 개
 function nextsHtml(list, dotMode){
