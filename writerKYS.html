@@ -217,7 +217,7 @@ function srcOf(cw,S,B){ if(cw.src==='sb'||cw.src==='tp') return cw.src; return !
 function sbWorkHTML(B,cw){
   const w=sbFind(B,cw.name);
   if(!w) return '<div class="work miss"><div class="head"><span class="name">'+esc(cw.name||'이름 없음')+'</span></div><p class="note">'+(B?'4baek에 이 이름의 작품이 없습니다 — 설정에서 이름을 4baek의 작품 이름과 똑같이 적으세요.':'이 브라우저에 4baek의 저장소가 없습니다.')+'</p></div>';
-  const sm=sbSums(B,w), lu=sm.last, base=cfg.sabaekUrl||DEF.sabaekUrl, href=lu?base+'#'+encodeURIComponent('원고')+'='+encodeURIComponent(lu.id):base;
+  const sm=sbSums(B,w), lu=sm.last, href=tpGyoWork(w.title);   /* 2026년 11월 28일부터 4baek이 아니라 타이핑의 같은 이름 작품을 교열 탭에 연다 */
   const now=sm.total, target=+w.goal||0,   /* 설정에 예전에 적어 둔 목표(cw.target)는 초고 줄에서는 쓰지 않는다 */ pct=target?Math.max(0,Math.min(100,Math.round(now/target*100))):null, sub=[];
   sub.push('<span>원고 '+sm.liveCnt+'개'+(sm.doneCnt?' · 완성 '+sm.doneCnt+'편':'')+'</span>');
   const left=target?Math.round((target-now)*10)/10:0;
@@ -239,6 +239,11 @@ function sbWorkHTML(B,cw){
     +(flags.length?'<div class="flags">'+flags.join('')+'</div>':'')+'</div>';
 }
 
+/* 작품 이름을 누르면 — 초고든 개정이든 타이핑의 교열 탭으로(2026년 11월 28일, 작가가 정함). 타이핑의 tpHashOpen이 &보기=교열을 읽는다.
+   원고를 알면 #원고=<id>&보기=교열, 모르면(4baek의 작품) #작품=<이름>&보기=교열 — 타이핑이 그 작품의 이어 쓸 원고를 고른다 */
+const tpBase=()=>cfg.taipingUrl||DEF.taipingUrl, hk=(k,v)=>encodeURIComponent(k)+'='+encodeURIComponent(v);
+const tpGyoMs=id=>tpBase()+'#'+hk('원고',id)+'&'+hk('보기','교열');
+const tpGyoWork=t=>tpBase()+'#'+hk('작품',String(t||'').trim())+'&'+hk('보기','교열');
 /* 다른 앱의 창 이름 — 타이핑과 storyM은 자기 창 이름을 appwin.<앱>에 적어 둔다. 그 창을 다시 써야 타이핑 창이 둘이 되어 서로 덮는 일이 없다 */
 function winName(app){ let n=''; try{ n=localStorage.getItem('appwin.'+app)||''; }catch(e){} if(!n||n===window.name) n=app; return n===window.name?app+'2':n; }
 /* 대시보드는 늘 떠 있어야 한다(2026년 11월 18일) — 시작이 이 창을 닫는 때로 글쓰기 끝을 잡는다. 그래서 여기서 여는 것은 모두 다른 창으로 간다.
@@ -268,7 +273,7 @@ function workHTML(S,stories,cw,B){
   const w=findWork(S,cw.name);
   if(!w) return '<div class="work miss"><div class="head"><span class="name">'+esc(cw.name||'이름 없음')+'</span></div><p class="note">타이핑에 이 이름의 작품이 없습니다 — 설정에서 이름을 타이핑의 작품 이름과 똑같이 적으세요.</p></div>';
   const us=unitsOf(S,w), lu=lastUnit(S,w), kind=w.kind==='개정'?'개정':'초고';
-  const base=cfg.taipingUrl||DEF.taipingUrl, href=lu?base+'#'+encodeURIComponent('원고')+'='+encodeURIComponent(lu.id):base;
+  const href=lu?tpGyoMs(lu.id):tpGyoWork(w.title);   /* 2026년 11월 28일부터 400자 탭이 아니라 교열 탭 */
   let now=0, target=0, unit='매', from=0, extra='';
   if(cw.unit==='page'){
     const r=curRev(w); unit='쪽';
