@@ -9,6 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="하루">
 <meta name="theme-color" content="#000000">
 <title>하루</title>
+<link rel="apple-touch-icon" href="haru-icon.png">
+<link rel="icon" type="image/png" href="haru-icon.png">
 <style>
   :root{
     --bg:#020603;
@@ -158,7 +160,11 @@
      고치기·지우기는 같은 줄을 PATCH(지우기는 del:1). 방점은 log를 모르므로 taken_at만 달고 남겨 둔다.
    읽기: 내 log 전부(처음엔 120일, 다음부터 14일, 지난 날을 볼 땐 그 언저리) + 맥 다녀올게의 memo·away(그날 것, 흐리게) */
 const KEY = 'haru.v1', CFG = 'haru.bj';
-const TAGS = ['기록','메모','사람','지출','수입','식사','건강','예술'];
+const TAGS = ['기록','메모','사람','지출','수입','식사','건강','예술','방점'];
+/* 방점(2026년 11월 28일 오후, 작가가 정함): 적은 글을 방점의 새 할 일로 보낸다 — bangjeom_act에 kind 'add'(Final Version과 같은 길), target = 새 일 id, text = {"t":제목}.
+   방점이 받으면 「새」 표시를 달고 목록에 넣는다. 하루에는 log 줄로도 남되(bj = 새 일 id) 보낸 뒤에는 고칠 수 없다(방점에서 고친다). 방점 일지의 「하루 기록」에서는 뺀다 */
+const BJ_TAG = '방점';
+const bjId = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);   // 방점의 uid와 같은 꼴
 const OLD_TAG = { '먹은 것':'식사', '몸':'건강', '본 것':'예술' };   // 첫날 잠깐 쓴 이름(11월 28일 낮에 바꿈)
 const tagOf = t => { t = String(t || '기록'); return OLD_TAG[t] || t; };
 const MONEY = new Set(['지출','수입']);
@@ -245,7 +251,7 @@ function takeLog(rows){
     if (!o || !+o.at || !r.target || waiting.has(r.target)) continue;
     const old = S.items[r.target];
     if (old && (+old.v || 0) > (+o.v || 0)) continue;
-    S.items[r.target] = { id:r.target, at:+o.at, tag:tagOf(o.tag), t:String(o.t || ''), dev:String(o.dev || ''), v:+o.v || 0, del:!!o.del, sent:true };
+    S.items[r.target] = { id:r.target, at:+o.at, tag:tagOf(o.tag), t:String(o.t || ''), dev:String(o.dev || ''), v:+o.v || 0, del:!!o.del, sent:true, ...(o.bj ? { bj:String(o.bj), bjSent:true } : {}) };
     n++;
   }
   return n;
@@ -294,7 +300,13 @@ async function flush(){
     while (S.out.length){
       const id = S.out[0], e = S.items[id];
       if (e){
-        const text = JSON.stringify({ at:e.at, tag:e.tag, t:e.t, dev:e.dev, v:e.v, ...(e.del ? { del:1 } : {}) });
+        if (e.bj && !e.bjSent && !e.del){   // 방점의 새 할 일을 먼저(보내기 전에 지웠으면 보내지 않는다)
+          const a = await fetch(`${c.url}/rest/v1/bangjeom_act`, { method:'POST', headers:hdr(c, { 'Content-Type':'application/json', Prefer:'return=minimal' }),
+            body: JSON.stringify({ list:c.list, kind:'add', target:e.bj, text:JSON.stringify({ t:e.t }), device:'haru-' + e.dev }) });
+          if (!a.ok) throw new Error('HTTP ' + a.status);
+          e.bjSent = true; save();
+        }
+        const text = JSON.stringify({ at:e.at, tag:e.tag, t:e.t, dev:e.dev, v:e.v, ...(e.bj ? { bj:e.bj } : {}), ...(e.del ? { del:1 } : {}) });
         let r;
         if (!e.sent){
           r = await fetch(`${c.url}/rest/v1/bangjeom_act`, { method:'POST', headers:hdr(c, { 'Content-Type':'application/json', Prefer:'return=minimal' }),
@@ -338,19 +350,23 @@ function write(){
   if (!raw) return;
   if (editId){
     const e = S.items[editId];
-    if (e){ const r = atFor(raw, e.at); Object.assign(e, { t:one(r.text) || e.t, at:r.at, tag:S.tag, v:Date.now() }); queue(e.id); toast('고쳤습니다'); }
+    if (e && S.tag === BJ_TAG && !e.bj){ toast('방점으로 보내려면 새로 적으세요'); return; }
+    if (e){ const r = atFor(raw, e.at); Object.assign(e, { t:one(r.text) || e.t, at:r.at, tag:e.bj ? BJ_TAG : S.tag, v:Date.now() }); queue(e.id); toast('고쳤습니다'); }
     endEdit();
   }else{
     const r = atFor(raw);
     if (!one(r.text)) return;
     const e = { id:uid(), at:r.at, tag:S.tag, t:one(r.text), dev:DEV, v:Date.now(), del:false, sent:false };
+    if (S.tag === BJ_TAG){ e.bj = bjId(); e.bjSent = false; }
     S.items[e.id] = e; fresh = e.id; queue(e.id);
+    if (e.bj) toast(cfg() ? '방점으로 보냅니다' : '연결하면 방점으로 보냅니다');
     if (dayKey(e.at) !== view){ view = dayKey(e.at); }
   }
   $('what').value = ''; grow(); render(true);
 }
 function startEdit(id){
   const e = S.items[id]; if (!e) return;
+  if (e.bj && e.bjSent){ toast('방점에 들어간 일은 방점에서 고치세요'); return; }
   editId = id; S.tag = TAGS.includes(e.tag) ? e.tag : '기록';
   $('what').value = `${hm(e.at)} ${e.t}`; grow();
   $('editNote').hidden = false;
@@ -367,7 +383,7 @@ let fresh = null;
 function chips(){
   $('chips').innerHTML = TAGS.map(t => `<button type="button" class="${t === S.tag ? 'sel' : ''}" data-t="${esc(t)}">${esc(t)}</button>`).join('');
   $('ps').textContent = `${S.tag} >`;
-  $('what').placeholder = MONEY.has(S.tag) ? '무엇에 · 얼마 (예: 점심 김밥 9,000원)' : S.tag === '사람' ? '누구와 · 무엇을' : S.tag === '식사' ? '무엇을 · 어디서 · 누구와' : S.tag === '건강' ? '잠 · 운동 · 컨디션 · 약' : S.tag === '예술' ? '읽은 책 · 본 영화 · 들은 음악' : '적고 Enter';
+  $('what').placeholder = MONEY.has(S.tag) ? '무엇에 · 얼마 (예: 점심 김밥 9,000원)' : S.tag === '사람' ? '누구와 · 무엇을' : S.tag === '식사' ? '무엇을 · 어디서 · 누구와' : S.tag === '건강' ? '잠 · 운동 · 컨디션 · 약' : S.tag === '예술' ? '읽은 책 · 본 영화 · 들은 음악' : S.tag === BJ_TAG ? '「새」 할 일로 방점에' : '적고 Enter';
 }
 function dayLines(k){
   const s = dayStart(k), e = dayStart(shift(k, 1));
@@ -375,7 +391,7 @@ function dayLines(k){
   const mac = Object.values(S.mac[k] || {});
   const waiting = new Set(S.out);
   const L = mine.map(x => ({ at:x.at, mine:true, id:x.id, tag:x.tag,
-    html:(MONEY.has(x.tag) ? moneyHtml(x.t) : esc(x.t)) + (x.dev && x.dev !== DEV ? ` <span class="src">· ${DEV_KO[x.dev] || x.dev}</span>` : '') + (waiting.has(x.id) ? '<span class="wait">못 보냄</span>' : '') }));
+    html:(MONEY.has(x.tag) ? moneyHtml(x.t) : esc(x.t)) + (x.bj ? ` <span class="src">→ ${x.bjSent ? '방점으로 보냄' : '방점으로 보낼 것'}</span>` : '') + (x.dev && x.dev !== DEV ? ` <span class="src">· ${DEV_KO[x.dev] || x.dev}</span>` : '') + (waiting.has(x.id) ? '<span class="wait">못 보냄</span>' : '') }));
   for (const m of mac){
     if (m.kind === 'memo') L.push({ at:m.at, mac:true, tag:'맥', html:`[${esc(m.tag)}] ${esc(m.t)}${m.task ? ` <span class="src">· ${esc(m.task)} 하던 중</span>` : ''}` });
     else L.push({ at:m.at, mac:true, tag:'맥', html:`자리 비움${m.back ? ` ${hm(m.at)}–${hm(m.back)} · ${Math.round((m.back - m.at)/60000)}분` : ''}${m.t ? ` <span class="src">· ${esc(m.t)}</span>` : ''}` });
